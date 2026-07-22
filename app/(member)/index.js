@@ -6,14 +6,27 @@ import { todayInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber, sessionNumberForDate } from "../../lib/programming/schedule";
 import { getMyAssignment, getCurrentBlock, getWorkout, logResult } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
+import { getSpcClient } from "../../lib/programming/spcClients";
 import { LogResultRow } from "./LogResultRow";
+import { SpcSessions } from "./SpcSessions";
 
 export default function MemberHome() {
   const { profile, signOut } = useAuth();
   const [state, setState] = useState({ status: "loading" });
+  const [hasSpc, setHasSpc] = useState(false);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
+    // Isolated from the group-program logic below on purpose, same reason
+    // the Clients page keeps nutrition/SPC lookups out of its main
+    // Promise.all — a member who isn't enrolled in SPC (or before the SPC
+    // migration has run) shouldn't be able to break the Flagship/BWA plan
+    // that already works today.
+    try {
+      setHasSpc(!!(await getSpcClient(profile.id)));
+    } catch {
+      setHasSpc(false);
+    }
     try {
       const assignment = await getMyAssignment(profile.id);
       if (!assignment?.group_program_id) {
@@ -92,7 +105,7 @@ export default function MemberHome() {
           Something went wrong loading your plan: {state.message}
         </Text>
       )}
-      {state.status === "unassigned" && (
+      {state.status === "unassigned" && !hasSpc && (
         <Text className="mt-4 text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
           You're not assigned to a program yet — check with your coach.
         </Text>
@@ -141,12 +154,17 @@ export default function MemberHome() {
         </>
       )}
 
+      {hasSpc && <SpcSessions userId={profile.id} />}
+
       <View className="mt-6 flex-row gap-4">
         <Link href="/(member)/plan" style={{ fontFamily: "Montserrat_500Medium" }} className="text-accent">
           Look ahead
         </Link>
         <Link href="/(member)/history" style={{ fontFamily: "Montserrat_500Medium" }} className="text-accent">
           History
+        </Link>
+        <Link href="/(member)/nutrition" style={{ fontFamily: "Montserrat_500Medium" }} className="text-accent">
+          Nutrition
         </Link>
       </View>
       <Pressable onPress={signOut} className="mt-6 self-start rounded-lg border border-neutral-300 px-5 py-3">

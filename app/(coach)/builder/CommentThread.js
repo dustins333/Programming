@@ -3,16 +3,16 @@ import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listComments, addComment } from "../../../lib/programming/comments";
 
-export function CommentThread({ groupBlockId }) {
+export function CommentThread({ groupBlockId, spcBlockId }) {
   const { profile } = useAuth();
   const [comments, setComments] = useState(null);
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
 
   const load = useCallback(async () => {
-    const rows = await listComments(groupBlockId);
+    const rows = await listComments({ groupBlockId, spcBlockId });
     setComments(rows);
-  }, [groupBlockId]);
+  }, [groupBlockId, spcBlockId]);
 
   useEffect(() => {
     load();
@@ -22,7 +22,7 @@ export function CommentThread({ groupBlockId }) {
     if (!draft.trim()) return;
     setPosting(true);
     try {
-      await addComment({ groupBlockId, coachId: profile.id, commentText: draft.trim() });
+      await addComment({ groupBlockId, spcBlockId, coachId: profile.id, commentText: draft.trim() });
       setDraft("");
       await load();
     } finally {

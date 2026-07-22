@@ -41,6 +41,12 @@ export default function CoachHome() {
       <Link href="/(coach)/clients" className="mb-3 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
         Clients
       </Link>
+      <Link href="/(coach)/spc" className="mb-3 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
+        SPC
+      </Link>
+      <Link href="/(coach)/nutrition" className="mb-3 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
+        Nutrition
+      </Link>
       {profile?.role === "admin" ? (
         <Link href="/(coach)/settings" className="mb-4 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
           Settings
