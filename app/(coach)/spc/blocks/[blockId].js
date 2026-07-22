@@ -4,6 +4,7 @@ import { Link, useLocalSearchParams } from "expo-router";
 import { getSpcBlock, listBlocksForSpcClient, listSpcWorkoutsForBlock } from "../../../../lib/programming/spcBlocks";
 import { copyLastBlockContent } from "../../../../lib/programming/spcWorkouts";
 import { fonts, colors } from "../../../../lib/theme";
+import { CoachShell } from "../../../../components/CoachShell";
 
 export default function SpcBlockDetail() {
   const { blockId } = useLocalSearchParams();
@@ -51,57 +52,67 @@ export default function SpcBlockDetail() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-          Something went wrong: {loadError}
-        </Text>
-      </View>
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white px-6">
+          <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong: {loadError}
+          </Text>
+        </View>
+      </CoachShell>
     );
   }
 
   if (!block || !workouts) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color={colors.primary} />
-      </View>
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white">
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </CoachShell>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
-      <Text className="mb-1 text-2xl text-primary" style={{ fontFamily: fonts.sansSemiBold }}>
+    <CoachShell>
+    <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
+      <Text className="mb-1 text-2xl" style={{ fontFamily: "ProtestStrike_400Regular", color: colors.primary }}>
         SPC block
       </Text>
-      <Text className="mb-6 text-neutral-500" style={{ fontFamily: fonts.sans }}>
+      <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
         {block.block_start_date} → {block.block_end_date} ({block.block_length_weeks} weeks)
       </Text>
 
       <View className="mb-6 flex-row flex-wrap gap-3">
-        <Link href={`/(coach)/spc/print/${block.id}`} className="text-accent" style={{ fontFamily: fonts.sansMedium }}>
+        <Link href={`/(coach)/spc/print/${block.id}`} style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
           Export / Print
         </Link>
         {priorBlock ? (
-          <Pressable onPress={handleCopyLastBlock} disabled={copying || copied}>
-            <Text className={copied ? "text-neutral-400" : "text-accent"} style={{ fontFamily: fonts.sansMedium }}>
+          <Pressable
+            onPress={handleCopyLastBlock}
+            disabled={copying || copied}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={{ fontFamily: fonts.sansMedium, color: copied ? "#a8a29e" : "#8a5140" }}>
               {copying ? "Copying…" : copied ? "Copied last block" : "Copy last block"}
             </Text>
           </Pressable>
         ) : null}
       </View>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-xs uppercase text-stone-700" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
         Sessions
       </Text>
       {workouts.map((w) => (
         <Link key={w.id} href={`/(coach)/spc/builder/${w.id}`} asChild>
-          <Pressable className="mb-2 rounded-lg border border-neutral-200 px-4 py-3">
+          <Pressable className="mb-2 rounded-lg border border-stone-200 px-4 py-3">
             <Text style={{ fontFamily: fonts.sansMedium }}>Session {w.session_number}</Text>
-            <Text className={w.status === "published" ? "text-accent" : "text-neutral-400"} style={{ fontFamily: fonts.sans }}>
+            <Text className="text-xs" style={{ fontFamily: fonts.sans, color: w.status === "published" ? "#8a5140" : "#a8a29e" }}>
               {w.status}
             </Text>
           </Pressable>
         </Link>
       ))}
     </ScrollView>
+    </CoachShell>
   );
 }

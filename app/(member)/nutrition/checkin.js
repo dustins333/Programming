@@ -1,13 +1,22 @@
 import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
 import { getClientQuestions, getCheckinForWeek, submitCheckin } from "../../../lib/nutrition/checkin";
+import { SegmentedControl } from "../../../components/SegmentedControl";
 import { fonts, colors } from "../../../lib/theme";
+
+const NUTRITION_SEGMENTS = [
+  { key: "today", label: "Today", href: "/(member)/nutrition" },
+  { key: "checkin", label: "Check-in", href: "/(member)/nutrition/checkin" },
+  { key: "history", label: "History", href: "/(member)/nutrition/history" },
+];
 
 export default function WeeklyCheckin() {
   const { profile } = useAuth();
+  const router = useRouter();
   const today = todayInBoise();
   const { currentWeek } = computeWeekWindows(today);
   const [questions, setQuestions] = useState(null);
@@ -64,22 +73,31 @@ export default function WeeklyCheckin() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
-      <Text className="mb-1 text-2xl text-primary" style={{ fontFamily: fonts.display }}>
-        Weekly Check-In
+      <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+        Nutrition
       </Text>
-      <Text className="mb-6 text-base text-neutral-500" style={{ fontFamily: fonts.sans }}>
+      <Text className="mb-4 text-base text-stone-500" style={{ fontFamily: fonts.sans }}>
         Week of {currentWeek.start}
       </Text>
 
+      <SegmentedControl
+        segments={NUTRITION_SEGMENTS}
+        activeKey="checkin"
+        onSelect={(key) => {
+          const seg = NUTRITION_SEGMENTS.find((s) => s.key === key);
+          if (seg && seg.key !== "checkin") router.push(seg.href);
+        }}
+      />
+
       {questions.length === 0 && (
-        <Text className="text-neutral-500" style={{ fontFamily: fonts.sans }}>
+        <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
           No check-in questions set up yet — check with your coach.
         </Text>
       )}
 
       {response ? (
         <View>
-          <Text className="mb-4 text-neutral-700" style={{ fontFamily: fonts.sansMedium }}>
+          <Text className="mb-4 text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
             Submitted {new Date(response.submitted_at).toLocaleDateString()}
           </Text>
           {response.answers.map((a, i) => (
@@ -95,14 +113,14 @@ export default function WeeklyCheckin() {
         <>
           {questions.map((q) => (
             <View key={q.id} className="mb-4">
-              <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: fonts.sansMedium }}>
+              <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
                 {q.question_text}
               </Text>
               <TextInput
                 value={answers[q.id] || ""}
                 onChangeText={(t) => setAnswers((a) => ({ ...a, [q.id]: t }))}
                 multiline
-                className="min-h-[80px] rounded-lg border border-neutral-300 px-4 py-3 text-base"
+                className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
                 style={{ fontFamily: fonts.sans }}
               />
             </View>

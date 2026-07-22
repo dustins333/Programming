@@ -9,6 +9,7 @@ import { getSetting } from "../../../lib/settings";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS } from "./index";
 import { NewSpcBlockModal } from "./NewSpcBlockModal";
+import { CoachShell } from "../../../components/CoachShell";
 
 export default function SpcClientDetail() {
   const { userId } = useLocalSearchParams();
@@ -105,32 +106,37 @@ export default function SpcClientDetail() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-          Something went wrong: {loadError}
-        </Text>
-      </View>
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white px-6">
+          <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong: {loadError}
+          </Text>
+        </View>
+      </CoachShell>
     );
   }
 
   if (!member || !client) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color={colors.primary} />
-      </View>
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white">
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </CoachShell>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
+    <CoachShell>
+    <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
       <Text className="text-2xl text-primary" style={{ fontFamily: fonts.display }}>
         {member.name}
       </Text>
-      <Text className="mb-6 text-neutral-500" style={{ fontFamily: fonts.sans }}>
+      <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
         SPC
       </Text>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
         Status
       </Text>
       <View className="mb-6 flex-row flex-wrap gap-2">
@@ -138,16 +144,16 @@ export default function SpcClientDetail() {
           <Pressable
             key={status}
             onPress={() => handleStatus(status)}
-            className={`rounded-full border px-3 py-1.5 ${client.status === status ? "border-primary bg-primary" : "border-neutral-300"}`}
+            className={`rounded-full border px-3.5 py-2.5 ${client.status === status ? "border-primary bg-primary" : "border-stone-300"}`}
           >
-            <Text className={client.status === status ? "text-white" : "text-neutral-700"} style={{ fontFamily: fonts.sans }}>
+            <Text className={client.status === status ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
               {label}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
         Assigned coach
       </Text>
       <View className="mb-6 flex-row flex-wrap gap-2">
@@ -155,10 +161,10 @@ export default function SpcClientDetail() {
           <Pressable
             key={coach.id}
             onPress={() => handleCoachReassign(coach.id)}
-            className={`rounded-full border px-3 py-1.5 ${client.assigned_coach_id === coach.id ? "border-primary bg-primary" : "border-neutral-300"}`}
+            className={`rounded-full border px-3.5 py-2.5 ${client.assigned_coach_id === coach.id ? "border-primary bg-primary" : "border-stone-300"}`}
           >
             <Text
-              className={client.assigned_coach_id === coach.id ? "text-white" : "text-neutral-700"}
+              className={client.assigned_coach_id === coach.id ? "text-white" : "text-stone-700"}
               style={{ fontFamily: fonts.sans }}
             >
               {coach.name}
@@ -167,20 +173,30 @@ export default function SpcClientDetail() {
         ))}
       </View>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
         Sessions per week
       </Text>
       <View className="mb-6 flex-row items-center gap-3">
-        <Pressable onPress={() => handleSessionsChange(-1)} className="rounded border border-neutral-300 px-3 py-1.5">
+        <Pressable
+          onPress={() => handleSessionsChange(-1)}
+          className="rounded border border-stone-300 px-3 py-2"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Decrease sessions per week"
+        >
           <Text>−</Text>
         </Pressable>
         <Text style={{ fontFamily: fonts.sansMedium }}>{client.sessions_per_week}</Text>
-        <Pressable onPress={() => handleSessionsChange(1)} className="rounded border border-neutral-300 px-3 py-1.5">
+        <Pressable
+          onPress={() => handleSessionsChange(1)}
+          className="rounded border border-stone-300 px-3 py-2"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Increase sessions per week"
+        >
           <Text>+</Text>
         </Pressable>
       </View>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
         Notes / Goals / Feedback
       </Text>
       <TextInput
@@ -189,7 +205,7 @@ export default function SpcClientDetail() {
         multiline
         numberOfLines={4}
         placeholder="Goals, injury notes, preferences, hold/pause reasons…"
-        className="mb-2 min-h-24 rounded-lg border border-neutral-300 px-4 py-3"
+        className="mb-2 min-h-24 rounded-lg border border-stone-300 px-4 py-3"
         style={{ fontFamily: fonts.sans }}
       />
       <Pressable
@@ -203,7 +219,7 @@ export default function SpcClientDetail() {
       </Pressable>
 
       <View className="mb-4 flex-row items-center justify-between">
-        <Text className="text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+        <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
           Blocks
         </Text>
         <Pressable onPress={() => setModalVisible(true)} className="rounded-lg bg-primary px-4 py-2">
@@ -213,17 +229,17 @@ export default function SpcClientDetail() {
         </Pressable>
       </View>
       {blocks.length === 0 ? (
-        <Text className="text-neutral-400" style={{ fontFamily: fonts.sans }}>
+        <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
           No blocks yet.
         </Text>
       ) : (
         blocks.map((block) => (
           <Link key={block.id} href={`/(coach)/spc/blocks/${block.id}`} asChild>
-            <Pressable className="mb-2 rounded-lg border border-neutral-200 px-4 py-3">
+            <Pressable className="mb-2 rounded-lg border border-stone-200 px-4 py-3">
               <Text style={{ fontFamily: fonts.sansMedium }}>
                 {block.block_start_date} → {block.block_end_date}
               </Text>
-              <Text className="text-xs text-neutral-500" style={{ fontFamily: fonts.sans }}>
+              <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
                 {block.block_length_weeks} weeks
               </Text>
             </Pressable>
@@ -238,5 +254,6 @@ export default function SpcClientDetail() {
         onSubmit={handleCreateBlock}
       />
     </ScrollView>
+    </CoachShell>
   );
 }

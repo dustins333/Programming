@@ -80,7 +80,7 @@ export function SpcSessions({ userId }) {
   }
   if (state.status === "not_published") {
     return (
-      <Text className="mt-6 text-neutral-500" style={{ fontFamily: fonts.sans }}>
+      <Text className="mt-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
         Your SPC coach hasn't published this block yet — check back soon.
       </Text>
     );
@@ -90,7 +90,7 @@ export function SpcSessions({ userId }) {
 
   return (
     <View className="mt-6">
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
         SPC
       </Text>
       <View className="mb-4 flex-row flex-wrap gap-2">
@@ -98,9 +98,9 @@ export function SpcSessions({ userId }) {
           <Pressable
             key={n}
             onPress={() => setSelectedWeek(n)}
-            className={`rounded-full border px-3 py-1.5 ${selectedWeek === n ? "border-primary bg-primary" : "border-neutral-300"}`}
+            className={`rounded-full border px-3.5 py-2.5 ${selectedWeek === n ? "border-primary bg-primary" : "border-stone-300"}`}
           >
-            <Text className={selectedWeek === n ? "text-white" : "text-neutral-700"} style={{ fontFamily: fonts.sans }}>
+            <Text className={selectedWeek === n ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
               Week {n}
             </Text>
           </Pressable>
@@ -109,7 +109,7 @@ export function SpcSessions({ userId }) {
 
       {state.sessions.map(({ workout, warmups, exercises }) => (
         <View key={workout.id} className="mb-6">
-          <Text className="mb-2 text-xs uppercase text-neutral-400" style={{ fontFamily: fonts.sansMedium }}>
+          <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
             Session {workout.session_number}
           </Text>
           {warmups.length > 0 && (

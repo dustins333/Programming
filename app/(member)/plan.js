@@ -69,7 +69,7 @@ export default function Plan() {
   if (state.status !== "ready") {
     return (
       <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+        <Text className="text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
           {state.status === "unassigned"
             ? "You're not assigned to a program yet."
             : state.status === "error"
@@ -82,10 +82,10 @@ export default function Plan() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
-      <Text className="mb-1 text-2xl text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+      <Text className="mb-1 text-2xl" style={{ fontFamily: "ProtestStrike_400Regular", color: "#a46a57" }}>
         {state.program.name} Plan
       </Text>
-      <Text className="mb-4 text-xs text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+      <Text className="mb-4 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
         {state.block.block_start_date} → {state.block.block_end_date}
       </Text>
 
@@ -94,9 +94,9 @@ export default function Plan() {
           <Pressable
             key={week}
             onPress={() => setSelectedWeek(week)}
-            className={`rounded-full border px-3 py-1.5 ${selectedWeek === week ? "border-primary bg-primary" : "border-neutral-300"}`}
+            className={`rounded-full border px-3.5 py-2.5 ${selectedWeek === week ? "border-primary bg-primary" : "border-stone-300"}`}
           >
-            <Text className={selectedWeek === week ? "text-white" : "text-neutral-700"} style={{ fontFamily: "Montserrat_400Regular" }}>
+            <Text className={selectedWeek === week ? "text-white" : "text-stone-700"} style={{ fontFamily: "Montserrat_400Regular" }}>
               Week {week}
             </Text>
           </Pressable>
@@ -104,18 +104,18 @@ export default function Plan() {
       </View>
 
       {sessionsForSelectedWeek.length === 0 ? (
-        <Text className="text-neutral-400" style={{ fontFamily: "Montserrat_400Regular" }}>
+        <Text className="text-stone-400" style={{ fontFamily: "Montserrat_400Regular" }}>
           Not published yet — check back soon.
         </Text>
       ) : (
         sessionsForSelectedWeek.map((workout) => {
           const details = sessionDetails[workout.id];
           return (
-            <View key={workout.id} className="mb-4 rounded-lg border border-neutral-200 px-4 py-3">
+            <View key={workout.id} className="mb-4 rounded-lg border border-stone-200 px-4 py-3">
               <Pressable onPress={() => loadSessionDetails(workout)}>
                 <Text style={{ fontFamily: "Montserrat_600SemiBold" }}>Session {workout.session_number}</Text>
                 {!details && (
-                  <Text className="text-xs text-accent" style={{ fontFamily: "Montserrat_400Regular" }}>
+                  <Text className="text-xs" style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140" }}>
                     {loadingSession === workout.id ? "Loading…" : "Tap to view"}
                   </Text>
                 )}
@@ -123,7 +123,7 @@ export default function Plan() {
               {details && (
                 <View className="mt-2">
                   {details.warmups.map((w, i) => (
-                    <Text key={w.id} className="text-xs text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+                    <Text key={w.id} className="text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
                       Warm-up {i + 1}: {w.exercises?.name ?? w.label}
                     </Text>
                   ))}
@@ -133,8 +133,12 @@ export default function Plan() {
                         {ex.exercises?.name} — {ex.sets}x{ex.reps}
                       </Text>
                       {ex.exercises?.video_url ? (
-                        <Pressable onPress={() => Linking.openURL(ex.exercises.video_url)}>
-                          <Text className="text-accent">▶</Text>
+                        <Pressable
+                          onPress={() => Linking.openURL(ex.exercises.video_url)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          accessibilityLabel={`Watch video for ${ex.exercises.name}`}
+                        >
+                          <Text style={{ color: "#8a5140" }}>▶</Text>
                         </Pressable>
                       ) : null}
                     </View>

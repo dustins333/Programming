@@ -1,19 +1,44 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { Link } from "expo-router";
 import { getNutritionRoster } from "../../../lib/nutrition/dashboard";
+import { StatusBadge } from "../../../components/StatusBadge";
 import { fonts, colors } from "../../../lib/theme";
 
-const STATUS_LABELS = {
-  pending: "Pending check-in",
-  ready: "Ready for check-in",
-  completed: "Check-in completed",
+// rosterStatus (see lib/nutrition/dashboard.js's deriveRosterStatus) -> the
+// shared 5-tone badge system, plus display copy. "Check-in due" and
+// "Awaiting review" are both check-in-adjacent but distinct states (hasn't
+// submitted vs. submitted-and-needs-your-notes), so this dashboard keeps
+// them as separate filters rather than collapsing to match the mockup's
+// exact chip count.
+const STATUS_META = {
+  checkinDue: { label: "Check-in due", tone: "urgent" },
+  needsTarget: { label: "Needs target", tone: "needsAction" },
+  awaitingReview: { label: "Awaiting review", tone: "needsAction" },
+  onTrack: { label: "On track", tone: "onTrack" },
+  paused: { label: "Paused", tone: "paused" },
 };
-const STATUS_ORDER = ["pending", "ready", "completed"];
+const FILTER_ORDER = ["checkinDue", "needsTarget", "awaitingReview", "onTrack", "paused"];
+
+function metaLine(client) {
+  if (client.rosterStatus === "paused") return "Paused";
+  if (client.rosterStatus === "needsTarget") return "No target set yet";
+  const logLine = client.loggedToday
+    ? "Logged today"
+    : client.missedDays > 0
+      ? `Missed ${client.missedDays} day${client.missedDays === 1 ? "" : "s"} this week`
+      : "Logged this week";
+  const weightLine =
+    client.weightDelta !== null
+      ? ` · ${client.weightDelta > 0 ? "▲" : client.weightDelta < 0 ? "▼" : "±"} ${Math.abs(client.weightDelta).toFixed(1)} lb`
+      : "";
+  return `${logLine}${weightLine}`;
+}
 
 export default function NutritionDashboard() {
   const [roster, setRoster] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [filter, setFilter] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -26,6 +51,20 @@ export default function NutritionDashboard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const filtered = useMemo(() => {
+    if (!roster) return [];
+    if (!filter) return roster;
+    return roster.filter((c) => c.rosterStatus === filter);
+  }, [roster, filter]);
+
+  const counts = useMemo(() => {
+    if (!roster) return {};
+    return FILTER_ORDER.reduce((acc, key) => {
+      acc[key] = roster.filter((c) => c.rosterStatus === key).length;
+      return acc;
+    }, {});
+  }, [roster]);
 
   if (loadError) {
     return (
@@ -47,59 +86,65 @@ export default function NutritionDashboard() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
-      <View className="mb-6 flex-row items-center justify-between">
-        <Text className="text-2xl text-primary" style={{ fontFamily: fonts.display }}>
+      <View className="mb-1 flex-row items-center justify-between">
+        <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
           Nutrition
         </Text>
-        <Link href="/(coach)/nutrition/questions" style={{ fontFamily: fonts.sansMedium }} className="text-accent">
+        <Link href="/(coach)/nutrition/questions" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
           Check-in questions
         </Link>
       </View>
+      <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
+        {roster.length} client{roster.length === 1 ? "" : "s"}
+      </Text>
 
-      {roster.length === 0 && (
-        <Text className="text-neutral-500" style={{ fontFamily: fonts.sans }}>
-          No active nutrition clients yet — assign one from the Clients page.
+      {roster.length === 0 ? (
+        <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
+          No nutrition clients yet — assign one from the Clients page.
         </Text>
-      )}
-
-      {STATUS_ORDER.map((status) => {
-        const clients = roster.filter((c) => c.checkinStatus === status);
-        if (clients.length === 0) return null;
-        return (
-          <View key={status} className="mb-6">
-            <Text className="mb-2 text-sm text-neutral-500" style={{ fontFamily: fonts.sansSemiBold }}>
-              {STATUS_LABELS[status]} ({clients.length})
-            </Text>
-            {clients.map((c) => (
-              <Link key={c.userId} href={`/(coach)/nutrition/clients/${c.userId}`} asChild>
-                <Pressable className="mb-2 rounded-lg border border-neutral-200 px-4 py-3">
-                  <View className="flex-row items-center justify-between">
-                    <Text style={{ fontFamily: fonts.sansMedium }}>{c.name}</Text>
-                    <Text
-                      style={{ fontFamily: fonts.sans }}
-                      className={
-                        c.weightDelta > 0
-                          ? "text-red-600"
-                          : c.weightDelta < 0
-                            ? "text-green-600"
-                            : "text-neutral-500"
-                      }
-                    >
-                      {c.weightDelta === null
-                        ? "— lb"
-                        : `${c.weightDelta > 0 ? "↑" : c.weightDelta < 0 ? "↓" : "±"} ${Math.abs(c.weightDelta).toFixed(1)} lb`}
-                    </Text>
-                  </View>
-                  <Text className="text-xs text-neutral-500" style={{ fontFamily: fonts.sans }}>
-                    {c.daysLogged}/7 days logged this week
-                    {c.needsAttention ? ` · missed ${c.missedDays} day${c.missedDays === 1 ? "" : "s"}` : ""}
+      ) : (
+        <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-6 mb-5 px-6">
+            <View className="flex-row gap-2">
+              <Pressable
+                onPress={() => setFilter(null)}
+                className={`rounded-full border px-3.5 py-2.5 ${!filter ? "border-primary bg-primary" : "border-stone-300"}`}
+              >
+                <Text className={!filter ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
+                  All ({roster.length})
+                </Text>
+              </Pressable>
+              {FILTER_ORDER.filter((key) => counts[key] > 0).map((key) => (
+                <Pressable
+                  key={key}
+                  onPress={() => setFilter(key)}
+                  className={`rounded-full border px-3.5 py-2.5 ${filter === key ? "border-primary bg-primary" : "border-stone-300"}`}
+                >
+                  <Text className={filter === key ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
+                    {STATUS_META[key].label} ({counts[key]})
                   </Text>
                 </Pressable>
-              </Link>
-            ))}
-          </View>
-        );
-      })}
+              ))}
+            </View>
+          </ScrollView>
+
+          {filtered.map((c) => (
+            <Link key={c.userId} href={`/(coach)/nutrition/clients/${c.userId}`} asChild>
+              <Pressable className="mb-2 rounded-2xl border border-stone-200 px-4 py-3.5">
+                <View className="flex-row items-center justify-between">
+                  <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                    {c.name}
+                  </Text>
+                  <StatusBadge tone={STATUS_META[c.rosterStatus].tone} label={STATUS_META[c.rosterStatus].label} />
+                </View>
+                <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                  {metaLine(c)}
+                </Text>
+              </Pressable>
+            </Link>
+          ))}
+        </>
+      )}
     </ScrollView>
   );
 }

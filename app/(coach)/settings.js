@@ -3,6 +3,9 @@ import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert 
 import { Redirect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { getSettings, updateSetting } from "../../lib/settings";
+import { sendPush } from "../../lib/notifications/sendPush";
+import { fonts, colors } from "../../lib/theme";
+import { CoachShell } from "../../components/CoachShell";
 
 const LABELS = {
   alert_lead_time_days: "Alert lead time (days before a block ends)",
@@ -16,6 +19,7 @@ export default function Settings() {
   const [settings, setSettings] = useState(null);
   const [values, setValues] = useState({});
   const [savingKey, setSavingKey] = useState(null);
+  const [sendingPush, setSendingPush] = useState(false);
 
   const load = useCallback(async () => {
     const rows = await getSettings();
@@ -44,22 +48,37 @@ export default function Settings() {
     }
   };
 
+  const handleSendTestPush = async () => {
+    setSendingPush(true);
+    try {
+      const result = await sendPush({ userId: profile.id, title: "Kova Strength", body: "Push notifications are wired up." });
+      Alert.alert("Sent", JSON.stringify(result));
+    } catch (err) {
+      Alert.alert("Failed to send", err.message ?? String(err));
+    } finally {
+      setSendingPush(false);
+    }
+  };
+
   if (!settings) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color="#a46a57" size="large" />
-      </View>
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white">
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      </CoachShell>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
-      <Text className="mb-6 text-2xl text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+    <CoachShell>
+    <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
+      <Text className="mb-6 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Settings
       </Text>
       {settings.map((row) => (
         <View key={row.key} className="mb-6">
-          <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
             {LABELS[row.key] ?? row.key}
           </Text>
           <View className="flex-row items-center gap-3">
@@ -67,21 +86,35 @@ export default function Settings() {
               value={values[row.key] ?? ""}
               onChangeText={(text) => setValues((v) => ({ ...v, [row.key]: text }))}
               keyboardType="numeric"
-              className="flex-1 rounded-lg border border-neutral-300 px-4 py-3 text-base"
-              style={{ fontFamily: "Montserrat_400Regular" }}
+              className="flex-1 rounded-lg border border-stone-300 px-4 py-3 text-base"
+              style={{ fontFamily: fonts.sans }}
             />
             <Pressable
               onPress={() => handleSave(row.key)}
               disabled={savingKey === row.key}
               className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
             >
-              <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                 {savingKey === row.key ? "Saving…" : "Save"}
               </Text>
             </Pressable>
           </View>
         </View>
       ))}
+
+      <Text className="mb-2 mt-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+        Diagnostics
+      </Text>
+      <Pressable
+        onPress={handleSendTestPush}
+        disabled={sendingPush}
+        className="self-start rounded-lg border border-primary px-5 py-3 disabled:opacity-50"
+      >
+        <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+          {sendingPush ? "Sending…" : "Send test push to myself"}
+        </Text>
+      </Pressable>
     </ScrollView>
+    </CoachShell>
   );
 }

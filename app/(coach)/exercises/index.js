@@ -9,6 +9,7 @@ import {
   MUSCLE_GROUPS,
 } from "../../../lib/programming/exercises";
 import { ExerciseFormModal } from "./ExerciseFormModal";
+import { CoachShell } from "../../../components/CoachShell";
 
 export default function Exercises() {
   const { profile } = useAuth();
@@ -60,9 +61,10 @@ export default function Exercises() {
   };
 
   return (
-    <View className="flex-1 bg-white px-6 py-8">
+    <CoachShell>
+    <View className="flex-1 bg-white px-6 py-8" style={{ maxWidth: 900 }}>
       <View className="mb-4 flex-row items-center justify-between">
-        <Text className="text-2xl text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+        <Text className="text-2xl" style={{ fontFamily: "ProtestStrike_400Regular", color: "#a46a57" }}>
           Exercise Library
         </Text>
         <Pressable
@@ -82,16 +84,16 @@ export default function Exercises() {
         value={search}
         onChangeText={setSearch}
         placeholder="Search exercises…"
-        className="mb-3 rounded-lg border border-neutral-300 px-4 py-3"
+        className="mb-3 rounded-lg border border-stone-300 px-4 py-3"
         style={{ fontFamily: "Montserrat_400Regular" }}
       />
 
       <View className="mb-4 flex-row flex-wrap gap-2">
         <Pressable
           onPress={() => setMuscleFilter(null)}
-          className={`rounded-full border px-3 py-1.5 ${!muscleFilter ? "border-primary bg-primary" : "border-neutral-300"}`}
+          className={`rounded-full border px-3.5 py-2.5 ${!muscleFilter ? "border-primary bg-primary" : "border-stone-300"}`}
         >
-          <Text className={!muscleFilter ? "text-white" : "text-neutral-700"} style={{ fontFamily: "Montserrat_400Regular" }}>
+          <Text className={!muscleFilter ? "text-white" : "text-stone-700"} style={{ fontFamily: "Montserrat_400Regular" }}>
             all
           </Text>
         </Pressable>
@@ -99,10 +101,10 @@ export default function Exercises() {
           <Pressable
             key={mg}
             onPress={() => setMuscleFilter(mg)}
-            className={`rounded-full border px-3 py-1.5 ${muscleFilter === mg ? "border-primary bg-primary" : "border-neutral-300"}`}
+            className={`rounded-full border px-3.5 py-2.5 ${muscleFilter === mg ? "border-primary bg-primary" : "border-stone-300"}`}
           >
             <Text
-              className={muscleFilter === mg ? "text-white" : "text-neutral-700"}
+              className={muscleFilter === mg ? "text-white" : "text-stone-700"}
               style={{ fontFamily: "Montserrat_400Regular" }}
             >
               {mg.replace("_", " ")}
@@ -118,24 +120,27 @@ export default function Exercises() {
           data={filtered}
           keyExtractor={(item) => item.id}
           ListEmptyComponent={
-            <Text className="text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+            <Text className="text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
               No exercises yet.
             </Text>
           }
           renderItem={({ item }) => (
-            <View className="mb-2 flex-row items-center justify-between rounded-lg border border-neutral-200 px-4 py-3">
+            <View className="mb-2 flex-row items-center justify-between rounded-lg border border-stone-200 px-4 py-3">
               <View className="flex-1">
                 <Text style={{ fontFamily: "Montserrat_500Medium" }}>{item.name}</Text>
-                <Text className="text-xs text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+                <Text className="text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
                   {item.muscle_group.replace("_", " ")}
                   {item.movement_pattern ? ` · ${item.movement_pattern.replace("_", " ")}` : ""}
                 </Text>
               </View>
               {item.video_url ? (
-                <Pressable onPress={() => Linking.openURL(item.video_url)} className="mr-3">
-                  <Text className="text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
-                    ▶ video
-                  </Text>
+                <Pressable
+                  onPress={() => Linking.openURL(item.video_url)}
+                  className="mr-3"
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel={`Watch video for ${item.name}`}
+                >
+                  <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>▶ video</Text>
                 </Pressable>
               ) : null}
               <Pressable
@@ -144,13 +149,17 @@ export default function Exercises() {
                   setModalVisible(true);
                 }}
                 className="mr-3"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel={`Edit ${item.name}`}
               >
-                <Text className="text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
-                  Edit
-                </Text>
+                <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>Edit</Text>
               </Pressable>
-              <Pressable onPress={() => handleArchive(item)}>
-                <Text className="text-neutral-400" style={{ fontFamily: "Montserrat_400Regular" }}>
+              <Pressable
+                onPress={() => handleArchive(item)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel={`Archive ${item.name}`}
+              >
+                <Text className="text-stone-400" style={{ fontFamily: "Montserrat_400Regular" }}>
                   Archive
                 </Text>
               </Pressable>
@@ -166,5 +175,6 @@ export default function Exercises() {
         onSubmit={handleSubmit}
       />
     </View>
+    </CoachShell>
   );
 }

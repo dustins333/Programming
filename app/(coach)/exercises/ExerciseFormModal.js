@@ -47,17 +47,17 @@ export function ExerciseFormModal({ visible, initialExercise, onClose, onSubmit 
               {initialExercise ? "Edit exercise" : "New exercise"}
             </Text>
 
-            <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
               Name
             </Text>
             <TextInput
               value={form.name}
               onChangeText={(name) => setForm((f) => ({ ...f, name }))}
-              className="mb-4 rounded-lg border border-neutral-300 px-4 py-3"
+              className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: "Montserrat_400Regular" }}
             />
 
-            <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
               Muscle group
             </Text>
             <View className="mb-4 flex-row flex-wrap gap-2">
@@ -65,12 +65,12 @@ export function ExerciseFormModal({ visible, initialExercise, onClose, onSubmit 
                 <Pressable
                   key={mg}
                   onPress={() => setForm((f) => ({ ...f, muscleGroup: mg }))}
-                  className={`rounded-full border px-3 py-1.5 ${
-                    form.muscleGroup === mg ? "border-primary bg-primary" : "border-neutral-300"
+                  className={`rounded-full border px-3.5 py-2.5 ${
+                    form.muscleGroup === mg ? "border-primary bg-primary" : "border-stone-300"
                   }`}
                 >
                   <Text
-                    className={form.muscleGroup === mg ? "text-white" : "text-neutral-700"}
+                    className={form.muscleGroup === mg ? "text-white" : "text-stone-700"}
                     style={{ fontFamily: "Montserrat_400Regular" }}
                   >
                     {mg.replace("_", " ")}
@@ -79,18 +79,18 @@ export function ExerciseFormModal({ visible, initialExercise, onClose, onSubmit 
               ))}
             </View>
 
-            <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
               Movement pattern (for the balance tally — optional)
             </Text>
             <View className="mb-4 flex-row flex-wrap gap-2">
               <Pressable
                 onPress={() => setForm((f) => ({ ...f, movementPattern: "" }))}
-                className={`rounded-full border px-3 py-1.5 ${
-                  !form.movementPattern ? "border-primary bg-primary" : "border-neutral-300"
+                className={`rounded-full border px-3.5 py-2.5 ${
+                  !form.movementPattern ? "border-primary bg-primary" : "border-stone-300"
                 }`}
               >
                 <Text
-                  className={!form.movementPattern ? "text-white" : "text-neutral-700"}
+                  className={!form.movementPattern ? "text-white" : "text-stone-700"}
                   style={{ fontFamily: "Montserrat_400Regular" }}
                 >
                   none
@@ -100,12 +100,12 @@ export function ExerciseFormModal({ visible, initialExercise, onClose, onSubmit 
                 <Pressable
                   key={mp}
                   onPress={() => setForm((f) => ({ ...f, movementPattern: mp }))}
-                  className={`rounded-full border px-3 py-1.5 ${
-                    form.movementPattern === mp ? "border-primary bg-primary" : "border-neutral-300"
+                  className={`rounded-full border px-3.5 py-2.5 ${
+                    form.movementPattern === mp ? "border-primary bg-primary" : "border-stone-300"
                   }`}
                 >
                   <Text
-                    className={form.movementPattern === mp ? "text-white" : "text-neutral-700"}
+                    className={form.movementPattern === mp ? "text-white" : "text-stone-700"}
                     style={{ fontFamily: "Montserrat_400Regular" }}
                   >
                     {mp.replace("_", " ")}
@@ -114,7 +114,7 @@ export function ExerciseFormModal({ visible, initialExercise, onClose, onSubmit 
               ))}
             </View>
 
-            <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
               Cues
             </Text>
             <TextInput
@@ -122,11 +122,11 @@ export function ExerciseFormModal({ visible, initialExercise, onClose, onSubmit 
               onChangeText={(cues) => setForm((f) => ({ ...f, cues }))}
               multiline
               numberOfLines={3}
-              className="mb-4 rounded-lg border border-neutral-300 px-4 py-3"
+              className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: "Montserrat_400Regular", textAlignVertical: "top" }}
             />
 
-            <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
               Video link (YouTube / Vimeo / Instagram)
             </Text>
             <TextInput
@@ -134,11 +134,11 @@ export function ExerciseFormModal({ visible, initialExercise, onClose, onSubmit 
               onChangeText={(videoUrl) => setForm((f) => ({ ...f, videoUrl }))}
               autoCapitalize="none"
               keyboardType="url"
-              className="mb-1 rounded-lg border border-neutral-300 px-4 py-3"
+              className="mb-1 rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: "Montserrat_400Regular" }}
             />
             {videoUrlLooksOff ? (
-              <Text className="mb-4 text-xs text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+              <Text className="mb-4 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
                 Doesn't look like a YouTube/Vimeo/Instagram link — that's fine if it's intentional.
               </Text>
             ) : (
@@ -146,7 +146,7 @@ export function ExerciseFormModal({ visible, initialExercise, onClose, onSubmit 
             )}
 
             <View className="flex-row justify-end gap-3">
-              <Pressable onPress={onClose} className="rounded-lg border border-neutral-300 px-4 py-3">
+              <Pressable onPress={onClose} className="rounded-lg border border-stone-300 px-4 py-3">
                 <Text style={{ fontFamily: "Montserrat_500Medium" }}>Cancel</Text>
               </Pressable>
               <Pressable

@@ -20,7 +20,7 @@ export function ExercisePickerModal({ visible, library, onClose, onPick }) {
             value={search}
             onChangeText={setSearch}
             placeholder="Search…"
-            className="mb-3 rounded-lg border border-neutral-300 px-4 py-3"
+            className="mb-3 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: "Montserrat_400Regular" }}
           />
           <FlatList
@@ -33,16 +33,16 @@ export function ExercisePickerModal({ visible, library, onClose, onPick }) {
                   onPick(item);
                   onClose();
                 }}
-                className="border-b border-neutral-100 py-3"
+                className="border-b border-stone-100 py-3"
               >
                 <Text style={{ fontFamily: "Montserrat_500Medium" }}>{item.name}</Text>
-                <Text className="text-xs text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+                <Text className="text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
                   {item.muscle_group.replace("_", " ")}
                 </Text>
               </Pressable>
             )}
           />
-          <Pressable onPress={onClose} className="mt-4 rounded-lg border border-neutral-300 px-4 py-3">
+          <Pressable onPress={onClose} className="mt-4 rounded-lg border border-stone-300 px-4 py-3">
             <Text className="text-center" style={{ fontFamily: "Montserrat_500Medium" }}>
               Cancel
             </Text>

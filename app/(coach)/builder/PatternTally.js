@@ -24,15 +24,15 @@ export function PatternTally({ currentPatterns, siblingPatterns }) {
   }, [currentPatterns, siblingPatterns]);
 
   return (
-    <View className="rounded-lg border border-neutral-200 p-4">
-      <Text className="mb-3 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+    <View className="rounded-lg border border-stone-200 p-4">
+      <Text className="mb-3 text-sm text-stone-700" style={{ fontFamily: "Montserrat_600SemiBold" }}>
         Movement balance (this week)
       </Text>
       <View className="flex-row flex-wrap gap-2">
         {MOVEMENT_PATTERNS.map((p) => (
           <View
             key={p}
-            className={`rounded-full border px-3 py-1.5 ${counts[p] === 0 ? "border-neutral-200" : "border-accent bg-tertiary/30"}`}
+            className={`rounded-full border px-3.5 py-2.5 ${counts[p] === 0 ? "border-stone-200" : "border-accent bg-tertiary/30"}`}
           >
             <Text className="text-xs" style={{ fontFamily: "Montserrat_500Medium" }}>
               {LABELS[p]}: {counts[p]}

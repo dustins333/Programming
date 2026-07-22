@@ -37,10 +37,10 @@ export default function SetPassword() {
 
   return (
     <View className="flex-1 justify-center bg-white px-6">
-      <Text className="mb-2 text-2xl text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+      <Text className="mb-2 text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
         Set your password
       </Text>
-      <Text className="mb-6 text-base text-neutral-600" style={{ fontFamily: "Montserrat_400Regular" }}>
+      <Text className="mb-6 text-base text-stone-600" style={{ fontFamily: "Montserrat_400Regular" }}>
         Choose a password for your Kova Strength account.
       </Text>
 
@@ -56,7 +56,7 @@ export default function SetPassword() {
             secureTextEntry
             autoCapitalize="none"
             placeholder="New password"
-            className="mb-2 rounded-lg border border-neutral-300 px-4 py-3 text-base"
+            className="mb-2 rounded-lg border border-stone-300 px-4 py-3 text-base"
             style={{ fontFamily: "Montserrat_400Regular" }}
           />
           {errorMessage ? (

@@ -35,7 +35,7 @@ export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
             New block
           </Text>
 
-          <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
             Program
           </Text>
           <View className="mb-4 flex-row gap-2">
@@ -43,12 +43,12 @@ export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
               <Pressable
                 key={p.id}
                 onPress={() => setGroupProgramId(p.id)}
-                className={`rounded-full border px-3 py-1.5 ${
-                  groupProgramId === p.id ? "border-primary bg-primary" : "border-neutral-300"
+                className={`rounded-full border px-3.5 py-2.5 ${
+                  groupProgramId === p.id ? "border-primary bg-primary" : "border-stone-300"
                 }`}
               >
                 <Text
-                  className={groupProgramId === p.id ? "text-white" : "text-neutral-700"}
+                  className={groupProgramId === p.id ? "text-white" : "text-stone-700"}
                   style={{ fontFamily: "Montserrat_400Regular" }}
                 >
                   {p.name} ({p.block_length_weeks}wk)
@@ -57,19 +57,19 @@ export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
             ))}
           </View>
 
-          <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
             Start date (YYYY-MM-DD)
           </Text>
           <TextInput
             value={startDate}
             onChangeText={setStartDate}
             placeholder="2026-07-20"
-            className="mb-6 rounded-lg border border-neutral-300 px-4 py-3"
+            className="mb-6 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: "Montserrat_400Regular" }}
           />
 
           <View className="flex-row justify-end gap-3">
-            <Pressable onPress={onClose} className="rounded-lg border border-neutral-300 px-4 py-3">
+            <Pressable onPress={onClose} className="rounded-lg border border-stone-300 px-4 py-3">
               <Text style={{ fontFamily: "Montserrat_500Medium" }}>Cancel</Text>
             </Pressable>
             <Pressable

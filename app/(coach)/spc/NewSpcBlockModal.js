@@ -33,30 +33,30 @@ export function NewSpcBlockModal({ visible, defaultLengthWeeks, onClose, onSubmi
             New SPC block
           </Text>
 
-          <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: fonts.sansMedium }}>
+          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
             Start date (YYYY-MM-DD)
           </Text>
           <TextInput
             value={startDate}
             onChangeText={setStartDate}
             placeholder="2026-07-20"
-            className="mb-4 rounded-lg border border-neutral-300 px-4 py-3"
+            className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: fonts.sans }}
           />
 
-          <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: fonts.sansMedium }}>
+          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
             Block length (weeks)
           </Text>
           <TextInput
             value={lengthWeeks}
             onChangeText={setLengthWeeks}
             keyboardType="numeric"
-            className="mb-6 rounded-lg border border-neutral-300 px-4 py-3"
+            className="mb-6 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: fonts.sans }}
           />
 
           <View className="flex-row justify-end gap-3">
-            <Pressable onPress={onClose} className="rounded-lg border border-neutral-300 px-4 py-3">
+            <Pressable onPress={onClose} className="rounded-lg border border-stone-300 px-4 py-3">
               <Text style={{ fontFamily: fonts.sansMedium }}>Cancel</Text>
             </Pressable>
             <Pressable

@@ -25,28 +25,28 @@ export function LinkMemberModal({ visible, onClose, onSubmit }) {
           <Text className="mb-1 text-xl text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
             Link existing account
           </Text>
-          <Text className="mb-4 text-xs text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+          <Text className="mb-4 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
             Create the login first in the Supabase dashboard (Authentication → Users → Add user), then paste its UUID here to
             create their Kova Strength profile. A proper email-invite flow is coming later.
           </Text>
 
           {["id", "name", "email", "phone"].map((field) => (
             <View key={field} className="mb-3">
-              <Text className="mb-1 text-sm capitalize text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+              <Text className="mb-1 text-sm capitalize text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
                 {field === "id" ? "Auth user UUID" : field}
               </Text>
               <TextInput
                 value={form[field]}
                 onChangeText={(v) => setForm((f) => ({ ...f, [field]: v }))}
                 autoCapitalize="none"
-                className="rounded-lg border border-neutral-300 px-4 py-3"
+                className="rounded-lg border border-stone-300 px-4 py-3"
                 style={{ fontFamily: "Montserrat_400Regular" }}
               />
             </View>
           ))}
 
           <View className="mt-2 flex-row justify-end gap-3">
-            <Pressable onPress={onClose} className="rounded-lg border border-neutral-300 px-4 py-3">
+            <Pressable onPress={onClose} className="rounded-lg border border-stone-300 px-4 py-3">
               <Text style={{ fontFamily: "Montserrat_500Medium" }}>Cancel</Text>
             </Pressable>
             <Pressable

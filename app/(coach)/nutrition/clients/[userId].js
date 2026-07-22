@@ -139,11 +139,11 @@ export default function NutritionClientDetail() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
-      <Text className="mb-6 text-2xl text-primary" style={{ fontFamily: fonts.display }}>
+      <Text className="mb-6 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         {name}
       </Text>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
         Current target
       </Text>
       {currentTarget ? (
@@ -153,12 +153,12 @@ export default function NutritionClientDetail() {
           {currentTarget.step_goal ? ` · ${currentTarget.step_goal} steps` : ""}
         </Text>
       ) : (
-        <Text className="mb-6 text-neutral-500" style={{ fontFamily: fonts.sans }}>
+        <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
           No target set yet.
         </Text>
       )}
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
         Set new target
       </Text>
       <View className="mb-2 flex-row gap-3">
@@ -197,7 +197,7 @@ export default function NutritionClientDetail() {
         value={form.note}
         onChangeText={(t) => setForm((f) => ({ ...f, note: t }))}
         placeholder="Note (what changed and why)…"
-        className="mb-3 rounded-lg border border-neutral-300 px-4 py-3"
+        className="mb-3 rounded-lg border border-stone-300 px-4 py-3"
         style={{ fontFamily: fonts.sans }}
       />
       <Pressable
@@ -210,7 +210,7 @@ export default function NutritionClientDetail() {
         </Text>
       </Pressable>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
         This week vs. last week
       </Text>
       {METRIC_ROWS.map((m) => {
@@ -219,16 +219,16 @@ export default function NutritionClientDetail() {
         const target = m.targetKey ? currentTarget?.[m.targetKey] : null;
         const color = m.oneSided ? colorForStepsTarget(actual, target) : colorForTarget(actual, target);
         return (
-          <View key={m.key} className="mb-1 flex-row items-center justify-between border-b border-neutral-100 py-2">
+          <View key={m.key} className="mb-1 flex-row items-center justify-between border-b border-stone-100 py-2">
             <Text style={{ fontFamily: fonts.sansMedium }}>{m.label}</Text>
             <View className="flex-row items-center gap-3">
               <Text
                 style={{ fontFamily: fonts.sansMedium }}
-                className={color === "green" ? "text-green-600" : color === "red" ? "text-red-600" : "text-neutral-700"}
+                className={color === "green" ? "text-green-600" : color === "red" ? "text-red-600" : "text-stone-700"}
               >
                 {actual !== null && actual !== undefined ? actual.toFixed(1) : "–"}
               </Text>
-              <Text className="text-xs text-neutral-400" style={{ fontFamily: fonts.sans }}>
+              <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
                 (last week: {prior !== null && prior !== undefined ? prior.toFixed(1) : "–"})
               </Text>
             </View>
@@ -237,11 +237,11 @@ export default function NutritionClientDetail() {
       })}
 
       <View className="mb-2 mt-8 flex-row items-center justify-between">
-        <Text className="text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+        <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
           This week's check-in
         </Text>
-        <Pressable onPress={handleCopyQuestions} disabled={copying}>
-          <Text className="text-xs text-accent" style={{ fontFamily: fonts.sansMedium }}>
+        <Pressable onPress={handleCopyQuestions} disabled={copying} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
             {copying ? "Copying…" : "Copy questions from template"}
           </Text>
         </Pressable>
@@ -265,24 +265,24 @@ export default function NutritionClientDetail() {
           </Pressable>
         </View>
       ) : (
-        <Text className="mb-8 text-neutral-500" style={{ fontFamily: fonts.sans }}>
+        <Text className="mb-8 text-stone-500" style={{ fontFamily: fonts.sans }}>
           Not submitted yet this week.
         </Text>
       )}
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
         Target history
       </Text>
       {targets.map((t) => (
-        <View key={t.id} className="mb-2 rounded-lg border border-neutral-200 px-4 py-3">
-          <Text className="text-xs text-neutral-500" style={{ fontFamily: fonts.sans }}>
+        <View key={t.id} className="mb-2 rounded-lg border border-stone-200 px-4 py-3">
+          <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
             Effective {t.effective_date}
           </Text>
           <Text style={{ fontFamily: fonts.sans }}>
             P {t.protein_g} / C {t.carb_g} / F {t.fat_g} / Fiber {t.fiber_g}
           </Text>
           {t.note ? (
-            <Text className="text-xs text-neutral-500" style={{ fontFamily: fonts.sans }}>
+            <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
               {t.note}
             </Text>
           ) : null}
@@ -295,14 +295,14 @@ export default function NutritionClientDetail() {
 function FormField({ label, value, onChangeText }) {
   return (
     <View className="mb-2 flex-1">
-      <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: fonts.sansMedium }}>
+      <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
         {label}
       </Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         keyboardType="numeric"
-        className="rounded-lg border border-neutral-300 px-4 py-3 text-base"
+        className="rounded-lg border border-stone-300 px-4 py-3 text-base"
         style={{ fontFamily: fonts.sans }}
       />
     </View>

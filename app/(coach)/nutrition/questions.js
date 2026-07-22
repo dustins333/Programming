@@ -68,7 +68,7 @@ export default function CheckinQuestions() {
       <Text className="mb-4 text-2xl text-primary" style={{ fontFamily: fonts.display }}>
         Check-In Questions
       </Text>
-      <Text className="mb-4 text-sm text-neutral-500" style={{ fontFamily: fonts.sans }}>
+      <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
         This is the master template. Each client gets their own copy — use "Copy questions from
         template" on their nutrition page to apply changes to that client.
       </Text>
@@ -78,7 +78,7 @@ export default function CheckinQuestions() {
           value={newText}
           onChangeText={setNewText}
           placeholder="New question…"
-          className="flex-1 rounded-lg border border-neutral-300 px-4 py-3"
+          className="flex-1 rounded-lg border border-stone-300 px-4 py-3"
           style={{ fontFamily: fonts.sans }}
         />
         <Pressable
@@ -96,17 +96,17 @@ export default function CheckinQuestions() {
         data={questions}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
-          <Text className="text-neutral-500" style={{ fontFamily: fonts.sans }}>
+          <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
             No questions yet.
           </Text>
         }
         renderItem={({ item }) => (
-          <View className="mb-2 flex-row items-center justify-between rounded-lg border border-neutral-200 px-4 py-3">
+          <View className="mb-2 flex-row items-center justify-between rounded-lg border border-stone-200 px-4 py-3">
             <Text className="flex-1" style={{ fontFamily: fonts.sans }}>
               {item.question_text}
             </Text>
             <Pressable onPress={() => handleDelete(item.id)}>
-              <Text className="text-neutral-400" style={{ fontFamily: fonts.sans }}>
+              <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
                 Remove
               </Text>
             </Pressable>

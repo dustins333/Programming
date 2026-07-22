@@ -1,69 +1,134 @@
-import { useState } from "react";
-import { View, Text, Pressable, Alert } from "react-native";
-import { Link } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
-import { sendPush } from "../../lib/notifications/sendPush";
+import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
+import { getCoachDashboardStats } from "../../lib/programming/coachDashboard";
+import { fonts, colors } from "../../lib/theme";
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatToday() {
+  const today = todayInBoise();
+  const [year, month, day] = today.split("-").map(Number);
+  return `${WEEKDAYS[dayOfWeekInBoise(today)]}, ${MONTHS[month - 1]} ${day}`;
+}
+
+function AttentionCard({ title, subtitle, onPress }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="mb-2.5 flex-row items-center justify-between rounded-2xl px-4 py-3.5"
+      style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#e9d3c6" }}
+    >
+      <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.accent, opacity: 0.5, marginRight: 14 }} />
+      <View className="flex-1">
+        <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+          {title}
+        </Text>
+        <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          {subtitle}
+        </Text>
+      </View>
+      <Text className="text-stone-400">›</Text>
+    </Pressable>
+  );
+}
+
+function StatTile({ value, label }) {
+  return (
+    <View className="flex-1 items-center rounded-2xl border border-stone-200 py-4">
+      <Text className="text-2xl text-stone-700" style={{ fontFamily: fonts.sansSemiBold }}>
+        {value}
+      </Text>
+      <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 export default function CoachHome() {
-  const { profile, signOut } = useAuth();
-  const [sending, setSending] = useState(false);
+  const { profile } = useAuth();
+  const router = useRouter();
+  const [stats, setStats] = useState(null);
+  const [loadError, setLoadError] = useState(null);
 
-  const handleSendTestPush = async () => {
-    setSending(true);
+  const load = useCallback(async () => {
     try {
-      const result = await sendPush({
-        userId: profile.id,
-        title: "Kova Strength",
-        body: "Push notifications are wired up.",
-      });
-      Alert.alert("Sent", JSON.stringify(result));
+      setStats(await getCoachDashboardStats());
     } catch (err) {
-      Alert.alert("Failed to send", err.message ?? String(err));
-    } finally {
-      setSending(false);
+      setLoadError(err.message ?? String(err));
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loadError) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white px-6">
+        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+          Something went wrong loading your dashboard: {loadError}
+        </Text>
+      </View>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  const hasAttentionItems = stats.spcDueSoon > 0 || stats.checkinsToReview > 0;
 
   return (
-    <View className="flex-1 items-center justify-center bg-white px-6">
-      <Text className="mb-2 text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
+    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
+      <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Welcome, {profile?.name}
       </Text>
-      <Text className="mb-8 text-base text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
-        {profile?.role === "admin" ? "Admin" : "Coach"} dashboard
+      <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
+        {profile?.role === "admin" ? "Admin" : "Coach"} · {formatToday()}
       </Text>
-      <Link href="/(coach)/blocks" className="mb-3 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
-        Group Program Blocks
-      </Link>
-      <Link href="/(coach)/exercises" className="mb-3 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
-        Exercise Library
-      </Link>
-      <Link href="/(coach)/clients" className="mb-3 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
-        Clients
-      </Link>
-      <Link href="/(coach)/spc" className="mb-3 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
-        SPC
-      </Link>
-      <Link href="/(coach)/nutrition" className="mb-3 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
-        Nutrition
-      </Link>
-      {profile?.role === "admin" ? (
-        <Link href="/(coach)/settings" className="mb-4 text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
-          Settings
-        </Link>
-      ) : null}
-      <Pressable
-        onPress={handleSendTestPush}
-        disabled={sending}
-        className="mb-4 rounded-lg border border-primary px-5 py-3 disabled:opacity-50"
-      >
-        <Text style={{ fontFamily: "Montserrat_500Medium", color: "#a46a57" }}>
-          {sending ? "Sending…" : "Send test push to myself"}
-        </Text>
-      </Pressable>
-      <Pressable onPress={signOut} className="rounded-lg border border-neutral-300 px-5 py-3">
-        <Text style={{ fontFamily: "Montserrat_500Medium" }}>Sign out</Text>
-      </Pressable>
-    </View>
+
+      {hasAttentionItems && (
+        <View className="mb-6">
+          <Text
+            className="mb-2 text-xs uppercase text-stone-400"
+            style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}
+          >
+            Needs your attention
+          </Text>
+          {stats.spcDueSoon > 0 && (
+            <AttentionCard
+              title={`${stats.spcDueSoon} SPC client${stats.spcDueSoon === 1 ? "" : "s"} due soon`}
+              subtitle="Blank drafts auto-created — ready to fill in"
+              onPress={() => router.push("/(coach)/spc")}
+            />
+          )}
+          {stats.checkinsToReview > 0 && (
+            <AttentionCard
+              title={`${stats.checkinsToReview} check-in${stats.checkinsToReview === 1 ? "" : "s"} to review`}
+              subtitle="Submitted this week, awaiting your notes"
+              onPress={() => router.push("/(coach)/nutrition")}
+            />
+          )}
+        </View>
+      )}
+
+      <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+        This week
+      </Text>
+      <View className="mb-6 flex-row gap-3">
+        <StatTile value={stats.flagshipCount} label="Flagship" />
+        <StatTile value={stats.spcCount} label="SPC" />
+        <StatTile value={stats.nutritionCount} label="Nutrition" />
+      </View>
+    </ScrollView>
   );
 }

@@ -126,10 +126,13 @@ export default function SpcWorkoutBuilderNative() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-6">
-      <Text className="text-xl text-primary" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="text-xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
         {member.name} — Session {workout.session_number}
       </Text>
-      <Text className={workout.status === "published" ? "mb-4 text-accent" : "mb-4 text-neutral-400"} style={{ fontFamily: fonts.sans }}>
+      <Text
+        className="mb-4 text-xs"
+        style={{ fontFamily: fonts.sansMedium, color: workout.status === "published" ? "#8a5140" : "#a8a29e" }}
+      >
         {workout.status}
       </Text>
       <Pressable onPress={handleTogglePublish} disabled={publishing} className="mb-6 self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
@@ -138,30 +141,42 @@ export default function SpcWorkoutBuilderNative() {
         </Text>
       </Pressable>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
         Warm-up
       </Text>
-      {warmups.map((w, i) => (
-        <View key={w.id} className="mb-2 flex-row items-center justify-between rounded-lg border border-neutral-200 px-3 py-2">
-          <Text style={{ fontFamily: fonts.sans }}>
-            {i + 1}. {w.exercises?.name ?? w.label}
-          </Text>
-          <Pressable onPress={() => handleRemoveWarmup(w.id)}>
-            <Text className="text-neutral-400">✕</Text>
-          </Pressable>
+      {warmups.length > 0 && (
+        <View className="mb-2 rounded-xl px-3.5" style={{ backgroundColor: "#faf7f4", borderWidth: 1, borderColor: "#f0ebe6" }}>
+          {warmups.map((w, i) => (
+            <View
+              key={w.id}
+              className="flex-row items-center justify-between py-2.5"
+              style={i < warmups.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f0ebe6" } : undefined}
+            >
+              <Text className="text-stone-700" style={{ fontFamily: fonts.sans, fontSize: 14 }}>
+                {i + 1}. {w.exercises?.name ?? w.label}
+              </Text>
+              <Pressable
+                onPress={() => handleRemoveWarmup(w.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel={`Remove warm-up exercise ${w.exercises?.name ?? w.label ?? i + 1}`}
+              >
+                <Text className="text-stone-400">✕</Text>
+              </Pressable>
+            </View>
+          ))}
         </View>
-      ))}
-      <Pressable onPress={() => setPickerTarget("warmup")} className="mb-6 rounded-lg border border-primary px-3 py-2">
-        <Text className="text-center text-accent" style={{ fontFamily: fonts.sansMedium }}>
+      )}
+      <Pressable onPress={() => setPickerTarget("warmup")} className="mb-6 rounded-lg border border-primary px-3 py-2.5">
+        <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
           + Insert warm-up exercise
         </Text>
       </Pressable>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text className="mb-2 text-xs uppercase text-stone-700" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
         Main Session
       </Text>
 
-      <Text className="mb-2 text-xs text-neutral-500" style={{ fontFamily: fonts.sans }}>
+      <Text className="mb-2 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
         Editing week:
       </Text>
       <View className="mb-4 flex-row gap-2">
@@ -169,9 +184,9 @@ export default function SpcWorkoutBuilderNative() {
           <Pressable
             key={weekNumber}
             onPress={() => setSelectedWeek(weekNumber)}
-            className={`rounded-full border px-3 py-1.5 ${selectedWeek === weekNumber ? "border-primary bg-primary" : "border-neutral-300"}`}
+            className={`rounded-full border px-3.5 py-2.5 ${selectedWeek === weekNumber ? "border-primary bg-primary" : "border-stone-300"}`}
           >
-            <Text className={selectedWeek === weekNumber ? "text-white" : "text-neutral-700"} style={{ fontFamily: fonts.sans }}>
+            <Text className={selectedWeek === weekNumber ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
               Wk {weekNumber}
             </Text>
           </Pressable>
@@ -181,24 +196,45 @@ export default function SpcWorkoutBuilderNative() {
       {exercises.map((item, i) => {
         const week = item.spc_exercise_weeks.find((w) => w.week_number === selectedWeek);
         return (
-          <View key={item.id} className="mb-3 rounded-lg border border-neutral-200 px-3 py-3">
+          <View key={item.id} className="mb-3 rounded-lg border border-stone-200 px-3 py-3">
             <View className="mb-2 flex-row items-center justify-between">
               <Text className="flex-1" style={{ fontFamily: fonts.sansMedium }}>
                 {item.exercises?.name}
               </Text>
               {item.exercises?.video_url ? (
-                <Pressable onPress={() => Linking.openURL(item.exercises.video_url)} className="mr-2">
-                  <Text className="text-accent">▶</Text>
+                <Pressable
+                  onPress={() => Linking.openURL(item.exercises.video_url)}
+                  className="mr-2"
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel={`Watch video for ${item.exercises.name}`}
+                >
+                  <Text style={{ color: "#8a5140" }}>▶</Text>
                 </Pressable>
               ) : null}
-              <Pressable onPress={() => moveExercise(i, -1)} disabled={i === 0} className="mr-1 px-1">
-                <Text className={i === 0 ? "text-neutral-200" : "text-neutral-500"}>▲</Text>
+              <Pressable
+                onPress={() => moveExercise(i, -1)}
+                disabled={i === 0}
+                className="mr-1 px-1"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Move exercise up"
+              >
+                <Text className={i === 0 ? "text-stone-200" : "text-stone-500"}>▲</Text>
               </Pressable>
-              <Pressable onPress={() => moveExercise(i, 1)} disabled={i === exercises.length - 1} className="mr-1 px-1">
-                <Text className={i === exercises.length - 1 ? "text-neutral-200" : "text-neutral-500"}>▼</Text>
+              <Pressable
+                onPress={() => moveExercise(i, 1)}
+                disabled={i === exercises.length - 1}
+                className="mr-1 px-1"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Move exercise down"
+              >
+                <Text className={i === exercises.length - 1 ? "text-stone-200" : "text-stone-500"}>▼</Text>
               </Pressable>
-              <Pressable onPress={() => handleRemoveExercise(item.id)}>
-                <Text className="text-neutral-400">✕</Text>
+              <Pressable
+                onPress={() => handleRemoveExercise(item.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel={`Remove ${item.exercises?.name ?? "exercise"}`}
+              >
+                <Text className="text-stone-400">✕</Text>
               </Pressable>
             </View>
             {week ? (
@@ -207,14 +243,14 @@ export default function SpcWorkoutBuilderNative() {
                   <View className="flex-row items-center gap-2">
                     <Pressable
                       onPress={() => handleWeekFieldChange(item.id, week.id, { sets: Math.max(0, (week.sets ?? 0) - 1) })}
-                      className="rounded border border-neutral-300 px-2 py-1"
+                      className="rounded border border-stone-300 px-2 py-1"
                     >
                       <Text>−</Text>
                     </Pressable>
                     <Text style={{ fontFamily: fonts.sans }}>{week.sets ?? 0} sets</Text>
                     <Pressable
                       onPress={() => handleWeekFieldChange(item.id, week.id, { sets: (week.sets ?? 0) + 1 })}
-                      className="rounded border border-neutral-300 px-2 py-1"
+                      className="rounded border border-stone-300 px-2 py-1"
                     >
                       <Text>+</Text>
                     </Pressable>
@@ -223,18 +259,18 @@ export default function SpcWorkoutBuilderNative() {
                     value={week.reps ?? ""}
                     onChangeText={(v) => handleWeekFieldChange(item.id, week.id, { reps: v })}
                     placeholder="reps"
-                    className="w-20 rounded border border-neutral-300 px-2 py-1.5"
+                    className="w-20 rounded border border-stone-300 px-2 py-1.5"
                     style={{ fontFamily: fonts.sans }}
                   />
                   <TextInput
                     value={week.rest ?? ""}
                     onChangeText={(v) => handleWeekFieldChange(item.id, week.id, { rest: v })}
                     placeholder="rest"
-                    className="w-20 rounded border border-neutral-300 px-2 py-1.5"
+                    className="w-20 rounded border border-stone-300 px-2 py-1.5"
                     style={{ fontFamily: fonts.sans }}
                   />
                 </View>
-                <Text className="mt-1 text-xs text-neutral-400" style={{ fontFamily: fonts.sans }}>
+                <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
                   {week.coach_initials ? `Last touched ${week.coach_initials} ${week.touched_date}` : "Not touched yet"}
                 </Text>
               </>
@@ -242,8 +278,8 @@ export default function SpcWorkoutBuilderNative() {
           </View>
         );
       })}
-      <Pressable onPress={() => setPickerTarget("exercise")} className="mb-6 rounded-lg border border-primary px-3 py-2">
-        <Text className="text-center text-accent" style={{ fontFamily: fonts.sansMedium }}>
+      <Pressable onPress={() => setPickerTarget("exercise")} className="mb-6 rounded-lg border border-primary px-3 py-2.5">
+        <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
           + Insert exercise
         </Text>
       </Pressable>

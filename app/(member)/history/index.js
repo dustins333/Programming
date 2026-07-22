@@ -3,9 +3,10 @@ import { View, Text, FlatList, ActivityIndicator, Pressable } from "react-native
 import { Link } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLoggedExercises } from "../../../lib/programming/memberPlan";
+import { fonts, colors } from "../../../lib/theme";
 
 export default function HistoryIndex() {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
   const [rows, setRows] = useState(null);
 
   const load = useCallback(async () => {
@@ -19,30 +20,44 @@ export default function HistoryIndex() {
 
   return (
     <View className="flex-1 bg-white px-6 py-8">
-      <Text className="mb-4 text-2xl text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+      <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         History
       </Text>
       {!rows ? (
-        <ActivityIndicator color="#a46a57" />
+        <ActivityIndicator color={colors.primary} />
       ) : (
         <FlatList
           data={rows}
           keyExtractor={(item) => item.exercise.id}
           ListEmptyComponent={
-            <Text className="text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+            <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
               No logged results yet — once you log a set, it'll show up here.
             </Text>
           }
           renderItem={({ item }) => (
             <Link href={`/(member)/history/${item.exercise.id}`} asChild>
-              <Pressable className="mb-2 rounded-lg border border-neutral-200 px-4 py-3">
-                <Text style={{ fontFamily: "Montserrat_500Medium" }}>{item.exercise.name}</Text>
-                <Text className="text-xs text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+              <Pressable className="mb-2 rounded-lg border border-stone-200 px-4 py-3">
+                <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                  {item.exercise.name}
+                </Text>
+                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
                   Last logged {item.lastDate}
                 </Text>
               </Pressable>
             </Link>
           )}
+          ListFooterComponent={
+            <Pressable
+              onPress={signOut}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Sign out"
+              className="mt-6 self-start rounded-lg border border-stone-300 px-5 py-3"
+            >
+              <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                Sign out
+              </Text>
+            </Pressable>
+          }
         />
       )}
     </View>

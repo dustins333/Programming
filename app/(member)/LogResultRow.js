@@ -23,16 +23,20 @@ export function LogResultRow({ item, onLog }) {
   };
 
   return (
-    <View className="mb-3 rounded-lg border border-neutral-200 px-4 py-3">
+    <View className="mb-3 rounded-lg border border-stone-200 px-4 py-3">
       <View className="mb-2 flex-row items-center justify-between">
         <Text style={{ fontFamily: "Montserrat_500Medium" }}>{item.exercises?.name}</Text>
         {item.exercises?.video_url ? (
-          <Pressable onPress={() => Linking.openURL(item.exercises.video_url)}>
-            <Text className="text-accent">▶</Text>
+          <Pressable
+            onPress={() => Linking.openURL(item.exercises.video_url)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={`Watch video for ${item.exercises.name}`}
+          >
+            <Text style={{ color: "#8a5140" }}>▶</Text>
           </Pressable>
         ) : null}
       </View>
-      <Text className="mb-2 text-xs text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+      <Text className="mb-2 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
         Target: {item.sets} sets × {item.reps} reps{item.tempo ? ` · tempo ${item.tempo}` : ""}
         {item.notes ? ` · ${item.notes}` : ""}
       </Text>
@@ -42,7 +46,7 @@ export function LogResultRow({ item, onLog }) {
           onChangeText={setSets}
           placeholder="sets"
           keyboardType="numeric"
-          className="w-16 rounded border border-neutral-300 px-2 py-1.5 text-center"
+          className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
         <TextInput
@@ -50,7 +54,7 @@ export function LogResultRow({ item, onLog }) {
           onChangeText={setReps}
           placeholder="reps"
           keyboardType="numeric"
-          className="w-16 rounded border border-neutral-300 px-2 py-1.5 text-center"
+          className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
         <TextInput
@@ -58,7 +62,7 @@ export function LogResultRow({ item, onLog }) {
           onChangeText={setWeight}
           placeholder="weight"
           keyboardType="numeric"
-          className="w-20 rounded border border-neutral-300 px-2 py-1.5 text-center"
+          className="w-20 rounded border border-stone-300 px-2 py-1.5 text-center"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
         <Pressable onPress={handleLog} disabled={saving} className="rounded-lg bg-primary px-3 py-2 disabled:opacity-50">

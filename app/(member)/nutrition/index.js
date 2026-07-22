@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
-import { Link } from "expo-router";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { getCurrentTarget, deriveCalories } from "../../../lib/nutrition/targets";
 import { getLogForDate, saveDraftLog, finalizeLog } from "../../../lib/nutrition/dailyLog";
+import { SegmentedControl } from "../../../components/SegmentedControl";
 import { fonts, colors } from "../../../lib/theme";
+
+const NUTRITION_SEGMENTS = [
+  { key: "today", label: "Today", href: "/(member)/nutrition" },
+  { key: "checkin", label: "Check-in", href: "/(member)/nutrition/checkin" },
+  { key: "history", label: "History", href: "/(member)/nutrition/history" },
+];
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -34,6 +41,7 @@ function toRowValues(log) {
 
 export default function NutritionToday() {
   const { profile } = useAuth();
+  const router = useRouter();
   const today = todayInBoise();
   const [target, setTarget] = useState(null);
   const [values, setValues] = useState(EMPTY_VALUES);
@@ -129,15 +137,24 @@ export default function NutritionToday() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
-      <Text className="mb-1 text-2xl text-primary" style={{ fontFamily: fonts.display }}>
-        Today's Log
+      <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+        Nutrition
       </Text>
-      <Text className="mb-6 text-base text-neutral-500" style={{ fontFamily: fonts.sans }}>
+      <Text className="mb-4 text-base text-stone-500" style={{ fontFamily: fonts.sans }}>
         {today}
       </Text>
 
+      <SegmentedControl
+        segments={NUTRITION_SEGMENTS}
+        activeKey="today"
+        onSelect={(key) => {
+          const seg = NUTRITION_SEGMENTS.find((s) => s.key === key);
+          if (seg && seg.key !== "today") router.push(seg.href);
+        }}
+      />
+
       {target ? (
-        <View className="mb-6 rounded-lg border border-neutral-200 px-4 py-3">
+        <View className="mb-6 rounded-lg border border-stone-200 px-4 py-3">
           <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold }}>
             Today's target
           </Text>
@@ -148,7 +165,7 @@ export default function NutritionToday() {
           {target.step_goal ? <Text style={{ fontFamily: fonts.sans }}>Steps: {target.step_goal}</Text> : null}
         </View>
       ) : (
-        <Text className="mb-6 text-neutral-500" style={{ fontFamily: fonts.sans }}>
+        <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
           No target set yet — check with your coach.
         </Text>
       )}
@@ -182,18 +199,18 @@ export default function NutritionToday() {
         <FormField label="Energy (1-5)" value={values.energy} onChangeText={(t) => update("energy", t)} flex />
       </View>
 
-      <Text className="mb-1 mt-2 text-sm text-neutral-700" style={{ fontFamily: fonts.sansMedium }}>
+      <Text className="mb-1 mt-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
         Notes
       </Text>
       <TextInput
         value={values.client_note}
         onChangeText={(t) => update("client_note", t)}
         multiline
-        className="mb-2 min-h-[80px] rounded-lg border border-neutral-300 px-4 py-3 text-base"
+        className="mb-2 min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
         style={{ fontFamily: fonts.sans }}
       />
 
-      <Text className="mb-6 text-sm text-neutral-500" style={{ fontFamily: fonts.sans }}>
+      <Text className="mb-6 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
         {saveState === "pending" && "Unsaved changes…"}
         {saveState === "saving" && "Saving…"}
         {saveState === "saved" && "All changes saved automatically."}
@@ -216,14 +233,6 @@ export default function NutritionToday() {
         </Text>
       </Pressable>
 
-      <View className="flex-row gap-4">
-        <Link href="/(member)/nutrition/checkin" style={{ fontFamily: fonts.sansMedium }} className="text-accent">
-          Weekly check-in
-        </Link>
-        <Link href="/(member)/nutrition/history" style={{ fontFamily: fonts.sansMedium }} className="text-accent">
-          History
-        </Link>
-      </View>
     </ScrollView>
   );
 }
@@ -231,14 +240,14 @@ export default function NutritionToday() {
 function FormField({ label, value, onChangeText, flex }) {
   return (
     <View className={flex ? "mb-2 flex-1" : "mb-2"}>
-      <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: fonts.sansMedium }}>
+      <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
         {label}
       </Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         keyboardType="numeric"
-        className="rounded-lg border border-neutral-300 px-4 py-3 text-base"
+        className="rounded-lg border border-stone-300 px-4 py-3 text-base"
         style={{ fontFamily: fonts.sans }}
       />
     </View>

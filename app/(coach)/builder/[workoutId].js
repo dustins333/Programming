@@ -115,10 +115,13 @@ export default function WorkoutBuilderNative() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-6">
-      <Text className="text-xl text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+      <Text className="text-xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
         {workout.group_blocks.group_programs.name} — Wk {workout.week_number}, Session {workout.session_number}
       </Text>
-      <Text className={workout.status === "published" ? "mb-4 text-accent" : "mb-4 text-neutral-400"} style={{ fontFamily: "Montserrat_400Regular" }}>
+      <Text
+        className="mb-4 text-xs"
+        style={{ fontFamily: "Montserrat_500Medium", color: workout.status === "published" ? "#8a5140" : "#a8a29e" }}
+      >
         {workout.status}
       </Text>
       <Pressable onPress={handleTogglePublish} disabled={publishing} className="mb-6 self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
@@ -127,56 +130,89 @@ export default function WorkoutBuilderNative() {
         </Text>
       </Pressable>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+      <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: "Montserrat_600SemiBold", letterSpacing: 0.4 }}>
         Warm-up
       </Text>
-      {warmups.map((w, i) => (
-        <View key={w.id} className="mb-2 flex-row items-center justify-between rounded-lg border border-neutral-200 px-3 py-2">
-          <Text style={{ fontFamily: "Montserrat_400Regular" }}>
-            {i + 1}. {w.exercises?.name ?? w.label}
-          </Text>
-          <Pressable onPress={() => handleRemoveWarmup(w.id)}>
-            <Text className="text-neutral-400">✕</Text>
-          </Pressable>
+      {warmups.length > 0 && (
+        <View className="mb-2 rounded-xl px-3.5" style={{ backgroundColor: "#faf7f4", borderWidth: 1, borderColor: "#f0ebe6" }}>
+          {warmups.map((w, i) => (
+            <View
+              key={w.id}
+              className="flex-row items-center justify-between py-2.5"
+              style={i < warmups.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f0ebe6" } : undefined}
+            >
+              <Text className="text-stone-700" style={{ fontFamily: "Montserrat_400Regular", fontSize: 14 }}>
+                {i + 1}. {w.exercises?.name ?? w.label}
+              </Text>
+              <Pressable
+                onPress={() => handleRemoveWarmup(w.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel={`Remove warm-up exercise ${w.exercises?.name ?? w.label ?? i + 1}`}
+              >
+                <Text className="text-stone-400">✕</Text>
+              </Pressable>
+            </View>
+          ))}
         </View>
-      ))}
-      <Pressable onPress={() => setPickerTarget("warmup")} className="mb-6 rounded-lg border border-primary px-3 py-2">
-        <Text className="text-center text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
+      )}
+      <Pressable onPress={() => setPickerTarget("warmup")} className="mb-6 rounded-lg border border-primary px-3 py-2.5">
+        <Text className="text-center" style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>
           + Insert warm-up exercise
         </Text>
       </Pressable>
 
-      <Text className="mb-2 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+      <Text className="mb-2 text-xs uppercase text-stone-700" style={{ fontFamily: "Montserrat_600SemiBold", letterSpacing: 0.4 }}>
         Main Session
       </Text>
       {exercises.map((item, i) => (
-        <View key={item.id} className="mb-3 rounded-lg border border-neutral-200 px-3 py-3">
+        <View key={item.id} className="mb-3 rounded-lg border border-stone-200 px-3 py-3">
           <View className="mb-2 flex-row items-center justify-between">
             <Text className="flex-1" style={{ fontFamily: "Montserrat_500Medium" }}>
               {item.exercises?.name}
             </Text>
             {item.exercises?.video_url ? (
-              <Pressable onPress={() => Linking.openURL(item.exercises.video_url)} className="mr-2">
-                <Text className="text-accent">▶</Text>
+              <Pressable
+                onPress={() => Linking.openURL(item.exercises.video_url)}
+                className="mr-2"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel={`Watch video for ${item.exercises.name}`}
+              >
+                <Text style={{ color: "#8a5140" }}>▶</Text>
               </Pressable>
             ) : null}
-            <Pressable onPress={() => moveExercise(i, -1)} disabled={i === 0} className="mr-1 px-1">
-              <Text className={i === 0 ? "text-neutral-200" : "text-neutral-500"}>▲</Text>
+            <Pressable
+              onPress={() => moveExercise(i, -1)}
+              disabled={i === 0}
+              className="mr-1 px-1"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Move exercise up"
+            >
+              <Text className={i === 0 ? "text-stone-200" : "text-stone-500"}>▲</Text>
             </Pressable>
-            <Pressable onPress={() => moveExercise(i, 1)} disabled={i === exercises.length - 1} className="mr-1 px-1">
-              <Text className={i === exercises.length - 1 ? "text-neutral-200" : "text-neutral-500"}>▼</Text>
+            <Pressable
+              onPress={() => moveExercise(i, 1)}
+              disabled={i === exercises.length - 1}
+              className="mr-1 px-1"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Move exercise down"
+            >
+              <Text className={i === exercises.length - 1 ? "text-stone-200" : "text-stone-500"}>▼</Text>
             </Pressable>
-            <Pressable onPress={() => handleRemoveExercise(item.id)}>
-              <Text className="text-neutral-400">✕</Text>
+            <Pressable
+              onPress={() => handleRemoveExercise(item.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel={`Remove ${item.exercises?.name ?? "exercise"}`}
+            >
+              <Text className="text-stone-400">✕</Text>
             </Pressable>
           </View>
           <View className="flex-row items-center gap-4">
             <View className="flex-row items-center gap-2">
-              <Pressable onPress={() => adjustSets(item, -1)} className="rounded border border-neutral-300 px-2 py-1">
+              <Pressable onPress={() => adjustSets(item, -1)} className="rounded border border-stone-300 px-2 py-1">
                 <Text>−</Text>
               </Pressable>
               <Text style={{ fontFamily: "Montserrat_400Regular" }}>{item.sets ?? 0} sets</Text>
-              <Pressable onPress={() => adjustSets(item, 1)} className="rounded border border-neutral-300 px-2 py-1">
+              <Pressable onPress={() => adjustSets(item, 1)} className="rounded border border-stone-300 px-2 py-1">
                 <Text>+</Text>
               </Pressable>
             </View>
@@ -184,14 +220,14 @@ export default function WorkoutBuilderNative() {
               value={item.reps ?? ""}
               onChangeText={(v) => handleExerciseChange(item.id, { reps: v })}
               placeholder="reps"
-              className="w-20 rounded border border-neutral-300 px-2 py-1.5"
+              className="w-20 rounded border border-stone-300 px-2 py-1.5"
               style={{ fontFamily: "Montserrat_400Regular" }}
             />
           </View>
         </View>
       ))}
-      <Pressable onPress={() => setPickerTarget("exercise")} className="mb-6 rounded-lg border border-primary px-3 py-2">
-        <Text className="text-center text-accent" style={{ fontFamily: "Montserrat_500Medium" }}>
+      <Pressable onPress={() => setPickerTarget("exercise")} className="mb-6 rounded-lg border border-primary px-3 py-2.5">
+        <Text className="text-center" style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>
           + Insert exercise
         </Text>
       </Pressable>

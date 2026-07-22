@@ -28,14 +28,14 @@ export default function ExerciseHistory() {
 
   return (
     <View className="flex-1 bg-white px-6 py-8">
-      <Text className="mb-4 text-2xl text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+      <Text className="mb-4 text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
         History
       </Text>
       <FlatList
         data={logs}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View className="mb-2 flex-row items-center justify-between rounded-lg border border-neutral-200 px-4 py-3">
+          <View className="mb-2 flex-row items-center justify-between rounded-lg border border-stone-200 px-4 py-3">
             <Text style={{ fontFamily: "Montserrat_400Regular" }}>{item.date_performed}</Text>
             <Text style={{ fontFamily: "Montserrat_500Medium" }}>
               {item.sets ?? "–"} × {item.reps ?? "–"} {item.weight ? `@ ${item.weight}` : ""}

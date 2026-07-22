@@ -38,11 +38,11 @@ export default function Login() {
         <Text className="mb-1 text-center text-3xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
           Kova Strength
         </Text>
-        <Text className="mb-8 text-center text-base text-neutral-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+        <Text className="mb-8 text-center text-base text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
           Sign in to your account
         </Text>
 
-        <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+        <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
           Email
         </Text>
         <TextInput
@@ -52,11 +52,11 @@ export default function Login() {
           autoComplete="email"
           keyboardType="email-address"
           textContentType="emailAddress"
-          className="mb-4 rounded-lg border border-neutral-300 px-4 py-3 text-base"
+          className="mb-4 rounded-lg border border-stone-300 px-4 py-3 text-base"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
 
-        <Text className="mb-1 text-sm text-neutral-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+        <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
           Password
         </Text>
         <TextInput
@@ -66,11 +66,15 @@ export default function Login() {
           autoCapitalize="none"
           autoComplete="password"
           textContentType="password"
-          className="mb-2 rounded-lg border border-neutral-300 px-4 py-3 text-base"
+          className="mb-2 rounded-lg border border-stone-300 px-4 py-3 text-base"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
 
-        <Link href="/reset-password" className="mb-6 self-end text-sm text-accent" style={{ fontFamily: "Montserrat_400Regular" }}>
+        <Link
+          href="/reset-password"
+          className="mb-6 self-end text-sm"
+          style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140" }}
+        >
           Forgot / set up password?
         </Link>
 
