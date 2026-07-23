@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, TextInput, FlatList, ScrollView, ActivityIndicator, Alert } from "react-native";
-import { Link } from "expo-router";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { listMembers, linkMemberByAuthId, listAssignments, assignProgram } from "../../../lib/programming/clients";
 import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { listNutritionClients, assignNutritionClient, setNutritionStatus } from "../../../lib/nutrition/clients";
@@ -8,61 +9,37 @@ import { listSpcClients, assignSpcClient, setSpcStatus } from "../../../lib/prog
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { LinkMemberModal } from "./LinkMemberModal";
 import { CoachShell } from "../../../components/CoachShell";
-import { fonts, colors } from "../../../lib/theme";
+import { fonts, colors, statusColors } from "../../../lib/theme";
 
 const TABLE_MIN_WIDTH = 860;
 const COLS = {
+  lock: { width: 28, marginLeft: 16 },
   name: { flex: 1.4, minWidth: 140 },
   email: { flex: 2, minWidth: 200 },
-  group: { flex: 1.6, minWidth: 190 },
-  spc: { flex: 1.3, minWidth: 160 },
-  nutrition: { flex: 1.3, minWidth: 160 },
+  pills: { flex: 2.2, minWidth: 260 },
 };
 
-function GroupCell({ current, programs, onPick }) {
-  return (
-    <View className="flex-row flex-wrap items-center gap-x-2">
-      <Pressable onPress={() => onPick(null)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-        <Text style={{ fontFamily: !current ? fonts.sansSemiBold : fonts.sans, color: !current ? colors.primaryOnWhite : "#a8a29e", fontSize: 13 }}>
-          None
-        </Text>
-      </Pressable>
-      {programs.map((p) => (
-        <Pressable key={p.id} onPress={() => onPick(p.id)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-          <Text
-            style={{
-              fontFamily: current === p.id ? fonts.sansSemiBold : fonts.sans,
-              color: current === p.id ? colors.primaryOnWhite : "#a8a29e",
-              fontSize: 13,
-            }}
-          >
-            {p.name}
-          </Text>
-        </Pressable>
-      ))}
+const MUTED = { bg: "#f1efed", text: "#a8a29e" };
+const FILLED = { bg: colors.primary, text: "#ffffff" };
+
+function Pill({ label, tone, onPress }) {
+  const { bg, text } = tone ?? MUTED;
+  const content = (
+    <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: bg }}>
+      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: text }}>{label}</Text>
     </View>
   );
-}
-
-function StatusCell({ label, active, onToggle, viewHref }) {
+  if (!onPress) return content;
   return (
-    <View>
-      <Pressable onPress={onToggle} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-        <Text style={{ fontFamily: fonts.sansMedium, color: active ? "#4d6142" : "#a8a29e", fontSize: 13 }}>
-          {label}
-        </Text>
-      </Pressable>
-      {viewHref ? (
-        <Link href={viewHref} style={{ fontFamily: fonts.sans, color: "#8a5140", fontSize: 12 }}>
-          View
-        </Link>
-      ) : null}
-    </View>
+    <Pressable onPress={onPress} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+      {content}
+    </Pressable>
   );
 }
 
 export default function Clients() {
   const { profile } = useAuth();
+  const router = useRouter();
   const [members, setMembers] = useState(null);
   const [assignments, setAssignments] = useState(null);
   const [programs, setPrograms] = useState(null);
@@ -70,6 +47,7 @@ export default function Clients() {
   const [spcClients, setSpcClients] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [search, setSearch] = useState("");
+  const [unlockedUserId, setUnlockedUserId] = useState(null);
 
   const load = useCallback(async () => {
     const [memberRows, assignmentRows, programRows] = await Promise.all([
@@ -155,6 +133,11 @@ export default function Clients() {
   const nutritionFor = (userId) => nutritionClients?.find((n) => n.user_id === userId);
   const spcFor = (userId) => spcClients?.find((s) => s.user_id === userId);
 
+  const toggleLock = (userId) => setUnlockedUserId((cur) => (cur === userId ? null : userId));
+
+  const flagshipProgram = useMemo(() => programs?.find((p) => p.name === "Flagship"), [programs]);
+  const bwaProgram = useMemo(() => programs?.find((p) => p.name === "Better With Age"), [programs]);
+
   const filteredMembers = useMemo(() => {
     if (!members) return [];
     if (!search.trim()) return members;
@@ -191,27 +174,22 @@ export default function Clients() {
           style={{ fontFamily: fonts.sans, maxWidth: 360 }}
         />
 
-        {!members ? (
+        {!members || !programs ? (
           <ActivityIndicator color={colors.primary} />
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator className="flex-1">
             <View style={{ minWidth: TABLE_MIN_WIDTH, flex: 1 }}>
-              <View className="flex-row border-b border-stone-200 pb-2">
+              <View className="flex-row items-center border-b border-stone-200 pb-2">
                 <Text style={{ ...COLS.name, fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e", textTransform: "uppercase" }}>
                   Name
                 </Text>
                 <Text style={{ ...COLS.email, fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e", textTransform: "uppercase" }}>
                   Email
                 </Text>
-                <Text style={{ ...COLS.group, fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e", textTransform: "uppercase" }}>
-                  Group program
+                <Text style={{ ...COLS.pills, fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e", textTransform: "uppercase" }}>
+                  Programs
                 </Text>
-                <Text style={{ ...COLS.spc, fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e", textTransform: "uppercase" }}>
-                  SPC
-                </Text>
-                <Text style={{ ...COLS.nutrition, fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e", textTransform: "uppercase" }}>
-                  Nutrition
-                </Text>
+                <View style={COLS.lock} />
               </View>
 
               <FlatList
@@ -223,44 +201,83 @@ export default function Clients() {
                   </Text>
                 }
                 renderItem={({ item }) => {
+                  const locked = unlockedUserId !== item.id;
                   const assignment = assignmentFor(item.id);
                   const nutritionAssignment = nutritionFor(item.id);
                   const nutritionActive = nutritionAssignment?.status === "active";
                   const spcAssignment = spcFor(item.id);
                   const spcActive = spcAssignment && spcAssignment.status !== "paused";
-                  return (
-                    <View className="flex-row items-center border-b border-stone-100 py-3">
+
+                  const flagshipActive = flagshipProgram && assignment?.group_program_id === flagshipProgram.id;
+                  const bwaActive = bwaProgram && assignment?.group_program_id === bwaProgram.id;
+
+                  const pills = (
+                    <View style={COLS.pills} className="flex-row flex-wrap items-center gap-1.5">
+                      <Pill
+                        label="Flagship"
+                        tone={flagshipActive ? FILLED : MUTED}
+                        onPress={
+                          locked || !flagshipProgram
+                            ? undefined
+                            : () => handleAssign(item.id, flagshipActive ? null : flagshipProgram.id)
+                        }
+                      />
+                      <Pill
+                        label="BWA"
+                        tone={bwaActive ? FILLED : MUTED}
+                        onPress={locked || !bwaProgram ? undefined : () => handleAssign(item.id, bwaActive ? null : bwaProgram.id)}
+                      />
+                      <Pill
+                        label="SPC"
+                        tone={spcAssignment ? statusColors[spcActive ? "onTrack" : "paused"] : MUTED}
+                        onPress={locked ? undefined : () => handleSpcToggle(item.id, spcActive)}
+                      />
+                      <Pill
+                        label="Nutrition"
+                        tone={nutritionAssignment ? statusColors[nutritionActive ? "onTrack" : "paused"] : MUTED}
+                        onPress={locked ? undefined : () => handleNutritionToggle(item.id, nutritionActive)}
+                      />
+                    </View>
+                  );
+
+                  const lockIcon = (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        toggleLock(item.id);
+                      }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={COLS.lock}
+                      accessibilityLabel={locked ? `Unlock ${item.name} to edit` : `Lock ${item.name}`}
+                    >
+                      <Ionicons name={locked ? "lock-closed" : "lock-open"} size={16} color={locked ? "#c7c2be" : colors.primaryOnWhite} />
+                    </Pressable>
+                  );
+
+                  const rowContent = (
+                    <>
                       <Text style={{ ...COLS.name, fontFamily: fonts.sansMedium, fontSize: 13 }} className="text-stone-700">
                         {item.name}
                       </Text>
                       <Text style={{ ...COLS.email, fontFamily: fonts.sans, fontSize: 12 }} className="text-stone-500" numberOfLines={1}>
                         {item.email}
                       </Text>
-                      <View style={COLS.group}>
-                        <GroupCell
-                          current={assignment?.group_program_id ?? null}
-                          programs={programs ?? []}
-                          onPick={(id) => handleAssign(item.id, id)}
-                        />
-                      </View>
-                      <View style={COLS.spc}>
-                        <StatusCell
-                          label={spcActive ? "Active" : spcAssignment ? "Paused" : "—"}
-                          active={spcActive}
-                          onToggle={() => handleSpcToggle(item.id, spcActive)}
-                          viewHref={spcAssignment ? `/(coach)/spc/${item.id}` : null}
-                        />
-                      </View>
-                      <View style={COLS.nutrition}>
-                        <StatusCell
-                          label={nutritionActive ? "Active" : nutritionAssignment ? "Paused" : "—"}
-                          active={nutritionActive}
-                          onToggle={() => handleNutritionToggle(item.id, nutritionActive)}
-                          viewHref={nutritionAssignment ? `/(coach)/nutrition/clients/${item.id}` : null}
-                        />
-                      </View>
-                    </View>
+                      {pills}
+                      {lockIcon}
+                    </>
                   );
+
+                  if (locked) {
+                    return (
+                      <Pressable
+                        onPress={() => router.push(`/(coach)/clients/${item.id}`)}
+                        className="flex-row items-center border-b border-stone-100 py-3"
+                      >
+                        {rowContent}
+                      </Pressable>
+                    );
+                  }
+                  return <View className="flex-row items-center border-b border-stone-100 py-3">{rowContent}</View>;
                 }}
               />
             </View>

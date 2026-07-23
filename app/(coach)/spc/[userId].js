@@ -7,7 +7,7 @@ import { getSpcClient, updateSpcClient, setSpcStatus } from "../../../lib/progra
 import { listBlocksForSpcClient, createSpcBlock } from "../../../lib/programming/spcBlocks";
 import { getSetting } from "../../../lib/settings";
 import { fonts, colors } from "../../../lib/theme";
-import { STATUS_LABELS } from "./index";
+import { STATUS_LABELS } from "../../../lib/programming/spcStatus";
 import { NewSpcBlockModal } from "./NewSpcBlockModal";
 import { CoachShell } from "../../../components/CoachShell";
 
