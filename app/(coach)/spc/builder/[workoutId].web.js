@@ -372,21 +372,21 @@ export default function SpcWorkoutBuilderWeb() {
                       value={w.sets ?? ""}
                       onChangeText={(v) => handleWarmupChange(w.id, { sets: v })}
                       placeholder="sets"
-                      className="w-16 rounded border border-stone-300 bg-white px-2 py-1"
+                      className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-3"
                       style={{ fontFamily: fonts.sans }}
                     />
                     <TextInput
                       value={w.reps ?? ""}
                       onChangeText={(v) => handleWarmupChange(w.id, { reps: v })}
                       placeholder="reps"
-                      className="w-16 rounded border border-stone-300 bg-white px-2 py-1"
+                      className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-3"
                       style={{ fontFamily: fonts.sans }}
                     />
                     <TextInput
                       value={w.notes ?? ""}
                       onChangeText={(v) => handleWarmupChange(w.id, { notes: v })}
                       placeholder="notes"
-                      className="w-28 rounded border border-stone-300 bg-white px-2 py-1"
+                      className="w-28 rounded-lg border border-stone-300 bg-white px-2 py-3"
                       style={{ fontFamily: fonts.sans }}
                     />
                     <Pressable

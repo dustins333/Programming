@@ -141,7 +141,7 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
 
           {rows.map((row, i) => (
             <View key={i} className="mb-2 flex-row items-center gap-2">
-              <Text className="w-12 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
+              <Text className="w-14 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
                 Set {i + 1}
               </Text>
               <TextInput
@@ -149,7 +149,7 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
                 onChangeText={(v) => updateRow(i, "reps", v)}
                 placeholder={item.targetReps ?? "reps"}
                 keyboardType="numeric"
-                className="w-20 rounded border border-stone-300 px-2 py-1.5 text-center"
+                className="w-20 rounded-lg border border-stone-300 px-2 py-3 text-center"
                 style={{ fontFamily: fonts.sans }}
               />
               <TextInput
@@ -157,7 +157,7 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
                 onChangeText={(v) => updateRow(i, "weight", v)}
                 placeholder="weight"
                 keyboardType="numeric"
-                className="w-20 rounded border border-stone-300 px-2 py-1.5 text-center"
+                className="w-20 rounded-lg border border-stone-300 px-2 py-3 text-center"
                 style={{ fontFamily: fonts.sans }}
               />
             </View>

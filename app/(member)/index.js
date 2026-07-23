@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Image, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
@@ -147,9 +147,12 @@ export default function MemberHome() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
-      <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        Hi, {profile?.name}
-      </Text>
+      <View className="flex-row items-center gap-3">
+        <Text className="flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
+          Hi, {profile?.name}
+        </Text>
+        <Image source={require("../../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
+      </View>
       <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
         {formatToday()}
       </Text>

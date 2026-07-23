@@ -1,4 +1,4 @@
-import { View, Text, Pressable, Platform } from "react-native";
+import { View, Text, Image, Pressable, Platform } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../lib/auth/AuthProvider";
@@ -44,7 +44,7 @@ export function CoachShell({ children }) {
   }
 
   return (
-    <View style={{ flex: 1, flexDirection: "row", backgroundColor: "white" }}>
+    <View style={{ flex: 1, flexDirection: "row", backgroundColor: "#f6f1ec" }}>
       <View
         style={{
           width: 232,
@@ -52,11 +52,15 @@ export function CoachShell({ children }) {
           borderRightColor: "#e7e5e4",
           paddingVertical: 24,
           paddingHorizontal: 16,
+          backgroundColor: "white",
         }}
       >
-        <Text className="mb-8 px-2 text-xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-          Kova Strength
-        </Text>
+        <View className="mb-7 flex-row items-center gap-2.5 px-2">
+          <Image source={require("../assets/kova-logo.jpg")} style={{ width: 32, height: 32, borderRadius: 16 }} />
+          <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 18 }} numberOfLines={1}>
+            Kova Strength
+          </Text>
+        </View>
 
         {NAV_ITEMS.map((item) => {
           const active = isActive(pathname, item.href);

@@ -19,7 +19,7 @@ Scale: ~150 Flagship, ~60 SPC (some clients are Hybrid — enrolled in both).
 - **SPC block auto-draft:** When a block is ending, the alert fires AND a **blank draft** is created so it's visibly flagged as due — plus a **"Copy Last Block"** button so the coach can populate it in one click if they want to.
 - **Movement-pattern balance tool:** Live tally counter (Squat / Lunge / Hinge / Core, Row / Horizontal Push / Vertical Pull / Vertical Push) shown while building a Flagship or Better With Age block — mirrors the tracker in your current Programming Skeleton sheet.
 - **Coach collaboration:** In-app comment threads on programs (mirrors the Abbi Notes / Terra Notes back-and-forth in your Skeleton sheet) — coaches can leave feedback/discussion directly on a block, not just in Slack/text.
-- **SPC status tracking:** Keeping your existing 5 statuses — Printed & Ready ✅ / Needs Printed 🖨️ / New Program ASAP 🚨 / Coming Up Next Week 🔔 / Paused ⏸️.
+- **SPC status tracking:** Keeping your existing 5 statuses — Printed & Ready / Needs Printed / New Program ASAP / Coming Up Next Week / Paused.
 
 ## 3. Program types
 | Type | Block length | Structure |

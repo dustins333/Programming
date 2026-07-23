@@ -214,14 +214,14 @@ export default function TemplateBuilder() {
                 value={item.reps ?? ""}
                 onChangeText={(v) => handleExerciseChange(item.id, { reps: v })}
                 placeholder="reps"
-                className="w-20 rounded border border-stone-300 px-2 py-1.5"
+                className="w-20 rounded-lg border border-stone-300 px-2 py-3"
                 style={{ fontFamily: fonts.sans }}
               />
               <TextInput
                 value={item.rest ?? ""}
                 onChangeText={(v) => handleExerciseChange(item.id, { rest: v })}
                 placeholder="rest"
-                className="w-20 rounded border border-stone-300 px-2 py-1.5"
+                className="w-20 rounded-lg border border-stone-300 px-2 py-3"
                 style={{ fontFamily: fonts.sans }}
               />
             </View>
@@ -229,7 +229,7 @@ export default function TemplateBuilder() {
               value={item.notes ?? ""}
               onChangeText={(v) => handleExerciseChange(item.id, { notes: v })}
               placeholder="Notes (optional)"
-              className="mt-2 rounded border border-stone-300 px-2 py-1.5"
+              className="mt-2 rounded-lg border border-stone-300 px-2 py-3"
               style={{ fontFamily: fonts.sans }}
             />
           </View>

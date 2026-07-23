@@ -92,28 +92,28 @@ function SortableExerciseRow({ item, onChange, onRemove }) {
           onChangeText={(v) => onChange(item.id, { sets: v === "" ? null : Number(v) || 0 })}
           keyboardType="numeric"
           placeholder="sets"
-          className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
+          className="w-16 rounded-lg border border-stone-300 px-2 py-3 text-center"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
         <TextInput
           value={item.reps ?? ""}
           onChangeText={(v) => onChange(item.id, { reps: v })}
           placeholder="reps"
-          className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
+          className="w-16 rounded-lg border border-stone-300 px-2 py-3 text-center"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
         <TextInput
           value={item.tempo ?? ""}
           onChangeText={(v) => onChange(item.id, { tempo: v })}
           placeholder="tempo"
-          className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
+          className="w-16 rounded-lg border border-stone-300 px-2 py-3 text-center"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
         <TextInput
           value={item.notes ?? ""}
           onChangeText={(v) => onChange(item.id, { notes: v })}
           placeholder="notes"
-          className="w-28 rounded border border-stone-300 px-2 py-1.5"
+          className="w-28 rounded-lg border border-stone-300 px-2 py-3"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
         <Pressable
@@ -348,21 +348,21 @@ export default function WorkoutBuilderWeb() {
                       value={w.sets ?? ""}
                       onChangeText={(v) => handleWarmupChange(w.id, { sets: v })}
                       placeholder="sets"
-                      className="w-16 rounded border border-stone-300 bg-white px-2 py-1"
+                      className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-3"
                       style={{ fontFamily: "Montserrat_400Regular" }}
                     />
                     <TextInput
                       value={w.reps ?? ""}
                       onChangeText={(v) => handleWarmupChange(w.id, { reps: v })}
                       placeholder="reps"
-                      className="w-16 rounded border border-stone-300 bg-white px-2 py-1"
+                      className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-3"
                       style={{ fontFamily: "Montserrat_400Regular" }}
                     />
                     <TextInput
                       value={w.notes ?? ""}
                       onChangeText={(v) => handleWarmupChange(w.id, { notes: v })}
                       placeholder="notes"
-                      className="w-28 rounded border border-stone-300 bg-white px-2 py-1"
+                      className="w-28 rounded-lg border border-stone-300 bg-white px-2 py-3"
                       style={{ fontFamily: "Montserrat_400Regular" }}
                     />
                     <Pressable

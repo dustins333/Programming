@@ -274,14 +274,14 @@ export default function SpcWorkoutBuilderNative() {
                     value={week.reps ?? ""}
                     onChangeText={(v) => handleWeekFieldChange(item.id, week.id, { reps: v })}
                     placeholder="reps"
-                    className="w-20 rounded border border-stone-300 px-2 py-1.5"
+                    className="w-20 rounded-lg border border-stone-300 px-2 py-3"
                     style={{ fontFamily: fonts.sans }}
                   />
                   <TextInput
                     value={week.rest ?? ""}
                     onChangeText={(v) => handleWeekFieldChange(item.id, week.id, { rest: v })}
                     placeholder="rest"
-                    className="w-20 rounded border border-stone-300 px-2 py-1.5"
+                    className="w-20 rounded-lg border border-stone-300 px-2 py-3"
                     style={{ fontFamily: fonts.sans }}
                   />
                 </View>

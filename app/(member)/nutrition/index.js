@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Image, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../../lib/boiseDate";
@@ -137,9 +137,12 @@ export default function NutritionToday() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
-      <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        My Nutrition
-      </Text>
+      <View className="flex-row items-center gap-3">
+        <Text className="mb-1 flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
+          My Nutrition
+        </Text>
+        <Image source={require("../../../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
+      </View>
       <Text className="mb-4 text-base text-stone-500" style={{ fontFamily: fonts.sans }}>
         {today}
       </Text>

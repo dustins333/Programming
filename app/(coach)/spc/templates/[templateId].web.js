@@ -79,28 +79,28 @@ function SortableExerciseRow({ item, onChange, onRemove }) {
           onChangeText={(v) => onChange(item.id, { sets: v === "" ? null : Number(v) || 0 })}
           keyboardType="numeric"
           placeholder="sets"
-          className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
+          className="w-16 rounded-lg border border-stone-300 px-2 py-3 text-center"
           style={{ fontFamily: fonts.sans }}
         />
         <TextInput
           value={item.reps ?? ""}
           onChangeText={(v) => onChange(item.id, { reps: v })}
           placeholder="reps"
-          className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
+          className="w-16 rounded-lg border border-stone-300 px-2 py-3 text-center"
           style={{ fontFamily: fonts.sans }}
         />
         <TextInput
           value={item.rest ?? ""}
           onChangeText={(v) => onChange(item.id, { rest: v })}
           placeholder="rest"
-          className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
+          className="w-16 rounded-lg border border-stone-300 px-2 py-3 text-center"
           style={{ fontFamily: fonts.sans }}
         />
         <TextInput
           value={item.notes ?? ""}
           onChangeText={(v) => onChange(item.id, { notes: v })}
           placeholder="notes"
-          className="w-28 rounded border border-stone-300 px-2 py-1.5"
+          className="w-28 rounded-lg border border-stone-300 px-2 py-3"
           style={{ fontFamily: fonts.sans }}
         />
         <Pressable
