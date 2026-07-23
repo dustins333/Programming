@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listExercises } from "../../../../lib/programming/exercises";
 import { getUser } from "../../../../lib/programming/clients";
@@ -14,10 +14,13 @@ import {
   removeSpcWorkoutExercise,
   reorderSpcWorkoutExercises,
   updateSpcExerciseWeek,
+  getSpcSiblingPatterns,
   setSpcWorkoutStatus,
 } from "../../../../lib/programming/spcWorkouts";
 import { ExercisePickerModal } from "../../builder/ExercisePickerModal";
 import { CommentThread } from "../../builder/CommentThread";
+import { PatternTally } from "../../builder/PatternTally";
+import { formatDateMDY } from "../../../../lib/formatDate";
 import { fonts, colors } from "../../../../lib/theme";
 
 // Native is a "view + quick adjust" surface, same philosophy as the group
@@ -26,6 +29,7 @@ import { fonts, colors } from "../../../../lib/theme";
 // week selector picks which week's numbers are being edited.
 export default function SpcWorkoutBuilderNative() {
   const { workoutId } = useLocalSearchParams();
+  const router = useRouter();
   const { profile } = useAuth();
 
   const [workout, setWorkout] = useState(null);
@@ -33,6 +37,7 @@ export default function SpcWorkoutBuilderNative() {
   const [warmups, setWarmups] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [library, setLibrary] = useState([]);
+  const [siblingPatterns, setSiblingPatterns] = useState([]);
   const [pickerTarget, setPickerTarget] = useState(null); // "warmup" | "exercise" | null
   const [selectedWeek, setSelectedWeek] = useState(1);
   const [publishing, setPublishing] = useState(false);
@@ -40,16 +45,18 @@ export default function SpcWorkoutBuilderNative() {
   const load = useCallback(async () => {
     const w = await getSpcWorkout(workoutId);
     setWorkout(w);
-    const [memberRow, warmupRows, exerciseRows, libraryRows] = await Promise.all([
+    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
       getUser(w.spc_blocks.spc_client_id),
       listSpcWarmups(workoutId),
       listSpcWorkoutExercises(workoutId),
       listExercises(),
+      getSpcSiblingPatterns(w.spc_blocks.id, workoutId),
     ]);
     setMember(memberRow);
     setWarmups(warmupRows);
     setExercises(exerciseRows);
     setLibrary(libraryRows);
+    setSiblingPatterns(siblings);
   }, [workoutId]);
 
   useEffect(() => {
@@ -123,9 +130,17 @@ export default function SpcWorkoutBuilderNative() {
   }
 
   const blockLengthWeeks = workout.spc_blocks.block_length_weeks;
+  const currentPatterns = exercises.map((e) => e.exercises?.movement_pattern).filter(Boolean);
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-6">
+      <Pressable
+        onPress={() => router.push(`/(coach)/spc/blocks/${workout.spc_blocks.id}`)}
+        className="mb-3 self-start"
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back to block</Text>
+      </Pressable>
       <Text className="text-xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
         {member.name} — Session {workout.session_number}
       </Text>
@@ -271,7 +286,7 @@ export default function SpcWorkoutBuilderNative() {
                   />
                 </View>
                 <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                  {week.coach_initials ? `Last touched ${week.coach_initials} ${week.touched_date}` : "Not touched yet"}
+                  {week.coach_initials ? `Last touched ${week.coach_initials} ${formatDateMDY(week.touched_date)}` : "Not touched yet"}
                 </Text>
               </>
             ) : null}
@@ -283,6 +298,10 @@ export default function SpcWorkoutBuilderNative() {
           + Insert exercise
         </Text>
       </Pressable>
+
+      <View className="mb-6">
+        <PatternTally currentPatterns={currentPatterns} siblingPatterns={siblingPatterns} />
+      </View>
 
       <CommentThread spcBlockId={workout.spc_blocks.id} />
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { Link, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../../../lib/boiseDate";
 import { core } from "../../../../lib/supabase/client";
@@ -8,6 +8,7 @@ import { listTargets, createTarget, deriveCalories } from "../../../../lib/nutri
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
 import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient } from "../../../../lib/nutrition/checkin";
 import { computeWeekWindows, summarizeWeek, colorForTarget, colorForStepsTarget } from "../../../../lib/nutrition/weekCycle";
+import { formatDateMDY } from "../../../../lib/formatDate";
 import { fonts, colors } from "../../../../lib/theme";
 
 const EMPTY_FORM = {
@@ -139,6 +140,9 @@ export default function NutritionClientDetail() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
+      <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
+        ‹ Back to Nutrition
+      </Link>
       <Text className="mb-6 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         {name}
       </Text>
@@ -276,7 +280,7 @@ export default function NutritionClientDetail() {
       {targets.map((t) => (
         <View key={t.id} className="mb-2 rounded-lg border border-stone-200 px-4 py-3">
           <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-            Effective {t.effective_date}
+            Effective {formatDateMDY(t.effective_date)}
           </Text>
           <Text style={{ fontFamily: fonts.sans }}>
             P {t.protein_g} / C {t.carb_g} / F {t.fat_g} / Fiber {t.fiber_g}

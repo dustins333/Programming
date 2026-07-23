@@ -5,6 +5,7 @@ import { todayInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
 import { getMyAssignment, getCurrentBlock, listPublishedWorkoutsForBlock } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
+import { formatDateMDY } from "../../lib/formatDate";
 
 export default function Plan() {
   const { profile } = useAuth();
@@ -86,7 +87,7 @@ export default function Plan() {
         {state.program.name} Plan
       </Text>
       <Text className="mb-4 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
-        {state.block.block_start_date} → {state.block.block_end_date}
+        {formatDateMDY(state.block.block_start_date)} → {formatDateMDY(state.block.block_end_date)}
       </Text>
 
       <View className="mb-6 flex-row flex-wrap gap-2">

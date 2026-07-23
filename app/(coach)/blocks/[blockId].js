@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-nati
 import { Link, useLocalSearchParams } from "expo-router";
 import { listWorkoutsForBlock } from "../../../lib/programming/blocks";
 import { CoachShell } from "../../../components/CoachShell";
+import { fonts, colors } from "../../../lib/theme";
 
 export default function BlockDetail() {
   const { blockId } = useLocalSearchParams();
@@ -33,6 +34,9 @@ export default function BlockDetail() {
   return (
     <CoachShell>
       <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 760 }}>
+        <Link href="/(coach)/blocks" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
+          ‹ Back to Group Programs
+        </Link>
         <Text className="mb-6 text-2xl" style={{ fontFamily: "ProtestStrike_400Regular", color: "#a46a57" }}>
           Block sessions
         </Text>

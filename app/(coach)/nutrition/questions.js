@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, FlatList, ActivityIndicator, Alert } from "react-native";
+import { Link } from "expo-router";
 import { listTemplateQuestions, addTemplateQuestion, deleteTemplateQuestion } from "../../../lib/nutrition/checkin";
 import { fonts, colors } from "../../../lib/theme";
 
@@ -65,6 +66,9 @@ export default function CheckinQuestions() {
 
   return (
     <View className="flex-1 bg-white px-6 py-8">
+      <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
+        ‹ Back to Nutrition
+      </Link>
       <Text className="mb-4 text-2xl text-primary" style={{ fontFamily: fonts.display }}>
         Check-In Questions
       </Text>

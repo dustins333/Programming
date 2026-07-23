@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { listExercises } from "../../../lib/programming/exercises";
 import {
   getWorkout,
@@ -24,6 +24,7 @@ import { CommentThread } from "./CommentThread";
 // searchable picker, reordering is plain up/down buttons.
 export default function WorkoutBuilderNative() {
   const { workoutId } = useLocalSearchParams();
+  const router = useRouter();
 
   const [workout, setWorkout] = useState(null);
   const [warmups, setWarmups] = useState([]);
@@ -115,6 +116,13 @@ export default function WorkoutBuilderNative() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-6">
+      <Pressable
+        onPress={() => router.push(`/(coach)/blocks/${workout.group_blocks.id}`)}
+        className="mb-3 self-start"
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back to block</Text>
+      </Pressable>
       <Text className="text-xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
         {workout.group_blocks.group_programs.name} — Wk {workout.week_number}, Session {workout.session_number}
       </Text>

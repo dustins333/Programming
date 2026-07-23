@@ -6,6 +6,7 @@ import { StatusBadge } from "../../../components/StatusBadge";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES, STATUS_ORDER } from "../../../lib/programming/spcStatus";
+import { formatDateMDY } from "../../../lib/formatDate";
 
 export default function SpcDashboard() {
   const [roster, setRoster] = useState(null);
@@ -148,7 +149,7 @@ export default function SpcDashboard() {
                     <Text className="mt-0.5 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
                       {c.sessionsPerWeek}x/week
                       {c.currentBlock
-                        ? ` · block ends ${c.currentBlock.block_end_date}${c.dueSoon ? " · due soon" : ""}`
+                        ? ` · block ends ${formatDateMDY(c.currentBlock.block_end_date)}${c.dueSoon ? " · due soon" : ""}`
                         : " · no block yet"}
                     </Text>
                     {c.notesGoalsFeedback ? (

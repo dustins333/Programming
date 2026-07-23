@@ -17,6 +17,7 @@ import { StatusBadge } from "../../../components/StatusBadge";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES, STATUS_ORDER } from "../../../lib/programming/spcStatus";
+import { formatDateMDY } from "../../../lib/formatDate";
 
 // Sticky drop target — one per status. Pinned at the top of the page so a
 // coach can drag a client row up into it without scrolling back and forth.
@@ -72,7 +73,7 @@ function ClientCard({ client }) {
       <Text className="mt-0.5 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
         {client.sessionsPerWeek}x/week
         {client.currentBlock
-          ? ` · block ends ${client.currentBlock.block_end_date}${client.dueSoon ? " · due soon" : ""}`
+          ? ` · block ends ${formatDateMDY(client.currentBlock.block_end_date)}${client.dueSoon ? " · due soon" : ""}`
           : " · no block yet"}
       </Text>
     </View>

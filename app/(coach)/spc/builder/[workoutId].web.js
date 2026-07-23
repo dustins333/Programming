@@ -25,10 +25,13 @@ import {
   removeSpcWorkoutExercise,
   reorderSpcWorkoutExercises,
   updateSpcExerciseWeek,
+  getSpcSiblingPatterns,
   setSpcWorkoutStatus,
 } from "../../../../lib/programming/spcWorkouts";
 import { ExerciseFormModal } from "../../exercises/ExerciseFormModal";
 import { CommentThread } from "../../builder/CommentThread";
+import { PatternTally } from "../../builder/PatternTally";
+import { formatDateMDY } from "../../../../lib/formatDate";
 import { fonts, colors } from "../../../../lib/theme";
 
 function initialsFor(name) {
@@ -83,7 +86,7 @@ function WeekCell({ week, onChange }) {
         style={{ fontFamily: fonts.sans }}
       />
       <Text className="mt-1 text-center text-[10px] text-stone-400" style={{ fontFamily: fonts.sans }}>
-        {week.coach_initials ? `${week.coach_initials} ${week.touched_date ?? ""}` : "—"}
+        {week.coach_initials ? `${week.coach_initials} ${formatDateMDY(week.touched_date)}` : "—"}
       </Text>
     </View>
   );
@@ -144,6 +147,7 @@ export default function SpcWorkoutBuilderWeb() {
   const [warmups, setWarmups] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [library, setLibrary] = useState([]);
+  const [siblingPatterns, setSiblingPatterns] = useState([]);
   const [search, setSearch] = useState("");
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -154,16 +158,18 @@ export default function SpcWorkoutBuilderWeb() {
   const load = useCallback(async () => {
     const w = await getSpcWorkout(workoutId);
     setWorkout(w);
-    const [memberRow, warmupRows, exerciseRows, libraryRows] = await Promise.all([
+    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
       getUser(w.spc_blocks.spc_client_id),
       listSpcWarmups(workoutId),
       listSpcWorkoutExercises(workoutId),
       listExercises(),
+      getSpcSiblingPatterns(w.spc_blocks.id, workoutId),
     ]);
     setMember(memberRow);
     setWarmups(warmupRows);
     setExercises(exerciseRows);
     setLibrary(libraryRows);
+    setSiblingPatterns(siblings);
   }, [workoutId]);
 
   useEffect(() => {
@@ -278,6 +284,8 @@ export default function SpcWorkoutBuilderWeb() {
       </View>
     );
   }
+
+  const currentPatterns = exercises.map((e) => e.exercises?.movement_pattern).filter(Boolean);
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
@@ -415,6 +423,10 @@ export default function SpcWorkoutBuilderWeb() {
                 ))
               )}
             </SortableContext>
+          </View>
+
+          <View className="mb-6">
+            <PatternTally currentPatterns={currentPatterns} siblingPatterns={siblingPatterns} />
           </View>
 
           <CommentThread spcBlockId={workout.spc_blocks.id} />

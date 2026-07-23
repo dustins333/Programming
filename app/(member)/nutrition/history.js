@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLogs } from "../../../lib/nutrition/dailyLog";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 
 const NUTRITION_SEGMENTS = [
@@ -69,7 +70,7 @@ export default function NutritionHistory() {
         renderItem={({ item }) => (
           <View className="mb-2 rounded-lg border border-stone-200 px-4 py-3">
             <View className="mb-1 flex-row items-center justify-between">
-              <Text style={{ fontFamily: fonts.sansSemiBold }}>{item.log_date}</Text>
+              <Text style={{ fontFamily: fonts.sansSemiBold }}>{formatDateMDY(item.log_date)}</Text>
               <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
                 {item.finalized_at ? "Finalized" : "Draft"}
               </Text>

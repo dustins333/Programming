@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { Link, useLocalSearchParams } from "expo-router";
-import { getSpcBlock, listBlocksForSpcClient, listSpcWorkoutsForBlock } from "../../../../lib/programming/spcBlocks";
+import { getSpcBlock, listBlocksForSpcClient, listSpcWorkoutsForBlock, labelBlocks } from "../../../../lib/programming/spcBlocks";
 import { copyLastBlockContent } from "../../../../lib/programming/spcWorkouts";
+import { formatDateMDY } from "../../../../lib/formatDate";
 import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
 
 export default function SpcBlockDetail() {
   const { blockId } = useLocalSearchParams();
   const [block, setBlock] = useState(null);
+  const [blockLabel, setBlockLabel] = useState(null);
   const [workouts, setWorkouts] = useState(null);
   const [priorBlock, setPriorBlock] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -24,6 +26,7 @@ export default function SpcBlockDetail() {
         listBlocksForSpcClient(b.spc_client_id),
       ]);
       setWorkouts(workoutRows);
+      setBlockLabel(labelBlocks(siblingBlocks).find((sb) => sb.id === b.id)?.label ?? "Block");
       const prior = siblingBlocks
         .filter((other) => other.id !== b.id && other.block_end_date < b.block_start_date)
         .sort((a, c) => (a.block_end_date < c.block_end_date ? 1 : -1))[0];
@@ -75,11 +78,17 @@ export default function SpcBlockDetail() {
   return (
     <CoachShell>
     <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
+      <Link
+        href={`/(coach)/spc/${block.spc_client_id}`}
+        style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}
+      >
+        ‹ Back to client
+      </Link>
       <Text className="mb-1 text-2xl" style={{ fontFamily: "ProtestStrike_400Regular", color: colors.primary }}>
-        SPC block
+        {blockLabel ?? "SPC block"}
       </Text>
       <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
-        {block.block_start_date} → {block.block_end_date} ({block.block_length_weeks} weeks)
+        {formatDateMDY(block.block_start_date)} → {formatDateMDY(block.block_end_date)} ({block.block_length_weeks} weeks)
       </Text>
 
       <View className="mb-6 flex-row flex-wrap gap-3">

@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getUser } from "../../../../lib/programming/clients";
-import { getSpcBlock, listSpcWorkoutsForBlock } from "../../../../lib/programming/spcBlocks";
+import { getSpcBlock, listBlocksForSpcClient, listSpcWorkoutsForBlock, labelBlocks } from "../../../../lib/programming/spcBlocks";
 import { listSpcWarmups, listSpcWorkoutExercises } from "../../../../lib/programming/spcWorkouts";
+import { formatDateMDY } from "../../../../lib/formatDate";
 
 // Web-only print/export view matching the gym's paper SPC Template layout
 // (spec §4): warm-up as a numbered 1-6 list with Sets/Reps/Notes, main
@@ -13,6 +14,7 @@ export default function SpcBlockPrintView() {
   const { blockId } = useLocalSearchParams();
   const router = useRouter();
   const [block, setBlock] = useState(null);
+  const [blockLabel, setBlockLabel] = useState(null);
   const [member, setMember] = useState(null);
   const [sessions, setSessions] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -20,7 +22,11 @@ export default function SpcBlockPrintView() {
   const load = useCallback(async () => {
     try {
       const b = await getSpcBlock(blockId);
-      const [memberRow, workouts] = await Promise.all([getUser(b.spc_client_id), listSpcWorkoutsForBlock(blockId)]);
+      const [memberRow, workouts, siblingBlocks] = await Promise.all([
+        getUser(b.spc_client_id),
+        listSpcWorkoutsForBlock(blockId),
+        listBlocksForSpcClient(b.spc_client_id),
+      ]);
       const sessionData = await Promise.all(
         workouts.map(async (w) => {
           const [warmups, exercises] = await Promise.all([listSpcWarmups(w.id), listSpcWorkoutExercises(w.id)]);
@@ -28,6 +34,7 @@ export default function SpcBlockPrintView() {
         })
       );
       setBlock(b);
+      setBlockLabel(labelBlocks(siblingBlocks).find((sb) => sb.id === b.id)?.label ?? "SPC Program");
       setMember(memberRow);
       setSessions(sessionData);
     } catch (err) {
@@ -70,9 +77,11 @@ export default function SpcBlockPrintView() {
         </button>
       </div>
 
-      <h1 style={{ fontSize: 20, marginBottom: 4 }}>{member.name} — SPC Program</h1>
+      <h1 style={{ fontSize: 20, marginBottom: 4 }}>
+        {member.name} — {blockLabel}
+      </h1>
       <p style={{ fontSize: 13, color: "#555", marginBottom: 24 }}>
-        {block.block_start_date} → {block.block_end_date} · {block.block_length_weeks} weeks
+        {formatDateMDY(block.block_start_date)} → {formatDateMDY(block.block_end_date)} · {block.block_length_weeks} weeks
       </p>
 
       {sessions.map(({ workout, warmups, exercises }) => (
@@ -144,7 +153,7 @@ export default function SpcBlockPrintView() {
                             {w?.rest ?? ""}
                             {w?.coach_initials ? (
                               <div style={{ fontSize: 9, color: "#777" }}>
-                                {w.coach_initials} {w.touched_date}
+                                {w.coach_initials} {formatDateMDY(w.touched_date)}
                               </div>
                             ) : null}
                           </td>
