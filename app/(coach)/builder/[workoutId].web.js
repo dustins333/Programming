@@ -27,10 +27,10 @@ import {
   getSiblingPatterns,
   setWorkoutStatus,
 } from "../../../lib/programming/workouts";
-import { ExerciseFormModal } from "../exercises/ExerciseFormModal";
+import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { createExercise } from "../../../lib/programming/exercises";
-import { PatternTally } from "./PatternTally";
-import { CommentThread } from "./CommentThread";
+import { PatternTally } from "../../../components/PatternTally";
+import { CommentThread } from "../../../components/CommentThread";
 
 function LibraryExercise({ exercise, onInsertClick }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView } from "react-native";
-import { MUSCLE_GROUPS, MOVEMENT_PATTERNS } from "../../../lib/programming/exercises";
+import { MUSCLE_GROUPS, MOVEMENT_PATTERNS } from "../lib/programming/exercises";
 
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
 

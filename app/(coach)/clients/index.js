@@ -3,7 +3,7 @@ import { View, Text, Pressable, TextInput, FlatList, ActivityIndicator, Alert } 
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { listMembers, linkMemberByAuthId } from "../../../lib/programming/clients";
-import { LinkMemberModal } from "./LinkMemberModal";
+import { LinkMemberModal } from "../../../components/LinkMemberModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 

@@ -38,13 +38,21 @@ export default function MemberLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Today", tabBarIcon: TabIcon("today") }} />
-      <Tabs.Screen name="plan" options={{ title: "Plan", tabBarIcon: TabIcon("calendar") }} />
-      <Tabs.Screen name="nutrition" options={{ title: "Nutrition", tabBarIcon: TabIcon("restaurant") }} />
-      <Tabs.Screen name="history" options={{ title: "History", tabBarIcon: TabIcon("time") }} />
+      <Tabs.Screen name="plan" options={{ title: "My Fitness", tabBarIcon: TabIcon("barbell") }} />
+      <Tabs.Screen name="nutrition" options={{ title: "My Nutrition", tabBarIcon: TabIcon("restaurant") }} />
+      <Tabs.Screen name="history" options={{ title: "My History", tabBarIcon: TabIcon("time") }} />
 
-      {/* Routable but not shown as their own tab — reached from Today. */}
-      <Tabs.Screen name="session" options={{ href: null }} />
-      <Tabs.Screen name="spc-session" options={{ href: null }} />
+      {/* Routable but not shown as their own tab — reached from My Fitness's
+          "View block" links. */}
+      <Tabs.Screen name="plan-block" options={{ href: null }} />
+      <Tabs.Screen name="plan-spc-block" options={{ href: null }} />
+
+      {/* Nested screens inside the nutrition/history folders have no nested
+          _layout of their own, so expo-router flattens them as siblings —
+          without these, each one leaks into the tab bar as its own item. */}
+      <Tabs.Screen name="nutrition/checkin" options={{ href: null }} />
+      <Tabs.Screen name="nutrition/history" options={{ href: null }} />
+      <Tabs.Screen name="history/[exerciseId]" options={{ href: null }} />
     </Tabs>
   );
 }

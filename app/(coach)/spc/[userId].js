@@ -11,7 +11,7 @@ import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { StatusBadge } from "../../../components/StatusBadge";
-import { NewSpcBlockModal } from "./NewSpcBlockModal";
+import { NewSpcBlockModal } from "../../../components/NewSpcBlockModal";
 import { CoachShell } from "../../../components/CoachShell";
 
 const isWeb = Platform.OS === "web";

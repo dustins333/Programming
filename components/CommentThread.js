@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
-import { useAuth } from "../../../lib/auth/AuthProvider";
-import { listComments, addComment } from "../../../lib/programming/comments";
+import { useAuth } from "../lib/auth/AuthProvider";
+import { listComments, addComment } from "../lib/programming/comments";
 
 export function CommentThread({ groupBlockId, spcBlockId }) {
   const { profile } = useAuth();

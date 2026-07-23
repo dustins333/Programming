@@ -15,9 +15,9 @@ import {
   getSiblingPatterns,
   setWorkoutStatus,
 } from "../../../lib/programming/workouts";
-import { ExercisePickerModal } from "./ExercisePickerModal";
-import { PatternTally } from "./PatternTally";
-import { CommentThread } from "./CommentThread";
+import { ExercisePickerModal } from "../../../components/ExercisePickerModal";
+import { PatternTally } from "../../../components/PatternTally";
+import { CommentThread } from "../../../components/CommentThread";
 
 // Native is a "view + quick adjust" surface, not the full builder — no
 // drag-and-drop here (that's web-only, per the build plan). Inserting is a

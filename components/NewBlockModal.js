@@ -1,19 +1,16 @@
 import { useEffect, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable } from "react-native";
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
+import { todayInBoise } from "../lib/boiseDate";
 
 export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
   const [groupProgramId, setGroupProgramId] = useState(null);
-  const [startDate, setStartDate] = useState(todayISO());
+  const [startDate, setStartDate] = useState(todayInBoise());
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setGroupProgramId(programs?.[0]?.id ?? null);
-      setStartDate(todayISO());
+      setStartDate(todayInBoise());
     }
   }, [visible, programs]);
 

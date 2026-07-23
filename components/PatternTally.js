@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { View, Text } from "react-native";
-import { MOVEMENT_PATTERNS } from "../../../lib/programming/exercises";
+import { MOVEMENT_PATTERNS } from "../lib/programming/exercises";
 
 const LABELS = {
   squat: "Squat",

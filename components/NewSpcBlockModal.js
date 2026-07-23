@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable } from "react-native";
-import { todayInBoise } from "../../../lib/boiseDate";
-import { fonts } from "../../../lib/theme";
+import { todayInBoise } from "../lib/boiseDate";
+import { fonts } from "../lib/theme";
 
 export function NewSpcBlockModal({ visible, defaultLengthWeeks, onClose, onSubmit }) {
   const [startDate, setStartDate] = useState(todayInBoise());

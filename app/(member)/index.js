@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber, sessionNumberForDate } from "../../lib/programming/schedule";
@@ -8,6 +8,8 @@ import { getMyAssignment, getCurrentBlock, getWorkout } from "../../lib/programm
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { getSpcClient } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listPublishedSpcWorkoutsForBlock } from "../../lib/programming/spcBlocks";
+import { listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
+import { getGroupCompletion, getNextIncompleteSpcWorkout } from "../../lib/programming/sessionCompletions";
 import { getLogForDate } from "../../lib/nutrition/dailyLog";
 import { getCurrentTarget, deriveCalories } from "../../lib/nutrition/targets";
 import { fonts, colors } from "../../lib/theme";
@@ -29,48 +31,55 @@ function Eyebrow({ children }) {
   );
 }
 
+// Today is a read-only "what to expect" overview — no inputs, no logging.
+// All actual set-by-set logging lives on My Fitness now; every preview card
+// here just links there.
 export default function MemberHome() {
   const { profile } = useAuth();
   const router = useRouter();
-  const [session, setSession] = useState({ status: "loading" });
-  const [spcTeaser, setSpcTeaser] = useState(null); // null = no SPC / no active block, else { sessionCount }
-  const [nutrition, setNutrition] = useState(null); // { status: "logged"|"not_logged", weight, caloriePct }
+  const [group, setGroup] = useState({ status: "loading" });
+  const [spc, setSpc] = useState(null); // null = not enrolled / no active block; else { status: "done" | "ready", ... }
+  const [nutrition, setNutrition] = useState(null);
 
   const load = useCallback(async () => {
-    setSession({ status: "loading" });
+    setGroup({ status: "loading" });
     const today = todayInBoise();
 
     // Each section loads independently — a member with only SPC (no group
     // program), or nutrition data that errors before its migration has run,
-    // shouldn't be able to take down the rest of Today. Same isolation
-    // pattern as the Clients page's nutrition/SPC lookups.
+    // shouldn't be able to take down the rest of Today.
     try {
       const assignment = await getMyAssignment(profile.id);
       if (!assignment?.group_program_id) {
-        setSession({ status: "unassigned" });
+        setGroup({ status: "unassigned" });
       } else {
         const program = assignment.group_programs;
         const block = await getCurrentBlock(program.id, today);
         if (!block) {
-          setSession({ status: "no_block", programName: program.name });
+          setGroup({ status: "no_block", programName: program.name });
         } else {
           const sessionNumber = sessionNumberForDate(today);
           if (!sessionNumber) {
-            setSession({ status: "rest_day", programName: program.name });
+            setGroup({ status: "rest_day", programName: program.name });
           } else {
             const weekNumber = currentWeekNumber(block.block_start_date, program.block_length_weeks, today);
             const workout = await getWorkout(block.id, weekNumber, sessionNumber);
             if (!workout) {
-              setSession({ status: "not_published", programName: program.name, weekNumber, sessionNumber });
+              setGroup({ status: "not_published", programName: program.name, weekNumber, sessionNumber });
             } else {
-              const [warmups, exercises] = await Promise.all([listWarmups(workout.id), listWorkoutExercises(workout.id)]);
-              setSession({ status: "ready", programName: program.name, weekNumber, sessionNumber, warmups, exercises });
+              const completion = await getGroupCompletion(profile.id, workout.id);
+              if (completion) {
+                setGroup({ status: "done", programName: program.name, weekNumber, sessionNumber });
+              } else {
+                const [warmups, exercises] = await Promise.all([listWarmups(workout.id), listWorkoutExercises(workout.id)]);
+                setGroup({ status: "ready", programName: program.name, weekNumber, sessionNumber, warmups, exercises });
+              }
             }
           }
         }
       }
     } catch (err) {
-      setSession({ status: "error", message: err.message ?? String(err) });
+      setGroup({ status: "error", message: err.message ?? String(err) });
     }
 
     try {
@@ -79,11 +88,24 @@ export default function MemberHome() {
         const block = await getCurrentSpcBlock(profile.id, today);
         if (block) {
           const workouts = await listPublishedSpcWorkoutsForBlock(block.id);
-          if (workouts.length > 0) setSpcTeaser({ sessionCount: workouts.length });
+          if (workouts.length > 0) {
+            const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+            const next = await getNextIncompleteSpcWorkout(profile.id, workouts, weekNumber, spcClient.sessions_per_week);
+            if (!next) {
+              setSpc({ status: "done" });
+            } else {
+              const exerciseRows = await listSpcWorkoutExercises(next.id);
+              const exercises = exerciseRows.map((ex) => ({
+                ...ex,
+                weekTarget: ex.spc_exercise_weeks.find((w) => w.week_number === weekNumber) ?? null,
+              }));
+              setSpc({ status: "ready", sessionNumber: next.session_number, exercises });
+            }
+          }
         }
       }
     } catch {
-      // leave spcTeaser null
+      // leave spc null
     }
 
     try {
@@ -106,11 +128,16 @@ export default function MemberHome() {
     }
   }, [profile.id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Refetch on every focus, not just first mount — Tabs keep this screen
+  // mounted in the background, so without this, finalizing a session on My
+  // Fitness wouldn't be reflected here until a full app reload.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
-  if (session.status === "loading") {
+  if (group.status === "loading") {
     return (
       <View className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator color={colors.primary} />
@@ -127,28 +154,28 @@ export default function MemberHome() {
         {formatToday()}
       </Text>
 
-      {session.status === "error" && (
+      {group.status === "error" && (
         <Text className="mb-4 text-red-600" style={{ fontFamily: fonts.sans }}>
-          Something went wrong loading your plan: {session.message}
+          Something went wrong loading your plan: {group.message}
         </Text>
       )}
-      {session.status === "unassigned" && !spcTeaser && (
+      {group.status === "unassigned" && !spc && (
         <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
           You're not assigned to a program yet — check with your coach.
         </Text>
       )}
-      {session.status === "no_block" && (
+      {group.status === "no_block" && (
         <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
-          No active {session.programName} block right now.
+          No active {group.programName} block right now.
         </Text>
       )}
-      {session.status === "not_published" && (
+      {group.status === "not_published" && (
         <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
-          Week {session.weekNumber}, Session {session.sessionNumber} isn't published yet — check back soon.
+          Week {group.weekNumber}, Session {group.sessionNumber} isn't published yet — check back soon.
         </Text>
       )}
 
-      {session.status === "rest_day" && (
+      {group.status === "rest_day" && (
         <View className="mb-4 rounded-2xl border border-dashed border-stone-300 px-5 py-6 items-center">
           <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-600">
             Rest day
@@ -159,32 +186,40 @@ export default function MemberHome() {
         </View>
       )}
 
-      {session.status === "ready" && (
-        <View className="mb-4 rounded-2xl border border-stone-200 px-5 py-4" style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12 }}>
-          <View className="mb-1 flex-row items-center justify-between">
-            <Eyebrow>Today's session</Eyebrow>
-            {spcTeaser ? (
-              <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: "#f4ede3" }}>
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#8a5a2e" }}>+ SPC today</Text>
-              </View>
-            ) : null}
-          </View>
+      {group.status === "done" && (
+        <View className="mb-4 rounded-2xl border border-stone-200 px-5 py-4">
+          <Eyebrow>Today's session</Eyebrow>
+          <Text className="mt-1 text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 16 }}>
+            {group.programName} — Week {group.weekNumber}, Session {group.sessionNumber}
+          </Text>
+          <Text className="mt-1 text-sm" style={{ fontFamily: fonts.sansMedium, color: "#4d6142" }}>
+            ✓ Completed
+          </Text>
+        </View>
+      )}
+
+      {group.status === "ready" && (
+        <View
+          className="mb-4 rounded-2xl border border-stone-200 px-5 py-4"
+          style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12 }}
+        >
+          <Eyebrow>Today's session</Eyebrow>
           <Text className="mb-2 text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 16 }}>
-            {session.programName} — Week {session.weekNumber}, Session {session.sessionNumber}
+            {group.programName} — Week {group.weekNumber}, Session {group.sessionNumber}
           </Text>
 
-          {session.warmups.length > 0 && (
+          {group.warmups.length > 0 && (
             <Text className="mb-3 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-              Warm-up: {session.warmups.map((w) => w.exercises?.name ?? w.label).join(", ")}
+              Warm-up: {group.warmups.map((w) => w.exercises?.name ?? w.label).join(", ")}
             </Text>
           )}
 
           <View className="mb-4 rounded-xl px-3.5" style={{ backgroundColor: "#faf7f4", borderWidth: 1, borderColor: "#f0ebe6" }}>
-            {session.exercises.map((ex, i) => (
+            {group.exercises.map((ex, i) => (
               <View
                 key={ex.id}
                 className="flex-row items-center justify-between py-2.5"
-                style={i < session.exercises.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f0ebe6" } : undefined}
+                style={i < group.exercises.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f0ebe6" } : undefined}
               >
                 <Text className="text-stone-700" style={{ fontFamily: fonts.sansMedium, fontSize: 14 }}>
                   {ex.exercises?.name}
@@ -197,27 +232,51 @@ export default function MemberHome() {
             ))}
           </View>
 
-          <Pressable onPress={() => router.push("/(member)/session")} className="items-center rounded-lg bg-primary py-3.5">
+          <Pressable onPress={() => router.push("/(member)/plan")} className="items-center rounded-lg bg-primary py-3.5">
             <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-              Start session
+              Log this session in My Fitness →
             </Text>
           </Pressable>
         </View>
       )}
 
-      {spcTeaser ? (
-        <Pressable
-          onPress={() => router.push("/(member)/spc-session")}
-          className="mb-4 rounded-2xl border border-stone-200 px-5 py-4"
-        >
+      {spc?.status === "done" ? (
+        <View className="mb-4 rounded-2xl border border-stone-200 px-5 py-4">
           <Eyebrow>SPC — Individual program</Eyebrow>
-          <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-            {spcTeaser.sessionCount} session{spcTeaser.sessionCount === 1 ? "" : "s"} · with your coach
+          <Text className="mt-1 text-sm" style={{ fontFamily: fonts.sansMedium, color: "#4d6142" }}>
+            ✓ No remaining sessions this week
           </Text>
-          <Text className="mt-2" style={{ fontFamily: fonts.sansMedium, color: "#8a5140", fontSize: 13 }}>
-            View SPC session ↓
+        </View>
+      ) : null}
+
+      {spc?.status === "ready" ? (
+        <View className="mb-4 rounded-2xl border border-stone-200 px-5 py-4">
+          <Eyebrow>SPC — Individual program</Eyebrow>
+          <Text className="mb-2 text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 16 }}>
+            Session {spc.sessionNumber}
           </Text>
-        </Pressable>
+          <View className="mb-4 rounded-xl px-3.5" style={{ backgroundColor: "#faf7f4", borderWidth: 1, borderColor: "#f0ebe6" }}>
+            {spc.exercises.map((ex, i) => (
+              <View
+                key={ex.id}
+                className="flex-row items-center justify-between py-2.5"
+                style={i < spc.exercises.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f0ebe6" } : undefined}
+              >
+                <Text className="text-stone-700" style={{ fontFamily: fonts.sansMedium, fontSize: 14 }}>
+                  {ex.exercises?.name}
+                </Text>
+                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                  {ex.weekTarget?.sets ?? "–"}×{ex.weekTarget?.reps ?? "–"}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <Pressable onPress={() => router.push("/(member)/plan")} className="items-center rounded-lg bg-primary py-3.5">
+            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+              Log this session in My Fitness →
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {nutrition ? (

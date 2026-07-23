@@ -3,6 +3,7 @@ import { View, Text, FlatList, ActivityIndicator, Pressable } from "react-native
 import { Link } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLoggedExercises } from "../../../lib/programming/memberPlan";
+import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 
 export default function HistoryIndex() {
@@ -21,7 +22,7 @@ export default function HistoryIndex() {
   return (
     <View className="flex-1 bg-white px-6 py-8">
       <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        History
+        My History
       </Text>
       {!rows ? (
         <ActivityIndicator color={colors.primary} />
@@ -41,7 +42,7 @@ export default function HistoryIndex() {
                   {item.exercise.name}
                 </Text>
                 <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                  Last logged {item.lastDate}
+                  Last logged {formatDateMDY(item.lastDate)}
                 </Text>
               </Pressable>
             </Link>

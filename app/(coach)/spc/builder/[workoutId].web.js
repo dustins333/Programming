@@ -28,9 +28,9 @@ import {
   getSpcSiblingPatterns,
   setSpcWorkoutStatus,
 } from "../../../../lib/programming/spcWorkouts";
-import { ExerciseFormModal } from "../../exercises/ExerciseFormModal";
-import { CommentThread } from "../../builder/CommentThread";
-import { PatternTally } from "../../builder/PatternTally";
+import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
+import { CommentThread } from "../../../../components/CommentThread";
+import { PatternTally } from "../../../../components/PatternTally";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { fonts, colors } from "../../../../lib/theme";
 

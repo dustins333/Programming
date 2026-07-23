@@ -6,7 +6,7 @@ import { listWorkoutExercisesForWorkouts } from "../../../lib/programming/workou
 import { currentWeekNumber } from "../../../lib/programming/schedule";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { useAuth } from "../../../lib/auth/AuthProvider";
-import { NewBlockModal } from "./NewBlockModal";
+import { NewBlockModal } from "../../../components/NewBlockModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 

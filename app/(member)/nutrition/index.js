@@ -138,7 +138,7 @@ export default function NutritionToday() {
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
       <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        Nutrition
+        My Nutrition
       </Text>
       <Text className="mb-4 text-base text-stone-500" style={{ fontFamily: fonts.sans }}>
         {today}

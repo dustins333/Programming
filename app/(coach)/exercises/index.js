@@ -8,7 +8,7 @@ import {
   setExerciseActive,
   MUSCLE_GROUPS,
 } from "../../../lib/programming/exercises";
-import { ExerciseFormModal } from "./ExerciseFormModal";
+import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { CoachShell } from "../../../components/CoachShell";
 
 export default function Exercises() {
