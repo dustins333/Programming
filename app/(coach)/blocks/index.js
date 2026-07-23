@@ -4,16 +4,15 @@ import { useRouter } from "expo-router";
 import { listGroupPrograms, createBlock, listWorkoutsForBlock, listBlocksForProgram, addDays } from "../../../lib/programming/blocks";
 import { listWorkoutExercisesForWorkouts } from "../../../lib/programming/workouts";
 import { currentWeekNumber } from "../../../lib/programming/schedule";
+import { WEEK_OFFSETS, groupRows } from "../../../lib/programming/gridRows";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { NewBlockModal } from "../../../components/NewBlockModal";
 import { CoachShell } from "../../../components/CoachShell";
+import { SessionCell, PlaceholderCell, GapSlot, SESSION_COL_WIDTH, CELL_MIN_HEIGHT, CELL_GAP } from "../../../components/BlockGridCells";
 import { fonts, colors } from "../../../lib/theme";
 
 const ROW_LABEL_WIDTH = 118;
-const SESSION_COL_WIDTH = 168;
-const CELL_MIN_HEIGHT = 122;
-const CELL_GAP = 12; // matches className="gap-3"
 const PANEL_PADDING = 14;
 // Approximate height of a panel's name-band + session-label header stack —
 // the row-label column has no header of its own, so it gets a plain spacer
@@ -23,21 +22,6 @@ const PANEL_PADDING = 14;
 const HEADER_STACK_HEIGHT = 94;
 const DISPLAY_NAME = { "Better With Age": "BWA" };
 const PANEL_BG = { Flagship: "#fdf6f2", "Better With Age": "#eef1e7" };
-
-// Rows are relative to TODAY (a real calendar date), not tied to one
-// block's own week numbering — Flagship (4wk blocks) and BWA (6wk blocks)
-// each display their own "Wk N" per row, and a row can be covered by
-// whichever block (current or already-scheduled-next) actually spans that
-// date, so a coach filling week 5-6 while week 1-4 is still current shows
-// up correctly instead of assuming only one block ever applies.
-const WEEK_OFFSETS = [
-  { offset: 0, label: "Current week" },
-  { offset: 1, label: "Next week" },
-  { offset: 2, label: "3 weeks out" },
-  { offset: 3, label: "4 weeks out" },
-  { offset: 4, label: "5 weeks out" },
-  { offset: 5, label: "6 weeks out" },
-];
 
 async function loadProgramData(program) {
   const allBlocks = await listBlocksForProgram(program.id);
@@ -67,101 +51,6 @@ async function loadProgramData(program) {
 
   const exercisesByWorkout = await listWorkoutExercisesForWorkouts(allWorkoutIds);
   return { program, rows, exercisesByWorkout, allBlocks };
-}
-
-// Groups consecutive uncovered rows into single spans, so a program with
-// no active block (or one that ends partway through the visible window)
-// gets one "start a block" prompt sized to the actual gap, instead of
-// repeating the same message in every empty session cell.
-function groupRows(rows) {
-  const groups = [];
-  let i = 0;
-  while (i < rows.length) {
-    if (rows[i].block) {
-      groups.push({ type: "covered", row: rows[i] });
-      i += 1;
-    } else {
-      let j = i;
-      while (j < rows.length && !rows[j].block) j += 1;
-      groups.push({ type: "gap", rows: rows.slice(i, j) });
-      i = j;
-    }
-  }
-  return groups;
-}
-
-function SessionCell({ workout, weekNum, exerciseNames, onPress }) {
-  const shown = exerciseNames.slice(0, 5);
-  const extra = exerciseNames.length - shown.length;
-  return (
-    <Pressable onPress={onPress} style={{ width: SESSION_COL_WIDTH, minHeight: CELL_MIN_HEIGHT }} className="rounded-lg border border-stone-200 p-2.5">
-      <View className="mb-1.5 flex-row items-center justify-between">
-        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11 }} className="text-stone-500">
-          Wk {weekNum}
-        </Text>
-        <View
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: workout.status === "published" ? "#7c9070" : "#d6d3d1",
-          }}
-        />
-      </View>
-      {shown.length === 0 ? (
-        <Text style={{ fontFamily: fonts.sans, fontSize: 11 }} className="text-stone-300">
-          Empty
-        </Text>
-      ) : (
-        shown.map((name, i) => (
-          <Text key={i} numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5 }} className="mb-0.5 text-stone-600">
-            {name}
-          </Text>
-        ))
-      )}
-      {extra > 0 ? (
-        <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11 }} className="text-stone-400">
-          +{extra} more
-        </Text>
-      ) : null}
-    </Pressable>
-  );
-}
-
-function PlaceholderCell() {
-  return (
-    <View
-      style={{ width: SESSION_COL_WIDTH, minHeight: CELL_MIN_HEIGHT }}
-      className="items-center justify-center rounded-lg border border-dashed border-stone-200"
-    >
-      <Text className="px-2 text-center text-xs text-stone-300" style={{ fontFamily: fonts.sans }}>
-        Not scheduled
-      </Text>
-    </View>
-  );
-}
-
-// One prompt spanning exactly the rows that have nothing covering them —
-// right where the gap actually starts, whether that's because the program
-// has never had a block or because its current one ends partway through
-// the visible window.
-function GapSlot({ rowCount, groupWidth, onStart, starting }) {
-  const height = rowCount * CELL_MIN_HEIGHT + (rowCount - 1) * CELL_GAP;
-  return (
-    <View
-      style={{ width: groupWidth, height, marginBottom: CELL_GAP }}
-      className="items-center justify-center rounded-xl border border-dashed border-stone-300 px-4"
-    >
-      <Text className="mb-3 text-center text-stone-400" style={{ fontFamily: fonts.sans }}>
-        Nothing scheduled yet.
-      </Text>
-      <Pressable onPress={onStart} disabled={starting} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
-        <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-          {starting ? "Starting…" : "Start new block"}
-        </Text>
-      </Pressable>
-    </View>
-  );
 }
 
 export default function Blocks() {

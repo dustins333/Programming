@@ -29,6 +29,7 @@ import {
   setSpcWorkoutStatus,
 } from "../../../../lib/programming/spcWorkouts";
 import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
+import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
 import { CommentThread } from "../../../../components/CommentThread";
 import { PatternTally } from "../../../../components/PatternTally";
 import { formatDateMDY } from "../../../../lib/formatDate";
@@ -150,10 +151,12 @@ export default function SpcWorkoutBuilderWeb() {
   const [siblingPatterns, setSiblingPatterns] = useState([]);
   const [search, setSearch] = useState("");
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
+  const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const { setNodeRef: setDropZoneRef, isOver } = useDroppable({ id: "session-dropzone" });
+  const { setNodeRef: setWarmupDropZoneRef, isOver: isOverWarmup } = useDroppable({ id: "warmup-dropzone" });
 
   const load = useCallback(async () => {
     const w = await getSpcWorkout(workoutId);
@@ -235,7 +238,9 @@ export default function SpcWorkoutBuilderWeb() {
     if (!over) return;
 
     if (active.data.current?.type === "library") {
-      if (over.id === "session-dropzone" || exercises.some((e) => e.id === over.id)) {
+      if (over.id === "warmup-dropzone") {
+        handleAddWarmup(active.data.current.exercise);
+      } else if (over.id === "session-dropzone" || exercises.some((e) => e.id === over.id)) {
         handleInsertExercise(active.data.current.exercise);
       }
       return;
@@ -347,9 +352,9 @@ export default function SpcWorkoutBuilderWeb() {
             </Pressable>
           </View>
 
-          <View className="mb-6">
+          <View ref={setWarmupDropZoneRef} className="mb-6">
             <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
-              Warm-up
+              Warm-up {isOverWarmup ? "· drop here" : ""}
             </Text>
             {warmups.length > 0 && (
               <View className="mb-2 rounded-xl px-3.5" style={{ backgroundColor: "#faf7f4", borderWidth: 1, borderColor: "#f0ebe6" }}>
@@ -395,8 +400,13 @@ export default function SpcWorkoutBuilderWeb() {
                 ))}
               </View>
             )}
-            <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-              Click an exercise in the library while building the warm-up list (max 5-6 movements).
+            <Pressable onPress={() => setWarmupPickerVisible(true)} className="rounded-lg border border-primary px-3 py-2.5">
+              <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
+                + Insert warm-up exercise
+              </Text>
+            </Pressable>
+            <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+              Or drag an exercise from the library into this section (max 5-6 movements).
             </Text>
           </View>
 
@@ -438,6 +448,13 @@ export default function SpcWorkoutBuilderWeb() {
         initialExercise={null}
         onClose={() => setNewExerciseModalVisible(false)}
         onSubmit={handleNewExerciseCreated}
+      />
+
+      <ExercisePickerModal
+        visible={warmupPickerVisible}
+        library={library}
+        onClose={() => setWarmupPickerVisible(false)}
+        onPick={handleAddWarmup}
       />
     </DndContext>
   );

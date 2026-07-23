@@ -1,0 +1,174 @@
+import { useCallback, useEffect, useState } from "react";
+import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { Link, useRouter } from "expo-router";
+import { useAuth } from "../../../../lib/auth/AuthProvider";
+import { listTemplates, createTemplate, deleteTemplate } from "../../../../lib/programming/templates";
+import { CoachShell } from "../../../../components/CoachShell";
+import { fonts, colors } from "../../../../lib/theme";
+
+const CATEGORY_LABELS = { away: "Away programming", trial: "Trial sessions" };
+
+function NewTemplateForm({ onCreate }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("away");
+  const [saving, setSaving] = useState(false);
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await onCreate({ name: name.trim(), category });
+      setName("");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View className="mb-8 rounded-2xl border border-stone-200 p-5">
+      <Text className="mb-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
+        New template
+      </Text>
+      <View className="mb-3 flex-row gap-2">
+        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+          <Pressable
+            key={key}
+            onPress={() => setCategory(key)}
+            className={`rounded-full border px-3.5 py-2.5 ${category === key ? "border-primary bg-primary" : "border-stone-300"}`}
+          >
+            <Text className={category === key ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
+              {label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <TextInput
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Away — Lower Body, Trial Session A"
+        className="mb-3 rounded-lg border border-stone-300 px-4 py-3"
+        style={{ fontFamily: fonts.sans }}
+      />
+      <Pressable
+        onPress={handleCreate}
+        disabled={saving || !name.trim()}
+        className="self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50"
+      >
+        <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+          {saving ? "Creating…" : "+ Create template"}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+export default function TemplatesIndex() {
+  const { profile } = useAuth();
+  const router = useRouter();
+  const [templates, setTemplates] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      setTemplates(await listTemplates());
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleCreate = async ({ name, category }) => {
+    try {
+      const created = await createTemplate({ name, category, createdBy: profile.id });
+      router.push(`/(coach)/spc/templates/${created.id}`);
+    } catch (err) {
+      Alert.alert("Failed to create template", err.message ?? String(err));
+    }
+  };
+
+  const handleDelete = async (template) => {
+    try {
+      await deleteTemplate(template.id);
+      await load();
+    } catch (err) {
+      Alert.alert("Failed to delete template", err.message ?? String(err));
+    }
+  };
+
+  if (loadError) {
+    return (
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white px-6">
+          <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong: {loadError}
+          </Text>
+        </View>
+      </CoachShell>
+    );
+  }
+
+  if (!templates) {
+    return (
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white">
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </CoachShell>
+    );
+  }
+
+  return (
+    <CoachShell>
+      <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
+        <Link href="/(coach)/spc" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 20 }}>
+          ‹ Back to SPC
+        </Link>
+        <Text className="mb-1 text-2xl" style={{ fontFamily: "ProtestStrike_400Regular", color: colors.primary }}>
+          Templates
+        </Text>
+        <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Reusable workouts a coach can assign as a one-off to any client's profile — away programming for travel, or a
+          trial session for a prospect.
+        </Text>
+
+        <NewTemplateForm onCreate={handleCreate} />
+
+        {Object.entries(CATEGORY_LABELS).map(([category, label]) => {
+          const rows = templates.filter((t) => t.category === category);
+          return (
+            <View key={category} className="mb-6">
+              <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
+                {label}
+              </Text>
+              {rows.length === 0 ? (
+                <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
+                  None yet.
+                </Text>
+              ) : (
+                rows.map((t) => (
+                  <View key={t.id} className="mb-2 flex-row items-center justify-between rounded-lg border border-stone-200 px-4 py-3">
+                    <Pressable onPress={() => router.push(`/(coach)/spc/templates/${t.id}`)} className="flex-1">
+                      <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+                        {t.name}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleDelete(t)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityLabel={`Delete template ${t.name}`}
+                    >
+                      <Text className="text-stone-400">✕</Text>
+                    </Pressable>
+                  </View>
+                ))
+              )}
+            </View>
+          );
+        })}
+      </ScrollView>
+    </CoachShell>
+  );
+}

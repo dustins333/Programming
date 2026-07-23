@@ -1,37 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  DndContext,
-  useDraggable,
-  useDroppable,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
+import { Link, useLocalSearchParams } from "expo-router";
+import { DndContext, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useAuth } from "../../../lib/auth/AuthProvider";
-import { listExercises, MUSCLE_GROUPS } from "../../../lib/programming/exercises";
+import { useAuth } from "../../../../lib/auth/AuthProvider";
+import { listExercises, MUSCLE_GROUPS, createExercise } from "../../../../lib/programming/exercises";
 import {
-  getWorkout,
-  listWarmups,
-  addWarmup,
-  updateWarmup,
-  removeWarmup,
-  listWorkoutExercises,
-  addWorkoutExercise,
-  updateWorkoutExercise,
-  removeWorkoutExercise,
-  reorderWorkoutExercises,
-  getSiblingPatterns,
-  setWorkoutStatus,
-} from "../../../lib/programming/workouts";
-import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
-import { ExercisePickerModal } from "../../../components/ExercisePickerModal";
-import { createExercise } from "../../../lib/programming/exercises";
-import { PatternTally } from "../../../components/PatternTally";
-import { CommentThread } from "../../../components/CommentThread";
+  getTemplate,
+  listTemplateWarmups,
+  addTemplateWarmup,
+  updateTemplateWarmup,
+  removeTemplateWarmup,
+  listTemplateExercises,
+  addTemplateExercise,
+  updateTemplateExercise,
+  removeTemplateExercise,
+  reorderTemplateExercises,
+} from "../../../../lib/programming/templates";
+import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
+import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
+import { fonts, colors } from "../../../../lib/theme";
+
+const CATEGORY_LABELS = { away: "Away programming", trial: "Trial session" };
 
 function LibraryExercise({ exercise, onInsertClick }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -48,9 +39,9 @@ function LibraryExercise({ exercise, onInsertClick }) {
         onPress={() => onInsertClick(exercise)}
         className="mb-1.5 cursor-grab rounded-lg border border-stone-200 px-3 py-2 active:opacity-70"
       >
-        <Text style={{ fontFamily: "Montserrat_500Medium" }}>{exercise.name}</Text>
+        <Text style={{ fontFamily: fonts.sansMedium }}>{exercise.name}</Text>
         {exercise.movement_pattern ? (
-          <Text className="text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+          <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
             {exercise.movement_pattern.replace("_", " ")}
           </Text>
         ) : null}
@@ -61,11 +52,7 @@ function LibraryExercise({ exercise, onInsertClick }) {
 
 function SortableExerciseRow({ item, onChange, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -74,14 +61,14 @@ function SortableExerciseRow({ item, onChange, onRemove }) {
           ⠿
         </div>
         <View className="flex-1">
-          <Text style={{ fontFamily: "Montserrat_500Medium" }}>{item.exercises?.name}</Text>
+          <Text style={{ fontFamily: fonts.sansMedium }}>{item.exercises?.name}</Text>
           {item.exercises?.video_url ? (
             <Pressable
               onPress={() => Linking.openURL(item.exercises.video_url)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityLabel={`Watch video for ${item.exercises.name}`}
             >
-              <Text className="text-xs" style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140" }}>
+              <Text className="text-xs" style={{ fontFamily: fonts.sans, color: "#8a5140" }}>
                 ▶ video
               </Text>
             </Pressable>
@@ -93,28 +80,28 @@ function SortableExerciseRow({ item, onChange, onRemove }) {
           keyboardType="numeric"
           placeholder="sets"
           className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
-          style={{ fontFamily: "Montserrat_400Regular" }}
+          style={{ fontFamily: fonts.sans }}
         />
         <TextInput
           value={item.reps ?? ""}
           onChangeText={(v) => onChange(item.id, { reps: v })}
           placeholder="reps"
           className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
-          style={{ fontFamily: "Montserrat_400Regular" }}
+          style={{ fontFamily: fonts.sans }}
         />
         <TextInput
-          value={item.tempo ?? ""}
-          onChangeText={(v) => onChange(item.id, { tempo: v })}
-          placeholder="tempo"
+          value={item.rest ?? ""}
+          onChangeText={(v) => onChange(item.id, { rest: v })}
+          placeholder="rest"
           className="w-16 rounded border border-stone-300 px-2 py-1.5 text-center"
-          style={{ fontFamily: "Montserrat_400Regular" }}
+          style={{ fontFamily: fonts.sans }}
         />
         <TextInput
           value={item.notes ?? ""}
           onChangeText={(v) => onChange(item.id, { notes: v })}
           placeholder="notes"
           className="w-28 rounded border border-stone-300 px-2 py-1.5"
-          style={{ fontFamily: "Montserrat_400Regular" }}
+          style={{ fontFamily: fonts.sans }}
         />
         <Pressable
           onPress={() => onRemove(item.id)}
@@ -128,40 +115,47 @@ function SortableExerciseRow({ item, onChange, onRemove }) {
   );
 }
 
-export default function WorkoutBuilderWeb() {
-  const { workoutId } = useLocalSearchParams();
+// Web-only drag-and-drop template builder — mirrors the group/SPC workout
+// builders' interaction model (dnd-kit library sidebar + sortable session
+// list + a warmup drop zone) instead of the plain click-based native
+// version at the sibling [templateId].js. No publish/status (templates
+// aren't visible to any member directly, only the one_off_workout copied
+// from one — see oneOffWorkouts.js), no per-week columns (a template is a
+// single flat prescription, used once per assignment), no comments/pattern
+// tally (no block/siblings concept for a standalone template).
+export default function TemplateBuilderWeb() {
+  const { templateId } = useLocalSearchParams();
   const { profile } = useAuth();
-  const router = useRouter();
 
-  const [workout, setWorkout] = useState(null);
+  const [template, setTemplate] = useState(null);
   const [warmups, setWarmups] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [library, setLibrary] = useState([]);
-  const [siblingPatterns, setSiblingPatterns] = useState([]);
   const [search, setSearch] = useState("");
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
-  const [publishing, setPublishing] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-
   const { setNodeRef: setDropZoneRef, isOver } = useDroppable({ id: "session-dropzone" });
   const { setNodeRef: setWarmupDropZoneRef, isOver: isOverWarmup } = useDroppable({ id: "warmup-dropzone" });
 
   const load = useCallback(async () => {
-    const w = await getWorkout(workoutId);
-    setWorkout(w);
-    const [warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
-      listWarmups(workoutId),
-      listWorkoutExercises(workoutId),
-      listExercises(),
-      getSiblingPatterns(w.group_blocks.id, w.week_number, workoutId),
-    ]);
-    setWarmups(warmupRows);
-    setExercises(exerciseRows);
-    setLibrary(libraryRows);
-    setSiblingPatterns(siblings);
-  }, [workoutId]);
+    try {
+      const [t, warmupRows, exerciseRows, libraryRows] = await Promise.all([
+        getTemplate(templateId),
+        listTemplateWarmups(templateId),
+        listTemplateExercises(templateId),
+        listExercises(),
+      ]);
+      setTemplate(t);
+      setWarmups(warmupRows);
+      setExercises(exerciseRows);
+      setLibrary(libraryRows);
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
+  }, [templateId]);
 
   useEffect(() => {
     load();
@@ -183,22 +177,28 @@ export default function WorkoutBuilderWeb() {
   }, [filteredLibrary]);
 
   const handleInsertExercise = async (exercise) => {
-    const created = await addWorkoutExercise({
-      workoutId,
-      exerciseId: exercise.id,
-      position: exercises.length + 1,
-    });
+    const created = await addTemplateExercise({ templateId, exerciseId: exercise.id, position: exercises.length + 1 });
     setExercises((prev) => [...prev, created]);
   };
 
   const handleExerciseChange = (id, fields) => {
     setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...fields } : e)));
-    updateWorkoutExercise(id, fields);
+    updateTemplateExercise(id, fields);
   };
 
   const handleRemoveExercise = async (id) => {
     setExercises((prev) => prev.filter((e) => e.id !== id));
-    await removeWorkoutExercise(id);
+    await removeTemplateExercise(id);
+  };
+
+  const handleAddWarmup = async (exercise) => {
+    const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: warmups.length + 1 });
+    setWarmups((prev) => [...prev, created]);
+  };
+
+  const handleRemoveWarmup = async (id) => {
+    setWarmups((prev) => prev.filter((w) => w.id !== id));
+    await removeTemplateWarmup(id);
   };
 
   const handleNewExerciseCreated = async (form) => {
@@ -225,51 +225,33 @@ export default function WorkoutBuilderWeb() {
       if (oldIndex === -1 || newIndex === -1) return;
       const reordered = arrayMove(exercises, oldIndex, newIndex);
       setExercises(reordered);
-      reorderWorkoutExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 })));
+      reorderTemplateExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 })));
     }
   };
 
-  const handleAddWarmup = async (exercise) => {
-    const created = await addWarmup({ workoutId, exerciseId: exercise.id, position: warmups.length + 1 });
-    setWarmups((prev) => [...prev, created]);
-  };
-
-  const handleWarmupChange = (id, fields) => {
-    setWarmups((prev) => prev.map((w) => (w.id === id ? { ...w, ...fields } : w)));
-    updateWarmup(id, fields);
-  };
-
-  const handleRemoveWarmup = async (id) => {
-    setWarmups((prev) => prev.filter((w) => w.id !== id));
-    await removeWarmup(id);
-  };
-
-  const handleTogglePublish = async () => {
-    setPublishing(true);
-    try {
-      const next = workout.status === "published" ? "draft" : "published";
-      await setWorkoutStatus(workoutId, next);
-      setWorkout((w) => ({ ...w, status: next }));
-    } finally {
-      setPublishing(false);
-    }
-  };
-
-  if (!workout) {
+  if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color="#a46a57" />
+      <View className="flex-1 items-center justify-center bg-white px-6">
+        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+          Something went wrong: {loadError}
+        </Text>
       </View>
     );
   }
 
-  const currentPatterns = exercises.map((e) => e.exercises?.movement_pattern).filter(Boolean);
+  if (!template) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <View className="flex-1 flex-row bg-white">
         <ScrollView className="w-72 border-r border-stone-200 px-4 py-6">
-          <Text className="mb-3 text-lg text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+          <Text className="mb-3 text-lg text-primary" style={{ fontFamily: fonts.sansSemiBold }}>
             Exercise Library
           </Text>
           <TextInput
@@ -277,17 +259,17 @@ export default function WorkoutBuilderWeb() {
             onChangeText={setSearch}
             placeholder="Search…"
             className="mb-3 rounded-lg border border-stone-300 px-3 py-2"
-            style={{ fontFamily: "Montserrat_400Regular" }}
+            style={{ fontFamily: fonts.sans }}
           />
           <Pressable onPress={() => setNewExerciseModalVisible(true)} className="mb-4 rounded-lg border border-primary px-3 py-2.5">
-            <Text className="text-center" style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>
+            <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
               + New Exercise
             </Text>
           </Pressable>
           {MUSCLE_GROUPS.map((mg) =>
             libraryByGroup[mg]?.length ? (
               <View key={mg} className="mb-4">
-                <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: "Montserrat_500Medium" }}>
+                <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
                   {mg.replace("_", " ")}
                 </Text>
                 {libraryByGroup[mg].map((exercise) => (
@@ -299,37 +281,18 @@ export default function WorkoutBuilderWeb() {
         </ScrollView>
 
         <ScrollView className="flex-1 px-8 py-6">
-          <Pressable
-            onPress={() => router.push(`/(coach)/blocks/${workout.group_blocks.id}`)}
-            className="mb-3 self-start"
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back to block</Text>
-          </Pressable>
-          <View className="mb-6 flex-row items-center justify-between">
-            <View>
-              <Text className="text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
-                {workout.group_blocks.group_programs.name} — Week {workout.week_number}, Session {workout.session_number}
-              </Text>
-              <Text
-                className="text-xs"
-                style={{ fontFamily: "Montserrat_500Medium", color: workout.status === "published" ? "#8a5140" : "#a8a29e" }}
-              >
-                {workout.status}
-              </Text>
-            </View>
-            <Pressable onPress={handleTogglePublish} disabled={publishing} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
-              <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
-                {workout.status === "published" ? "Unpublish" : "Publish"}
-              </Text>
-            </Pressable>
-          </View>
+          <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: "#8a5140", marginBottom: 12 }}>
+            ‹ Back to templates
+          </Link>
+          <Text className="text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
+            {template.name}
+          </Text>
+          <Text className="mb-6 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+            {CATEGORY_LABELS[template.category] ?? template.category}
+          </Text>
 
           <View ref={setWarmupDropZoneRef} className="mb-6">
-            <Text
-              className="mb-2 text-xs uppercase text-stone-400"
-              style={{ fontFamily: "Montserrat_600SemiBold", letterSpacing: 0.4 }}
-            >
+            <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
               Warm-up {isOverWarmup ? "· drop here" : ""}
             </Text>
             {warmups.length > 0 && (
@@ -341,30 +304,9 @@ export default function WorkoutBuilderWeb() {
                     style={i < warmups.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f0ebe6" } : undefined}
                   >
                     <Text className="w-5 text-xs text-stone-400">{i + 1}.</Text>
-                    <Text className="flex-1 text-stone-700" style={{ fontFamily: "Montserrat_500Medium", fontSize: 14 }}>
+                    <Text className="flex-1 text-stone-700" style={{ fontFamily: fonts.sansMedium, fontSize: 14 }}>
                       {w.exercises?.name ?? w.label}
                     </Text>
-                    <TextInput
-                      value={w.sets ?? ""}
-                      onChangeText={(v) => handleWarmupChange(w.id, { sets: v })}
-                      placeholder="sets"
-                      className="w-16 rounded border border-stone-300 bg-white px-2 py-1"
-                      style={{ fontFamily: "Montserrat_400Regular" }}
-                    />
-                    <TextInput
-                      value={w.reps ?? ""}
-                      onChangeText={(v) => handleWarmupChange(w.id, { reps: v })}
-                      placeholder="reps"
-                      className="w-16 rounded border border-stone-300 bg-white px-2 py-1"
-                      style={{ fontFamily: "Montserrat_400Regular" }}
-                    />
-                    <TextInput
-                      value={w.notes ?? ""}
-                      onChangeText={(v) => handleWarmupChange(w.id, { notes: v })}
-                      placeholder="notes"
-                      className="w-28 rounded border border-stone-300 bg-white px-2 py-1"
-                      style={{ fontFamily: "Montserrat_400Regular" }}
-                    />
                     <Pressable
                       onPress={() => handleRemoveWarmup(w.id)}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -377,26 +319,23 @@ export default function WorkoutBuilderWeb() {
               </View>
             )}
             <Pressable onPress={() => setWarmupPickerVisible(true)} className="rounded-lg border border-primary px-3 py-2.5">
-              <Text className="text-center" style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>
+              <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
                 + Insert warm-up exercise
               </Text>
             </Pressable>
-            <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: "Montserrat_400Regular" }}>
+            <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
               Or drag an exercise from the library into this section (max 5-6 movements).
             </Text>
           </View>
 
           <View ref={setDropZoneRef} className="mb-6">
-            <Text
-              className="mb-2 text-xs uppercase text-stone-700"
-              style={{ fontFamily: "Montserrat_600SemiBold", letterSpacing: 0.4 }}
-            >
-              Main Session {isOver ? "· drop here" : ""}
+            <Text className="mb-2 text-xs uppercase text-stone-700" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
+              Exercises {isOver ? "· drop here" : ""}
             </Text>
             <SortableContext items={exercises.map((e) => e.id)} strategy={verticalListSortingStrategy}>
               {exercises.length === 0 ? (
                 <View className="rounded-lg border border-dashed border-stone-300 px-4 py-8">
-                  <Text className="text-center text-stone-400" style={{ fontFamily: "Montserrat_400Regular" }}>
+                  <Text className="text-center text-stone-400" style={{ fontFamily: fonts.sans }}>
                     Drag exercises here, or click one in the library.
                   </Text>
                 </View>
@@ -407,12 +346,6 @@ export default function WorkoutBuilderWeb() {
               )}
             </SortableContext>
           </View>
-
-          <View className="mb-6">
-            <PatternTally currentPatterns={currentPatterns} siblingPatterns={siblingPatterns} />
-          </View>
-
-          <CommentThread groupBlockId={workout.group_blocks.id} />
         </ScrollView>
       </View>
 

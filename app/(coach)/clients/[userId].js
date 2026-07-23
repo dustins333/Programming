@@ -7,9 +7,13 @@ import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { getCurrentBlock } from "../../../lib/programming/memberPlan";
 import { getSpcClient, assignSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
 import { getNutritionClient, assignNutritionClient, setNutritionStatus } from "../../../lib/nutrition/clients";
+import { listTemplates } from "../../../lib/programming/templates";
+import { listOneOffWorkoutsForUser, createOneOffFromTemplate, deleteOneOffWorkout } from "../../../lib/programming/oneOffWorkouts";
+import { listCompletedOneOffWorkoutIds } from "../../../lib/programming/sessionCompletions";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { AssignOneOffModal } from "../../../components/AssignOneOffModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { fonts, colors } from "../../../lib/theme";
@@ -58,22 +62,32 @@ export default function ClientProfile() {
   const [currentBlock, setCurrentBlock] = useState(null);
   const [spcClient, setSpcClient] = useState(null);
   const [nutritionClient, setNutritionClient] = useState(null);
+  const [oneOffs, setOneOffs] = useState([]);
+  const [completedOneOffIds, setCompletedOneOffIds] = useState(new Set());
+  const [templates, setTemplates] = useState([]);
+  const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [memberRow, assignmentRow, programRows, spcRow, nutritionRow] = await Promise.all([
+      const [memberRow, assignmentRow, programRows, spcRow, nutritionRow, oneOffRows, completedIds, templateRows] = await Promise.all([
         getUser(userId),
         getAssignment(userId),
         listGroupPrograms(),
         getSpcClient(userId),
         getNutritionClient(userId),
+        listOneOffWorkoutsForUser(userId),
+        listCompletedOneOffWorkoutIds(userId),
+        listTemplates(),
       ]);
       setMember(memberRow);
       setAssignment(assignmentRow);
       setPrograms(programRows);
       setSpcClient(spcRow);
       setNutritionClient(nutritionRow);
+      setOneOffs(oneOffRows);
+      setCompletedOneOffIds(completedIds);
+      setTemplates(templateRows);
       setCurrentBlock(assignmentRow?.group_program_id ? await getCurrentBlock(assignmentRow.group_program_id) : null);
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -134,6 +148,24 @@ export default function ClientProfile() {
       await load();
     } catch (err) {
       Alert.alert("Failed to update nutrition status", err.message ?? String(err));
+    }
+  };
+
+  const handleAssignOneOff = async (template) => {
+    try {
+      await createOneOffFromTemplate({ userId, templateId: template.id, templateName: template.name, assignedBy: profile.id });
+      await load();
+    } catch (err) {
+      Alert.alert("Failed to assign one-off workout", err.message ?? String(err));
+    }
+  };
+
+  const handleDeleteOneOff = async (oneOff) => {
+    try {
+      await deleteOneOffWorkout(oneOff.id);
+      await load();
+    } catch (err) {
+      Alert.alert("Failed to remove one-off workout", err.message ?? String(err));
     }
   };
 
@@ -246,6 +278,52 @@ export default function ClientProfile() {
             <ViewLink label="View nutrition dashboard →" onPress={() => router.push(`/(coach)/nutrition/clients/${userId}`)} />
           ) : null}
         </SettingsCard>
+
+        <SettingsCard icon="add-circle-outline" title="One-off workouts">
+          {oneOffs.length === 0 ? (
+            <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
+              None assigned — away workouts or trial sessions show up here and in the client's My Fitness tab.
+            </Text>
+          ) : (
+            oneOffs.map((oneOff) => {
+              const completed = completedOneOffIds.has(oneOff.id);
+              return (
+                <View key={oneOff.id} className="mb-2 flex-row items-center justify-between rounded-lg border border-stone-200 px-4 py-3">
+                  <View className="flex-1">
+                    <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                      {oneOff.title}
+                    </Text>
+                    <Text className="text-xs" style={{ fontFamily: fonts.sans, color: completed ? "#4d6142" : "#a8a29e" }}>
+                      {completed ? "✓ Completed" : oneOff.status === "published" ? "Not yet completed" : "Draft"}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => handleDeleteOneOff(oneOff)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityLabel={`Remove one-off workout ${oneOff.title}`}
+                  >
+                    <Text className="text-stone-400">✕</Text>
+                  </Pressable>
+                </View>
+              );
+            })
+          )}
+          <Pressable
+            onPress={() => setAssignModalVisible(true)}
+            className="mt-3 self-start rounded-lg bg-primary px-4 py-2.5"
+          >
+            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+              + Assign one-off
+            </Text>
+          </Pressable>
+        </SettingsCard>
+
+        <AssignOneOffModal
+          visible={assignModalVisible}
+          templates={templates}
+          onClose={() => setAssignModalVisible(false)}
+          onPick={handleAssignOneOff}
+        />
       </ScrollView>
     </CoachShell>
   );

@@ -248,9 +248,14 @@ export default function SpcDashboardWeb() {
               borderBottomColor: "#e7e5e4",
             }}
           >
-            <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-              SPC
-            </Text>
+            <View className="mb-4 flex-row items-center justify-between">
+              <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+                SPC
+              </Text>
+              <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                Templates →
+              </Link>
+            </View>
 
             {roster.length > 0 && (
               <View className="mb-4 flex-row flex-wrap items-center gap-3">

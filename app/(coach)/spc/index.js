@@ -76,9 +76,14 @@ export default function SpcDashboard() {
   return (
     <CoachShell>
       <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32 }}>
-        <Text className="mb-6 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-          SPC
-        </Text>
+        <View className="mb-6 flex-row items-center justify-between">
+          <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+            SPC
+          </Text>
+          <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+            Templates →
+          </Link>
+        </View>
 
         {roster.length === 0 && (
           <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>

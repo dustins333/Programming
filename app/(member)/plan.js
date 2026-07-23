@@ -9,11 +9,13 @@ import { listWarmups, listWorkoutExercises } from "../../lib/programming/workout
 import { getSpcClient } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listPublishedSpcWorkoutsForBlock } from "../../lib/programming/spcBlocks";
 import { listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
+import { listActiveOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import {
   getGroupCompletion,
   getNextIncompleteSpcWorkout,
   finalizeGroupSession,
   finalizeSpcSession,
+  finalizeOneOffSession,
 } from "../../lib/programming/sessionCompletions";
 import { SessionLogger } from "../../components/SessionLogger";
 import { fonts, colors } from "../../lib/theme";
@@ -24,6 +26,7 @@ export default function MyFitness() {
   const [group, setGroup] = useState({ status: "loading" });
   const [hasSpc, setHasSpc] = useState(false);
   const [spc, setSpc] = useState(null);
+  const [oneOffs, setOneOffs] = useState([]);
 
   const load = useCallback(async () => {
     setGroup({ status: "loading" });
@@ -125,6 +128,32 @@ export default function MyFitness() {
       setHasSpc(false);
       setSpc(null);
     }
+
+    // One-offs load independently too, same reasoning — an away workout or
+    // trial session assignment has nothing to do with group/SPC, so its
+    // failure shouldn't hide either of those sections.
+    try {
+      const activeOneOffs = await listActiveOneOffWorkoutsForUser(profile.id);
+      const withContent = await Promise.all(
+        activeOneOffs.map(async (workout) => {
+          const [warmupRows, exerciseRows] = await Promise.all([listOneOffWarmups(workout.id), listOneOffExercises(workout.id)]);
+          return {
+            workout,
+            warmups: warmupRows,
+            exercises: exerciseRows.map((ex) => ({
+              id: ex.id,
+              exercise: ex.exercises,
+              targetSets: ex.sets,
+              targetReps: ex.reps,
+              notes: ex.rest ? `rest ${ex.rest}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
+            })),
+          };
+        })
+      );
+      setOneOffs(withContent);
+    } catch {
+      setOneOffs([]);
+    }
   }, [profile.id]);
 
   // Refetch on every focus, not just first mount — same reasoning as
@@ -146,6 +175,13 @@ export default function MyFitness() {
     setSpc((s) => ({ ...s, completed: true }));
   };
 
+  // One-offs are open-until-completed, no recurrence — once finalized it
+  // just drops out of the active list rather than showing a completed state.
+  const handleFinalizeOneOff = async (workoutId) => {
+    await finalizeOneOffSession(profile.id, workoutId);
+    setOneOffs((prev) => prev.filter((o) => o.workout.id !== workoutId));
+  };
+
   if (group.status === "loading") {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -156,7 +192,7 @@ export default function MyFitness() {
 
   const noGroupProgram = group.status === "unassigned" || group.status === "no_block";
   const nothingForSpc = !hasSpc || !spc || spc.status === "no_block" || spc.status === "not_published";
-  if (noGroupProgram && group.status !== "error" && nothingForSpc) {
+  if (noGroupProgram && group.status !== "error" && nothingForSpc && oneOffs.length === 0) {
     return (
       <View className="flex-1 items-center justify-center bg-white px-6">
         <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
@@ -287,6 +323,27 @@ export default function MyFitness() {
           />
         </View>
       )}
+
+      {oneOffs.map(({ workout, warmups, exercises }) => (
+        <View key={workout.id} className="mb-8">
+          <Text className="mb-1 text-lg" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
+            {workout.title}
+          </Text>
+          {warmups.length > 0 && (
+            <Text className="mb-2 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Warm-up: {warmups.map((w) => w.exercises?.name ?? w.label).join(", ")}
+            </Text>
+          )}
+          <SessionLogger
+            userId={profile.id}
+            datePerformed={todayInBoise()}
+            source="one_off"
+            exercises={exercises}
+            isCompleted={false}
+            onFinalize={() => handleFinalizeOneOff(workout.id)}
+          />
+        </View>
+      ))}
     </ScrollView>
   );
 }

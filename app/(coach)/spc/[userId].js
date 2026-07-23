@@ -4,15 +4,63 @@ import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getUser, listCoaches } from "../../../lib/programming/clients";
 import { getSpcClient, updateSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
-import { listBlocksForSpcClient, createSpcBlock, labelBlocks } from "../../../lib/programming/spcBlocks";
+import {
+  listBlocksForSpcClient,
+  createSpcBlock,
+  labelBlocks,
+  listSpcWorkoutsForBlock,
+  addDays,
+} from "../../../lib/programming/spcBlocks";
+import { listSpcWorkoutExercisesForWorkouts } from "../../../lib/programming/spcWorkouts";
+import { currentWeekNumber } from "../../../lib/programming/schedule";
+import { WEEK_OFFSETS, groupRows } from "../../../lib/programming/gridRows";
+import { SessionCell, PlaceholderCell, GapSlot, SESSION_COL_WIDTH, CELL_MIN_HEIGHT, CELL_GAP } from "../../../components/BlockGridCells";
 import { getSetting } from "../../../lib/settings";
 import { todayInBoise } from "../../../lib/boiseDate";
-import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { NewSpcBlockModal } from "../../../components/NewSpcBlockModal";
 import { CoachShell } from "../../../components/CoachShell";
+
+const ROW_LABEL_WIDTH = 130;
+
+// Same "rows relative to today, gap-detect, size one prompt to the gap"
+// pattern as Group Programs' grid (app/(coach)/blocks/index.js) — SPC's
+// equivalent of "one program" is "one client", since each SPC client has
+// their own independent block timeline rather than sharing one program-wide
+// schedule. Fetches every session-row for each block covering the visible
+// window plus a batched exercise-name lookup, same shape as the group grid.
+async function loadGrid(blockRows) {
+  const today = todayInBoise();
+  const rows = WEEK_OFFSETS.map(({ offset, label }) => {
+    const weekDate = addDays(today, offset * 7);
+    const block = blockRows.find((b) => b.block_start_date <= weekDate && weekDate <= b.block_end_date) ?? null;
+    const weekNum = block ? currentWeekNumber(block.block_start_date, block.block_length_weeks, weekDate) : null;
+    return { offset, label, weekDate, block, weekNum, sessions: [] };
+  });
+
+  const blockIds = [...new Set(rows.map((r) => r.block?.id).filter(Boolean))];
+  const workoutsByBlockId = {};
+  await Promise.all(
+    blockIds.map(async (id) => {
+      workoutsByBlockId[id] = await listSpcWorkoutsForBlock(id);
+    })
+  );
+
+  const allWorkoutIds = [];
+  for (const row of rows) {
+    if (!row.block) continue;
+    // No week_number filter (unlike group) — SPC sessions recur weekly off
+    // one spc_workouts row, so every week row covered by this block shows
+    // the same session set.
+    row.sessions = workoutsByBlockId[row.block.id] ?? [];
+    allWorkoutIds.push(...row.sessions.map((s) => s.id));
+  }
+
+  const exercisesByWorkout = await listSpcWorkoutExercisesForWorkouts(allWorkoutIds);
+  return { rows, exercisesByWorkout };
+}
 
 const isWeb = Platform.OS === "web";
 
@@ -87,11 +135,14 @@ export default function SpcClientDetail() {
   const [client, setClient] = useState(null);
   const [coaches, setCoaches] = useState([]);
   const [blocks, setBlocks] = useState([]);
+  const [gridRows, setGridRows] = useState(null);
+  const [exercisesByWorkout, setExercisesByWorkout] = useState({});
   const [notesDraft, setNotesDraft] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [defaultLengthWeeks, setDefaultLengthWeeks] = useState(4);
   const [loadError, setLoadError] = useState(null);
+  const [startingGap, setStartingGap] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -108,6 +159,10 @@ export default function SpcClientDetail() {
       setBlocks(blockRows);
       setNotesDraft(clientRow?.notes_goals_feedback ?? "");
       setDefaultLengthWeeks(Number(defaultLength));
+
+      const { rows, exercisesByWorkout: exByWorkout } = await loadGrid(blockRows);
+      setGridRows(rows);
+      setExercisesByWorkout(exByWorkout);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -173,11 +228,36 @@ export default function SpcClientDetail() {
     }
   };
 
+  // Starts right where THIS gap begins (day after whichever block ends just
+  // before it, or today if there's no preceding block at all) rather than
+  // asking the coach to pick a date — same gap-aware approach as Group
+  // Programs' handleStartGapBlock, which structurally can't create an
+  // overlapping block since it never lets a free-typed date land inside an
+  // existing one. createSpcBlock also double-checks this server-side now.
+  const handleStartGapBlock = async (gapRows) => {
+    setStartingGap(true);
+    try {
+      const precedingBlock = blocks
+        .filter((b) => b.block_end_date < gapRows[0].weekDate)
+        .sort((a, b) => (a.block_end_date < b.block_end_date ? 1 : -1))[0];
+      const startDate = precedingBlock ? addDays(precedingBlock.block_end_date, 1) : todayInBoise();
+      await createSpcBlock({
+        spcClientId: userId,
+        coachId: client?.assigned_coach_id ?? profile.id,
+        startDate,
+        lengthWeeks: defaultLengthWeeks,
+        sessionsPerWeek: client?.sessions_per_week ?? 2,
+      });
+      await load();
+    } catch (err) {
+      Alert.alert("Failed to start new block", err.message ?? String(err));
+    } finally {
+      setStartingGap(false);
+    }
+  };
+
   const labeledBlocks = useMemo(() => labelBlocks(blocks), [blocks]);
-  const currentBlocks = useMemo(() => {
-    const today = todayInBoise();
-    return labeledBlocks.filter((b) => b.block_end_date >= today).sort((a, b) => (a.block_start_date < b.block_start_date ? -1 : 1));
-  }, [labeledBlocks]);
+  const blockLabelsById = useMemo(() => new Map(labeledBlocks.map((b) => [b.id, b.label])), [labeledBlocks]);
 
   if (loadError) {
     return (
@@ -247,90 +327,145 @@ export default function SpcClientDetail() {
         </View>
 
         <View style={{ flexDirection: isWeb ? "row" : "column", gap: 20 }}>
-          <View style={{ flex: 1 }}>
-            <Card title="Sessions per week">
-              <View className="flex-row items-center gap-3">
-                <Pressable
-                  onPress={() => handleSessionsChange(-1)}
-                  className="rounded border border-stone-300 px-3 py-2"
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  accessibilityLabel="Decrease sessions per week"
-                >
-                  <Text>−</Text>
-                </Pressable>
-                <Text style={{ fontFamily: fonts.sansMedium }}>{client.sessions_per_week}</Text>
-                <Pressable
-                  onPress={() => handleSessionsChange(1)}
-                  className="rounded border border-stone-300 px-3 py-2"
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  accessibilityLabel="Increase sessions per week"
-                >
-                  <Text>+</Text>
-                </Pressable>
-              </View>
-            </Card>
-
-            <Card title="Notes / Goals / Feedback">
-              <TextInput
-                value={notesDraft}
-                onChangeText={setNotesDraft}
-                multiline
-                numberOfLines={5}
-                placeholder="Goals, injury notes, preferences, hold/pause reasons…"
-                className="mb-3 min-h-28 rounded-lg border border-stone-300 px-4 py-3"
-                style={{ fontFamily: fonts.sans }}
-              />
+          <Card title="Sessions per week" style={{ flex: 1 }}>
+            <View className="flex-row items-center gap-3">
               <Pressable
-                onPress={handleSaveNotes}
-                disabled={savingNotes}
-                className="self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50"
+                onPress={() => handleSessionsChange(-1)}
+                className="rounded border border-stone-300 px-3 py-2"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Decrease sessions per week"
               >
-                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                  {savingNotes ? "Saving…" : "Save notes"}
-                </Text>
+                <Text>−</Text>
               </Pressable>
-            </Card>
-          </View>
+              <Text style={{ fontFamily: fonts.sansMedium }}>{client.sessions_per_week}</Text>
+              <Pressable
+                onPress={() => handleSessionsChange(1)}
+                className="rounded border border-stone-300 px-3 py-2"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Increase sessions per week"
+              >
+                <Text>+</Text>
+              </Pressable>
+            </View>
+          </Card>
 
-          <View style={{ flex: 1 }}>
-            <Card title="Blocks">
-              <View className="mb-4 flex-row items-center gap-2.5">
-                <Pressable onPress={() => setModalVisible(true)} className="rounded-lg bg-primary px-4 py-2">
-                  <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                    + New block
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => router.push(`/(coach)/spc/history/${userId}`)}
-                  className="rounded-lg border border-stone-300 px-4 py-2"
-                >
-                  <Text className="text-stone-600" style={{ fontFamily: fonts.sansSemiBold }}>
-                    History
-                  </Text>
-                </Pressable>
-              </View>
+          <Card title="Notes / Goals / Feedback" style={{ flex: 1 }}>
+            <TextInput
+              value={notesDraft}
+              onChangeText={setNotesDraft}
+              multiline
+              numberOfLines={5}
+              placeholder="Goals, injury notes, preferences, hold/pause reasons…"
+              className="mb-3 min-h-28 rounded-lg border border-stone-300 px-4 py-3"
+              style={{ fontFamily: fonts.sans }}
+            />
+            <Pressable
+              onPress={handleSaveNotes}
+              disabled={savingNotes}
+              className="self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50"
+            >
+              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                {savingNotes ? "Saving…" : "Save notes"}
+              </Text>
+            </Pressable>
+          </Card>
+        </View>
 
-              {currentBlocks.length === 0 ? (
-                <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
-                  No current or upcoming blocks.
-                </Text>
-              ) : (
-                currentBlocks.map((block) => (
-                  <Link key={block.id} href={`/(coach)/spc/blocks/${block.id}`} asChild>
-                    <Pressable className="mb-2 rounded-lg border border-stone-200 px-4 py-3">
-                      <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
-                        {block.label}
-                      </Text>
-                      <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                        {formatDateMDY(block.block_start_date)} → {formatDateMDY(block.block_end_date)} · {block.block_length_weeks} weeks
-                      </Text>
-                    </Pressable>
-                  </Link>
-                ))
-              )}
-            </Card>
+        <View className="mb-3 mt-2 flex-row items-center justify-between">
+          <Text className="text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
+            Blocks
+          </Text>
+          <View className="flex-row items-center gap-2.5">
+            <Pressable onPress={() => setModalVisible(true)} className="rounded-lg bg-primary px-4 py-2">
+              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                + New block
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push(`/(coach)/spc/history/${userId}`)}
+              className="rounded-lg border border-stone-300 px-4 py-2"
+            >
+              <Text className="text-stone-600" style={{ fontFamily: fonts.sansSemiBold }}>
+                History
+              </Text>
+            </Pressable>
           </View>
         </View>
+
+        {!gridRows ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6">
+            <View className="flex-row items-start gap-4">
+              <View style={{ width: ROW_LABEL_WIDTH }}>
+                <View style={{ height: 34 }} />
+                {gridRows.map((row, idx) => {
+                  const isNewBlockStart = row.block && row.block.id !== gridRows[idx - 1]?.block?.id;
+                  return (
+                    <View key={row.offset} style={{ minHeight: CELL_MIN_HEIGHT }} className="mb-3 justify-center">
+                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12 }} className="text-stone-600">
+                        {row.label}
+                      </Text>
+                      {isNewBlockStart ? (
+                        <Link href={`/(coach)/spc/blocks/${row.block.id}`} style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.primaryOnWhite, marginTop: 2 }}>
+                          {blockLabelsById.get(row.block.id) ?? "Block"} ›
+                        </Link>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+
+              <View
+                style={{
+                  width: (client.sessions_per_week ?? 2) * SESSION_COL_WIDTH + ((client.sessions_per_week ?? 2) - 1) * CELL_GAP + 28,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: "#e7e5e4",
+                  padding: 14,
+                }}
+              >
+                <View className="mb-3 flex-row gap-3">
+                  {Array.from({ length: client.sessions_per_week ?? 2 }, (_, i) => i + 1).map((n) => (
+                    <View key={n} style={{ width: SESSION_COL_WIDTH }} className="items-center">
+                      <Text className="text-xs uppercase text-stone-500" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
+                        Session {n}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                {groupRows(gridRows).map((group, idx) =>
+                  group.type === "covered" ? (
+                    <View key={group.row.offset} className="mb-3 flex-row gap-3">
+                      {Array.from({ length: client.sessions_per_week ?? 2 }, (_, i) => i + 1).map((sessionNum) => {
+                        const workout = group.row.sessions.find((w) => w.session_number === sessionNum);
+                        if (!workout) return <PlaceholderCell key={sessionNum} />;
+                        return (
+                          <SessionCell
+                            key={sessionNum}
+                            workout={workout}
+                            weekNum={group.row.weekNum}
+                            exerciseNames={exercisesByWorkout[workout.id] ?? []}
+                            onPress={() => router.push(`/(coach)/spc/builder/${workout.id}`)}
+                          />
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <GapSlot
+                      key={`gap-${idx}`}
+                      rowCount={group.rows.length}
+                      groupWidth={(client.sessions_per_week ?? 2) * SESSION_COL_WIDTH + ((client.sessions_per_week ?? 2) - 1) * CELL_GAP}
+                      onStart={() => handleStartGapBlock(group.rows)}
+                      starting={startingGap}
+                    />
+                  )
+                )}
+              </View>
+            </View>
+          </ScrollView>
+        )}
 
         <NewSpcBlockModal
           visible={modalVisible}
