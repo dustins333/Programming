@@ -10,7 +10,12 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kovastrength.app"
+      "bundleIdentifier": "com.kovastrength.app",
+      "infoPlist": {
+        "UIApplicationSceneManifest": {
+          "UIApplicationSupportsMultipleScenes": false
+        }
+      }
     },
     "android": {
       "package": "com.kovastrength.app",
