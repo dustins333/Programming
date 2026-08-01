@@ -16,6 +16,9 @@ import {
   updateSpcExerciseWeek,
   getSpcSiblingPatterns,
   setSpcWorkoutStatus,
+  setSpcWorkoutTitle,
+  getSpcWorkoutWeekTitles,
+  setSpcWorkoutWeekTitle,
 } from "../../../../lib/programming/spcWorkouts";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
 import { CommentThread } from "../../../../components/CommentThread";
@@ -41,22 +44,25 @@ export default function SpcWorkoutBuilderNative() {
   const [pickerTarget, setPickerTarget] = useState(null); // "warmup" | "exercise" | null
   const [selectedWeek, setSelectedWeek] = useState(1);
   const [publishing, setPublishing] = useState(false);
+  const [weekTitles, setWeekTitles] = useState([]);
 
   const load = useCallback(async () => {
     const w = await getSpcWorkout(workoutId);
     setWorkout(w);
-    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
+    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings, weekTitleRows] = await Promise.all([
       getUser(w.spc_blocks.spc_client_id),
       listSpcWarmups(workoutId),
       listSpcWorkoutExercises(workoutId),
       listExercises(),
       getSpcSiblingPatterns(w.spc_blocks.id, workoutId),
+      getSpcWorkoutWeekTitles(workoutId),
     ]);
     setMember(memberRow);
     setWarmups(warmupRows);
     setExercises(exerciseRows);
     setLibrary(libraryRows);
     setSiblingPatterns(siblings);
+    setWeekTitles(weekTitleRows);
   }, [workoutId]);
 
   useEffect(() => {
@@ -121,6 +127,21 @@ export default function SpcWorkoutBuilderNative() {
     }
   };
 
+  const handleDefaultTitleChange = (title) => {
+    setWorkout((w) => ({ ...w, title }));
+    setSpcWorkoutTitle(workoutId, title);
+  };
+
+  // Blank clears the override for this week (falls back to the default
+  // title above) — setSpcWorkoutWeekTitle deletes the row in that case.
+  const handleWeekTitleChange = (title) => {
+    setWeekTitles((prev) => {
+      const others = prev.filter((t) => t.week_number !== selectedWeek);
+      return title ? [...others, { week_number: selectedWeek, title }] : others;
+    });
+    setSpcWorkoutWeekTitle(workoutId, selectedWeek, title);
+  };
+
   if (!workout || !member) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -150,11 +171,22 @@ export default function SpcWorkoutBuilderNative() {
       >
         {workout.status}
       </Text>
-      <Pressable onPress={handleTogglePublish} disabled={publishing} className="mb-6 self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
+      <Pressable onPress={handleTogglePublish} disabled={publishing} className="mb-4 self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
         <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
           {workout.status === "published" ? "Unpublish" : "Publish"}
         </Text>
       </Pressable>
+
+      <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+        Default title (applies to every week unless overridden below)
+      </Text>
+      <TextInput
+        value={workout.title ?? ""}
+        onChangeText={handleDefaultTitleChange}
+        placeholder="Session title (e.g. Back & Bis) — shown to the member"
+        className="mb-6 rounded-lg border border-stone-300 px-4 py-3"
+        style={{ fontFamily: fonts.sans }}
+      />
 
       <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
         Warm-up
@@ -207,6 +239,17 @@ export default function SpcWorkoutBuilderNative() {
           </Pressable>
         ))}
       </View>
+
+      <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+        Title override for Week {selectedWeek} (blank uses the default title above)
+      </Text>
+      <TextInput
+        value={weekTitles.find((t) => t.week_number === selectedWeek)?.title ?? ""}
+        onChangeText={handleWeekTitleChange}
+        placeholder={workout.title || "e.g. Last week! Let's crush those delts"}
+        className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
+        style={{ fontFamily: fonts.sans }}
+      />
 
       {exercises.map((item, i) => {
         const week = item.spc_exercise_weeks.find((w) => w.week_number === selectedWeek);

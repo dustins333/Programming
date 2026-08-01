@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, FlatList, ActivityIndicator } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLogs } from "../../../lib/nutrition/dailyLog";
@@ -16,6 +17,7 @@ const NUTRITION_SEGMENTS = [
 export default function NutritionHistory() {
   const { profile } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [logs, setLogs] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
@@ -44,7 +46,7 @@ export default function NutritionHistory() {
   }
 
   return (
-    <View className="flex-1 bg-white px-6 py-8">
+    <View className="flex-1 bg-white px-6 pb-8" style={{ paddingTop: insets.top + 6 }}>
       <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Nutrition
       </Text>

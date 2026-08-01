@@ -9,24 +9,31 @@ export const SESSION_COL_WIDTH = 168;
 export const CELL_MIN_HEIGHT = 122;
 export const CELL_GAP = 12; // matches className="gap-3"
 
+// Published/draft reads straight off the cell's own background now — a
+// subtle green tint (same tone as the app's other "on track"/"logged"
+// states) instead of a small corner dot, so status is visible at a glance
+// across the whole grid rather than something you have to look for.
+const PUBLISHED_BG = "#eef1e7";
+const PUBLISHED_BORDER = "#d3ddc7";
+
 export function SessionCell({ workout, weekNum, exerciseNames, onPress }) {
   const shown = exerciseNames.slice(0, 5);
   const extra = exerciseNames.length - shown.length;
+  const isPublished = workout.status === "published";
   return (
-    <Pressable onPress={onPress} style={{ width: SESSION_COL_WIDTH, minHeight: CELL_MIN_HEIGHT }} className="rounded-lg border border-stone-200 p-2.5">
-      <View className="mb-1.5 flex-row items-center justify-between">
-        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11 }} className="text-stone-500">
-          Wk {weekNum}
-        </Text>
-        <View
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: workout.status === "published" ? "#7c9070" : "#d6d3d1",
-          }}
-        />
-      </View>
+    <Pressable
+      onPress={onPress}
+      style={{
+        width: SESSION_COL_WIDTH,
+        minHeight: CELL_MIN_HEIGHT,
+        backgroundColor: isPublished ? PUBLISHED_BG : "white",
+        borderColor: isPublished ? PUBLISHED_BORDER : "#e7e5e4",
+      }}
+      className="rounded-lg border p-2.5"
+    >
+      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11 }} className="mb-1.5 text-stone-500">
+        Wk {weekNum}
+      </Text>
       {shown.length === 0 ? (
         <Text style={{ fontFamily: fonts.sans, fontSize: 11 }} className="text-stone-300">
           Empty

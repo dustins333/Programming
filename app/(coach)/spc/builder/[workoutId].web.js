@@ -27,6 +27,9 @@ import {
   updateSpcExerciseWeek,
   getSpcSiblingPatterns,
   setSpcWorkoutStatus,
+  setSpcWorkoutTitle,
+  getSpcWorkoutWeekTitles,
+  setSpcWorkoutWeekTitle,
 } from "../../../../lib/programming/spcWorkouts";
 import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
@@ -153,6 +156,7 @@ export default function SpcWorkoutBuilderWeb() {
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [weekTitles, setWeekTitles] = useState([]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const { setNodeRef: setDropZoneRef, isOver } = useDroppable({ id: "session-dropzone" });
@@ -161,18 +165,20 @@ export default function SpcWorkoutBuilderWeb() {
   const load = useCallback(async () => {
     const w = await getSpcWorkout(workoutId);
     setWorkout(w);
-    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
+    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings, weekTitleRows] = await Promise.all([
       getUser(w.spc_blocks.spc_client_id),
       listSpcWarmups(workoutId),
       listSpcWorkoutExercises(workoutId),
       listExercises(),
       getSpcSiblingPatterns(w.spc_blocks.id, workoutId),
+      getSpcWorkoutWeekTitles(workoutId),
     ]);
     setMember(memberRow);
     setWarmups(warmupRows);
     setExercises(exerciseRows);
     setLibrary(libraryRows);
     setSiblingPatterns(siblings);
+    setWeekTitles(weekTitleRows);
   }, [workoutId]);
 
   useEffect(() => {
@@ -282,6 +288,21 @@ export default function SpcWorkoutBuilderWeb() {
     }
   };
 
+  const handleDefaultTitleChange = (title) => {
+    setWorkout((w) => ({ ...w, title }));
+    setSpcWorkoutTitle(workoutId, title);
+  };
+
+  // Blank clears the override for that week (falls back to the default
+  // title above) — setSpcWorkoutWeekTitle deletes the row in that case.
+  const handleWeekTitleChange = (weekNumber, title) => {
+    setWeekTitles((prev) => {
+      const others = prev.filter((t) => t.week_number !== weekNumber);
+      return title ? [...others, { week_number: weekNumber, title }] : others;
+    });
+    setSpcWorkoutWeekTitle(workoutId, weekNumber, title);
+  };
+
   if (!workout || !member) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -352,6 +373,17 @@ export default function SpcWorkoutBuilderWeb() {
             </Pressable>
           </View>
 
+          <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+            Default title (applies to every week unless overridden below)
+          </Text>
+          <TextInput
+            value={workout.title ?? ""}
+            onChangeText={handleDefaultTitleChange}
+            placeholder="Session title (e.g. Back & Bis) — shown to the member"
+            className="mb-6 w-96 rounded-lg border border-stone-300 px-4 py-3"
+            style={{ fontFamily: fonts.sans }}
+          />
+
           <View ref={setWarmupDropZoneRef} className="mb-6">
             <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
               Warm-up {isOverWarmup ? "· drop here" : ""}
@@ -414,6 +446,28 @@ export default function SpcWorkoutBuilderWeb() {
             <Text className="mb-2 text-xs uppercase text-stone-700" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
               Main Session {isOver ? "· drop here" : ""}
             </Text>
+
+            {exercises.length > 0 && (
+              <View className="mb-2 flex-row items-start" style={{ marginLeft: 190 }}>
+                <ScrollView horizontal>
+                  {Array.from({ length: workout.spc_blocks.block_length_weeks }, (_, i) => i + 1).map((weekNumber) => (
+                    <View key={weekNumber} className="w-24 border-l border-stone-100 px-2">
+                      <Text className="mb-1 text-center text-[10px] uppercase text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
+                        Wk {weekNumber} title
+                      </Text>
+                      <TextInput
+                        value={weekTitles.find((t) => t.week_number === weekNumber)?.title ?? ""}
+                        onChangeText={(v) => handleWeekTitleChange(weekNumber, v)}
+                        placeholder={workout.title || "(default)"}
+                        className="rounded border border-stone-300 px-1.5 py-1 text-center text-xs"
+                        style={{ fontFamily: fonts.sans }}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
             <SortableContext items={exercises.map((e) => e.id)} strategy={verticalListSortingStrategy}>
               {exercises.length === 0 ? (
                 <View className="rounded-lg border border-dashed border-stone-300 px-4 py-8">

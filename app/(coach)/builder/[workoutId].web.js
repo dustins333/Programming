@@ -26,6 +26,7 @@ import {
   reorderWorkoutExercises,
   getSiblingPatterns,
   setWorkoutStatus,
+  setWorkoutTitle,
 } from "../../../lib/programming/workouts";
 import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../components/ExercisePickerModal";
@@ -255,6 +256,11 @@ export default function WorkoutBuilderWeb() {
     }
   };
 
+  const handleTitleChange = (title) => {
+    setWorkout((w) => ({ ...w, title }));
+    setWorkoutTitle(workoutId, title);
+  };
+
   if (!workout) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -324,6 +330,14 @@ export default function WorkoutBuilderWeb() {
               </Text>
             </Pressable>
           </View>
+
+          <TextInput
+            value={workout.title ?? ""}
+            onChangeText={handleTitleChange}
+            placeholder="Session title (e.g. Back & Bis) — shown to the member"
+            className="mb-6 rounded-lg border border-stone-300 px-4 py-3"
+            style={{ fontFamily: "Montserrat_400Regular" }}
+          />
 
           <View ref={setWarmupDropZoneRef} className="mb-6">
             <Text

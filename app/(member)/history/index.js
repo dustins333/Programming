@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, FlatList, ActivityIndicator, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLoggedExercises } from "../../../lib/programming/memberPlan";
@@ -8,6 +9,7 @@ import { fonts, colors } from "../../../lib/theme";
 
 export default function HistoryIndex() {
   const { profile, signOut } = useAuth();
+  const insets = useSafeAreaInsets();
   const [rows, setRows] = useState(null);
 
   const load = useCallback(async () => {
@@ -20,7 +22,7 @@ export default function HistoryIndex() {
   }, [load]);
 
   return (
-    <View className="flex-1 bg-white px-6 py-8">
+    <View className="flex-1 bg-white px-6 pb-8" style={{ paddingTop: insets.top + 6 }}>
       <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         My History
       </Text>

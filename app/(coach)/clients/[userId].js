@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Alert } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getUser, getAssignment, assignProgram } from "../../../lib/programming/clients";
+import { getUser, listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../../lib/programming/clients";
 import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { getCurrentBlock } from "../../../lib/programming/memberPlan";
 import { getSpcClient, assignSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
@@ -57,9 +57,9 @@ export default function ClientProfile() {
   const { profile } = useAuth();
   const router = useRouter();
   const [member, setMember] = useState(null);
-  const [assignment, setAssignment] = useState(null);
+  const [assignments, setAssignments] = useState([]);
   const [programs, setPrograms] = useState([]);
-  const [currentBlock, setCurrentBlock] = useState(null);
+  const [currentBlocksByProgramId, setCurrentBlocksByProgramId] = useState({});
   const [spcClient, setSpcClient] = useState(null);
   const [nutritionClient, setNutritionClient] = useState(null);
   const [oneOffs, setOneOffs] = useState([]);
@@ -70,9 +70,9 @@ export default function ClientProfile() {
 
   const load = useCallback(async () => {
     try {
-      const [memberRow, assignmentRow, programRows, spcRow, nutritionRow, oneOffRows, completedIds, templateRows] = await Promise.all([
+      const [memberRow, assignmentRows, programRows, spcRow, nutritionRow, oneOffRows, completedIds, templateRows] = await Promise.all([
         getUser(userId),
-        getAssignment(userId),
+        listAssignmentsForUser(userId),
         listGroupPrograms(),
         getSpcClient(userId),
         getNutritionClient(userId),
@@ -81,14 +81,20 @@ export default function ClientProfile() {
         listTemplates(),
       ]);
       setMember(memberRow);
-      setAssignment(assignmentRow);
+      setAssignments(assignmentRows);
       setPrograms(programRows);
       setSpcClient(spcRow);
       setNutritionClient(nutritionRow);
       setOneOffs(oneOffRows);
       setCompletedOneOffIds(completedIds);
       setTemplates(templateRows);
-      setCurrentBlock(assignmentRow?.group_program_id ? await getCurrentBlock(assignmentRow.group_program_id) : null);
+
+      const blocks = await Promise.all(assignmentRows.map((a) => getCurrentBlock(a.group_program_id)));
+      const blocksByProgramId = {};
+      assignmentRows.forEach((a, i) => {
+        blocksByProgramId[a.group_program_id] = blocks[i];
+      });
+      setCurrentBlocksByProgramId(blocksByProgramId);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -98,24 +104,29 @@ export default function ClientProfile() {
     load();
   }, [load]);
 
-  const flagshipProgram = useMemo(() => programs.find((p) => p.name === "Flagship"), [programs]);
-  const bwaProgram = useMemo(() => programs.find((p) => p.name === "Better With Age"), [programs]);
-
-  const activeGroupKey = !assignment
-    ? "none"
-    : assignment.group_program_id === flagshipProgram?.id
-      ? "flagship"
-      : assignment.group_program_id === bwaProgram?.id
-        ? "bwa"
-        : "none";
-
-  const handleGroupSelect = async (key) => {
-    const groupProgramId = key === "flagship" ? flagshipProgram?.id : key === "bwa" ? bwaProgram?.id : null;
+  // A client can hold several memberships at once now (e.g. Flagship plus
+  // a specialty program), so this toggles one specific program's
+  // membership on/off rather than picking a single mutually-exclusive
+  // program.
+  const handleToggleMembership = async (groupProgramId, enrolled) => {
     try {
-      await assignProgram(userId, groupProgramId ?? null);
+      if (enrolled) {
+        await addGroupMembership(userId, groupProgramId);
+      } else {
+        await removeGroupMembership(userId, groupProgramId);
+      }
       await load();
     } catch (err) {
       Alert.alert("Failed to update group program", err.message ?? String(err));
+    }
+  };
+
+  const handleFrequencySelect = async (groupProgramId, sessionsPerWeek) => {
+    try {
+      await setMembershipSessionsPerWeek(userId, groupProgramId, sessionsPerWeek);
+      await load();
+    } catch (err) {
+      Alert.alert("Failed to update session frequency", err.message ?? String(err));
     }
   };
 
@@ -218,25 +229,56 @@ export default function ClientProfile() {
           </View>
         </View>
 
-        <SettingsCard icon="barbell-outline" title="Group program">
-          <SegmentedControl
-            segments={[
-              { key: "none", label: "None" },
-              { key: "flagship", label: "Flagship" },
-              { key: "bwa", label: "BWA" },
-            ]}
-            activeKey={activeGroupKey}
-            onSelect={handleGroupSelect}
-          />
-          {activeGroupKey !== "none" ? (
-            currentBlock ? (
-              <ViewLink label="View current block →" onPress={() => router.push(`/(coach)/blocks/${currentBlock.id}`)} />
-            ) : (
-              <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                No active block right now.
-              </Text>
-            )
-          ) : null}
+        <SettingsCard icon="barbell-outline" title="Group programs">
+          {programs.length === 0 ? (
+            <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
+              No group programs exist yet — create one from the Group Programs tab.
+            </Text>
+          ) : (
+            programs.map((program) => {
+              const membership = assignments.find((a) => a.group_program_id === program.id);
+              const enrolled = !!membership;
+              const block = currentBlocksByProgramId[program.id];
+              return (
+                <View key={program.id} className="mb-3 rounded-lg border border-stone-200 px-4 py-3">
+                  <View className="flex-row items-center gap-3">
+                    <Switch
+                      value={enrolled}
+                      onValueChange={(v) => handleToggleMembership(program.id, v)}
+                      trackColor={{ false: "#e7e5e4", true: colors.accent }}
+                      thumbColor="#ffffff"
+                    />
+                    <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                      {program.name}
+                    </Text>
+                  </View>
+                  {enrolled ? (
+                    <View className="mt-3">
+                      <Text className="mb-1.5 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                        Sessions per week (membership frequency)
+                      </Text>
+                      <SegmentedControl
+                        segments={[
+                          { key: "1", label: "1x" },
+                          { key: "2", label: "2x" },
+                          { key: "3", label: "3x" },
+                        ]}
+                        activeKey={String(membership.sessions_per_week ?? 3)}
+                        onSelect={(key) => handleFrequencySelect(program.id, Number(key))}
+                      />
+                      {block ? (
+                        <ViewLink label="View current block →" onPress={() => router.push(`/(coach)/blocks/${block.id}`)} />
+                      ) : (
+                        <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                          No active block right now.
+                        </Text>
+                      )}
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })
+          )}
         </SettingsCard>
 
         <SettingsCard icon="clipboard-outline" title="SPC">

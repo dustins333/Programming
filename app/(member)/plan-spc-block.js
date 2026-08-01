@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
 import { getSpcClient } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listPublishedSpcWorkoutsForBlock } from "../../lib/programming/spcBlocks";
-import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
+import { listSpcWarmups, listSpcWorkoutExercises, listSpcWorkoutWeekTitlesForWorkouts } from "../../lib/programming/spcWorkouts";
 import { getLoggedSetsForDate } from "../../lib/programming/memberPlan";
 import { getSpcCompletion } from "../../lib/programming/sessionCompletions";
 import { formatDateMDY } from "../../lib/formatDate";
@@ -19,6 +20,7 @@ import { fonts, colors } from "../../lib/theme";
 export default function PlanSpcBlock() {
   const { profile } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [state, setState] = useState({ status: "loading" });
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [sessionDetails, setSessionDetails] = useState({});
@@ -44,8 +46,9 @@ export default function PlanSpcBlock() {
         return;
       }
       const week = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+      const weekTitles = await listSpcWorkoutWeekTitlesForWorkouts(workouts.map((w) => w.id));
       setSelectedWeek(week);
-      setState({ status: "ready", block, workouts });
+      setState({ status: "ready", block, workouts, weekTitles });
     } catch (err) {
       setState({ status: "error", message: err.message ?? String(err) });
     }
@@ -97,7 +100,7 @@ export default function PlanSpcBlock() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
+    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
       <Pressable onPress={() => router.back()} className="mb-4 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ My Fitness</Text>
       </Pressable>
@@ -138,10 +141,14 @@ export default function PlanSpcBlock() {
           {state.workouts.map((workout) => {
             const key = `${workout.id}:${selectedWeek}`;
             const details = sessionDetails[key];
+            const title = state.weekTitles[workout.id]?.[selectedWeek] || workout.title || null;
             return (
               <View key={workout.id} className="mb-4 rounded-lg border border-stone-200 px-4 py-3">
                 <Pressable onPress={() => loadSessionDetails(workout)}>
-                  <Text style={{ fontFamily: fonts.sansSemiBold }}>Session {workout.session_number}</Text>
+                  <Text style={{ fontFamily: fonts.sansSemiBold }}>
+                    Session {workout.session_number}
+                    {title ? ` — ${title}` : ""}
+                  </Text>
                   {!details ? (
                     <Text className="text-xs" style={{ fontFamily: fonts.sans, color: colors.primaryOnWhite }}>
                       {loadingSession === key ? "Loading…" : "Tap to view"}

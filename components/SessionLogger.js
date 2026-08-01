@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, Linking, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, Pressable, Linking } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { getLastLoggedSession, getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { formatDateMDY } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
@@ -10,7 +11,13 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
   const targetSets = item.targetSets && item.targetSets > 0 ? item.targetSets : 3;
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
-  const [history, setHistory] = useState(undefined); // undefined = not loaded yet, null = no prior session
+  // History is fetched lazily off the clock-icon toggle, not on every
+  // expand — most sessions never get looked at, and it used to be an
+  // always-visible flat "Set 1 / Set 2 / Set 3" block that just ate space.
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState(null); // null until loaded — see historyLoaded for "loaded but genuinely empty"
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [saveState, setSaveState] = useState("idle"); // idle | pending | saving | saved | error
   const loaded = useRef(false);
   const debounceRef = useRef(null);
@@ -22,11 +29,7 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
   const loadOnFirstExpand = async () => {
     if (loaded.current) return;
     loaded.current = true;
-    const [last, todaysSets] = await Promise.all([
-      getLastLoggedSession(userId, item.exercise.id, datePerformed),
-      getLoggedSetsForDate(userId, item.exercise.id, datePerformed),
-    ]);
-    setHistory(last);
+    const todaysSets = await getLoggedSetsForDate(userId, item.exercise.id, datePerformed);
     if (todaysSets.length > 0) {
       skipAutosaveRef.current = true;
       setRows((prev) =>
@@ -43,6 +46,21 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
   const handleToggle = () => {
     if (!expanded) loadOnFirstExpand();
     onToggle(item.id);
+  };
+
+  // Fetched once, on first tap of the clock icon — not on every expand,
+  // since most sessions never get looked at and this used to fire
+  // unconditionally. Toggling back off just hides it, doesn't reset it.
+  const handleToggleHistory = async () => {
+    const next = !showHistory;
+    setShowHistory(next);
+    if (next && !historyLoaded) {
+      setHistoryLoading(true);
+      const last = await getLastLoggedSession(userId, item.exercise.id, datePerformed);
+      setHistory(last);
+      setHistoryLoaded(true);
+      setHistoryLoading(false);
+    }
   };
 
   const updateRow = (index, field, value) => {
@@ -112,56 +130,73 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
             </Pressable>
           ) : null}
 
-          <View className="mb-3 rounded-lg px-3 py-2.5" style={{ backgroundColor: "#faf7f4", borderWidth: 1, borderColor: "#f0ebe6" }}>
-            <Text className="mb-1 text-xs uppercase" style={{ fontFamily: fonts.sansSemiBold, color: "#8a5140", letterSpacing: 0.3 }}>
-              Last time
+          <Pressable
+            onPress={handleToggleHistory}
+            className="mb-2 flex-row items-center gap-1.5 self-start"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={showHistory ? "Hide last time" : "Show last time"}
+          >
+            <Ionicons name={showHistory ? "time" : "time-outline"} size={16} color={colors.primaryOnWhite} />
+            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: colors.primaryOnWhite }}>
+              {historyLoading
+                ? "Loading last time…"
+                : showHistory && history
+                  ? `Last time: ${formatDateMDY(history.date)}`
+                  : showHistory
+                    ? "Last time"
+                    : "Show last time"}
             </Text>
-            {history === undefined ? (
-              <ActivityIndicator color={colors.primary} size="small" />
-            ) : history === null ? (
-              <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                No previous history for this lift yet.
-              </Text>
-            ) : (
-              <>
-                <Text className="text-xs text-stone-600" style={{ fontFamily: fonts.sans }}>
-                  {formatDateMDY(history.date)} —{" "}
-                  {history.sets
-                    .map((s) => `Set ${s.set_number}: ${s.reps ?? "–"} reps${s.weight ? ` @ ${s.weight}` : ""}`)
-                    .join(" · ")}
-                </Text>
-                {history.sets.find((s) => s.notes) ? (
-                  <Text className="mt-1 text-xs italic text-stone-500" style={{ fontFamily: fonts.sans }}>
-                    Note: {history.sets.find((s) => s.notes).notes}
-                  </Text>
-                ) : null}
-              </>
-            )}
-          </View>
+          </Pressable>
+          {showHistory && historyLoaded && history === null ? (
+            <Text className="mb-2 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+              No previous history for this lift yet.
+            </Text>
+          ) : null}
 
-          {rows.map((row, i) => (
-            <View key={i} className="mb-2 flex-row items-center gap-2">
-              <Text className="w-14 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-                Set {i + 1}
-              </Text>
-              <TextInput
-                value={row.reps}
-                onChangeText={(v) => updateRow(i, "reps", v)}
-                placeholder={item.targetReps ?? "reps"}
-                keyboardType="numeric"
-                className="w-20 rounded-lg border border-stone-300 px-2 py-3 text-center"
-                style={{ fontFamily: fonts.sans }}
-              />
-              <TextInput
-                value={row.weight}
-                onChangeText={(v) => updateRow(i, "weight", v)}
-                placeholder="weight"
-                keyboardType="numeric"
-                className="w-20 rounded-lg border border-stone-300 px-2 py-3 text-center"
-                style={{ fontFamily: fonts.sans }}
-              />
-            </View>
-          ))}
+          {rows.map((row, i) => {
+            // Matched by set_number, not position — if last time had more
+            // or fewer sets than today's target, only the sets that line
+            // up by number get an annotation; anything else is silently
+            // dropped rather than showing a mismatched row.
+            const histSet = showHistory && history ? history.sets.find((s) => s.set_number === i + 1) : null;
+            return (
+              <View key={i} className="mb-2">
+                <View className="flex-row items-center gap-2">
+                  <Text className="w-14 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
+                    Set {i + 1}
+                  </Text>
+                  <TextInput
+                    value={row.reps}
+                    onChangeText={(v) => updateRow(i, "reps", v)}
+                    placeholder={item.targetReps ?? "reps"}
+                    keyboardType="numeric"
+                    className="w-20 rounded-lg border border-stone-300 px-2 py-3 text-center"
+                    style={{ fontFamily: fonts.sans }}
+                  />
+                  <TextInput
+                    value={row.weight}
+                    onChangeText={(v) => updateRow(i, "weight", v)}
+                    placeholder="weight"
+                    keyboardType="numeric"
+                    className="w-20 rounded-lg border border-stone-300 px-2 py-3 text-center"
+                    style={{ fontFamily: fonts.sans }}
+                  />
+                </View>
+                {histSet ? (
+                  <View className="ml-16 mt-1 self-start rounded-md px-2 py-1" style={{ backgroundColor: "#fdf6f2" }}>
+                    <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#8a5140" }}>
+                      Last: {histSet.reps ?? "–"} reps{histSet.weight ? ` @ ${histSet.weight}` : ""}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+          {showHistory && history?.sets.find((s) => s.notes) ? (
+            <Text className="mb-1 text-xs italic text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Last time's note: {history.sets.find((s) => s.notes).notes}
+            </Text>
+          ) : null}
 
           <Text className="mb-1 mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
             Notes
@@ -193,7 +228,11 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
 // target sets into individual reps/weight rows plus a notes field
 // (autosaved, debounced, same pattern as nutrition's daily log) and a "last
 // time" history panel, with one Finalize button for the whole session.
-export function SessionLogger({ userId, datePerformed, source, exercises, isCompleted, onFinalize }) {
+// hideFinalizeButton lets a caller take the Finalize button out of the
+// scrolling content entirely (My Fitness docks it in a screen-bottom bar
+// instead, when exactly one session is the page's clear focus) without
+// this component losing its own standalone-usable default.
+export function SessionLogger({ userId, datePerformed, source, exercises, isCompleted, onFinalize, hideFinalizeButton }) {
   const [expandedId, setExpandedId] = useState(null);
   const [finalizing, setFinalizing] = useState(false);
 
@@ -222,15 +261,17 @@ export function SessionLogger({ userId, datePerformed, source, exercises, isComp
         />
       ))}
 
-      <Pressable
-        onPress={handleFinalize}
-        disabled={finalizing}
-        className="mt-2 items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
-      >
-        <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-          {finalizing ? "Saving…" : isCompleted ? "Session finalized ✓ (tap to re-finalize)" : "Finalize workout"}
-        </Text>
-      </Pressable>
+      {!hideFinalizeButton && (
+        <Pressable
+          onPress={handleFinalize}
+          disabled={finalizing}
+          className="mt-2 items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+        >
+          <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+            {finalizing ? "Saving…" : isCompleted ? "Session finalized ✓ (tap to re-finalize)" : "Finalize workout"}
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }

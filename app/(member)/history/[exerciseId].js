@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, FlatList, ActivityIndicator } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLogsForExercise } from "../../../lib/programming/memberPlan";
@@ -26,6 +27,7 @@ export default function ExerciseHistory() {
   const { exerciseId } = useLocalSearchParams();
   const { profile } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [logs, setLogs] = useState(null);
 
   const load = useCallback(async () => {
@@ -48,7 +50,7 @@ export default function ExerciseHistory() {
   }
 
   return (
-    <View className="flex-1 bg-white px-6 py-8">
+    <View className="flex-1 bg-white px-6 pb-8" style={{ paddingTop: insets.top + 6 }}>
       <Pressable onPress={() => router.back()} className="mb-4 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ My History</Text>
       </Pressable>

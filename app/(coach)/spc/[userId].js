@@ -17,6 +17,7 @@ import { WEEK_OFFSETS, groupRows } from "../../../lib/programming/gridRows";
 import { SessionCell, PlaceholderCell, GapSlot, SESSION_COL_WIDTH, CELL_MIN_HEIGHT, CELL_GAP } from "../../../components/BlockGridCells";
 import { getSetting } from "../../../lib/settings";
 import { todayInBoise } from "../../../lib/boiseDate";
+import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -401,10 +402,14 @@ export default function SpcClientDetail() {
                 <View style={{ height: 34 }} />
                 {gridRows.map((row, idx) => {
                   const isNewBlockStart = row.block && row.block.id !== gridRows[idx - 1]?.block?.id;
+                  const weekEnd = addDays(row.weekDate, 6);
                   return (
                     <View key={row.offset} style={{ minHeight: CELL_MIN_HEIGHT }} className="mb-3 justify-center">
                       <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12 }} className="text-stone-600">
                         {row.label}
+                      </Text>
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 10.5 }} className="mt-0.5 text-stone-400">
+                        {formatDateMDY(row.weekDate)} – {formatDateMDY(weekEnd)}
                       </Text>
                       {isNewBlockStart ? (
                         <Link href={`/(coach)/spc/blocks/${row.block.id}`} style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.primaryOnWhite, marginTop: 2 }}>

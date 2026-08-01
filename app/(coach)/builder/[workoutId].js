@@ -14,6 +14,7 @@ import {
   reorderWorkoutExercises,
   getSiblingPatterns,
   setWorkoutStatus,
+  setWorkoutTitle,
 } from "../../../lib/programming/workouts";
 import { ExercisePickerModal } from "../../../components/ExercisePickerModal";
 import { PatternTally } from "../../../components/PatternTally";
@@ -93,6 +94,11 @@ export default function WorkoutBuilderNative() {
     await removeWarmup(id);
   };
 
+  const handleTitleChange = (title) => {
+    setWorkout((w) => ({ ...w, title }));
+    setWorkoutTitle(workoutId, title);
+  };
+
   const handleTogglePublish = async () => {
     setPublishing(true);
     try {
@@ -132,11 +138,19 @@ export default function WorkoutBuilderNative() {
       >
         {workout.status}
       </Text>
-      <Pressable onPress={handleTogglePublish} disabled={publishing} className="mb-6 self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
+      <Pressable onPress={handleTogglePublish} disabled={publishing} className="mb-4 self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
         <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
           {workout.status === "published" ? "Unpublish" : "Publish"}
         </Text>
       </Pressable>
+
+      <TextInput
+        value={workout.title ?? ""}
+        onChangeText={handleTitleChange}
+        placeholder="Session title (e.g. Back & Bis) — shown to the member"
+        className="mb-6 rounded-lg border border-stone-300 px-4 py-3"
+        style={{ fontFamily: "Montserrat_400Regular" }}
+      />
 
       <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: "Montserrat_600SemiBold", letterSpacing: 0.4 }}>
         Warm-up

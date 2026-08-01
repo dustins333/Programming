@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Image, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../../lib/boiseDate";
@@ -42,6 +43,7 @@ function toRowValues(log) {
 export default function NutritionToday() {
   const { profile } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const today = todayInBoise();
   const [target, setTarget] = useState(null);
   const [values, setValues] = useState(EMPTY_VALUES);
@@ -136,7 +138,7 @@ export default function NutritionToday() {
   const calorieTarget = target ? Math.round(deriveCalories(target)) : null;
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
+    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
       <View className="flex-row items-center gap-3">
         <Text className="mb-1 flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
           My Nutrition

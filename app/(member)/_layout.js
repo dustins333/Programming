@@ -37,7 +37,7 @@ export default function MemberLayout() {
         tabBarLabelStyle: { fontFamily: fonts.sansMedium, fontSize: 11 },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Today", tabBarIcon: TabIcon("today") }} />
+      <Tabs.Screen name="index" options={{ title: "My Week", tabBarIcon: TabIcon("today") }} />
       <Tabs.Screen name="plan" options={{ title: "My Fitness", tabBarIcon: TabIcon("barbell") }} />
       <Tabs.Screen name="nutrition" options={{ title: "My Nutrition", tabBarIcon: TabIcon("restaurant") }} />
       <Tabs.Screen name="history" options={{ title: "My History", tabBarIcon: TabIcon("time") }} />

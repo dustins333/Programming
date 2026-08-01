@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
-import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
 import {
-  getMyAssignment,
+  listMyAssignments,
   getCurrentBlock,
   listPublishedWorkoutsForBlock,
   getLoggedSetsForDate,
@@ -22,6 +23,8 @@ import { fonts, colors } from "../../lib/theme";
 export default function PlanBlock() {
   const { profile } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { programId } = useLocalSearchParams();
   const [state, setState] = useState({ status: "loading" });
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [sessionDetails, setSessionDetails] = useState({});
@@ -30,11 +33,16 @@ export default function PlanBlock() {
   const load = useCallback(async () => {
     setState({ status: "loading" });
     try {
-      const assignment = await getMyAssignment(profile.id);
-      if (!assignment?.group_program_id) {
+      const assignments = await listMyAssignments(profile.id);
+      if (assignments.length === 0) {
         setState({ status: "unassigned" });
         return;
       }
+      // Which membership's block to show — passed by whichever "View full
+      // block" link sent the member here (a client can hold more than one
+      // group program now), falling back to the first membership for
+      // direct navigation with no param.
+      const assignment = assignments.find((a) => a.group_program_id === programId) ?? assignments[0];
       const program = assignment.group_programs;
       const block = await getCurrentBlock(program.id, todayInBoise());
       if (!block) {
@@ -100,7 +108,7 @@ export default function PlanBlock() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
+    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
       <Pressable onPress={() => router.back()} className="mb-4 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ My Fitness</Text>
       </Pressable>
@@ -146,7 +154,10 @@ export default function PlanBlock() {
               return (
                 <View key={workout.id} className="mb-4 rounded-lg border border-stone-200 px-4 py-3">
                   <Pressable onPress={() => loadSessionDetails(workout)}>
-                    <Text style={{ fontFamily: fonts.sansSemiBold }}>Session {workout.session_number}</Text>
+                    <Text style={{ fontFamily: fonts.sansSemiBold }}>
+                      Session {workout.session_number}
+                      {workout.title ? ` — ${workout.title}` : ""}
+                    </Text>
                     {!details ? (
                       <Text className="text-xs" style={{ fontFamily: fonts.sans, color: colors.primaryOnWhite }}>
                         {loadingSession === workout.id ? "Loading…" : "Tap to view"}
