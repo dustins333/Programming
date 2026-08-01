@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
@@ -9,51 +9,76 @@ import {
   listMyAssignments,
   getCurrentBlock,
   listPublishedWorkoutsForBlock,
-  getLoggedSetsForDate,
 } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
-import { getGroupCompletion } from "../../lib/programming/sessionCompletions";
+import { listGroupCompletionDetailsForWorkouts, finalizeGroupSession } from "../../lib/programming/sessionCompletions";
+import { retryOnce } from "../../lib/retry";
 import { formatDateMDY } from "../../lib/formatDate";
+import { SessionDetailModal } from "../../components/SessionDetailModal";
 import { fonts, colors } from "../../lib/theme";
 
-// Read-only full multi-week view of a member's group program block — one
-// tap away from My Fitness's "View full block" link. My Fitness itself only
-// shows today's specific session; this is for looking ahead/back at other
-// weeks, not logging (no inputs here).
+const CANVAS = "#faf8f6";
+const CARD_BORDER = "#ece7e1";
+const TILE_COMPLETED_BORDER = "#4d6142";
+const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 };
+
+// Full multi-week view of a member's group program block — one tap away
+// from My Fitness's "View full block" link. Every week is laid out at once
+// (mirrors the coach's block-sessions grid, app/(coach)/blocks/[blockId].js:
+// week as a row label, sessions laid out beside it) rather than the old
+// pill-select-one-week pattern. Completion status is fetched for the whole
+// block up front (listGroupCompletionDetailsForWorkouts) so a completed
+// session's bubble is immediately green with its date — no need to tap a
+// session just to find out whether it happened. Tapping a session opens a
+// popup: a completed one shows the real SessionLogger accordion (view +
+// edit whatever was logged — no video links, those stay My Fitness-only,
+// and no Finalize button, this is for correcting history not first-time
+// logging); one that hasn't happened yet shows its plain prescription.
 export default function PlanBlock() {
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { programId } = useLocalSearchParams();
   const [state, setState] = useState({ status: "loading" });
-  const [selectedWeek, setSelectedWeek] = useState(null);
-  const [sessionDetails, setSessionDetails] = useState({});
-  const [loadingSession, setLoadingSession] = useState(null);
+  const [currentWeek, setCurrentWeek] = useState(null);
+  const [sessionContent, setSessionContent] = useState({}); // workoutId -> { warmups, exercises }
+  const [modalWorkoutId, setModalWorkoutId] = useState(null);
+  const [modalLoading, setModalLoading] = useState(false);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
     try {
-      const assignments = await listMyAssignments(profile.id);
-      if (assignments.length === 0) {
-        setState({ status: "unassigned" });
-        return;
-      }
-      // Which membership's block to show — passed by whichever "View full
-      // block" link sent the member here (a client can hold more than one
-      // group program now), falling back to the first membership for
-      // direct navigation with no param.
-      const assignment = assignments.find((a) => a.group_program_id === programId) ?? assignments[0];
-      const program = assignment.group_programs;
-      const block = await getCurrentBlock(program.id, todayInBoise());
-      if (!block) {
-        setState({ status: "no_block" });
-        return;
-      }
-      const workouts = await listPublishedWorkoutsForBlock(block.id);
-      const week = currentWeekNumber(block.block_start_date, program.block_length_weeks, todayInBoise());
-      setSelectedWeek(week);
-      setState({ status: "ready", program, block, workouts });
+      // Wrapped in retryOnce: a transient failure on the first request
+      // batch right after navigating here (cold connections, several
+      // sequential Supabase calls firing right after a reload) used to
+      // surface as a permanent "not showing completed sessions" state with
+      // no obvious way to recover short of leaving and coming back.
+      const result = await retryOnce(async () => {
+        const assignments = await listMyAssignments(profile.id);
+        if (assignments.length === 0) return { status: "unassigned" };
+
+        // Which membership's block to show — passed by whichever "View full
+        // block" link sent the member here (a client can hold more than one
+        // group program now), falling back to the first membership for
+        // direct navigation with no param.
+        const assignment = assignments.find((a) => a.group_program_id === programId) ?? assignments[0];
+        const program = assignment.group_programs;
+        const block = await getCurrentBlock(program.id, todayInBoise());
+        if (!block) return { status: "no_block" };
+
+        const workouts = await listPublishedWorkoutsForBlock(block.id);
+        const completions = await listGroupCompletionDetailsForWorkouts(profile.id, workouts.map((w) => w.id));
+        const week = currentWeekNumber(block.block_start_date, program.block_length_weeks, todayInBoise());
+        // logs.source predates multi-membership and only special-cases
+        // Flagship/BWA by name — any other program tags with the generic
+        // 'group' value, same rule plan.js's own load() uses.
+        const source = program.name === "Flagship" ? "flagship" : program.name === "Better With Age" ? "bwa" : "group";
+        return { status: "ready", program, block, workouts, completions, source, week };
+      });
+      if (result.status === "ready") setCurrentWeek(result.week);
+      setState(result);
     } catch (err) {
+      console.error("Plan block: failed to load", err);
       setState({ status: "error", message: err.message ?? String(err) });
     }
   }, [profile.id]);
@@ -67,50 +92,65 @@ export default function PlanBlock() {
     return Array.from({ length: state.program.block_length_weeks }, (_, i) => i + 1);
   }, [state]);
 
-  const sessionsForSelectedWeek = useMemo(() => {
-    if (state.status !== "ready" || !selectedWeek) return [];
-    return state.workouts.filter((w) => w.week_number === selectedWeek).sort((a, b) => a.session_number - b.session_number);
-  }, [state, selectedWeek]);
-
-  const loadSessionDetails = async (workout) => {
-    if (sessionDetails[workout.id]) return;
-    setLoadingSession(workout.id);
-    const [warmups, exercises, completion] = await Promise.all([
-      listWarmups(workout.id),
-      listWorkoutExercises(workout.id),
-      getGroupCompletion(profile.id, workout.id),
-    ]);
-
-    // Only a finalized session has a real "this actually happened on X"
-    // date to key logged sets off of — an unfinalized one has nothing
-    // reliable to show here yet.
-    let loggedByExercise = {};
-    if (completion) {
-      const performedDate = dateInBoise(new Date(completion.completed_at));
-      const results = await Promise.all(
-        exercises.map((ex) => getLoggedSetsForDate(profile.id, ex.exercise_id, performedDate))
-      );
-      exercises.forEach((ex, i) => {
-        loggedByExercise[ex.exercise_id] = results[i];
-      });
-    }
-
-    setSessionDetails((prev) => ({ ...prev, [workout.id]: { warmups, exercises, completion, loggedByExercise } }));
-    setLoadingSession(null);
+  const openSession = async (workout) => {
+    setModalWorkoutId(workout.id);
+    if (sessionContent[workout.id]) return;
+    setModalLoading(true);
+    const [warmups, exercises] = await Promise.all([listWarmups(workout.id), listWorkoutExercises(workout.id)]);
+    setSessionContent((prev) => ({
+      ...prev,
+      [workout.id]: {
+        warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
+        exercises: exercises.map((ex) => ({
+          id: ex.id,
+          exercise: ex.exercises,
+          targetSets: ex.sets,
+          targetReps: ex.reps,
+          notes: ex.tempo ? `tempo ${ex.tempo}` : null,
+        })),
+      },
+    }));
+    setModalLoading(false);
   };
+
+  const closeModal = () => setModalWorkoutId(null);
+
+  // Logging a missed past session — the member picks (or keeps the
+  // defaulted-to-today) date it actually happened, and that becomes the
+  // completion's real timestamp so history reflects when it happened, not
+  // when they got around to typing it in. Updates state.completions
+  // in place rather than a full reload — the modal's own `completed` prop
+  // is derived from that map, so it flips straight into the "view/edit
+  // what you logged" mode once this resolves, no extra plumbing needed.
+  const handleFinalizeMissedSession = async (workout, logDate) => {
+    const completedAt = new Date(`${logDate}T12:00:00`).toISOString();
+    await finalizeGroupSession(profile.id, workout.id, completedAt);
+    setState((prev) => {
+      if (prev.status !== "ready") return prev;
+      const next = new Map(prev.completions);
+      next.set(workout.id, completedAt);
+      return { ...prev, completions: next };
+    });
+  };
+
+  const goToMyFitness = () => router.push({ pathname: "/(member)/plan", params: programId ? { program: programId } : undefined });
 
   if (state.status === "loading") {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: CANVAS }}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
+  const modalWorkout = state.status === "ready" ? state.workouts.find((w) => w.id === modalWorkoutId) : null;
+  const modalCompletedAt = modalWorkoutId ? state.completions?.get(modalWorkoutId) : null;
+  const modalContent = modalWorkoutId ? sessionContent[modalWorkoutId] : null;
+
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
-      <Pressable onPress={() => router.back()} className="mb-4 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ My Fitness</Text>
+    <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
+      <Pressable onPress={goToMyFitness} className="mb-3 flex-row items-center gap-1 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>‹ My Fitness</Text>
       </Pressable>
 
       {state.status !== "ready" ? (
@@ -123,99 +163,85 @@ export default function PlanBlock() {
         </Text>
       ) : (
         <>
-          <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+          <Text className="mb-0.5 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
             {state.program.name} Plan
           </Text>
-          <Text className="mb-4 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          <Text className="mb-5" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
             {formatDateMDY(state.block.block_start_date)} → {formatDateMDY(state.block.block_end_date)}
           </Text>
 
-          <View className="mb-6 flex-row flex-wrap gap-2">
-            {weeksInBlock.map((week) => (
-              <Pressable
-                key={week}
-                onPress={() => setSelectedWeek(week)}
-                className={`rounded-full border px-3.5 py-2.5 ${selectedWeek === week ? "border-primary bg-primary" : "border-stone-300"}`}
-              >
-                <Text className={selectedWeek === week ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
+          {weeksInBlock.map((week) => {
+            const sessionsForWeek = state.workouts
+              .filter((w) => w.week_number === week)
+              .sort((a, b) => a.session_number - b.session_number);
+            const isCurrent = week === currentWeek;
+            return (
+              <View key={week} className="mb-5">
+                <Text
+                  className="mb-2 text-xs uppercase"
+                  style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5, color: isCurrent ? colors.primaryOnWhite : "#a8a29e" }}
+                >
                   Week {week}
+                  {isCurrent ? " · Current" : ""}
                 </Text>
-              </Pressable>
-            ))}
-          </View>
 
-          {sessionsForSelectedWeek.length === 0 ? (
-            <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
-              Not published yet — check back soon.
-            </Text>
-          ) : (
-            sessionsForSelectedWeek.map((workout) => {
-              const details = sessionDetails[workout.id];
-              return (
-                <View key={workout.id} className="mb-4 rounded-lg border border-stone-200 px-4 py-3">
-                  <Pressable onPress={() => loadSessionDetails(workout)}>
-                    <Text style={{ fontFamily: fonts.sansSemiBold }}>
-                      Session {workout.session_number}
-                      {workout.title ? ` — ${workout.title}` : ""}
-                    </Text>
-                    {!details ? (
-                      <Text className="text-xs" style={{ fontFamily: fonts.sans, color: colors.primaryOnWhite }}>
-                        {loadingSession === workout.id ? "Loading…" : "Tap to view"}
-                      </Text>
-                    ) : details.completion ? (
-                      <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#4d6142" }}>
-                        ✓ Completed {formatDateMDY(dateInBoise(new Date(details.completion.completed_at)))}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                  {details && (
-                    <View className="mt-2">
-                      {details.warmups.map((w, i) => (
-                        <Text key={w.id} className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                          Warm-up {i + 1}: {w.exercises?.name ?? w.label}
-                        </Text>
-                      ))}
-                      {details.exercises.map((ex) => {
-                        const logged = details.loggedByExercise[ex.exercise_id];
-                        return (
-                          <View key={ex.id} className="mt-2">
-                            <View className="flex-row items-center justify-between">
-                              <Text style={{ fontFamily: fonts.sans }}>
-                                {ex.exercises?.name} — {ex.sets}x{ex.reps}
-                              </Text>
-                              {ex.exercises?.video_url ? (
-                                <Pressable
-                                  onPress={() => Linking.openURL(ex.exercises.video_url)}
-                                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                  accessibilityLabel={`Watch video for ${ex.exercises.name}`}
-                                >
-                                  <Text style={{ color: colors.primaryOnWhite }}>▶</Text>
-                                </Pressable>
-                              ) : null}
-                            </View>
-                            {logged && logged.length > 0 && (
-                              <View className="mt-1 rounded-lg px-3 py-2" style={{ backgroundColor: "#faf7f4", borderWidth: 1, borderColor: "#f0ebe6" }}>
-                                <Text className="text-xs text-stone-600" style={{ fontFamily: fonts.sans }}>
-                                  {logged.map((s) => `Set ${s.set_number}: ${s.reps ?? "–"} reps${s.weight ? ` @ ${s.weight}` : ""}`).join(" · ")}
-                                </Text>
-                                {logged.find((s) => s.notes) ? (
-                                  <Text className="mt-1 text-xs italic text-stone-500" style={{ fontFamily: fonts.sans }}>
-                                    Note: {logged.find((s) => s.notes).notes}
-                                  </Text>
-                                ) : null}
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
-              );
-            })
-          )}
+                {sessionsForWeek.length === 0 ? (
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e", fontStyle: "italic" }}>Not published yet</Text>
+                ) : (
+                  <View className="flex-row gap-2">
+                    {sessionsForWeek.map((workout) => {
+                      const completedAt = state.completions.get(workout.id);
+                      const isCompleted = !!completedAt;
+                      return (
+                        <Pressable
+                          key={workout.id}
+                          onPress={() => openSession(workout)}
+                          className="items-center justify-center rounded-2xl bg-white px-2 py-3.5"
+                          style={{
+                            flex: 1,
+                            minHeight: 56,
+                            borderWidth: isCompleted ? 2 : 1,
+                            borderColor: isCompleted ? TILE_COMPLETED_BORDER : CARD_BORDER,
+                            ...CARD_SHADOW,
+                          }}
+                        >
+                          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c", textAlign: "center" }} numberOfLines={2}>
+                            Session {workout.session_number}
+                            {workout.title ? ` — ${workout.title}` : ""}
+                          </Text>
+                          {isCompleted ? (
+                            <Text className="mt-0.5" style={{ fontFamily: fonts.sansSemiBold, fontSize: 10, color: "#4d6142" }}>
+                              ✓ {formatDateMDY(dateInBoise(new Date(completedAt)))}
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </>
       )}
+
+      <SessionDetailModal
+        key={modalWorkoutId ?? "none"}
+        visible={!!modalWorkoutId}
+        onClose={closeModal}
+        title={modalWorkout ? `Session ${modalWorkout.session_number}${modalWorkout.title ? ` — ${modalWorkout.title}` : ""}` : ""}
+        completed={!!modalCompletedAt}
+        completedDateLabel={modalCompletedAt ? formatDateMDY(dateInBoise(new Date(modalCompletedAt))) : null}
+        loading={modalLoading || !modalContent}
+        warmups={modalContent?.warmups}
+        userId={profile.id}
+        datePerformed={modalCompletedAt ? dateInBoise(new Date(modalCompletedAt)) : null}
+        loggable={modalWorkout ? modalWorkout.week_number <= currentWeek : false}
+        defaultLogDate={todayInBoise()}
+        source={state.source}
+        exercises={modalContent?.exercises ?? []}
+        onFinalize={(logDate) => handleFinalizeMissedSession(modalWorkout, logDate)}
+      />
     </ScrollView>
   );
 }

@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber, sessionNumberForDate } from "../../lib/programming/schedule";
@@ -19,20 +18,27 @@ import {
   finalizeSpcSession,
   finalizeOneOffSession,
 } from "../../lib/programming/sessionCompletions";
+import { retryOnce } from "../../lib/retry";
 import { SessionLogger } from "../../components/SessionLogger";
 import { fonts, colors } from "../../lib/theme";
 
-// Matches My Week's card treatment — a white box sitting on the page's
-// warm-gray background so each program reads as its own distinct block.
-// `title` is only rendered when there's no tab bar above already naming
-// the program (see ProgramTabs) — with tabs visible, a second big program
-// name inside the card would just repeat what the active tab already says.
+// Design tokens from design_handoff_visual_pass_v4/README.md.
+const CANVAS = "#faf8f6";
+const CARD_BORDER = "#ece7e1";
+const HITSLOP = { top: 10, bottom: 10, left: 10, right: 10 };
+const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 };
+const EYEBROW_MUTED = { fontFamily: fonts.sansBold, fontSize: 11, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 8 };
+
+// Matches My Week's card treatment — a light spacing wrapper, not its own
+// bordered card (the individual pieces inside — banner, warmup card,
+// exercise cards — carry their own white/bordered styling instead, so the
+// page reads as a flat stack of distinct elements on the canvas background
+// rather than one big enclosing box). `title` is only rendered when there's
+// no tab bar above already naming the program (see ProgramTabs) — with tabs
+// visible, a second big program name inside would just repeat the active tab.
 function FitnessCard({ title, children }) {
   return (
-    <View
-      className="mb-6 rounded-2xl px-5 py-5"
-      style={{ backgroundColor: "white", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 14 }}
-    >
+    <View className="mb-6">
       {title ? (
         <Text className="mb-3 text-center" style={{ fontFamily: fonts.display, fontSize: 20, color: colors.primary }}>
           {title}
@@ -57,10 +63,22 @@ function ProgramTabs({ options, active, onSelect }) {
           <Pressable
             key={opt.key}
             onPress={() => onSelect(opt.key)}
-            className="items-center rounded-xl px-4 py-3"
-            style={{ borderWidth: 1.5, borderColor: colors.primary, backgroundColor: isActive ? colors.primary : "white" }}
+            className="flex-1 items-center justify-center rounded-full px-3 py-2.5"
+            style={{
+              borderWidth: 1.5,
+              borderColor: colors.primary,
+              backgroundColor: isActive ? colors.primary : "white",
+              ...(isActive
+                ? { shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 10 }
+                : null),
+            }}
           >
-            <Text style={{ fontFamily: fonts.sansSemiBold, color: isActive ? "white" : colors.primaryOnWhite }}>{opt.label}</Text>
+            <Text
+              numberOfLines={2}
+              style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: isActive ? "white" : colors.primaryOnWhite, textAlign: "center" }}
+            >
+              {opt.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -73,31 +91,92 @@ function ProgramTabs({ options, active, onSelect }) {
 // right now has to be a choice, not a lookup — this is that picker. Only
 // rendered when sessionsPerWeek > 1; a 1x/week client has nothing to pick
 // between, so their single session just loads directly (same as before).
+// Border-only states, no checkmark circle: done-but-not-selected gets the
+// same 2px olive border as a completed session tile elsewhere in the app;
+// selected-not-done gets a peach tint; everything else is a plain outline.
 function SpcSessionPicker({ sessions, selected, onSelect }) {
   return (
-    <View className="mb-4 flex-row gap-2">
+    <View className="mb-4 flex-row gap-2.5">
       {sessions.map((s) => {
-        const isActive = s.sessionNumber === selected;
+        const isSelected = s.sessionNumber === selected;
+        const doneNotSelected = s.completed && !isSelected;
         return (
           <Pressable
             key={s.sessionNumber}
             onPress={() => onSelect(s.sessionNumber)}
-            className="flex-1 items-center rounded-xl py-2.5"
-            style={{ borderWidth: 1.5, borderColor: isActive ? colors.primary : "#e7e5e4", backgroundColor: isActive ? "#fdf6f2" : "white" }}
+            className="flex-1 items-center justify-center rounded-2xl py-4"
+            style={{
+              backgroundColor: isSelected ? "#fdf6f2" : "white",
+              borderWidth: doneNotSelected ? 2 : isSelected ? 1.5 : 1,
+              borderColor: doneNotSelected ? "#4d6142" : isSelected ? colors.primary : CARD_BORDER,
+              ...CARD_SHADOW,
+            }}
           >
-            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12 }} className="text-stone-600">
+            <Text style={{ fontFamily: isSelected ? fonts.sansBold : fonts.sansSemiBold, fontSize: 14, color: isSelected ? colors.primaryOnWhite : "#44403c" }}>
               Session {s.sessionNumber}
             </Text>
-            <Ionicons
-              name={s.completed ? "checkmark-circle-outline" : "ellipse-outline"}
-              size={18}
-              color={s.completed ? "#4d6142" : "#d6d3d1"}
-              style={{ marginTop: 3 }}
-            />
           </Pressable>
         );
       })}
     </View>
+  );
+}
+
+// Which session is currently loaded below — eyebrow (program · week, small/
+// uppercase, truncates rather than wrapping into the title) + title (the
+// session's own name, falling back to "Session N"), plus a pill shortcut to
+// the full multi-week block view.
+function SelectedSessionBanner({ eyebrow, title, onViewBlock }) {
+  return (
+    <View
+      className="mb-4 flex-row items-center gap-3 rounded-2xl px-3.5 py-3"
+      style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#f0ddd2" }}
+    >
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          numberOfLines={1}
+          style={{ fontFamily: fonts.sansBold, fontSize: 10, color: colors.primaryOnWhite, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}
+        >
+          {eyebrow}
+        </Text>
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#44403c" }}>{title}</Text>
+      </View>
+      <Pressable
+        onPress={onViewBlock}
+        hitSlop={HITSLOP}
+        style={{ flexShrink: 0, borderWidth: 1, borderColor: colors.primary, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12, backgroundColor: "white" }}
+      >
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: colors.primaryOnWhite }}>View full block ›</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// Warm-up section — a bordered card of name/sets×reps rows, mirroring the
+// exercise list's card language, instead of one joined "Warm-up: A, B" line.
+// Renders the same warmup rows already fetched for the section (no new
+// query), just restyled from an inline string into individual rows.
+function WarmupCard({ warmups }) {
+  if (!warmups || warmups.length === 0) return null;
+  return (
+    <>
+      <Text style={EYEBROW_MUTED}>Warm-up</Text>
+      <View className="mb-5 rounded-2xl bg-white px-3.5" style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}>
+        {warmups.map((w, i) => {
+          const detail = w.sets && w.reps ? `${w.sets}×${w.reps}` : w.sets || w.reps || "";
+          return (
+            <View
+              key={w.id ?? i}
+              className="flex-row items-center justify-between py-2.5"
+              style={i < warmups.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f2eee9" } : undefined}
+            >
+              <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>{w.exercises?.name ?? w.label}</Text>
+              {detail ? <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e" }}>{detail}</Text> : null}
+            </View>
+          );
+        })}
+      </View>
+    </>
   );
 }
 
@@ -116,17 +195,29 @@ export default function MyFitness() {
   const [selectedProgramOverride, setSelectedProgramOverride] = useState(null);
   const [footerFinalizing, setFooterFinalizing] = useState(false);
 
+  // Same staleness guard as My Week's load() — useFocusEffect below re-runs
+  // load() on every focus, and without this an older in-flight call can
+  // resolve after a newer one and clobber good state with stale/incomplete
+  // data, reading as sessions/titles randomly disappearing.
+  const requestIdRef = useRef(0);
+
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestIdRef.current !== requestId;
     setGroupsLoading(true);
     const today = todayInBoise();
 
     // Every membership loads independently — a client can hold several
     // group program memberships at once (e.g. Flagship plus a specialty
     // program), and one program's failure shouldn't hide another's, same
-    // reasoning as group-vs-SPC-vs-one-offs below.
+    // reasoning as group-vs-SPC-vs-one-offs below. Wrapped in retryOnce:
+    // same reasoning as My Week's load() — a transient failure on the
+    // first request batch right after a reload used to render identically
+    // to "nothing here," only "fixed" by navigating away and back.
     try {
-      const assignments = await listMyAssignments(profile.id);
-      const results = await Promise.all(
+      const results = await retryOnce(async () => {
+        const assignments = await listMyAssignments(profile.id);
+        return Promise.all(
         assignments.map(async (assignment) => {
           const program = assignment.group_programs;
           // logs.source predates multi-membership and only special-cases
@@ -177,57 +268,65 @@ export default function MyFitness() {
             return { groupProgramId: program.id, programName: program.name, status: "error", message: err.message ?? String(err) };
           }
         })
-      );
-      setGroups(results);
+        );
+      });
+      if (!isStale()) setGroups(results);
     } catch (err) {
-      setGroups([{ status: "error", message: err.message ?? String(err) }]);
+      console.error("My Fitness: failed to load group programs", err);
+      if (!isStale()) setGroups([{ status: "error", message: err.message ?? String(err) }]);
     } finally {
-      setGroupsLoading(false);
+      if (!isStale()) setGroupsLoading(false);
     }
 
     try {
-      const spcClient = await getSpcClient(profile.id);
-      const active = isSpcActive(spcClient);
-      setHasSpc(active);
-      if (!active) {
-        setSpc(null);
-      } else {
+      const spcResult = await retryOnce(async () => {
+        const spcClient = await getSpcClient(profile.id);
+        const active = isSpcActive(spcClient);
+        if (!active) return { active };
+
         const block = await getCurrentSpcBlock(profile.id, today);
-        if (!block) {
-          setSpc({ status: "no_block" });
-        } else {
-          const workouts = await listPublishedSpcWorkoutsForBlock(block.id);
-          if (workouts.length === 0) {
-            setSpc({ status: "not_published" });
-          } else {
-            const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
-            const sessionsPerWeek = spcClient.sessions_per_week;
-            const relevant = workouts.slice(0, sessionsPerWeek);
-            const workoutIds = relevant.map((w) => w.id);
-            const completedIds = await getCompletedSpcWorkoutIdsForWeek(profile.id, workoutIds, weekNumber);
-            const sessions = relevant.map((w) => ({ sessionNumber: w.session_number, workout: w, completed: completedIds.has(w.id) }));
-            const defaultSession = sessions.find((s) => !s.completed) ?? sessions[0];
-            setSpc({
-              status: sessions.every((s) => s.completed) ? "done" : "ready",
-              weekNumber,
-              sessionsPerWeek,
-              sessions,
-              selectedSessionNumber: defaultSession?.sessionNumber ?? null,
-            });
-          }
-        }
+        if (!block) return { active, spc: { status: "no_block" } };
+
+        const workouts = await listPublishedSpcWorkoutsForBlock(block.id);
+        if (workouts.length === 0) return { active, spc: { status: "not_published" } };
+
+        const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+        const sessionsPerWeek = spcClient.sessions_per_week;
+        const relevant = workouts.slice(0, sessionsPerWeek);
+        const workoutIds = relevant.map((w) => w.id);
+        const completedIds = await getCompletedSpcWorkoutIdsForWeek(profile.id, workoutIds, weekNumber);
+        const sessions = relevant.map((w) => ({ sessionNumber: w.session_number, workout: w, completed: completedIds.has(w.id) }));
+        const defaultSession = sessions.find((s) => !s.completed) ?? sessions[0];
+        return {
+          active,
+          spc: {
+            status: sessions.every((s) => s.completed) ? "done" : "ready",
+            weekNumber,
+            sessionsPerWeek,
+            sessions,
+            selectedSessionNumber: defaultSession?.sessionNumber ?? null,
+          },
+        };
+      });
+      if (!isStale()) {
+        setHasSpc(spcResult.active);
+        setSpc(spcResult.active ? spcResult.spc : null);
       }
-    } catch {
-      setHasSpc(false);
-      setSpc(null);
+    } catch (err) {
+      console.error("My Fitness: failed to load SPC", err);
+      if (!isStale()) {
+        setHasSpc(false);
+        setSpc(null);
+      }
     }
 
     // One-offs load independently too, same reasoning — an away workout or
     // trial session assignment has nothing to do with group/SPC, so its
     // failure shouldn't hide either of those sections.
     try {
-      const activeOneOffs = await listActiveOneOffWorkoutsForUser(profile.id);
-      const withContent = await Promise.all(
+      const withContent = await retryOnce(async () => {
+        const activeOneOffs = await listActiveOneOffWorkoutsForUser(profile.id);
+        return Promise.all(
         activeOneOffs.map(async (workout) => {
           const [warmupRows, exerciseRows] = await Promise.all([listOneOffWarmups(workout.id), listOneOffExercises(workout.id)]);
           return {
@@ -242,10 +341,12 @@ export default function MyFitness() {
             })),
           };
         })
-      );
-      setOneOffs(withContent);
-    } catch {
-      setOneOffs([]);
+        );
+      });
+      if (!isStale()) setOneOffs(withContent);
+    } catch (err) {
+      console.error("My Fitness: failed to load one-offs", err);
+      if (!isStale()) setOneOffs([]);
     }
   }, [profile.id]);
 
@@ -337,7 +438,7 @@ export default function MyFitness() {
 
   if (groupsLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-stone-100">
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: CANVAS }}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
@@ -362,13 +463,11 @@ export default function MyFitness() {
   if (visibleGroup) {
     activeFinalize = {
       key: visibleGroup.groupProgramId,
-      isCompleted: visibleGroup.completed,
       onFinalize: () => handleFinalizeGroup(visibleGroup),
     };
   } else if ((!showTabs || selectedProgram === "spc") && spc?.status === "ready" && spcDetail) {
     activeFinalize = {
       key: "spc",
-      isCompleted: spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false,
       onFinalize: handleFinalizeSpc,
     };
   }
@@ -385,7 +484,7 @@ export default function MyFitness() {
 
   if (groups.length === 0 && !hasSpc && oneOffs.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center bg-stone-100 px-6">
+      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
         <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
           You're not assigned to a program yet — check with your coach.
         </Text>
@@ -394,7 +493,7 @@ export default function MyFitness() {
   }
 
   return (
-    <View className="flex-1 bg-stone-100">
+    <View className="flex-1" style={{ backgroundColor: CANVAS }}>
     <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
       <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         My Fitness
@@ -444,25 +543,15 @@ export default function MyFitness() {
 
             {groupEntry.status === "ready" && (
               <FitnessCard title={showTabs ? null : groupEntry.programName}>
-                <Text className="mb-1 text-center text-sm text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-                  Week {groupEntry.weekNumber}, Session {groupEntry.sessionNumber}
-                  {groupEntry.workout.title ? ` — ${groupEntry.workout.title}` : ""}
-                </Text>
-                {groupEntry.warmups.length > 0 && (
-                  <Text className="mb-2 text-center text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                    Warm-up: {groupEntry.warmups.map((w) => w.exercises?.name ?? w.label).join(", ")}
-                  </Text>
-                )}
-                <Pressable
-                  onPress={() => router.push({ pathname: "/(member)/plan-block", params: { programId: groupEntry.groupProgramId } })}
-                  className="mb-4 self-center"
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                    View full block →
-                  </Text>
-                </Pressable>
+                <SelectedSessionBanner
+                  eyebrow={`${groupEntry.programName} · WEEK ${groupEntry.weekNumber}`}
+                  title={groupEntry.workout.title || `Session ${groupEntry.sessionNumber}`}
+                  onViewBlock={() => router.push({ pathname: "/(member)/plan-block", params: { programId: groupEntry.groupProgramId } })}
+                />
 
+                <WarmupCard warmups={groupEntry.warmups} />
+
+                <Text style={EYEBROW_MUTED}>Main session</Text>
                 <SessionLogger
                   userId={profile.id}
                   datePerformed={todayInBoise()}
@@ -499,7 +588,7 @@ export default function MyFitness() {
               <Pressable
                 onPress={() => router.push("/(member)/plan-spc-block")}
                 className="self-center"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={HITSLOP}
               >
                 <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
                   View full SPC block →
@@ -522,20 +611,13 @@ export default function MyFitness() {
                 <ActivityIndicator color={colors.primary} />
               ) : (
                 <>
-                  <Text className="mb-1 text-center text-sm text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-                    Session {spcDetail.sessionNumber}
-                    {spcDetail.title ? ` — ${spcDetail.title}` : ""}
-                  </Text>
-                  <Pressable
-                    onPress={() => router.push("/(member)/plan-spc-block")}
-                    className="mb-4 self-center"
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                      View full SPC block →
-                    </Text>
-                  </Pressable>
+                  <SelectedSessionBanner
+                    eyebrow={`SPC · SESSION ${spcDetail.sessionNumber}`}
+                    title={spcDetail.title || `Session ${spcDetail.sessionNumber}`}
+                    onViewBlock={() => router.push("/(member)/plan-spc-block")}
+                  />
 
+                  <Text style={EYEBROW_MUTED}>Main session</Text>
                   <SessionLogger
                     userId={profile.id}
                     datePerformed={todayInBoise()}
@@ -555,11 +637,7 @@ export default function MyFitness() {
       {(!showTabs || selectedProgram === "extras") &&
         oneOffs.map(({ workout, warmups, exercises }) => (
           <FitnessCard key={workout.id} title={workout.title}>
-            {warmups.length > 0 && (
-              <Text className="mb-2 text-center text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                Warm-up: {warmups.map((w) => w.exercises?.name ?? w.label).join(", ")}
-              </Text>
-            )}
+            <WarmupCard warmups={warmups} />
             <SessionLogger
               userId={profile.id}
               datePerformed={todayInBoise()}
@@ -573,14 +651,23 @@ export default function MyFitness() {
     </ScrollView>
 
     {activeFinalize && (
-      <View className="px-6 py-3.5" style={{ borderTopWidth: 1, borderTopColor: "#e7e5e4", backgroundColor: "white" }}>
+      <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: CARD_BORDER, backgroundColor: CANVAS }}>
         <Pressable
           onPress={handleFooterFinalize}
           disabled={footerFinalizing}
-          className="items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+          className="items-center justify-center disabled:opacity-50"
+          style={{
+            height: 52,
+            borderRadius: 12,
+            backgroundColor: colors.primary,
+            shadowColor: colors.primary,
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.25,
+            shadowRadius: 16,
+          }}
         >
-          <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-            {footerFinalizing ? "Saving…" : activeFinalize.isCompleted ? "Session finalized ✓ (tap to re-finalize)" : "Finalize workout"}
+          <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
+            {footerFinalizing ? "Saving…" : "Finalize workout"}
           </Text>
         </Pressable>
       </View>

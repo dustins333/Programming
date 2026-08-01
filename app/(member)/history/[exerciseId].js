@@ -7,6 +7,10 @@ import { listLogsForExercise } from "../../../lib/programming/memberPlan";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 
+const CANVAS = "#faf8f6";
+const CARD_BORDER = "#ece7e1";
+const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 };
+
 // Groups per-set rows under one date header instead of one flat row per
 // set — a 3-set session would otherwise show as 3 near-identical rows.
 function groupByDate(logs) {
@@ -43,19 +47,19 @@ export default function ExerciseHistory() {
 
   if (!logs) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: CANVAS }}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-white px-6 pb-8" style={{ paddingTop: insets.top + 6 }}>
-      <Pressable onPress={() => router.back()} className="mb-4 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ My History</Text>
+    <View className="flex-1 px-6 pb-8" style={{ backgroundColor: CANVAS, paddingTop: insets.top + 6 }}>
+      <Pressable onPress={() => router.back()} className="mb-3 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>‹ My History</Text>
       </Pressable>
       <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        History
+        {logs[0]?.exercises?.name ?? "History"}
       </Text>
       <FlatList
         data={groups}
@@ -66,12 +70,12 @@ export default function ExerciseHistory() {
           </Text>
         }
         renderItem={({ item: group }) => (
-          <View className="mb-3 rounded-lg border border-stone-200 px-4 py-3">
-            <Text className="mb-1" style={{ fontFamily: fonts.sansMedium }}>
+          <View className="mb-2.5 rounded-2xl bg-white px-4 py-3.5" style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}>
+            <Text className="mb-1.5" style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#44403c" }}>
               {formatDateMDY(group.date)}
             </Text>
             {group.sets.map((s) => (
-              <Text key={s.id} className="text-sm text-stone-600" style={{ fontFamily: fonts.sans }}>
+              <Text key={s.id} style={{ fontFamily: fonts.sans, fontSize: 13, color: "#78716c", marginTop: 2 }}>
                 Set {s.set_number}: {s.reps ?? "–"} reps{s.weight ? ` @ ${s.weight}` : ""}
               </Text>
             ))}

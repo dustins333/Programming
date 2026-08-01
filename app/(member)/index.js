@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { View, Text, Image, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -14,6 +14,7 @@ import { listSpcWorkoutExercises, listSpcWarmups, listSpcWorkoutWeekTitlesForWor
 import { listGroupCompletionsForWorkouts, getCompletedSpcWorkoutIdsForWeek } from "../../lib/programming/sessionCompletions";
 import { listWeekOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import { listLogsForDateRange } from "../../lib/nutrition/dailyLog";
+import { retryOnce } from "../../lib/retry";
 import { SessionPreviewModal } from "../../components/SessionPreviewModal";
 import { fonts, colors } from "../../lib/theme";
 
@@ -21,14 +22,26 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_LABELS = ["M", "T", "W", "Th", "F", "Sa", "Su"]; // Monday..Sunday
 
-// A section's "fully checked off" wash — deliberately more saturated than
-// the app's usual subtle statusColors.onTrack tint, since the point here is
-// a visible celebratory moment, not a quiet status indicator. The header
-// band uses a slightly deeper shade of the same family for a two-tone card.
-const DONE_BG = "#dcead0";
-const DONE_BORDER = "#8fb473";
-const DONE_HEADER_BG = "#c9e0b8";
-const HEADER_BG = "#f6e2d6";
+// Design tokens from design_handoff_visual_pass_v4/README.md — a completed
+// session/card gets a border tint only, never a background fill ("a subtle
+// warm fuzzy, never a full-color tile fill").
+const CANVAS = "#faf8f6";
+const CARD_BORDER = "#ece7e1";
+const CARD_BORDER_DONE = "#dbe8cf";
+const TILE_COMPLETED_BORDER = "#4d6142";
+const PILL_BG = "#f5f1ec";
+const PILL_BG_DONE = "#e9f0e1";
+const PILL_TEXT_DONE = "#3f5136";
+const CHEVRON_COLOR = "#c9c4bd";
+const DESC_COLOR = "#a8907f";
+const HITSLOP = { top: 10, bottom: 10, left: 10, right: 10 };
+const CARD_SHADOW = {
+  shadowColor: "#44403c",
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.05,
+  shadowRadius: 16,
+  elevation: 2,
+};
 
 function formatToday() {
   const today = todayInBoise();
@@ -36,104 +49,96 @@ function formatToday() {
   return `${WEEKDAYS[dayOfWeekInBoise(today)]}, ${MONTHS[month - 1]} ${day}`;
 }
 
-// One tappable bubble in a session row — a preview + checkmark, not a
-// logging control. Tapping a published bubble opens a read-only detail
-// popup; an unpublished slot renders muted and isn't pressable at all.
-function SessionBubble({ label, title, completed, published, onPress, borderColor, caption, fixedWidth }) {
-  const hasTitle = title && title !== "Untitled session";
+// One tappable bubble in a session row — a preview, not a logging control.
+// Completion is signaled purely by border weight/color (2px olive vs. the
+// card's default border), no checkmark badge/fill. Fixed 3-row skeleton —
+// title / description (blank, not omitted, when there's none) / day caption
+// (blank for SPC) — so the day caption always lands at the same y-position
+// regardless of how many lines the description needs.
+function SessionBubble({ label, description, completed, published, onPress, caption, cardDone, fixedWidth }) {
+  const borderColor = completed ? TILE_COMPLETED_BORDER : cardDone ? CARD_BORDER_DONE : CARD_BORDER;
   return (
     <Pressable
       onPress={published ? onPress : undefined}
-      className={fixedWidth ? "items-center rounded-xl px-1 py-3" : "flex-1 items-center rounded-xl px-1 py-3"}
       style={{
-        borderWidth: 1.5,
-        borderColor: published ? borderColor : "#e7e5e4",
-        backgroundColor: "white",
-        opacity: published ? 1 : 0.55,
-        ...(fixedWidth ? { width: fixedWidth } : null),
+        flex: fixedWidth ? undefined : 1,
+        width: fixedWidth || undefined,
+        minHeight: 78,
+        flexDirection: "column",
+        backgroundColor: CANVAS,
+        borderWidth: completed ? 2 : 1,
+        borderColor,
+        borderRadius: 14,
+        paddingHorizontal: 8,
+        paddingTop: 12,
+        paddingBottom: 10,
+        opacity: published ? 1 : 0.5,
       }}
     >
-      {/* Top block grows to fill whatever space the bottom block doesn't
-          need — since siblings in the row are stretched to equal height,
-          this pins the checkmark+caption to the same Y position in every
-          bubble regardless of whether this one has a title line or not. */}
-      <View className="flex-1 items-center">
-        <Text numberOfLines={1} style={{ fontFamily: fonts.sansMedium, fontSize: 12 }} className="max-w-full text-center text-stone-600">
-          {label}
+      <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c", textAlign: "center" }}>
+        {label}
+      </Text>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 2 }}>
+        <Text numberOfLines={2} style={{ fontFamily: fonts.sans, fontStyle: "italic", fontSize: 10.5, color: DESC_COLOR, textAlign: "center" }}>
+          {description || ""}
         </Text>
-        {hasTitle ? (
-          <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 10 }} className="mt-0.5 max-w-full text-center text-stone-500">
-            {title}
-          </Text>
-        ) : null}
       </View>
-      <View className="items-center">
-        {published ? (
-          <Ionicons
-            name={completed ? "checkmark-circle-outline" : "ellipse-outline"}
-            size={26}
-            color={completed ? "#4d6142" : "#d6d3d1"}
-          />
-        ) : (
-          <Text className="text-xs text-stone-300" style={{ fontFamily: fonts.sans }}>
-            —
-          </Text>
-        )}
-        {caption ? (
-          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 10 }} className="mt-1.5 text-stone-400">
-            {caption}
-          </Text>
-        ) : null}
-      </View>
+      <Text
+        numberOfLines={1}
+        style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.6, color: "#8a5140", textAlign: "center", textTransform: "uppercase" }}
+      >
+        {caption || ""}
+      </Text>
     </Pressable>
   );
 }
 
-function WeekSection({ title, rows, target, completedCount, onNavigate }) {
+// Shared white-card shell for a program row on My Week — 8px dot + name
+// left, completed-count pill + chevron right. The pill switches to an
+// olive/check tint once every session for the week is done, and the card's
+// own border tints toward that same olive family — a subtle nod, not a
+// full-color fill.
+function ProgramCard({ title, rows, target, completedCount, onNavigate, navigateLabel }) {
   const isDone = completedCount >= target;
-  const borderColor = isDone ? DONE_BORDER : colors.primary;
   return (
     <View
-      className="mb-4 overflow-hidden rounded-2xl"
-      style={{
-        backgroundColor: isDone ? DONE_BG : "white",
-        borderWidth: 1.5,
-        borderColor,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 14,
-      }}
+      className="mb-3.5 rounded-[20px] bg-white px-4 pb-3.5 pt-4"
+      style={{ borderWidth: 1, borderColor: isDone ? CARD_BORDER_DONE : CARD_BORDER, ...CARD_SHADOW }}
     >
-      <View
-        className="flex-row items-end justify-between px-4 py-3"
-        style={{ backgroundColor: isDone ? DONE_HEADER_BG : HEADER_BG, borderBottomWidth: 1.5, borderBottomColor: borderColor }}
-      >
-        <Text style={{ fontFamily: fonts.display, fontSize: 28, color: colors.primary }}>{title}</Text>
-        <View className="flex-row items-center gap-2">
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 24, color: isDone ? "#4d6142" : colors.primaryOnWhite }}>
-            {completedCount}/{target}
+      <View className="mb-3 flex-row items-center justify-between">
+        <View className="mr-2 flex-1 flex-row items-center gap-2">
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
+          <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>
+            {title}
           </Text>
-          <Pressable
-            onPress={onNavigate}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityLabel={`Go to ${title} in My Fitness`}
+        </View>
+        <View className="flex-row items-center gap-2">
+          <View
+            className="flex-row items-center rounded-full py-1"
+            style={{ backgroundColor: isDone ? PILL_BG_DONE : PILL_BG, paddingLeft: isDone ? 8 : 10, paddingRight: 10 }}
           >
-            <Ionicons name="chevron-forward" size={22} color={colors.primaryOnWhite} />
+            {isDone ? <Ionicons name="checkmark" size={9} color={PILL_TEXT_DONE} style={{ marginRight: 3 }} /> : null}
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 11, color: isDone ? PILL_TEXT_DONE : colors.primaryOnWhite }}>
+              {completedCount}/{target}
+            </Text>
+          </View>
+          <Pressable onPress={onNavigate} hitSlop={HITSLOP} accessibilityLabel={navigateLabel ?? `Go to ${title} in My Fitness`}>
+            <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} />
           </Pressable>
         </View>
       </View>
-      <View className="flex-row gap-2 px-4 py-4">
-        {rows.map(({ key, label, title: rowTitle, completed, published, onPress, caption }) => (
+      <View className="flex-row gap-2">
+        {rows.map(({ key, label, title: rowTitle, completed, published, onPress, caption, fixedWidth }) => (
           <SessionBubble
             key={key}
             label={label}
-            title={rowTitle}
+            description={rowTitle && rowTitle !== "Untitled session" ? rowTitle : ""}
             completed={completed}
             published={published}
             onPress={onPress}
-            borderColor={borderColor}
             caption={caption}
+            cardDone={isDone}
+            fixedWidth={fixedWidth}
           />
         ))}
       </View>
@@ -141,43 +146,51 @@ function WeekSection({ title, rows, target, completedCount, onNavigate }) {
   );
 }
 
+// 7-day consistency strip — olive dot = logged, rust ring = today
+// (unlogged), neutral outline = everything else. No calorie numbers/
+// progress bar — nutrition isn't logged until evening, so nothing
+// calorie-related should show mid-day.
 function NutritionStrip({ days, onNavigate }) {
   return (
-    <View
-      className="mb-4 overflow-hidden rounded-2xl"
-      style={{ backgroundColor: "white", borderWidth: 1.5, borderColor: colors.primary, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 14 }}
-    >
-      <View
-        className="flex-row items-center justify-center px-4 py-3"
-        style={{ backgroundColor: HEADER_BG, borderBottomWidth: 1.5, borderBottomColor: colors.primary }}
-      >
-        <Text style={{ fontFamily: fonts.display, fontSize: 28, color: colors.primary }}>Nutrition</Text>
-        <Pressable
-          onPress={onNavigate}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel="Go to My Nutrition"
-          style={{ position: "absolute", right: 16 }}
-        >
-          <Ionicons name="chevron-forward" size={22} color={colors.primaryOnWhite} />
+    <View className="mb-3.5 rounded-[20px] bg-white px-4 pb-4 pt-4" style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}>
+      <View className="mb-3 flex-row items-center justify-between">
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>Nutrition</Text>
+        <Pressable onPress={onNavigate} hitSlop={HITSLOP} accessibilityLabel="Go to My Nutrition">
+          <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} />
         </Pressable>
       </View>
-      <View className="flex-row gap-1.5 px-4 py-4">
-        {days.map((day) => (
-          <View
-            key={day.date}
-            className="flex-1 items-center rounded-xl px-1 py-2.5"
-            style={{ borderWidth: 1.5, borderColor: day.isToday ? colors.primary : "#e7e5e4", backgroundColor: "white" }}
-          >
-            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11 }} className="mb-1 text-stone-600">
-              {day.label}
-            </Text>
-            <Ionicons
-              name={day.finalized ? "checkmark-circle-outline" : "ellipse-outline"}
-              size={22}
-              color={day.finalized ? "#4d6142" : "#d6d3d1"}
-            />
-          </View>
-        ))}
+      <View className="flex-row justify-between">
+        {days.map((day) => {
+          const ringToday = day.isToday && !day.finalized;
+          return (
+            <View key={day.date} className="items-center" style={{ gap: 5 }}>
+              <View
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: ringToday ? "#fdf6f2" : "transparent",
+                }}
+              >
+                <View
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    backgroundColor: day.finalized ? "#4d6142" : "transparent",
+                    borderWidth: day.finalized ? 0 : 1.5,
+                    borderColor: day.isToday ? colors.primary : "#d9d4cd",
+                  }}
+                />
+              </View>
+              <Text style={{ fontFamily: day.isToday ? fonts.sansBold : fonts.sans, fontSize: 10, color: day.isToday ? colors.primaryOnWhite : "#a8a29e" }}>
+                {day.label}
+              </Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -190,49 +203,15 @@ function NutritionStrip({ days, onNavigate }) {
 function OneOffsSection({ items, onNavigate }) {
   const target = items.length;
   const completedCount = items.filter((i) => i.completed).length;
-  const isDone = target > 0 && completedCount >= target;
-  const borderColor = isDone ? DONE_BORDER : colors.primary;
   return (
-    <View
-      className="mb-4 overflow-hidden rounded-2xl"
-      style={{
-        backgroundColor: isDone ? DONE_BG : "white",
-        borderWidth: 1.5,
-        borderColor,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 14,
-      }}
-    >
-      <View
-        className="flex-row items-end justify-between px-4 py-3"
-        style={{ backgroundColor: isDone ? DONE_HEADER_BG : HEADER_BG, borderBottomWidth: 1.5, borderBottomColor: borderColor }}
-      >
-        <Text style={{ fontFamily: fonts.display, fontSize: 28, color: colors.primary }}>Extras</Text>
-        <View className="flex-row items-center gap-2">
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 24, color: isDone ? "#4d6142" : colors.primaryOnWhite }}>
-            {completedCount}/{target}
-          </Text>
-          <Pressable onPress={onNavigate} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Go to Extras in My Fitness">
-            <Ionicons name="chevron-forward" size={22} color={colors.primaryOnWhite} />
-          </Pressable>
-        </View>
-      </View>
-      <View className="flex-row flex-wrap gap-2 px-4 py-4">
-        {items.map((item) => (
-          <SessionBubble
-            key={item.key}
-            label={item.label}
-            completed={item.completed}
-            published
-            onPress={item.onPress}
-            borderColor={borderColor}
-            fixedWidth={96}
-          />
-        ))}
-      </View>
-    </View>
+    <ProgramCard
+      title="Extras"
+      rows={items.map((item) => ({ ...item, fixedWidth: 96 }))}
+      target={target}
+      completedCount={completedCount}
+      onNavigate={onNavigate}
+      navigateLabel="Go to Extras in My Fitness"
+    />
   );
 }
 
@@ -247,146 +226,173 @@ export default function MemberHome() {
   const [oneOffs, setOneOffs] = useState([]);
   const [preview, setPreview] = useState(null); // { visible, loading, title, subtitle, warmups, exercises }
 
+  // Tabs stay mounted, and useFocusEffect below re-runs load() on every
+  // focus — flipping tabs quickly (or any slow network response) can leave
+  // two load() calls in flight at once. Without this guard, an older call's
+  // response can resolve after a newer one and overwrite good data with
+  // whatever that older, possibly-incomplete fetch saw, which reads as
+  // titles/rows randomly disappearing even though nothing actually changed
+  // server-side. Same "cancelled" convention plan.js's SPC-detail effect
+  // already uses, applied here to the whole multi-section load().
+  const requestIdRef = useRef(0);
+
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestIdRef.current !== requestId;
     setGroupsLoading(true);
     const today = todayInBoise();
 
     // Each membership loads independently — a client can hold several
     // group program memberships at once (e.g. Flagship plus a specialty
     // program), and one program's failure shouldn't hide another's, same
-    // reasoning as group-vs-SPC-vs-nutrition below.
+    // reasoning as group-vs-SPC-vs-nutrition below. Each section is wrapped
+    // in retryOnce: a transient failure on the very first request batch
+    // right after a page reload (cold connections, browser resource
+    // contention from many parallel fetches firing at once) used to get
+    // swallowed by the plain catch below and render identically to "no data
+    // here" — indistinguishable from genuinely not being enrolled, and only
+    // "fixed" by navigating away and back (which re-triggers load() via
+    // useFocusEffect, giving it a second, now-successful attempt). One
+    // retry covers that blip without masking a real, persistent failure.
     try {
-      const assignments = await listMyAssignments(profile.id);
-      const results = await Promise.all(
-        assignments.map(async (assignment) => {
-          const program = assignment.group_programs;
-          try {
-            const block = await getCurrentBlock(program.id, today);
-            if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };
+      const results = await retryOnce(async () => {
+        const assignments = await listMyAssignments(profile.id);
+        return Promise.all(
+          assignments.map(async (assignment) => {
+            const program = assignment.group_programs;
+            try {
+              const block = await getCurrentBlock(program.id, today);
+              if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };
 
-            const weekNumber = currentWeekNumber(block.block_start_date, program.block_length_weeks, today);
-            const workouts = await listWorkoutsForWeek(block.id, weekNumber);
-            const workoutIds = workouts.map((w) => w.id);
-            const completedIds = await listGroupCompletionsForWorkouts(profile.id, workoutIds);
+              const weekNumber = currentWeekNumber(block.block_start_date, program.block_length_weeks, today);
+              const workouts = await listWorkoutsForWeek(block.id, weekNumber);
+              const workoutIds = workouts.map((w) => w.id);
+              const completedIds = await listGroupCompletionsForWorkouts(profile.id, workoutIds);
 
-            // Every program owns its own session count and day-of-week map
-            // now (migrations 0010/0011) — Flagship/BWA's 3-sessions-
-            // Mon/Tue-Wed/Thu-Fri/Sat shape is just this program's data,
-            // not a rule every group program follows.
-            const todaysSessionNumber = sessionNumberForDate(today, program.session_days);
-            const rows = Array.from({ length: program.sessions_per_week }, (_, i) => i + 1).map((sessionNumber) => {
-              const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
+              // Every program owns its own session count and day-of-week map
+              // now (migrations 0010/0011) — Flagship/BWA's 3-sessions-
+              // Mon/Tue-Wed/Thu-Fri/Sat shape is just this program's data,
+              // not a rule every group program follows.
+              const todaysSessionNumber = sessionNumberForDate(today, program.session_days);
+              const rows = Array.from({ length: program.sessions_per_week }, (_, i) => i + 1).map((sessionNumber) => {
+                const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
+                return {
+                  key: `session-${sessionNumber}`,
+                  sessionNumber,
+                  workout,
+                  published: !!workout,
+                  label: `Session ${sessionNumber}`,
+                  title: workout?.title || "Untitled session",
+                  caption: formatSessionDays(program.session_days?.[sessionNumber - 1]),
+                  completed: workout ? completedIds.has(workout.id) : false,
+                  isToday: sessionNumber === todaysSessionNumber,
+                };
+              });
+
               return {
-                key: `session-${sessionNumber}`,
-                sessionNumber,
-                workout,
-                published: !!workout,
-                label: `Session ${sessionNumber}`,
-                title: workout?.title || "Untitled session",
-                caption: formatSessionDays(program.session_days?.[sessionNumber - 1]),
-                completed: workout ? completedIds.has(workout.id) : false,
-                isToday: sessionNumber === todaysSessionNumber,
+                groupProgramId: program.id,
+                programName: program.name,
+                status: "ready",
+                weekNumber,
+                sessionsPerWeek: assignment.sessions_per_week ?? program.sessions_per_week,
+                rows,
               };
-            });
-
-            return {
-              groupProgramId: program.id,
-              programName: program.name,
-              status: "ready",
-              weekNumber,
-              sessionsPerWeek: assignment.sessions_per_week ?? program.sessions_per_week,
-              rows,
-            };
-          } catch (err) {
-            return { groupProgramId: program.id, programName: program.name, status: "error", message: err.message ?? String(err) };
-          }
-        })
-      );
-      setGroups(results);
+            } catch (err) {
+              return { groupProgramId: program.id, programName: program.name, status: "error", message: err.message ?? String(err) };
+            }
+          })
+        );
+      });
+      if (!isStale()) setGroups(results);
     } catch (err) {
-      setGroups([{ status: "error", message: err.message ?? String(err) }]);
+      console.error("My Week: failed to load group programs", err);
+      if (!isStale()) setGroups([{ status: "error", message: err.message ?? String(err) }]);
     } finally {
-      setGroupsLoading(false);
+      if (!isStale()) setGroupsLoading(false);
     }
 
     try {
-      const spcClient = await getSpcClient(profile.id);
-      if (!isSpcActive(spcClient)) {
-        setSpc(null);
-      } else {
+      const spcResult = await retryOnce(async () => {
+        const spcClient = await getSpcClient(profile.id);
+        if (!isSpcActive(spcClient)) return { status: "inactive" };
+
         const block = await getCurrentSpcBlock(profile.id, today);
-        if (!block) {
-          setSpc({ status: "no_block" });
-        } else {
-          const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
-          const workouts = await listPublishedSpcWorkoutsForBlock(block.id);
-          if (workouts.length === 0) {
-            setSpc({ status: "not_published" });
-          } else {
-            const sessionsPerWeek = spcClient.sessions_per_week;
-            const workoutIds = workouts.map((w) => w.id);
-            const [completedIds, weekTitles] = await Promise.all([
-              getCompletedSpcWorkoutIdsForWeek(profile.id, workoutIds, weekNumber),
-              listSpcWorkoutWeekTitlesForWorkouts(workoutIds),
-            ]);
+        if (!block) return { status: "no_block" };
 
-            const rows = Array.from({ length: sessionsPerWeek }, (_, i) => i + 1).map((sessionNumber) => {
-              const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
-              const overrideTitle = workout ? weekTitles[workout.id]?.[weekNumber] : null;
-              const resolvedTitle = overrideTitle || workout?.title || "Untitled session";
-              return {
-                key: `spc-session-${sessionNumber}`,
-                sessionNumber,
-                workout,
-                published: !!workout,
-                label: `Session ${sessionNumber}`,
-                title: resolvedTitle,
-                completed: workout ? completedIds.has(workout.id) : false,
-                isToday: false,
-              };
-            });
+        const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+        const workouts = await listPublishedSpcWorkoutsForBlock(block.id);
+        if (workouts.length === 0) return { status: "not_published" };
 
-            setSpc({ status: "ready", weekNumber, sessionsPerWeek, rows });
-          }
-        }
-      }
-    } catch {
-      setSpc(null);
+        const sessionsPerWeek = spcClient.sessions_per_week;
+        const workoutIds = workouts.map((w) => w.id);
+        const [completedIds, weekTitles] = await Promise.all([
+          getCompletedSpcWorkoutIdsForWeek(profile.id, workoutIds, weekNumber),
+          listSpcWorkoutWeekTitlesForWorkouts(workoutIds),
+        ]);
+
+        const rows = Array.from({ length: sessionsPerWeek }, (_, i) => i + 1).map((sessionNumber) => {
+          const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
+          const overrideTitle = workout ? weekTitles[workout.id]?.[weekNumber] : null;
+          const resolvedTitle = overrideTitle || workout?.title || "Untitled session";
+          return {
+            key: `spc-session-${sessionNumber}`,
+            sessionNumber,
+            workout,
+            published: !!workout,
+            label: `Session ${sessionNumber}`,
+            title: resolvedTitle,
+            completed: workout ? completedIds.has(workout.id) : false,
+            isToday: false,
+          };
+        });
+
+        return { status: "ready", weekNumber, sessionsPerWeek, rows };
+      });
+      if (!isStale()) setSpc(spcResult.status === "inactive" ? null : spcResult);
+    } catch (err) {
+      console.error("My Week: failed to load SPC", err);
+      if (!isStale()) setSpc(null);
     }
 
     // Monday-Sunday of the current week, regardless of which day "today"
     // falls on — dayOfWeekInBoise is 0=Sunday..6=Saturday, so Sunday needs
     // its own offset (Monday was 6 days ago) rather than 1 - day.
     try {
-      const dow = dayOfWeekInBoise(today);
-      const weekStart = addDays(today, dow === 0 ? -6 : 1 - dow);
-      const weekEnd = addDays(weekStart, 6);
-      const logs = await listLogsForDateRange(profile.id, weekStart, weekEnd);
-      const finalizedDates = new Set(logs.filter((l) => l.finalized_at).map((l) => l.log_date));
-      const days = Array.from({ length: 7 }, (_, i) => {
-        const date = addDays(weekStart, i);
-        return { date, label: DAY_LABELS[i], finalized: finalizedDates.has(date), isToday: date === today };
+      const days = await retryOnce(async () => {
+        const dow = dayOfWeekInBoise(today);
+        const weekStart = addDays(today, dow === 0 ? -6 : 1 - dow);
+        const weekEnd = addDays(weekStart, 6);
+        const logs = await listLogsForDateRange(profile.id, weekStart, weekEnd);
+        const finalizedDates = new Set(logs.filter((l) => l.finalized_at).map((l) => l.log_date));
+        return Array.from({ length: 7 }, (_, i) => {
+          const date = addDays(weekStart, i);
+          return { date, label: DAY_LABELS[i], finalized: finalizedDates.has(date), isToday: date === today };
+        });
       });
-      setNutrition({ status: "ready", days });
-    } catch {
-      setNutrition(null);
+      if (!isStale()) setNutrition({ status: "ready", days });
+    } catch (err) {
+      console.error("My Week: failed to load nutrition", err);
+      if (!isStale()) setNutrition(null);
     }
 
     // One-offs load independently too — an away workout or trial session
     // assignment has nothing to do with group/SPC/nutrition, so its
     // failure shouldn't hide any of those sections.
     try {
-      const workouts = await listWeekOneOffWorkoutsForUser(profile.id, today);
-      setOneOffs(
-        workouts.map((w) => ({
-          key: w.id,
-          workoutId: w.id,
-          label: w.title,
-          completed: w.completed,
-        }))
-      );
-    } catch {
-      setOneOffs([]);
+      const workouts = await retryOnce(() => listWeekOneOffWorkoutsForUser(profile.id, today));
+      if (!isStale()) {
+        setOneOffs(
+          workouts.map((w) => ({
+            key: w.id,
+            workoutId: w.id,
+            label: w.title,
+            completed: w.completed,
+          }))
+        );
+      }
+    } catch (err) {
+      console.error("My Week: failed to load one-offs", err);
+      if (!isStale()) setOneOffs([]);
     }
   }, [profile.id]);
 
@@ -467,7 +473,7 @@ export default function MemberHome() {
 
   if (groupsLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-stone-200">
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: CANVAS }}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
@@ -475,8 +481,9 @@ export default function MemberHome() {
 
   return (
     <ScrollView
-      className="flex-1 bg-stone-200"
+      className="flex-1"
       contentContainerClassName="px-5 pb-5"
+      style={{ backgroundColor: CANVAS }}
       contentContainerStyle={{ paddingTop: insets.top + 6 }}
     >
       <View className="flex-row items-center gap-3">
@@ -512,7 +519,7 @@ export default function MemberHome() {
         }
         const completedCount = groupEntry.rows.filter((r) => r.completed).length;
         return (
-          <WeekSection
+          <ProgramCard
             key={groupEntry.groupProgramId}
             title={groupEntry.programName}
             rows={groupEntry.rows.map((row) => ({ ...row, onPress: () => openGroupPreview(groupEntry, row) }))}
@@ -535,7 +542,7 @@ export default function MemberHome() {
       )}
 
       {spc?.status === "ready" && (
-        <WeekSection
+        <ProgramCard
           title="SPC"
           rows={spc.rows.map((row) => ({ ...row, onPress: () => openSpcPreview(row) }))}
           target={spc.sessionsPerWeek}

@@ -7,7 +7,13 @@ import { fonts, colors } from "../lib/theme";
 
 const AUTOSAVE_DELAY_MS = 900;
 
-function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle }) {
+// Design tokens from design_handoff_visual_pass_v4/README.md.
+const CARD_BORDER = "#ece7e1";
+const INPUT_BORDER = "#d9d4cd";
+const PILL_BG = "#fdece5";
+const PILL_TEXT = "#b23a22";
+
+function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle, hideVideo }) {
   const targetSets = item.targetSets && item.targetSets > 0 ? item.targetSets : 3;
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
@@ -101,43 +107,57 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
   }, [rows, notes]);
 
   return (
-    <View className="mb-3 rounded-lg border border-stone-200 px-4 py-3">
-      <Pressable onPress={handleToggle} className="flex-row items-center justify-between">
-        <View className="flex-1">
-          <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+    <View
+      className="mb-2.5 rounded-2xl bg-white px-4"
+      style={
+        expanded
+          ? {
+              borderWidth: 1.5,
+              borderColor: colors.primary,
+              paddingVertical: 18,
+              shadowColor: colors.primary,
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.08,
+              shadowRadius: 22,
+            }
+          : { borderWidth: 1, borderColor: CARD_BORDER, paddingVertical: 15, shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 }
+      }
+    >
+      <Pressable onPress={handleToggle} className="flex-row items-center justify-between" style={{ gap: 12 }}>
+        <View className="flex-1" style={{ minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: expanded ? 15 : 14, color: "#44403c" }}>
             {item.exercise.name}
           </Text>
-          <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", marginTop: 1 }}>
             Target: {targetSets} sets × {item.targetReps ?? "–"}
             {item.notes ? ` · ${item.notes}` : ""}
           </Text>
         </View>
-        <Text className="text-stone-400">{expanded ? "▲" : "▼"}</Text>
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color={expanded ? "#a8a29e" : "#d6d3d1"} />
       </Pressable>
 
       {expanded && (
         <View className="mt-3">
-          {item.exercise.video_url ? (
+          {!hideVideo && item.exercise.video_url ? (
             <Pressable
               onPress={() => Linking.openURL(item.exercise.video_url)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityLabel={`Watch video for ${item.exercise.name}`}
-              className="mb-2 self-start"
+              className="mb-3 flex-row items-center gap-1.5 self-start"
             >
-              <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                ▶ Watch video
-              </Text>
+              <Ionicons name="play" size={11} color={colors.primaryOnWhite} />
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>Watch video</Text>
             </Pressable>
           ) : null}
 
           <Pressable
             onPress={handleToggleHistory}
-            className="mb-2 flex-row items-center gap-1.5 self-start"
+            className="mb-3 flex-row items-center gap-1.5 self-start"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel={showHistory ? "Hide last time" : "Show last time"}
           >
-            <Ionicons name={showHistory ? "time" : "time-outline"} size={16} color={colors.primaryOnWhite} />
-            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: colors.primaryOnWhite }}>
+            <Ionicons name={showHistory ? "time" : "time-outline"} size={14} color={colors.primary} />
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>
               {historyLoading
                 ? "Loading last time…"
                 : showHistory && history
@@ -160,62 +180,69 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
             // dropped rather than showing a mismatched row.
             const histSet = showHistory && history ? history.sets.find((s) => s.set_number === i + 1) : null;
             return (
-              <View key={i} className="mb-2">
-                <View className="flex-row items-center gap-2">
-                  <Text className="w-14 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-                    Set {i + 1}
-                  </Text>
+              <View key={i} className="mb-2.5">
+                <View className="flex-row items-center gap-2.5">
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#78716c", width: 46 }}>Set {i + 1}</Text>
                   <TextInput
                     value={row.reps}
                     onChangeText={(v) => updateRow(i, "reps", v)}
                     placeholder={item.targetReps ?? "reps"}
                     keyboardType="numeric"
-                    className="w-20 rounded-lg border border-stone-300 px-2 py-3 text-center"
-                    style={{ fontFamily: fonts.sans }}
+                    placeholderTextColor="#a8a29e"
+                    className="flex-1 text-center"
+                    style={{ fontFamily: fonts.sans, fontSize: 14, color: "#44403c", height: 44, borderWidth: 1, borderColor: INPUT_BORDER, borderRadius: 10 }}
                   />
                   <TextInput
                     value={row.weight}
                     onChangeText={(v) => updateRow(i, "weight", v)}
                     placeholder="weight"
                     keyboardType="numeric"
-                    className="w-20 rounded-lg border border-stone-300 px-2 py-3 text-center"
-                    style={{ fontFamily: fonts.sans }}
+                    placeholderTextColor="#a8a29e"
+                    className="flex-1 text-center"
+                    style={{ fontFamily: fonts.sans, fontSize: 14, color: "#44403c", height: 44, borderWidth: 1, borderColor: INPUT_BORDER, borderRadius: 10 }}
                   />
                 </View>
                 {histSet ? (
-                  <View className="ml-16 mt-1 self-start rounded-md px-2 py-1" style={{ backgroundColor: "#fdf6f2" }}>
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#8a5140" }}>
-                      Last: {histSet.reps ?? "–"} reps{histSet.weight ? ` @ ${histSet.weight}` : ""}
-                    </Text>
+                  <View className="mt-1.5 items-center">
+                    <View className="rounded-full" style={{ backgroundColor: PILL_BG, paddingVertical: 3, paddingHorizontal: 10 }}>
+                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: PILL_TEXT }}>
+                        Last: {histSet.reps ?? "–"} reps{histSet.weight ? ` @ ${histSet.weight}` : ""}
+                      </Text>
+                    </View>
                   </View>
                 ) : null}
               </View>
             );
           })}
           {showHistory && history?.sets.find((s) => s.notes) ? (
-            <Text className="mb-1 text-xs italic text-stone-500" style={{ fontFamily: fonts.sans }}>
+            <Text className="mb-2" style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
               Last time's note: {history.sets.find((s) => s.notes).notes}
             </Text>
           ) : null}
 
-          <Text className="mb-1 mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-            Notes
-          </Text>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#78716c", marginBottom: 6 }}>Notes</Text>
           <TextInput
             value={notes}
             onChangeText={setNotes}
             multiline
             placeholder="How did it feel? Anything to remember for next time?"
-            className="mb-2 min-h-[60px] rounded-lg border border-stone-300 px-3 py-2 text-sm"
-            style={{ fontFamily: fonts.sans }}
+            placeholderTextColor="#a8a29e"
+            className="mb-2.5"
+            style={{ fontFamily: fonts.sans, fontSize: 13, color: "#44403c", minHeight: 52, borderWidth: 1, borderColor: INPUT_BORDER, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }}
           />
 
-          <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-            {saveState === "pending" && "Unsaved changes…"}
-            {saveState === "saving" && "Saving…"}
-            {saveState === "saved" && "Saved automatically ✓"}
-            {saveState === "error" && "Couldn't save — check your connection."}
-          </Text>
+          {saveState === "saved" ? (
+            <View className="flex-row items-center gap-1.5">
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#4d6142" }} />
+              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>Saved automatically</Text>
+            </View>
+          ) : (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
+              {saveState === "pending" && "Unsaved changes…"}
+              {saveState === "saving" && "Saving…"}
+              {saveState === "error" && "Couldn't save — check your connection."}
+            </Text>
+          )}
         </View>
       )}
     </View>
@@ -232,11 +259,23 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle 
 // scrolling content entirely (My Fitness docks it in a screen-bottom bar
 // instead, when exactly one session is the page's clear focus) without
 // this component losing its own standalone-usable default.
-export function SessionLogger({ userId, datePerformed, source, exercises, isCompleted, onFinalize, hideFinalizeButton }) {
+export function SessionLogger({
+  userId,
+  datePerformed,
+  source,
+  exercises,
+  onFinalize,
+  hideFinalizeButton,
+  hideVideo,
+  onExpandExercise,
+}) {
   const [expandedId, setExpandedId] = useState(null);
   const [finalizing, setFinalizing] = useState(false);
 
-  const handleToggle = (id) => setExpandedId((prev) => (prev === id ? null : id));
+  const handleToggle = (id) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+    onExpandExercise?.();
+  };
 
   const handleFinalize = async () => {
     setFinalizing(true);
@@ -258,6 +297,7 @@ export function SessionLogger({ userId, datePerformed, source, exercises, isComp
           item={item}
           expanded={expandedId === item.id}
           onToggle={handleToggle}
+          hideVideo={hideVideo}
         />
       ))}
 
@@ -265,10 +305,19 @@ export function SessionLogger({ userId, datePerformed, source, exercises, isComp
         <Pressable
           onPress={handleFinalize}
           disabled={finalizing}
-          className="mt-2 items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+          className="mt-2 items-center justify-center disabled:opacity-50"
+          style={{
+            height: 52,
+            borderRadius: 12,
+            backgroundColor: colors.primary,
+            shadowColor: colors.primary,
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.25,
+            shadowRadius: 16,
+          }}
         >
-          <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-            {finalizing ? "Saving…" : isCompleted ? "Session finalized ✓ (tap to re-finalize)" : "Finalize workout"}
+          <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
+            {finalizing ? "Saving…" : "Finalize workout"}
           </Text>
         </Pressable>
       )}
