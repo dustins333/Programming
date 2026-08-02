@@ -1,0 +1,169 @@
+// Server-side counterpart to lib/programming/spcDashboard.js's
+// checkAndAutoDraft() — that version only runs when a coach happens to have
+// the SPC dashboard open, so a block ending while no coach opens the page in
+// time never auto-drafts and never notifies anyone. This runs on a schedule
+// (see supabase/migrations/0013_spc_alert_push_cron.sql) via pg_cron +
+// pg_net, independent of anyone loading the app, and — unlike the client
+// version — actually pushes the assigned coach when it drafts a block.
+//
+// Deploy with: supabase functions deploy scan-spc-alerts --no-verify-jwt
+// (--no-verify-jwt because pg_net's cron call carries no user JWT — this
+// function is invoked by the database itself, not a logged-in user. Auth
+// instead comes from the CRON_SECRET header check below.)
+//
+// Requires a CRON_SECRET function secret:
+//   supabase secrets set CRON_SECRET=<a-random-value>
+// and the same value pasted into the cron.schedule() call in the migration.
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { sendPushToUser } from "../_shared/expoPush.ts";
+
+const TIMEZONE = "America/Boise";
+
+function todayInBoise() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function daysBetween(start: string, end: string) {
+  const startDate = new Date(`${start}T12:00:00`);
+  const endDate = new Date(`${end}T12:00:00`);
+  return Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function addDays(dateString: string, days: number) {
+  const d = new Date(dateString + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function rangesOverlap(startA: string, endA: string, startB: string, endB: string) {
+  return startA <= endB && startB <= endA;
+}
+
+Deno.serve(async (req) => {
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const admin = createClient(supabaseUrl, serviceRoleKey);
+  const programming = admin.schema("programming");
+  const core = admin.schema("core");
+
+  const { data: settingRows } = await core
+    .from("settings")
+    .select("key, value")
+    .in("key", ["alert_lead_time_days", "notify_spc_block_alerts"]);
+  const settingsByKey = Object.fromEntries((settingRows ?? []).map((r) => [r.key, r.value]));
+  const leadTimeDays = Number(settingsByKey.alert_lead_time_days ?? 3);
+  // Default true (unset = existing always-on behavior) — only an explicit
+  // false in core.settings turns the push half off. Drafting still happens
+  // either way; this only gates whether the coach gets notified about it.
+  const pushEnabled = settingsByKey.notify_spc_block_alerts !== false;
+
+  const today = todayInBoise();
+
+  const { data: clients, error: clientsError } = await programming
+    .from("spc_clients")
+    .select("*")
+    .neq("status", "paused");
+  if (clientsError) {
+    return new Response(JSON.stringify({ error: clientsError.message }), { status: 500 });
+  }
+
+  const results = { scanned: clients?.length ?? 0, drafted: 0, pushed: 0, errors: [] as string[] };
+
+  for (const client of clients ?? []) {
+    try {
+      const { data: latest, error: latestError } = await programming
+        .from("spc_blocks")
+        .select("*")
+        .eq("spc_client_id", client.user_id)
+        .order("block_start_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestError) throw latestError;
+      if (!latest) continue;
+
+      const daysUntilEnd = daysBetween(today, latest.block_end_date);
+      if (daysUntilEnd > leadTimeDays) continue;
+
+      const startDate = addDays(latest.block_end_date, 1);
+      const lengthWeeks = latest.block_length_weeks;
+      const endDate = addDays(startDate, lengthWeeks * 7 - 1);
+
+      // Same overlap guard createSpcBlock() enforces client-side — a coach
+      // could've manually created the next block already, e.g. via "Copy
+      // last block", between one cron run and the next.
+      const { data: existingBlocks, error: existingError } = await programming
+        .from("spc_blocks")
+        .select("block_start_date, block_end_date")
+        .eq("spc_client_id", client.user_id);
+      if (existingError) throw existingError;
+      const overlap = (existingBlocks ?? []).some((b) =>
+        rangesOverlap(startDate, endDate, b.block_start_date, b.block_end_date)
+      );
+      if (overlap) continue;
+
+      const coachId = client.assigned_coach_id ?? latest.coach_id;
+
+      const { data: newBlock, error: insertError } = await programming
+        .from("spc_blocks")
+        .insert({
+          spc_client_id: client.user_id,
+          coach_id: coachId,
+          block_start_date: startDate,
+          block_length_weeks: lengthWeeks,
+          block_end_date: endDate,
+        })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+
+      const workoutRows = [];
+      for (let session = 1; session <= client.sessions_per_week; session += 1) {
+        workoutRows.push({ spc_block_id: newBlock.id, session_number: session });
+      }
+      const { error: workoutsError } = await programming.from("spc_workouts").insert(workoutRows);
+      if (workoutsError) throw workoutsError;
+
+      const { error: statusError } = await programming
+        .from("spc_clients")
+        .update({ status: "new_program_asap" })
+        .eq("user_id", client.user_id);
+      if (statusError) throw statusError;
+
+      results.drafted += 1;
+
+      if (coachId && pushEnabled) {
+        const { data: clientUser } = await core.from("users").select("name").eq("id", client.user_id).maybeSingle();
+        const clientName = clientUser?.name ?? "A client";
+        const pushResult = await sendPushToUser(
+          admin,
+          coachId,
+          "New SPC block ready",
+          `${clientName}'s next block was auto-drafted — review and publish.`,
+          { type: "spc_block_drafted", spcClientId: client.user_id, blockId: newBlock.id }
+        );
+        if (pushResult.sent > 0) results.pushed += 1;
+      }
+    } catch (err) {
+      results.errors.push(`${client.user_id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return new Response(JSON.stringify(results), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+});

@@ -6,8 +6,7 @@
 // must be the target user themselves, or staff (admin/coach) — enforced
 // below, not left to the client.
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+import { sendPushToUser } from "../_shared/expoPush.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -55,37 +54,17 @@ Deno.serve(async (req) => {
     }
   }
 
-  const { data: tokens, error: tokensError } = await adminClient
-    .schema("core")
-    .from("push_tokens")
-    .select("expo_push_token")
-    .eq("user_id", userId);
-
-  if (tokensError) {
-    return new Response(JSON.stringify({ error: tokensError.message }), { status: 500 });
+  let result;
+  try {
+    result = await sendPushToUser(adminClient, userId, title, body, data ?? {});
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), { status: 500 });
   }
-  if (!tokens || tokens.length === 0) {
+  if (result.sent === 0) {
     return new Response(JSON.stringify({ sent: 0, message: "No registered devices for this user" }), { status: 200 });
   }
 
-  const messages = tokens.map((t) => ({
-    to: t.expo_push_token,
-    title,
-    body,
-    data: data ?? {},
-  }));
-
-  const expoResponse = await fetch(EXPO_PUSH_URL, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(messages),
-  });
-  const expoResult = await expoResponse.json();
-
-  return new Response(JSON.stringify({ sent: messages.length, expoResult }), {
+  return new Response(JSON.stringify(result), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
