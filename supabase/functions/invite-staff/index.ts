@@ -99,6 +99,21 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: upsertError.message }), { status: 500 });
   }
 
+  // Also keep public.coaches in sync — that's the table the standalone
+  // Nutrition Tracker app's is_coach() RLS helper checks (Kova's nutrition
+  // module reads/writes the same live public.* tables that app uses). A
+  // fresh coach/admin needs a row there before they can manage any nutrition
+  // client; ensure-nutrition-coach covers the same gap for accounts that
+  // never went through this function (e.g. a role promoted via raw SQL).
+  if (["coach", "admin"].includes(role)) {
+    const { error: coachUpsertError } = await adminClient
+      .from("coaches")
+      .upsert({ id: authUserId, name, email }, { onConflict: "id" });
+    if (coachUpsertError) {
+      return new Response(JSON.stringify({ error: coachUpsertError.message }), { status: 500 });
+    }
+  }
+
   return new Response(JSON.stringify({ profile }), {
     status: 200,
     headers: { "Content-Type": "application/json" },

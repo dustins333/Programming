@@ -1,19 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, Image, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Image, TextInput, Pressable, ScrollView, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../../lib/boiseDate";
+import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
+import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { getCurrentTarget, deriveCalories } from "../../../lib/nutrition/targets";
 import { getLogForDate, saveDraftLog, finalizeLog } from "../../../lib/nutrition/dailyLog";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
-
-const NUTRITION_SEGMENTS = [
-  { key: "today", label: "Today", href: "/(member)/nutrition" },
-  { key: "checkin", label: "Check-in", href: "/(member)/nutrition/checkin" },
-  { key: "history", label: "History", href: "/(member)/nutrition/history" },
-];
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -23,6 +20,7 @@ const EMPTY_VALUES = {
   carb_g: "",
   fat_g: "",
   fiber_g: "",
+  calories_override: "",
   steps: "",
   sleep_hours: "",
   sleep_quality: "",
@@ -45,6 +43,8 @@ export default function NutritionToday() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const today = todayInBoise();
+  const access = useNutritionAccess(profile.id);
+
   const [target, setTarget] = useState(null);
   const [values, setValues] = useState(EMPTY_VALUES);
   const [ready, setReady] = useState(false);
@@ -60,6 +60,7 @@ export default function NutritionToday() {
   const skipAutosaveRef = useRef(true);
 
   useEffect(() => {
+    if (access.status !== "active") return;
     (async () => {
       try {
         const [targetRow, log] = await Promise.all([
@@ -75,7 +76,7 @@ export default function NutritionToday() {
         setLoadError(err.message ?? String(err));
       }
     })();
-  }, [profile.id, today]);
+  }, [access.status, profile.id, today]);
 
   useEffect(() => {
     if (!ready) return;
@@ -117,6 +118,10 @@ export default function NutritionToday() {
     }
   };
 
+  if (access.status !== "active") {
+    return <NutritionAccessMessage status={access.status} error={access.error} />;
+  }
+
   if (loadError) {
     return (
       <View className="flex-1 items-center justify-center bg-white px-6">
@@ -128,11 +133,7 @@ export default function NutritionToday() {
   }
 
   if (!ready) {
-    return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return <NutritionAccessMessage status="loading" />;
   }
 
   const calorieTarget = target ? Math.round(deriveCalories(target)) : null;
@@ -150,10 +151,10 @@ export default function NutritionToday() {
       </Text>
 
       <SegmentedControl
-        segments={NUTRITION_SEGMENTS}
+        segments={NUTRITION_TABS}
         activeKey="today"
         onSelect={(key) => {
-          const seg = NUTRITION_SEGMENTS.find((s) => s.key === key);
+          const seg = NUTRITION_TABS.find((s) => s.key === key);
           if (seg && seg.key !== "today") router.push(seg.href);
         }}
       />
@@ -175,7 +176,18 @@ export default function NutritionToday() {
         </Text>
       )}
 
+      <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+        Log these first thing when you wake up
+      </Text>
       <FormField label="Weight" value={values.weight} onChangeText={(t) => update("weight", t)} />
+      <View className="mb-2 flex-row gap-3">
+        <FormField label="Sleep (hrs)" value={values.sleep_hours} onChangeText={(t) => update("sleep_hours", t)} flex />
+        <FormField label="Sleep quality (1-5)" value={values.sleep_quality} onChangeText={(t) => update("sleep_quality", t)} flex />
+      </View>
+
+      <Text className="mb-2 mt-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+        Macros
+      </Text>
       <View className="mb-2 flex-row gap-3">
         <FormField label="Protein (g)" value={values.protein_g} onChangeText={(t) => update("protein_g", t)} flex />
         <FormField label="Carb (g)" value={values.carb_g} onChangeText={(t) => update("carb_g", t)} flex />
@@ -184,22 +196,12 @@ export default function NutritionToday() {
         <FormField label="Fat (g)" value={values.fat_g} onChangeText={(t) => update("fat_g", t)} flex />
         <FormField label="Fiber (g)" value={values.fiber_g} onChangeText={(t) => update("fiber_g", t)} flex />
       </View>
+
+      <Text className="mb-2 mt-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+        Activity
+      </Text>
       <View className="mb-2 flex-row gap-3">
         <FormField label="Steps" value={values.steps} onChangeText={(t) => update("steps", t)} flex />
-        <FormField
-          label="Sleep (hrs)"
-          value={values.sleep_hours}
-          onChangeText={(t) => update("sleep_hours", t)}
-          flex
-        />
-      </View>
-      <View className="mb-2 flex-row gap-3">
-        <FormField
-          label="Sleep quality (1-5)"
-          value={values.sleep_quality}
-          onChangeText={(t) => update("sleep_quality", t)}
-          flex
-        />
         <FormField label="Hunger (1-5)" value={values.hunger} onChangeText={(t) => update("hunger", t)} flex />
         <FormField label="Energy (1-5)" value={values.energy} onChangeText={(t) => update("energy", t)} flex />
       </View>
@@ -237,7 +239,6 @@ export default function NutritionToday() {
           {finalizing ? "Saving…" : finalizedAt ? "Day finalized ✓ (tap to re-finalize)" : "Finalize Day"}
         </Text>
       </Pressable>
-
     </ScrollView>
   );
 }

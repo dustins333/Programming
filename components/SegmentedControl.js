@@ -2,8 +2,8 @@ import { View, Text, Pressable } from "react-native";
 import { fonts } from "../lib/theme";
 
 // Simple 2-4 way segmented nav — used by the member Nutrition tab's
-// Today/Check-in/History switcher (each segment is a real route, this just
-// renders as tabs and highlights whichever one is active).
+// Today/Weekly/Check-In/Photos switcher (each segment is a real route, this
+// just renders as tabs and highlights whichever one is active).
 export function SegmentedControl({ segments, activeKey, onSelect }) {
   return (
     <View className="mb-6 flex-row rounded-xl bg-stone-100 p-1">

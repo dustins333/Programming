@@ -52,8 +52,8 @@ export default function ResetPassword() {
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
-            className="mb-2 rounded-lg border border-stone-300 px-4 py-3 text-base"
-            style={{ fontFamily: "Montserrat_400Regular" }}
+            className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
+            style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
           />
           {errorMessage ? (
             <Text className="mb-4 text-sm text-red-600" style={{ fontFamily: "Montserrat_400Regular" }}>

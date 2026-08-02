@@ -52,8 +52,8 @@ export default function Login() {
           autoComplete="email"
           keyboardType="email-address"
           textContentType="emailAddress"
-          className="mb-4 rounded-lg border border-stone-300 px-4 py-3 text-base"
-          style={{ fontFamily: "Montserrat_400Regular" }}
+          className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
+          style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
         />
 
         <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
@@ -66,8 +66,8 @@ export default function Login() {
           autoCapitalize="none"
           autoComplete="password"
           textContentType="password"
-          className="mb-2 rounded-lg border border-stone-300 px-4 py-3 text-base"
-          style={{ fontFamily: "Montserrat_400Regular" }}
+          className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
+          style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
         />
 
         <Link

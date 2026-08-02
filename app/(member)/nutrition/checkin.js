@@ -1,19 +1,16 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../../lib/boiseDate";
+import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
+import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
 import { getClientQuestions, getCheckinForWeek, submitCheckin } from "../../../lib/nutrition/checkin";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
-
-const NUTRITION_SEGMENTS = [
-  { key: "today", label: "Today", href: "/(member)/nutrition" },
-  { key: "checkin", label: "Check-in", href: "/(member)/nutrition/checkin" },
-  { key: "history", label: "History", href: "/(member)/nutrition/history" },
-];
 
 export default function WeeklyCheckin() {
   const { profile } = useAuth();
@@ -21,13 +18,17 @@ export default function WeeklyCheckin() {
   const insets = useSafeAreaInsets();
   const today = todayInBoise();
   const { currentWeek } = computeWeekWindows(today);
+  const access = useNutritionAccess(profile.id);
+
   const [questions, setQuestions] = useState(null);
   const [response, setResponse] = useState(null);
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
+    if (access.status !== "active") return;
     (async () => {
       try {
         const [q, r] = await Promise.all([
@@ -40,20 +41,29 @@ export default function WeeklyCheckin() {
         setLoadError(err.message ?? String(err));
       }
     })();
-  }, [profile.id, currentWeek.start]);
+  }, [access.status, profile.id, currentWeek.start]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const payload = questions.map((q) => ({ question: q.question_text, answer: answers[q.id] || "" }));
       const saved = await submitCheckin(profile.id, payload);
       setResponse(saved);
     } catch (err) {
+      // The standalone app's submitCheckin also throws when that week
+      // requires progress photos and none are uploaded yet (Phase 5) — that
+      // error message is safe to surface as-is once it starts firing.
+      setSubmitError(err.message ?? String(err));
       Alert.alert("Failed to submit", err.message ?? String(err));
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (access.status !== "active") {
+    return <NutritionAccessMessage status={access.status} error={access.error} />;
+  }
 
   if (loadError) {
     return (
@@ -66,11 +76,7 @@ export default function WeeklyCheckin() {
   }
 
   if (!questions) {
-    return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return <NutritionAccessMessage status="loading" />;
   }
 
   return (
@@ -83,10 +89,10 @@ export default function WeeklyCheckin() {
       </Text>
 
       <SegmentedControl
-        segments={NUTRITION_SEGMENTS}
+        segments={NUTRITION_TABS}
         activeKey="checkin"
         onSelect={(key) => {
-          const seg = NUTRITION_SEGMENTS.find((s) => s.key === key);
+          const seg = NUTRITION_TABS.find((s) => s.key === key);
           if (seg && seg.key !== "checkin") router.push(seg.href);
         }}
       />
@@ -127,6 +133,11 @@ export default function WeeklyCheckin() {
               />
             </View>
           ))}
+          {submitError ? (
+            <Text className="mb-3 text-sm text-red-600" style={{ fontFamily: fonts.sans }}>
+              {submitError}
+            </Text>
+          ) : null}
           {questions.length > 0 && (
             <Pressable
               onPress={handleSubmit}

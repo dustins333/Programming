@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import {
@@ -145,7 +145,7 @@ export default function SpcBlockDetail() {
               </Text>
             </View>
           </View>
-          {isAdmin && isFuture ? (
+          {isAdmin && isFuture && Platform.OS === "web" ? (
             <Pressable
               onPress={handleDelete}
               disabled={deleting}
@@ -159,7 +159,7 @@ export default function SpcBlockDetail() {
           ) : null}
         </View>
 
-        {priorBlock ? (
+        {priorBlock && Platform.OS === "web" ? (
           <Pressable onPress={handleCopyLastBlock} disabled={copying || copied} className="mb-6 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={{ fontFamily: fonts.sansMedium, color: copied ? "#a8a29e" : "#8a5140" }}>
               {copying ? "Copying…" : copied ? "Copied last block" : "Copy last block"}

@@ -1,4 +1,5 @@
 import { View, Text, Image, Pressable, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../lib/auth/AuthProvider";
@@ -38,9 +39,16 @@ export function CoachShell({ children }) {
   const { profile, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
 
+  // Native's Tabs navigator runs headerShown:false everywhere in (coach),
+  // so nothing else accounts for the status bar/notch — without this, every
+  // screen's content renders flush under it (same class of bug already
+  // fixed once on the member side's My Week screen). This single wrapper
+  // covers every screen that opts into CoachShell instead of patching each
+  // one individually.
   if (Platform.OS !== "web") {
-    return children;
+    return <View style={{ flex: 1, paddingTop: insets.top }}>{children}</View>;
   }
 
   // Admin always sees every module; a coach's own account-level toggles

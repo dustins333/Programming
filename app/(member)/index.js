@@ -14,6 +14,7 @@ import { listSpcWorkoutExercises, listSpcWarmups } from "../../lib/programming/s
 import { listGroupCompletionsForWorkouts, getCompletedSpcWorkoutIdsForWeek } from "../../lib/programming/sessionCompletions";
 import { listWeekOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import { listLogsForDateRange } from "../../lib/nutrition/dailyLog";
+import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { retryOnce } from "../../lib/retry";
 import { SessionPreviewModal } from "../../components/SessionPreviewModal";
 import { fonts, colors } from "../../lib/theme";
@@ -355,17 +356,25 @@ export default function MemberHome() {
     // its own offset (Monday was 6 days ago) rather than 1 - day.
     try {
       const days = await retryOnce(async () => {
+        // A client mid-onboarding (or not turned on at all) has no real
+        // daily-log target yet — the strip only means something once
+        // they're past the coach's Approve & Set Targets step, same gate
+        // the 4-tab home itself uses (lib/nutrition/useNutritionAccess.js).
+        const nutritionClient = await getNutritionClient(profile.id);
+        if (!nutritionClient || nutritionClient.status !== "active" || !nutritionClient.objective_tracking_approved_at) {
+          return null;
+        }
         const dow = dayOfWeekInBoise(today);
         const weekStart = addDays(today, dow === 0 ? -6 : 1 - dow);
         const weekEnd = addDays(weekStart, 6);
         const logs = await listLogsForDateRange(profile.id, weekStart, weekEnd);
-        const finalizedDates = new Set(logs.filter((l) => l.finalized_at).map((l) => l.log_date));
+        const finalizedDates = new Set(logs.filter((l) => l.finalized_at).map((l) => l.date));
         return Array.from({ length: 7 }, (_, i) => {
           const date = addDays(weekStart, i);
           return { date, label: DAY_LABELS[i], finalized: finalizedDates.has(date), isToday: date === today };
         });
       });
-      if (!isStale()) setNutrition({ status: "ready", days });
+      if (!isStale()) setNutrition(days ? { status: "ready", days } : null);
     } catch (err) {
       console.error("My Week: failed to load nutrition", err);
       if (!isStale()) setNutrition(null);

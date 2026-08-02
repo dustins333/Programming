@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
 import { listExercises } from "../../../../lib/programming/exercises";
 import {
@@ -25,6 +26,7 @@ const CATEGORY_LABELS = { away: "Away programming", trial: "Trial session" };
 // assignment, not progressed over weeks.
 export default function TemplateBuilder() {
   const { templateId } = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
 
   const [template, setTemplate] = useState(null);
   const [warmups, setWarmups] = useState([]);
@@ -113,7 +115,10 @@ export default function TemplateBuilder() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
+    <ScrollView
+      className="flex-1 bg-white"
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: insets.top + 32, paddingBottom: 32, maxWidth: 640 }}
+    >
         <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
           ‹ Back to templates
         </Link>

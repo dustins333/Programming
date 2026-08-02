@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-nati
 import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
-import { getCoachDashboardStats } from "../../lib/programming/coachDashboard";
+import { getCoachDashboardStats, computeAttentionItems } from "../../lib/programming/coachDashboard";
 import { STATUS_LABELS as SPC_STATUS_LABELS, STATUS_TONES as SPC_STATUS_TONES, STATUS_ORDER as SPC_STATUS_ORDER } from "../../lib/programming/spcStatus";
 import { CoachShell } from "../../components/CoachShell";
 import { fonts, colors, statusColors } from "../../lib/theme";
@@ -273,56 +273,10 @@ export default function CoachHomeWeb() {
     );
   }
 
-  // A rollup of the Nutrition/SPC/Group tiles below — every item here reads
-  // from the exact same computed stats those tiles render, rather than
-  // being a separately hand-maintained list. SPC's due-soon/overdue counts
-  // are deliberately not surfaced here: checkAndAutoDraft() (run just
-  // before these stats are computed) already converts them into "New
-  // Program ASAP" status, so that status count is the accurate version of
-  // "needs a new program built."
-  const spcNewProgramCount = stats.spcByStatus.new_program_asap ?? 0;
-  const attentionItems = [
-    spcNewProgramCount > 0 && {
-      key: "spc-new-program",
-      title: `${spcNewProgramCount} SPC client${spcNewProgramCount === 1 ? "" : "s"} need a new program`,
-      subtitle: "Blank draft auto-created — ready to fill in",
-      onPress: () => router.push("/(coach)/spc"),
-    },
-    stats.nutritionBreakdown.readyForCheckin > 0 && {
-      key: "checkins",
-      title: `${stats.nutritionBreakdown.readyForCheckin} check-in${stats.nutritionBreakdown.readyForCheckin === 1 ? "" : "s"} to review`,
-      subtitle: "Submitted this week, awaiting your notes",
-      onPress: () => router.push("/(coach)/nutrition"),
-    },
-    stats.nutritionAtRisk > 0 && {
-      key: "nutrition-risk",
-      title: `${stats.nutritionAtRisk} nutrition client${stats.nutritionAtRisk === 1 ? "" : "s"} at risk`,
-      subtitle: "Missed logging days this week",
-      onPress: () => router.push("/(coach)/nutrition"),
-    },
-    ...stats.groupDashboard
-      .filter((p) => p.unpublishedThisWeek)
-      .map((p) => ({
-        key: `group-unpub-${p.programId}`,
-        title: `${p.name}: this week isn't published`,
-        subtitle: "Sessions are still drafts",
-        onPress: () => router.push(`/(coach)/blocks?program=${p.programId}`),
-      })),
-    ...stats.groupDashboard
-      .filter((p) => p.hasActiveBlock && p.daysUntilEnd <= 7 && !p.hasNextWeekBlock)
-      .map((p) => ({
-        key: `group-gap-${p.programId}`,
-        title: `${p.name}: block ends in ${p.daysUntilEnd} day${p.daysUntilEnd === 1 ? "" : "s"}`,
-        subtitle: "Nothing queued to start after it",
-        onPress: () => router.push(`/(coach)/blocks?program=${p.programId}`),
-      })),
-    stats.unassignedCount > 0 && {
-      key: "unassigned",
-      title: `${stats.unassignedCount} client${stats.unassignedCount === 1 ? "" : "s"} not enrolled in anything`,
-      subtitle: "Linked but not assigned to a program or nutrition",
-      onPress: () => router.push("/(coach)/clients?program=unassigned"),
-    },
-  ].filter(Boolean);
+  // Shared with the native dashboard (lib/programming/coachDashboard.js) so
+  // the two can't drift on what counts as "needs attention" — this used to
+  // be computed inline here only.
+  const attentionItems = computeAttentionItems(stats).map((item) => ({ ...item, onPress: () => router.push(item.route) }));
 
   const goToClients = (programParam) => {
     router.push(programParam ? `/(coach)/clients?program=${programParam}` : "/(coach)/clients");

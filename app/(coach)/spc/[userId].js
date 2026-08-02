@@ -463,15 +463,17 @@ export default function SpcClientDetail() {
             Blocks
           </Text>
           <View className="flex-row items-center gap-2.5">
-            <Pressable
-              onPress={() => setModalVisible(true)}
-              className="rounded-lg px-4 py-2.5"
-              style={{ backgroundColor: colors.primary, shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 16 }}
-            >
-              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
-                + New block
-              </Text>
-            </Pressable>
+            {isWeb && (
+              <Pressable
+                onPress={() => setModalVisible(true)}
+                className="rounded-lg px-4 py-2.5"
+                style={{ backgroundColor: colors.primary, shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 16 }}
+              >
+                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
+                  + New block
+                </Text>
+              </Pressable>
+            )}
             <Pressable
               onPress={() => router.push(`/(coach)/spc/history/${userId}`)}
               className="rounded-lg border px-4 py-2.5"
@@ -563,7 +565,7 @@ export default function SpcClientDetail() {
                               onPress={cellOnPress}
                               highlight={group.row.offset === 0}
                               copyRole={copyRole}
-                              onStartCopy={hasContent ? () => startCopy(workout, group.row.weekNum) : undefined}
+                              onStartCopy={isWeb && hasContent ? () => startCopy(workout, group.row.weekNum) : undefined}
                             />
                           );
                         })}
@@ -573,7 +575,7 @@ export default function SpcClientDetail() {
                         key={`gap-${idx}`}
                         rowCount={group.rows.length}
                         groupWidth={columns * SESSION_COL_WIDTH + (columns - 1) * CELL_GAP}
-                        onStart={() => handleStartGapBlock(group.rows)}
+                        onStart={isWeb ? () => handleStartGapBlock(group.rows) : undefined}
                         starting={startingGap}
                       />
                     )

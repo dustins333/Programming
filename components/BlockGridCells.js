@@ -129,6 +129,8 @@ export function PlaceholderCell() {
 // right where the gap actually starts, whether that's because the
 // program/client has never had a block or because its current one ends
 // partway through the visible window.
+// onStart is optional — omit it (native's "no programming from the app"
+// policy) to render the gap as plain status text with no creation button.
 export function GapSlot({ rowCount, groupWidth, onStart, starting }) {
   const height = rowCount * CELL_MIN_HEIGHT + (rowCount - 1) * CELL_GAP;
   return (
@@ -136,14 +138,16 @@ export function GapSlot({ rowCount, groupWidth, onStart, starting }) {
       style={{ width: groupWidth, height, marginBottom: CELL_GAP }}
       className="items-center justify-center rounded-xl border border-dashed border-stone-300 px-4"
     >
-      <Text className="mb-3 text-center text-stone-400" style={{ fontFamily: fonts.sans }}>
+      <Text className={onStart ? "mb-3 text-center text-stone-400" : "text-center text-stone-400"} style={{ fontFamily: fonts.sans }}>
         Nothing scheduled yet.
       </Text>
-      <Pressable onPress={onStart} disabled={starting} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
-        <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-          {starting ? "Starting…" : "Start new block"}
-        </Text>
-      </Pressable>
+      {onStart ? (
+        <Pressable onPress={onStart} disabled={starting} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
+          <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+            {starting ? "Starting…" : "Start new block"}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

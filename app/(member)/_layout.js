@@ -79,7 +79,9 @@ export default function MemberLayout() {
           _layout of their own, so expo-router flattens them as siblings —
           without these, each one leaks into the tab bar as its own item. */}
       <Tabs.Screen name="nutrition/checkin" options={{ href: null }} />
-      <Tabs.Screen name="nutrition/history" options={{ href: null }} />
+      <Tabs.Screen name="nutrition/weekly" options={{ href: null }} />
+      <Tabs.Screen name="nutrition/photos" options={{ href: null }} />
+      <Tabs.Screen name="nutrition/onboarding" options={{ href: null }} />
       <Tabs.Screen name="history/[exerciseId]" options={{ href: null }} />
     </Tabs>
   );

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, FlatList, ActivityIndicator, Alert } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { listTemplateQuestions, addTemplateQuestion, deleteTemplateQuestion } from "../../../lib/nutrition/checkin";
+import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 
 export default function CheckinQuestions() {
+  const insets = useSafeAreaInsets();
   const [questions, setQuestions] = useState(null);
   const [newText, setNewText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,30 +51,40 @@ export default function CheckinQuestions() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-          Something went wrong loading check-in questions: {loadError}
-        </Text>
-      </View>
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white px-6">
+          <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong loading check-in questions: {loadError}
+          </Text>
+        </View>
+      </CoachShell>
     );
   }
 
   if (!questions) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color={colors.primary} />
-      </View>
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white">
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </CoachShell>
     );
   }
 
   return (
-    <View className="flex-1 bg-white px-6 py-8">
+    <CoachShell>
+    <View className="flex-1 bg-white px-6 py-8" style={{ paddingTop: insets.top + 20 }}>
       <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
         ‹ Back to Nutrition
       </Link>
-      <Text className="mb-4 text-2xl text-primary" style={{ fontFamily: fonts.display }}>
-        Check-In Questions
-      </Text>
+      <View className="mb-4 flex-row items-center justify-between">
+        <Text className="text-2xl text-primary" style={{ fontFamily: fonts.display }}>
+          Check-In Questions
+        </Text>
+        <Link href="/(coach)/nutrition/questionnaire" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, fontSize: 13 }}>
+          Onboarding questionnaire →
+        </Link>
+      </View>
       <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
         This is the master template. Each client gets their own copy — use "Copy questions from
         template" on their nutrition page to apply changes to that client.
@@ -118,5 +131,6 @@ export default function CheckinQuestions() {
         )}
       />
     </View>
+    </CoachShell>
   );
 }

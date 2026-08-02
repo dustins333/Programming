@@ -43,6 +43,13 @@
           "icon": "./assets/icon.png",
           "color": "#a46a57"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Kova Strength needs access to your photos to upload progress photos.",
+          "cameraPermission": "Kova Strength needs access to your camera to take progress photos."
+        }
       ]
     ]
   }

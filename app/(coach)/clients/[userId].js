@@ -8,7 +8,7 @@ import { getCurrentBlock } from "../../../lib/programming/memberPlan";
 import { currentWeekNumber } from "../../../lib/programming/schedule";
 import { getMissedSessionFlagsByUser } from "../../../lib/programming/flags";
 import { getSpcClient, assignSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
-import { getNutritionClient, assignNutritionClient, setNutritionStatus } from "../../../lib/nutrition/clients";
+import { getClient as getNutritionClient, createOrReactivateClient, setClientStatus as setNutritionStatus } from "../../../lib/nutrition/clients";
 import { listTemplates } from "../../../lib/programming/templates";
 import { listOneOffWorkoutsForUser, createOneOffFromTemplate, deleteOneOffWorkout } from "../../../lib/programming/oneOffWorkouts";
 import { listCompletedOneOffWorkoutIds } from "../../../lib/programming/sessionCompletions";
@@ -236,10 +236,17 @@ export default function ClientProfile() {
     try {
       if (!enrolled) {
         await setNutritionStatus(userId, "paused");
-      } else if (nutritionClient) {
-        await setNutritionStatus(userId, "active");
       } else {
-        await assignNutritionClient(userId, profile.id);
+        // Existing public.clients row (a real standalone-app client) just
+        // gets reactivated; a brand-new-to-nutrition member gets a fresh
+        // row and lands in onboarding. See lib/nutrition/clients.js.
+        await createOrReactivateClient({
+          userId,
+          coachId: profile.id,
+          name: member.name,
+          email: member.email,
+          phone: member.phone,
+        });
       }
       await load();
     } catch (err) {

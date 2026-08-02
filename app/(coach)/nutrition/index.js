@@ -1,27 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { getNutritionRoster } from "../../../lib/nutrition/dashboard";
+import { STATUS_META, STATUS_ORDER } from "../../../lib/nutrition/rosterStatus";
 import { StatusBadge } from "../../../components/StatusBadge";
+import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 
-// rosterStatus (see lib/nutrition/dashboard.js's deriveRosterStatus) -> the
-// shared 5-tone badge system, plus display copy. "Check-in due" and
-// "Awaiting review" are both check-in-adjacent but distinct states (hasn't
-// submitted vs. submitted-and-needs-your-notes), so this dashboard keeps
-// them as separate filters rather than collapsing to match the mockup's
-// exact chip count.
-const STATUS_META = {
-  checkinDue: { label: "Check-in due", tone: "urgent" },
-  needsTarget: { label: "Needs target", tone: "needsAction" },
-  awaitingReview: { label: "Awaiting review", tone: "needsAction" },
-  onTrack: { label: "On track", tone: "onTrack" },
-  paused: { label: "Paused", tone: "paused" },
-};
-const FILTER_ORDER = ["checkinDue", "needsTarget", "awaitingReview", "onTrack", "paused"];
+const FILTER_ORDER = STATUS_ORDER;
 
 function metaLine(client) {
   if (client.rosterStatus === "paused") return "Paused";
+  if (client.rosterStatus === "onboarding") return "Not yet approved for targets";
   if (client.rosterStatus === "needsTarget") return "No target set yet";
   const logLine = client.loggedToday
     ? "Logged today"
@@ -36,6 +27,7 @@ function metaLine(client) {
 }
 
 export default function NutritionDashboard() {
+  const insets = useSafeAreaInsets();
   const [roster, setRoster] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [filter, setFilter] = useState(null);
@@ -68,31 +60,45 @@ export default function NutritionDashboard() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-          Something went wrong loading the nutrition roster: {loadError}
-        </Text>
-      </View>
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white px-6">
+          <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong loading the nutrition roster: {loadError}
+          </Text>
+        </View>
+      </CoachShell>
     );
   }
 
   if (!roster) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color={colors.primary} />
-      </View>
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white">
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </CoachShell>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8">
+    <CoachShell>
+    <ScrollView
+      className="flex-1 bg-white"
+      contentContainerClassName="px-6 py-8"
+      contentContainerStyle={{ paddingTop: insets.top + 20 }}
+    >
       <View className="mb-1 flex-row items-center justify-between">
         <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
           Nutrition
         </Text>
-        <Link href="/(coach)/nutrition/questions" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
-          Check-in questions
-        </Link>
+        <View className="flex-row gap-4">
+          <Link href="/(coach)/nutrition/photo-compare" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
+            Photo compare
+          </Link>
+          <Link href="/(coach)/nutrition/questions" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
+            Check-in questions
+          </Link>
+        </View>
       </View>
       <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
         {roster.length} client{roster.length === 1 ? "" : "s"}
@@ -146,5 +152,6 @@ export default function NutritionDashboard() {
         </>
       )}
     </ScrollView>
+    </CoachShell>
   );
 }

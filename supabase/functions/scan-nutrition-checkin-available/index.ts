@@ -2,7 +2,12 @@
 // app/api/cron/checkin-available/route.js — announces the new week's
 // check-in is open. Unconditional (unlike scan-nutrition-reminders' checks),
 // scheduled to only run Sundays (see 0014_nutrition_reminder_cron.sql), same
-// split as the source app.
+// split as the source app. Rewritten to query the same live public.* tables
+// the standalone app itself uses (was originally against Kova's placeholder
+// nutrition.* schema) — see CLAUDE.md's nutrition-rebuild section. Only
+// announces to clients past onboarding, same reasoning as
+// scan-nutrition-reminders: someone still mid-onboarding has no check-in
+// cadence to announce yet.
 //
 // Deploy with: supabase functions deploy scan-nutrition-checkin-available --no-verify-jwt
 // Reuses the same CRON_SECRET already set for scan-spc-alerts.
@@ -22,7 +27,6 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(supabaseUrl, serviceRoleKey);
-  const nutrition = admin.schema("nutrition");
   const core = admin.schema("core");
 
   const { data: setting } = await core
@@ -36,10 +40,11 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ scanned: 0, pushed: 0, skipped: "disabled", errors: [] }), { status: 200 });
   }
 
-  const { data: clients, error: clientsError } = await nutrition
-    .from("nutrition_clients")
-    .select("user_id")
-    .neq("status", "paused");
+  const { data: clients, error: clientsError } = await admin
+    .from("clients")
+    .select("id")
+    .eq("status", "active")
+    .not("objective_tracking_approved_at", "is", null);
   if (clientsError) {
     return new Response(JSON.stringify({ error: clientsError.message }), { status: 500 });
   }
@@ -50,14 +55,14 @@ Deno.serve(async (req) => {
     try {
       const result = await sendPushToUser(
         admin,
-        client.user_id,
+        client.id,
         "Weekly check-in available",
         "Your weekly check-in is ready for you to fill out.",
         { type: "nutrition_checkin_available" }
       );
       if (result.sent > 0) results.pushed += 1;
     } catch (err) {
-      results.errors.push(`${client.user_id}: ${err instanceof Error ? err.message : String(err)}`);
+      results.errors.push(`${client.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

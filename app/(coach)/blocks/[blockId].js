@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getBlock, listWorkoutsForBlock, deleteBlock } from "../../../lib/programming/blocks";
@@ -109,7 +109,7 @@ export default function BlockDetail() {
               </Text>
             </View>
           </View>
-          {isAdmin && isFuture ? (
+          {isAdmin && isFuture && Platform.OS === "web" ? (
             <Pressable
               onPress={handleDelete}
               disabled={deleting}

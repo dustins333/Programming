@@ -1,4 +1,5 @@
 import { View, Text, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { fonts, colors } from "../../lib/theme";
@@ -11,11 +12,12 @@ const ROWS = [
 export default function Programs() {
   const router = useRouter();
   const { profile } = useAuth();
+  const insets = useSafeAreaInsets();
   const isAdmin = profile?.role === "admin";
   const rows = ROWS.filter((row) => isAdmin || !row.permission || profile?.[row.permission]);
 
   return (
-    <View className="flex-1 bg-white px-6 py-8">
+    <View className="flex-1 bg-white px-6 py-8" style={{ paddingTop: insets.top + 20 }}>
       <Text className="mb-6 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Programs
       </Text>

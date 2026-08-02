@@ -1,13 +1,19 @@
 // Ported from the standalone Nutrition Tracker app's app/api/cron/reminders/
-// route.js (see CLAUDE.md's nutrition section — this app's nutrition module
-// is otherwise a one-time logic port, not a live sync, but these two
-// reminder triggers didn't exist here at all yet). Two independent checks,
-// same as the source app combined them into one daily cron run:
+// route.js. Originally written against Kova's placeholder nutrition.*
+// schema — now rewritten to query the same live public.* tables the
+// standalone app itself uses, matching the rest of the nutrition rebuild
+// (see CLAUDE.md's nutrition-rebuild section). Two independent checks, same
+// as the source app combined them into one daily cron run:
 //   1. Daily log reminder — every day, per client, if today's log isn't
 //      finalized yet.
 //   2. Weekly check-in nag — Mondays only, if last week's check-in was never
 //      submitted at all (existence check, not finalized_at — submitting is a
 //      client action, finalizing is a coach action in this app's model).
+// Only scans clients past onboarding (objective_tracking_approved_at set) —
+// someone still mid-onboarding has no daily-log/check-in cadence yet, so
+// nagging them about either would be wrong. That condition has no
+// placeholder-schema equivalent since that schema had no onboarding concept
+// at all — this is a real behavior addition, not just a rename.
 //
 // Deploy with: supabase functions deploy scan-nutrition-reminders --no-verify-jwt
 // Schedule: supabase/migrations/0014_nutrition_reminder_cron.sql
@@ -62,7 +68,6 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(supabaseUrl, serviceRoleKey);
-  const nutrition = admin.schema("nutrition");
   const core = admin.schema("core");
 
   const { data: settingRows } = await core
@@ -76,10 +81,11 @@ Deno.serve(async (req) => {
   const today = todayInBoise();
   const isMonday = dayOfWeekInBoise(today) === 1;
 
-  const { data: clients, error: clientsError } = await nutrition
-    .from("nutrition_clients")
+  const { data: clients, error: clientsError } = await admin
+    .from("clients")
     .select("*")
-    .neq("status", "paused");
+    .eq("status", "active")
+    .not("objective_tracking_approved_at", "is", null);
   if (clientsError) {
     return new Response(JSON.stringify({ error: clientsError.message }), { status: 500 });
   }
@@ -89,18 +95,18 @@ Deno.serve(async (req) => {
   for (const client of clients ?? []) {
     try {
       if (dailyLogEnabled) {
-        const { data: todayLog, error: logError } = await nutrition
+        const { data: todayLog, error: logError } = await admin
           .from("daily_logs")
           .select("finalized_at")
-          .eq("user_id", client.user_id)
-          .eq("log_date", today)
+          .eq("client_id", client.id)
+          .eq("date", today)
           .maybeSingle();
         if (logError) throw logError;
 
         if (!todayLog || !todayLog.finalized_at) {
           const result = await sendPushToUser(
             admin,
-            client.user_id,
+            client.id,
             "Daily log reminder",
             "Don't forget to log today — weight, macros, steps, sleep.",
             { type: "nutrition_daily_log_reminder" }
@@ -111,10 +117,10 @@ Deno.serve(async (req) => {
 
       if (checkinNagEnabled && isMonday) {
         const weekStart = lastWeekStart(today);
-        const { data: response, error: checkinError } = await nutrition
+        const { data: response, error: checkinError } = await admin
           .from("checkin_responses")
           .select("id")
-          .eq("user_id", client.user_id)
+          .eq("client_id", client.id)
           .eq("week_start", weekStart)
           .maybeSingle();
         if (checkinError) throw checkinError;
@@ -122,7 +128,7 @@ Deno.serve(async (req) => {
         if (!response) {
           const result = await sendPushToUser(
             admin,
-            client.user_id,
+            client.id,
             "Weekly check-in still needed",
             "Your weekly check-in is still open — get it in when you can.",
             { type: "nutrition_checkin_nag" }
@@ -131,7 +137,7 @@ Deno.serve(async (req) => {
         }
       }
     } catch (err) {
-      results.errors.push(`${client.user_id}: ${err instanceof Error ? err.message : String(err)}`);
+      results.errors.push(`${client.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

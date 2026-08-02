@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Link } from "expo-router";
 import { getSpcRoster, checkAndAutoDraft } from "../../../lib/programming/spcDashboard";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -80,9 +80,11 @@ export default function SpcDashboard() {
           <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
             SPC
           </Text>
-          <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-            Templates →
-          </Link>
+          {Platform.OS === "web" && (
+            <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+              Templates →
+            </Link>
+          )}
         </View>
 
         {roster.length === 0 && (

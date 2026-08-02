@@ -25,6 +25,12 @@ const PANEL_PADDING = 14;
 const HEADER_STACK_HEIGHT = 94;
 const DISPLAY_NAME = { "Better With Age": "BWA" };
 const PANEL_BG = { Flagship: "#fdf6f2", "Better With Age": "#eef1e7" };
+// Building/editing programming is web-only per direct request — native is
+// a read-only view of whatever's already built (block creation, the
+// per-program settings editor, and the click-to-copy flow all disappear
+// here; tapping a session cell still opens the builder route, which is
+// itself read-only on native — see app/(coach)/builder/[workoutId].js).
+const isWeb = Platform.OS === "web";
 
 async function loadProgramData(program) {
   const allBlocks = await listBlocksForProgram(program.id);
@@ -216,15 +222,17 @@ export default function Blocks() {
                 History
               </Text>
             </Pressable>
-            <Pressable
-              onPress={() => setModalVisible(true)}
-              className="rounded-lg px-4 py-2.5"
-              style={{ backgroundColor: colors.primary, shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 16 }}
-            >
-              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
-                + New Block
-              </Text>
-            </Pressable>
+            {isWeb && (
+              <Pressable
+                onPress={() => setModalVisible(true)}
+                className="rounded-lg px-4 py-2.5"
+                style={{ backgroundColor: colors.primary, shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 16 }}
+              >
+                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
+                  + New Block
+                </Text>
+              </Pressable>
+            )}
           </View>
         </View>
 
@@ -260,15 +268,17 @@ export default function Blocks() {
                     </Pressable>
                   );
                 })}
-                <Pressable
-                  onPress={() => setNewProgramModalVisible(true)}
-                  className="rounded-xl px-5 py-3.5"
-                  style={{ borderWidth: 1.5, borderStyle: "dashed", borderColor: "#d9d4cd" }}
-                >
-                  <Text style={{ fontFamily: fonts.sansSemiBold, color: "#a8a29e", fontSize: 15 }}>+ New group type</Text>
-                </Pressable>
+                {isWeb && (
+                  <Pressable
+                    onPress={() => setNewProgramModalVisible(true)}
+                    className="rounded-xl px-5 py-3.5"
+                    style={{ borderWidth: 1.5, borderStyle: "dashed", borderColor: "#d9d4cd" }}
+                  >
+                    <Text style={{ fontFamily: fonts.sansSemiBold, color: "#a8a29e", fontSize: 15 }}>+ New group type</Text>
+                  </Pressable>
+                )}
               </View>
-              {selected && (
+              {selected && isWeb && (
                 <Pressable onPress={() => setEditProgramModalVisible(true)} className="rounded-lg border px-4 py-3.5" style={{ borderColor: "#d9d4cd" }}>
                   <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c", fontSize: 14 }}>
                     ⚙ {DISPLAY_NAME[selected.program.name] ?? selected.program.name} settings
@@ -359,7 +369,7 @@ export default function Blocks() {
                                     onPress={cellOnPress}
                                     highlight={group.row.offset === 0}
                                     copyRole={copyRole}
-                                    onStartCopy={hasContent ? () => startCopy(workout, group.row.weekNum) : undefined}
+                                    onStartCopy={isWeb && hasContent ? () => startCopy(workout, group.row.weekNum) : undefined}
                                   />
                                 );
                               })}
@@ -369,7 +379,7 @@ export default function Blocks() {
                               key={`gap-${idx}`}
                               rowCount={group.rows.length}
                               groupWidth={groupWidth}
-                              onStart={() => handleStartGapBlock(program, group.rows, allBlocks)}
+                              onStart={isWeb ? () => handleStartGapBlock(program, group.rows, allBlocks) : undefined}
                               starting={startingProgramId === program.id}
                             />
                           )

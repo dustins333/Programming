@@ -130,9 +130,17 @@ Deno.serve(async (req) => {
         .single();
       if (insertError) throw insertError;
 
+      // Full week x session grid, matching createSpcBlock() client-side
+      // (lib/programming/spcBlocks.js) — since migration 0016 rearchitected
+      // SPC to one independent spc_workouts row per (week, session) with a
+      // required week_number, the old one-row-per-session skeleton this
+      // function used to insert would violate the NOT NULL constraint and
+      // silently leave a coach with an empty, session-less block.
       const workoutRows = [];
-      for (let session = 1; session <= client.sessions_per_week; session += 1) {
-        workoutRows.push({ spc_block_id: newBlock.id, session_number: session });
+      for (let week = 1; week <= lengthWeeks; week += 1) {
+        for (let session = 1; session <= client.sessions_per_week; session += 1) {
+          workoutRows.push({ spc_block_id: newBlock.id, session_number: session, week_number: week });
+        }
       }
       const { error: workoutsError } = await programming.from("spc_workouts").insert(workoutRows);
       if (workoutsError) throw workoutsError;

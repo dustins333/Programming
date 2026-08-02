@@ -86,7 +86,7 @@ async function loadRoster() {
   }
 
   const spcActiveIds = new Set(spcRoster.filter((c) => c.status !== "paused").map((c) => c.userId));
-  const nutritionActiveIds = new Set(nutritionRoster.filter((c) => c.status !== "paused").map((c) => c.userId));
+  const nutritionActiveIds = new Set(nutritionRoster.filter((c) => c.status === "active").map((c) => c.userId));
 
   const rows = members.map((m) => {
     const groupProgramIds = assignments.filter((a) => a.user_id === m.id).map((a) => a.group_program_id);
