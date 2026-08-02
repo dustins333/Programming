@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<![CDATA[
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #f3ede6; font-family: 'Montserrat', sans-serif; }
+  ::-webkit-scrollbar { display: none; }
+</style>
+</helmet>
+
+<div style="padding: 48px; display: flex; flex-direction: column; gap: 24px;">
+  <div>
+    <div style="font-family: 'Protest Strike', sans-serif; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; color: #a46a57; margin-bottom: 4px;">Web — Coach Side, corrected against components/CoachShell.js + real screens</div>
+    <div style="font-size: 26px; font-weight: 600; color: #44403c;">Same structure you actually built, with the brand mark added</div>
+    <div style="font-size: 14px; color: #78716c; margin-top: 6px; max-width: 860px; line-height: 1.5;">
+      Pulled the real CoachShell (white sidebar, 6 nav items + Settings, Ionicons), the real Coach Home (two Panels: Needs your attention / Roster stat tiles), the real drag-and-drop builder (library on the left, warm-up inset list, sortable main-session rows), and the real SPC dashboard (sticky status-tile drop targets, coach filter, due-soon toggle, status-grouped rows) — my earlier mockup had these wrong (dark sidebar, library on the right, flat SPC list). This pass keeps every real structure and adds only what's missing: your logo in the sidebar and a warmer canvas tone behind the white content panels.
+    </div>
+  </div>
+
+  <!-- Coach Home — matches app/(coach)/index.web.js -->
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/home" width="1360" height="860" hint-size="1360,860">
+    <div style="display: flex; height: 100%; background: #f6f1ec;">
+
+      <!-- Sidebar — matches CoachShell.js structure exactly, logo added -->
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 16px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 28px;">
+          <img src="assets/kova-logo.jpg" style="width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;" />
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 18px; color: #a46a57; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Kova Strength</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: #fdf6f2; margin-bottom: 2px;">
+          <div style="width: 18px; text-align: center; color: #8a5140; font-size: 14px;">⌂</div>
+          <div style="font-size: 14px; font-weight: 600; color: #8a5140;">Dashboard</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; margin-bottom: 2px;">
+          <div style="width: 18px; text-align: center; color: #78716c; font-size: 14px;">◍</div>
+          <div style="font-size: 14px; font-weight: 500; color: #44403c;">Clients</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; margin-bottom: 2px;">
+          <div style="width: 18px; text-align: center; color: #78716c; font-size: 14px;">▤</div>
+          <div style="font-size: 14px; font-weight: 500; color: #44403c;">Group Programs</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; margin-bottom: 2px;">
+          <div style="width: 18px; text-align: center; color: #78716c; font-size: 14px;">▦</div>
+          <div style="font-size: 14px; font-weight: 500; color: #44403c;">SPC</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; margin-bottom: 2px;">
+          <div style="width: 18px; text-align: center; color: #78716c; font-size: 14px;">◐</div>
+          <div style="font-size: 14px; font-weight: 500; color: #44403c;">Nutrition</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; margin-bottom: 2px;">
+          <div style="width: 18px; text-align: center; color: #78716c; font-size: 14px;">▥</div>
+          <div style="font-size: 14px; font-weight: 500; color: #44403c;">Exercise Library</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;">
+          <div style="width: 18px; text-align: center; color: #78716c; font-size: 14px;">⚙</div>
+          <div style="font-size: 14px; font-weight: 500; color: #44403c;">Settings</div>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="border-top: 1px solid #e7e5e4; padding-top: 16px; margin-top: 16px;">
+          <div style="font-size: 12px; color: #a8a29e; padding: 0 8px; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Terra Whitfield</div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;">
+            <div style="width: 18px; text-align: center; color: #78716c; font-size: 14px;">⏻</div>
+            <div style="font-size: 14px; font-weight: 500; color: #44403c;">Sign out</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main — matches CoachHomeWeb: greeting + Attention/Roster + Nutrition/SPC/Group Programs status panels -->
+      <div style="flex: 1; padding: 40px; overflow: auto; background: #faf8f6;">
+        <div style="font-family: 'Protest Strike', sans-serif; font-size: 27px; color: #a46a57;">Welcome, Admin</div>
+        <div style="font-size: 14px; color: #78716c; margin-bottom: 28px;">Admin · Saturday, Aug 1</div>
+
+        <div style="display: grid; grid-template-columns: 1.1fr 1.4fr; gap: 16px; max-width: 1180px; margin-bottom: 16px;">
+          <!-- Needs your attention panel -->
+          <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+            <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px;">Needs your attention</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 15px; border-radius: 12px; background: #fdece5; border: 1px solid #f0d4c9; margin-bottom: 8px;">
+              <div style="min-width: 0;">
+                <div style="font-size: 13.5px; font-weight: 700; color: #8a3a24; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">2 nutrition clients at risk</div>
+                <div style="font-size: 12px; color: #a8574a; margin-top: 1px;">Missed logging days this week</div>
+              </div>
+              <div style="color: #c2543a; font-size: 15px; flex-shrink: 0;">›</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 15px; border-radius: 12px; background: #fdece5; border: 1px solid #f0d4c9;">
+              <div style="min-width: 0;">
+                <div style="font-size: 13.5px; font-weight: 700; color: #8a3a24; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Better With Age: this week isn't published</div>
+                <div style="font-size: 12px; color: #a8574a; margin-top: 1px;">Sessions are still drafts</div>
+              </div>
+              <div style="color: #c2543a; font-size: 15px; flex-shrink: 0;">›</div>
+            </div>
+          </div>
+
+          <!-- Roster panel — FUNCTIONALITY NOTE: each stat tile below is clickable, navigating to /clients with that tile's filter pre-applied (e.g. "SPC" tile -> Clients list filtered to program=SPC). "Total clients" clears all filters. -->
+          <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+            <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px;">Roster</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+              <div style="background: #faf7f4; border-radius: 10px; padding: 12px 14px;">
+                <div style="font-size: 22px; font-weight: 700; color: #44403c;">2</div>
+                <div style="font-size: 12px; color: #78716c; white-space: nowrap;">Total clients</div>
+              </div>
+              <div style="background: #faf7f4; border-radius: 10px; padding: 12px 14px;">
+                <div style="font-size: 22px; font-weight: 700; color: #44403c;">1</div>
+                <div style="font-size: 12px; color: #78716c;">Flagship</div>
+              </div>
+              <div style="background: #faf7f4; border-radius: 10px; padding: 12px 14px;">
+                <div style="font-size: 22px; font-weight: 700; color: #44403c;">0</div>
+                <div style="font-size: 12px; color: #78716c; white-space: nowrap;">Better With Age</div>
+              </div>
+              <div style="background: #faf7f4; border-radius: 10px; padding: 12px 14px;">
+                <div style="font-size: 22px; font-weight: 700; color: #44403c;">2</div>
+                <div style="font-size: 12px; color: #78716c;">SPC</div>
+              </div>
+              <div style="background: #faf7f4; border-radius: 10px; padding: 12px 14px;">
+                <div style="font-size: 22px; font-weight: 700; color: #44403c;">2</div>
+                <div style="font-size: 12px; color: #78716c;">Nutrition</div>
+              </div>
+              <div style="background: #faf7f4; border-radius: 10px; padding: 12px 14px;">
+                <div style="font-size: 22px; font-weight: 700; color: #44403c;">0</div>
+                <div style="font-size: 12px; color: #78716c;">Unassigned</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1.15fr; gap: 16px; max-width: 1180px;">
+          <!-- Nutrition status panel -->
+          <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 18px 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em;">Nutrition</div>
+              <div style="color: #c9c4bd; font-size: 14px;">›</div>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 5px; margin-bottom: 14px;">
+              <div style="font-size: 26px; font-weight: 700; color: #44403c;">2</div>
+              <div style="font-size: 13px; color: #78716c;">active</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid #f0ede8;">
+              <div style="font-size: 13px; color: #44403c;">Not set up yet</div>
+              <div style="background: #fdece5; color: #b23a22; font-size: 11.5px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center;">1</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid #f0ede8;">
+              <div style="font-size: 13px; color: #44403c;">Pending check-in</div>
+              <div style="background: #f4ede3; color: #8a5a2e; font-size: 11.5px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center;">1</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid #f0ede8;">
+              <div style="font-size: 13px; color: #44403c;">Ready for check-in</div>
+              <div style="background: #f1efed; color: #a8a29e; font-size: 11.5px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center;">0</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid #f0ede8;">
+              <div style="font-size: 13px; color: #44403c;">Check-in completed</div>
+              <div style="background: #eef1e7; color: #4d6142; font-size: 11.5px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center;">0</div>
+            </div>
+          </div>
+
+          <!-- SPC status panel -->
+          <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 18px 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em;">SPC</div>
+              <div style="color: #c9c4bd; font-size: 14px;">›</div>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 5px; margin-bottom: 14px;">
+              <div style="font-size: 26px; font-weight: 700; color: #44403c;">2</div>
+              <div style="font-size: 13px; color: #78716c;">clients</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid #f0ede8;">
+              <div style="font-size: 13px; color: #44403c;">New Program ASAP</div>
+              <div style="background: #fdece5; color: #b23a22; font-size: 11.5px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center;">0</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid #f0ede8;">
+              <div style="font-size: 13px; color: #44403c;">Needs Printed</div>
+              <div style="background: #f4ede3; color: #8a5a2e; font-size: 11.5px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center;">0</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid #f0ede8;">
+              <div style="font-size: 13px; color: #44403c; white-space: nowrap;">Coming Up Next Week</div>
+              <div style="background: #f1efed; color: #a8a29e; font-size: 11.5px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">0</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid #f0ede8;">
+              <div style="font-size: 13px; color: #44403c;">Printed &amp; Ready</div>
+              <div style="background: #eef1e7; color: #4d6142; font-size: 11.5px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center;">2</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid #f0ede8;">
+              <div style="font-size: 13px; color: #44403c;">Paused</div>
+              <div style="background: #f1efed; color: #a8a29e; font-size: 11.5px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center;">0</div>
+            </div>
+          </div>
+
+          <!-- Group Programs panel -->
+          <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 18px 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em;">Group programs</div>
+              <div style="color: #c9c4bd; font-size: 14px;">›</div>
+            </div>
+            <div style="padding: 10px 0; border-top: 1px solid #f0ede8;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <div style="font-size: 14px; font-weight: 700; color: #44403c;">Better With Age</div>
+                <div style="font-size: 11.5px; color: #a8a29e; white-space: nowrap; flex-shrink: 0;">31 days left</div>
+              </div>
+              <div style="font-size: 12px; font-weight: 700; color: #b23a22; margin-top: 4px;">This week isn't published</div>
+              <div style="font-size: 12px; color: #a8907f; margin-top: 1px;">Next week isn't published yet</div>
+            </div>
+            <div style="padding: 10px 0; border-top: 1px solid #f0ede8;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <div style="font-size: 14px; font-weight: 700; color: #44403c;">Flagship</div>
+                <div style="font-size: 11.5px; color: #a8a29e; white-space: nowrap; flex-shrink: 0;">15 days left</div>
+              </div>
+              <div style="font-size: 12px; color: #a8907f; margin-top: 4px;">Next week isn't published yet</div>
+            </div>
+            <div style="padding: 10px 0; border-top: 1px solid #f0ede8;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <div style="font-size: 14px; font-weight: 700; color: #44403c;">LLYL</div>
+                <div style="font-size: 11.5px; color: #a8a29e; white-space: nowrap; flex-shrink: 0;">27 days left</div>
+              </div>
+              <div style="font-size: 12px; color: #a8907f; margin-top: 4px;">Next week isn't published yet</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- Builder — matches [workoutId].web.js: library LEFT, warm-up inset list, sortable main session rows -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">Split-screen builder — library on the left, narrow fixed-width (~260-290px); session/main area is the flex:1 majority of the screen, NOT split ~50/50 like the current build</div>
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/builder/flagship-w2-s1" width="1360" height="860" hint-size="1360,860">
+    <div style="display: flex; height: 100%; background: #fff;">
+      <div style="width: 264px; border-right: 1px solid #e7e5e4; padding: 24px 16px; overflow: auto; flex-shrink: 0;">
+        <div style="font-size: 16px; font-weight: 600; color: #a46a57; margin-bottom: 12px;">Exercise Library</div>
+        <div style="height: 38px; border: 1px solid #d6d3d1; border-radius: 8px; margin-bottom: 12px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: #a8a29e;">Search…</div>
+        <div style="border: 1px solid #a46a57; border-radius: 8px; padding: 10px; text-align: center; font-size: 13px; font-weight: 500; color: #8a5140; margin-bottom: 16px;">+ New Exercise</div>
+
+        <div style="background: #fdf6ee; border: 1px solid #ecdcc4; border-radius: 10px; padding: 10px; margin-bottom: 16px;">
+          <div style="font-size: 10.5px; font-weight: 700; color: #8a5a2e; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">⟳ Warm-ups</div>
+          <div style="background: #fff; border: 1px solid #ecdcc4; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; color: #44403c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Band Pull-Apart</div>
+          <div style="background: #fff; border: 1px solid #ecdcc4; border-radius: 8px; padding: 8px 10px; font-size: 13px; color: #44403c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Glute Bridge</div>
+        </div>
+
+        <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">Lifts</div>
+        <div style="font-size: 11px; font-weight: 500; color: #a8a29e; text-transform: uppercase; margin-bottom: 6px;">Chest</div>
+        <div style="border: 1px solid #e7e5e4; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; color: #44403c;">Incline DB Press</div>
+        <div style="border: 1px solid #e7e5e4; border-radius: 8px; padding: 8px 10px; margin-bottom: 14px; font-size: 13px; color: #44403c;">Barbell Bench Press</div>
+        <div style="font-size: 11px; font-weight: 500; color: #a8a29e; text-transform: uppercase; margin-bottom: 6px;">Back</div>
+        <div style="border: 1px solid #e7e5e4; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; color: #44403c;">Lat Pulldown</div>
+        <div style="border: 1px solid #e7e5e4; border-radius: 8px; padding: 8px 10px; font-size: 13px; color: #44403c;">Seated Cable Row</div>
+      </div>
+      <div style="flex: 1; padding: 24px 36px; overflow: auto;">
+        <div style="font-size: 13px; font-weight: 500; color: #8a5140; margin-bottom: 12px;">‹ Back to block</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 22px; color: #a46a57; white-space: nowrap;">Flagship — Week 2, Session 1</div>
+            <div style="font-size: 12px; font-weight: 500; color: #8a5140; white-space: nowrap;">published</div>
+          </div>
+          <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 8px;">Unpublish</div>
+        </div>
+        <div style="font-size: 11px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">Warm-up</div>
+        <div style="background: #faf7f4; border: 1px solid #f0ebe6; border-radius: 12px; padding: 2px 14px; margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #f0ebe6;">
+            <div style="width: 16px; font-size: 12px; color: #a8a29e;">1.</div>
+            <div style="flex: 1; font-size: 14px; color: #44403c; font-weight: 500;">Band Pull-Apart</div>
+            <div style="width: 56px; height: 30px; border: 1px solid #d6d3d1; border-radius: 6px; background: #fff;"></div>
+            <div style="width: 56px; height: 30px; border: 1px solid #d6d3d1; border-radius: 6px; background: #fff;"></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 10px 0;">
+            <div style="width: 16px; font-size: 12px; color: #a8a29e;">2.</div>
+            <div style="flex: 1; font-size: 14px; color: #44403c; font-weight: 500;">Glute Bridge</div>
+            <div style="width: 56px; height: 30px; border: 1px solid #d6d3d1; border-radius: 6px; background: #fff;"></div>
+            <div style="width: 56px; height: 30px; border: 1px solid #d6d3d1; border-radius: 6px; background: #fff;"></div>
+          </div>
+        </div>
+        <div style="border: 1px solid #a46a57; border-radius: 8px; padding: 9px; text-align: center; font-size: 13px; font-weight: 500; color: #8a5140; margin-bottom: 20px;">+ Insert warm-up exercise</div>
+
+        <div style="font-size: 11px; font-weight: 600; color: #44403c; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">Main Session</div>
+        <div style="display: flex; align-items: center; gap: 12px; border: 1px solid #e7e5e4; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;">
+          <div style="color: #d6d3d1;">⠿</div>
+          <div style="flex: 1; font-size: 14px; font-weight: 500; color: #44403c;">Barbell Bench Press</div>
+          <div style="width: 52px; height: 32px; border: 1px solid #d6d3d1; border-radius: 6px;"></div>
+          <div style="width: 52px; height: 32px; border: 1px solid #d6d3d1; border-radius: 6px;"></div>
+          <div style="width: 52px; height: 32px; border: 1px solid #d6d3d1; border-radius: 6px;"></div>
+          <div style="width: 90px; height: 32px; border: 1px solid #d6d3d1; border-radius: 6px;"></div>
+          <div style="color: #a8a29e; font-size: 13px;">✕</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; border: 1px solid #e7e5e4; border-radius: 10px; padding: 12px 14px;">
+          <div style="color: #d6d3d1;">⠿</div>
+          <div style="flex: 1; font-size: 14px; font-weight: 500; color: #44403c;">Seated Cable Row</div>
+          <div style="width: 52px; height: 32px; border: 1px solid #d6d3d1; border-radius: 6px;"></div>
+          <div style="width: 52px; height: 32px; border: 1px solid #d6d3d1; border-radius: 6px;"></div>
+          <div style="width: 52px; height: 32px; border: 1px solid #d6d3d1; border-radius: 6px;"></div>
+          <div style="width: 90px; height: 32px; border: 1px solid #d6d3d1; border-radius: 6px;"></div>
+          <div style="color: #a8a29e; font-size: 13px;">✕</div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- Clients list — restyled v2: filters/sort + tags + pagination for 100+ clients -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">Clients list — restyled v2 (filter/sort, program tags, pagination)</div>
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/clients" width="1360" height="860" hint-size="1360,860">
+    <div style="display: flex; height: 100%; background: #fff;">
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 16px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 28px;">
+          <img src="assets/kova-logo.jpg" style="width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;" />
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 18px; color: #a46a57;">Kova Strength</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: #fdf6f2;">
+          <div style="width: 18px; text-align: center; color: #8a5140; font-size: 14px;">◍</div>
+          <div style="font-size: 14px; font-weight: 600; color: #8a5140;">Clients</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; padding: 40px; overflow: auto; background: #faf8f6;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; color: #a46a57;">Clients</div>
+            <div style="font-size: 13px; color: #78716c; margin-top: 2px;">1–20 of 134</div>
+          </div>
+          <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 8px; box-shadow: 0 6px 16px rgba(164,106,87,0.25); white-space: nowrap; flex-shrink: 0;">+ Link account</div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 18px; max-width: 900px;">
+          <div style="flex: 1; height: 40px; border: 1px solid #d9d4cd; border-radius: 8px; background: #fff; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: #a8a29e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Search by name or email…</div>
+          <div style="height: 40px; border: 1px solid #d9d4cd; border-radius: 8px; background: #fff; padding: 0 14px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #44403c; white-space: nowrap;">All programs <span style="color: #a8a29e;">▾</span></div>
+          <div style="height: 40px; border: 1px solid #d9d4cd; border-radius: 8px; background: #fff; padding: 0 14px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #44403c; white-space: nowrap;">Flags <span style="color: #a8a29e;">▾</span></div>
+          <div style="height: 40px; border: 1px solid #d9d4cd; border-radius: 8px; background: #fff; padding: 0 14px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #44403c; white-space: nowrap;">Sort: Name <span style="color: #a8a29e;">▾</span></div>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; max-width: 900px; overflow: hidden;">
+          <div style="display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-bottom: 1px solid #ece7e1;">
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: #fdf6f2; color: #a46a57; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">D</div>
+            <div style="min-width: 0; flex: 1;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="font-size: 14px; font-weight: 600; color: #44403c;">Dustin</div>
+                <div style="background: #fdece5; color: #b23a22; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; flex-shrink: 0;">1 flag</div>
+              </div>
+              <div style="font-size: 12.5px; color: #78716c; margin-top: 1px;">dustin@kovastrength.com</div>
+            </div>
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+              <div style="background: #eef1e7; color: #4d6142; font-size: 10.5px; font-weight: 600; padding: 4px 9px; border-radius: 999px;">Flagship</div>
+              <div style="background: #eef1e7; color: #4d6142; font-size: 10.5px; font-weight: 600; padding: 4px 9px; border-radius: 999px;">SPC</div>
+              <div style="background: #eef1e7; color: #4d6142; font-size: 10.5px; font-weight: 600; padding: 4px 9px; border-radius: 999px;">Nutrition</div>
+            </div>
+            <div style="color: #c9c4bd; font-size: 15px; flex-shrink: 0;">›</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-bottom: 1px solid #ece7e1;">
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: #fdf6f2; color: #a46a57; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">T</div>
+            <div style="min-width: 0; flex: 1;">
+              <div style="font-size: 14px; font-weight: 600; color: #44403c;">Test1</div>
+              <div style="font-size: 12.5px; color: #78716c; margin-top: 1px;">test1@kovastrength.com</div>
+            </div>
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+              <div style="background: #f1efed; color: #78716c; font-size: 10.5px; font-weight: 600; padding: 4px 9px; border-radius: 999px;">Unassigned</div>
+            </div>
+            <div style="color: #c9c4bd; font-size: 15px; flex-shrink: 0;">›</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 16px 18px;">
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: #fdf6f2; color: #a46a57; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">S</div>
+            <div style="min-width: 0; flex: 1;">
+              <div style="font-size: 14px; font-weight: 600; color: #44403c;">Sarah K.</div>
+              <div style="font-size: 12.5px; color: #78716c; margin-top: 1px;">sarah.k@kovastrength.com</div>
+            </div>
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+              <div style="background: #eef1e7; color: #4d6142; font-size: 10.5px; font-weight: 600; padding: 4px 9px; border-radius: 999px;">SPC</div>
+            </div>
+            <div style="color: #c9c4bd; font-size: 15px; flex-shrink: 0;">›</div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; max-width: 900px; margin-top: 16px;">
+          <div style="font-size: 12.5px; color: #78716c;">Page 1 of 7</div>
+          <div style="width: 32px; height: 32px; border: 1px solid #d9d4cd; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #d6d3d1; font-size: 13px;">‹</div>
+          <div style="width: 32px; height: 32px; border: 1px solid #d9d4cd; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #44403c; font-size: 13px;">›</div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- Client detail — restyled v2: snapshot panel + split enrolled/frequency controls -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">Client detail — restyled v2 (snapshot panel, split program controls)</div>
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/clients/dustin" width="1360" height="900" hint-size="1360,900">
+    <div style="display: flex; height: 100%; background: #fff;">
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 16px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 28px;">
+          <img src="assets/kova-logo.jpg" style="width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;" />
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 18px; color: #a46a57;">Kova Strength</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: #fdf6f2;">
+          <div style="width: 18px; text-align: center; color: #8a5140; font-size: 14px;">◍</div>
+          <div style="font-size: 14px; font-weight: 600; color: #8a5140;">Clients</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; padding: 36px 40px; overflow: auto; background: #faf8f6;">
+        <div style="font-size: 13px; font-weight: 600; color: #8a5140; margin-bottom: 18px;">‹ Back to clients</div>
+
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 22px;">
+          <div style="width: 52px; height: 52px; border-radius: 50%; background: #fdf6f2; color: #a46a57; font-weight: 700; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">D</div>
+          <div>
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 22px; color: #a46a57;">Dustin</div>
+            <div style="font-size: 13px; color: #78716c;">dustin@kovastrength.com</div>
+          </div>
+        </div>
+
+        <!-- Snapshot panel: block progress + flags -->
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 18px 20px; margin-bottom: 16px; max-width: 900px;">
+          <div style="display: flex; gap: 32px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 220px;">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Current block</div>
+              <div style="font-size: 14px; font-weight: 600; color: #44403c; margin-bottom: 8px;">Flagship · Week 3 of 6</div>
+              <div style="height: 6px; border-radius: 999px; background: #f1efed; overflow: hidden;">
+                <div style="width: 50%; height: 100%; background: #4d6142; border-radius: 999px;"></div>
+              </div>
+            </div>
+            <div style="flex: 1.4; min-width: 280px; border-left: 1px solid #ece7e1; padding-left: 32px;">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Flags</div>
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <div style="background: #fdece5; color: #b23a22; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; flex-shrink: 0; white-space: nowrap;">Missed session</div>
+                <div style="font-size: 12.5px; color: #57534e;">No log for Session 2 · this week</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="background: #fdece5; color: #b23a22; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; flex-shrink: 0;">Injury note</div>
+                <div style="font-size: 12.5px; color: #57534e;">"Right knee twinge on lunges" · logged 7/14</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 18px 20px; margin-bottom: 16px; max-width: 900px;">
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: #44403c; margin-bottom: 14px;">⊹ Group programs</div>
+
+          <div style="border: 1px solid #ece7e1; border-radius: 12px; margin-bottom: 10px; overflow: hidden;">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px;">
+              <div style="width: 36px; height: 20px; border-radius: 999px; background: #e7e5e4; position: relative; flex-shrink: 0;">
+                <div style="width: 16px; height: 16px; border-radius: 50%; background: #fff; position: absolute; top: 2px; left: 2px;"></div>
+              </div>
+              <div style="font-size: 14px; font-weight: 600; color: #44403c;">Better With Age</div>
+            </div>
+          </div>
+
+          <div style="border: 1px solid #dbe8cf; border-radius: 12px; margin-bottom: 10px; overflow: hidden;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0ede8;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 36px; height: 20px; border-radius: 999px; background: #4d6142; position: relative; flex-shrink: 0;">
+                  <div style="width: 16px; height: 16px; border-radius: 50%; background: #fff; position: absolute; top: 2px; right: 2px;"></div>
+                </div>
+                <div style="font-size: 14px; font-weight: 600; color: #44403c;">Flagship</div>
+              </div>
+              <div style="font-size: 13px; font-weight: 600; color: #8a5140; white-space: nowrap; flex-shrink: 0;">View current block ›</div>
+            </div>
+            <div style="padding: 12px 14px; background: #faf8f6;">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Frequency</div>
+              <div style="display: flex; border: 1px solid #d9d4cd; border-radius: 8px; overflow: hidden; width: fit-content;">
+                <div style="padding: 7px 18px; font-size: 13px; font-weight: 600; background: #fff; color: #a46a57;">1x</div>
+                <div style="padding: 7px 18px; font-size: 13px; font-weight: 500; color: #78716c; border-left: 1px solid #d9d4cd;">2x</div>
+                <div style="padding: 7px 18px; font-size: 13px; font-weight: 500; color: #78716c; border-left: 1px solid #d9d4cd;">3x</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border: 1px solid #dbe8cf; border-radius: 12px; overflow: hidden;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0ede8;">
+              <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <div style="width: 36px; height: 20px; border-radius: 999px; background: #4d6142; position: relative; flex-shrink: 0;">
+                  <div style="width: 16px; height: 16px; border-radius: 50%; background: #fff; position: absolute; top: 2px; right: 2px;"></div>
+                </div>
+                <div style="font-size: 14px; font-weight: 600; color: #44403c; white-space: nowrap;">LLYL</div>
+              </div>
+              <div style="font-size: 13px; font-weight: 600; color: #8a5140; white-space: nowrap; flex-shrink: 0;">View current block ›</div>
+            </div>
+            <div style="padding: 12px 14px; background: #faf8f6;">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Frequency</div>
+              <div style="display: flex; border: 1px solid #d9d4cd; border-radius: 8px; overflow: hidden; width: fit-content;">
+                <div style="padding: 7px 18px; font-size: 13px; font-weight: 500; color: #78716c;">1x</div>
+                <div style="padding: 7px 18px; font-size: 13px; font-weight: 600; background: #fff; color: #a46a57; border-left: 1px solid #d9d4cd;">2x</div>
+                <div style="padding: 7px 18px; font-size: 13px; font-weight: 500; color: #78716c; border-left: 1px solid #d9d4cd;">3x</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 16px; max-width: 900px;">
+          <div style="flex: 1; background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 16px 18px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+              <div style="font-size: 14px; font-weight: 700; color: #44403c;">▤ SPC</div>
+              <div style="background: #eef1e7; color: #4d6142; font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px;">Printed &amp; Ready</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+              <div style="width: 32px; height: 18px; border-radius: 999px; background: #4d6142; position: relative;">
+                <div style="width: 14px; height: 14px; border-radius: 50%; background: #fff; position: absolute; top: 2px; right: 2px;"></div>
+              </div>
+              <div style="font-size: 13px; font-weight: 500; color: #44403c;">Enrolled</div>
+            </div>
+            <div style="font-size: 13px; font-weight: 600; color: #8a5140;">View SPC program ›</div>
+          </div>
+          <div style="flex: 1; background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 16px 18px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+              <div style="font-size: 14px; font-weight: 700; color: #44403c;">✂ Nutrition</div>
+              <div style="background: #eef1e7; color: #4d6142; font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px;">Active</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+              <div style="width: 32px; height: 18px; border-radius: 999px; background: #4d6142; position: relative;">
+                <div style="width: 14px; height: 14px; border-radius: 50%; background: #fff; position: absolute; top: 2px; right: 2px;"></div>
+              </div>
+              <div style="font-size: 13px; font-weight: 500; color: #44403c;">Enrolled</div>
+            </div>
+            <div style="font-size: 13px; font-weight: 600; color: #8a5140;">View nutrition dashboard ›</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- SPC dashboard — matches spc/index.web.js: sticky status-tile drop targets, coach filter, due-soon toggle, grouped rows -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">SPC dashboard — status tiles are real drag targets, rows grouped by status</div>
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/spc" width="1360" height="860" hint-size="1360,860">
+    <div style="display: flex; height: 100%; background: #fff;">
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0;"></div>
+      <div style="flex: 1; overflow: auto;">
+        <div style="padding: 40px 40px 16px; border-bottom: 1px solid #e7e5e4;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; color: #a46a57;">SPC</div>
+            <div style="font-size: 13px; font-weight: 500; color: #8a5140; white-space: nowrap; flex-shrink: 0; margin-left: 12px;">Templates →</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px;">
+            <div style="height: 40px; border: 1px solid #d6d3d1; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; font-size: 13px; color: #44403c;">All coaches ▾</div>
+            <div style="height: 40px; border: 1px solid #d6d3d1; border-radius: 999px; padding: 0 16px; display: flex; align-items: center; font-size: 13px; color: #44403c; white-space: nowrap; flex-shrink: 0;">Due soon</div>
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div style="width: 172px; border: 1px solid #e7e5e4; border-radius: 12px; padding: 12px 14px;">
+              <div style="background: #fdece5; color: #b23a22; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; display: inline-block;">New Program ASAP</div>
+              <div style="font-size: 12px; color: #a8a29e; margin-top: 8px;">2 clients</div>
+            </div>
+            <div style="width: 172px; border: 1px solid #e7e5e4; border-radius: 12px; padding: 12px 14px;">
+              <div style="background: #f4ede3; color: #8a5a2e; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; display: inline-block;">Needs Printed</div>
+              <div style="font-size: 12px; color: #a8a29e; margin-top: 8px;">1 client</div>
+            </div>
+            <div style="width: 172px; border: 1px solid #e7e5e4; border-radius: 12px; padding: 12px 14px;">
+              <div style="background: #eef1e7; color: #4d6142; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; display: inline-block;">Printed &amp; Ready</div>
+              <div style="font-size: 12px; color: #a8a29e; margin-top: 8px;">7 clients</div>
+            </div>
+            <div style="width: 172px; border: 1px solid #e7e5e4; border-radius: 12px; padding: 12px 14px;">
+              <div style="background: #f1efed; color: #78716c; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; display: inline-block;">Paused</div>
+              <div style="font-size: 12px; color: #a8a29e; margin-top: 8px;">1 client</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding: 20px 40px 40px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <div style="background: #fdece5; color: #b23a22; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px;">New Program ASAP</div>
+            <div style="font-size: 12px; color: #a8a29e;">2</div>
+          </div>
+          <div style="border: 1px solid #e9d3c6; border-left: 3px solid #c2543a; border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; max-width: 720px;">
+            <div>
+              <div style="font-size: 14px; font-weight: 500; color: #44403c;">Jamie R.</div>
+              <div style="font-size: 12px; color: #a8a29e; margin-top: 2px;">3x/week · block ends 7/18/26 · due soon</div>
+            </div>
+            <div style="font-size: 12px; color: #a8a29e;">Abbi</div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin: 20px 0 12px;">
+            <div style="background: #eef1e7; color: #4d6142; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px;">Printed &amp; Ready</div>
+            <div style="font-size: 12px; color: #a8a29e;">7</div>
+          </div>
+          <div style="border: 1px solid #e7e5e4; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; max-width: 720px;">
+            <div>
+              <div style="font-size: 14px; font-weight: 500; color: #44403c;">Sarah K.</div>
+              <div style="font-size: 12px; color: #a8a29e; margin-top: 2px;">3x/week · block ends 8/14/26</div>
+            </div>
+            <div style="font-size: 12px; color: #a8a29e;">Abbi</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- Group Programs — restyled + merged (no separate "Block sessions" page). Session cards carry a Duplicate action instead of drag-and-drop. -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">Group Programs — restyled, single page (calendar IS the block builder), Duplicate-to picker replaces drag-and-drop</div>
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/group-programs/flagship" width="1360" height="900" hint-size="1360,900">
+    <div style="display: flex; height: 100%; background: #fff;">
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 16px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 28px;">
+          <img src="assets/kova-logo.jpg" style="width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;" />
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 18px; color: #a46a57;">Kova Strength</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: #fdf6f2;">
+          <div style="width: 18px; text-align: center; color: #8a5140; font-size: 14px;">⟷</div>
+          <div style="font-size: 14px; font-weight: 600; color: #8a5140;">Group Programs</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; padding: 36px 40px; overflow: auto; background: #faf8f6;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 24px; color: #a46a57;">Group Programs</div>
+          <div style="display: flex; gap: 10px; flex-shrink: 0;">
+            <div style="border: 1px solid #d9d4cd; color: #44403c; font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 8px; white-space: nowrap;">History</div>
+            <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 8px; white-space: nowrap; box-shadow: 0 6px 16px rgba(164,106,87,0.25);">+ New Block</div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;">
+          <div style="display: flex; gap: 8px;">
+            <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 700; padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 10px rgba(164,106,87,0.2);">Flagship</div>
+            <div style="border: 1.5px solid #a46a57; color: #8a5140; font-size: 13px; font-weight: 600; padding: 8.5px 18px; border-radius: 999px;">BWA</div>
+            <div style="border: 1.5px solid #a46a57; color: #8a5140; font-size: 13px; font-weight: 600; padding: 8.5px 18px; border-radius: 999px;">LLYL</div>
+            <div style="border: 1.5px dashed #d9d4cd; color: #a8a29e; font-size: 13px; font-weight: 600; padding: 8.5px 18px; border-radius: 999px; white-space: nowrap;">+ New group type</div>
+          </div>
+          <div style="border: 1px solid #d9d4cd; color: #44403c; font-size: 13px; font-weight: 600; padding: 9px 14px; border-radius: 8px; white-space: nowrap; flex-shrink: 0;">⚙ Flagship settings</div>
+        </div>
+
+        <div style="font-size: 12px; color: #a8907f; margin-bottom: 16px; max-width: 640px;">This calendar is the block — open any week's session to build or tweak it directly. Click ⧉ on a session to copy it, then click any other tiles to send it there.</div>
+
+        <div style="display: grid; grid-template-columns: 118px 1fr; gap: 0 20px; max-width: 900px;">
+
+          <div style="font-size: 12.5px; font-weight: 700; color: #4d6142;">Current week<div style="font-size: 10.5px; font-weight: 500; color: #a8a29e; margin-top: 2px;">08-01 – 08-07</div></div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px;">
+            <div style="border: 2px solid #4d6142; background: #f5f8f1; border-radius: 14px; padding: 14px; position: relative;">
+              <div style="position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; border-radius: 6px; background: #fff; border: 1px solid #dbe8cf; display: flex; align-items: center; justify-content: center; color: #4d6142; font-size: 12px;">⧉</div>
+              <div style="font-size: 10px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Session 1</div>
+              <div style="font-size: 13px; color: #44403c; line-height: 1.5;">Barbell Bench Press<br/>OH Press<br/>Goblet Squat</div>
+            </div>
+            <!-- Copy source -->
+            <div style="border: 2px solid #a46a57; background: #fdf6f2; border-radius: 14px; padding: 14px; position: relative;">
+              <div style="position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; border-radius: 6px; background: #a46a57; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px;">⧉</div>
+              <div style="font-size: 10px; font-weight: 700; color: #8a5140; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Session 2 · copying</div>
+              <div style="font-size: 13px; color: #44403c; line-height: 1.5;">Seated Cable Row</div>
+            </div>
+            <div style="border: 2px solid #4d6142; background: #f5f8f1; border-radius: 14px; padding: 14px; position: relative;">
+              <div style="position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; border-radius: 6px; background: #fff; border: 1px solid #dbe8cf; display: flex; align-items: center; justify-content: center; color: #4d6142; font-size: 12px;">⧉</div>
+              <div style="font-size: 10px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Session 3</div>
+              <div style="font-size: 13px; color: #44403c; line-height: 1.5;">OH Press<br/>Seated Cable Row</div>
+            </div>
+          </div>
+
+          <div style="font-size: 12.5px; font-weight: 700; color: #57534e;">Next week<div style="font-size: 10.5px; font-weight: 500; color: #a8a29e; margin-top: 2px;">08-08 – 08-14</div></div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px;">
+            <div style="border: 1.5px dashed #a46a57; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+              <div style="font-size: 12.5px; color: #8a5140; font-style: italic;">Click to paste here</div>
+            </div>
+            <!-- Selected target -->
+            <div style="border: 1.5px solid #a46a57; background: #fdf6f2; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center; position: relative;">
+              <div style="position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 999px; background: #a46a57; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px;">✓</div>
+              <div style="font-size: 12.5px; color: #8a5140; font-weight: 600;">Selected</div>
+            </div>
+            <div style="border: 1.5px dashed #a46a57; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+              <div style="font-size: 12.5px; color: #8a5140; font-style: italic;">Click to paste here</div>
+            </div>
+          </div>
+
+          <div style="font-size: 12.5px; font-weight: 700; color: #57534e;">3 weeks out<div style="font-size: 10.5px; font-weight: 500; color: #a8a29e; margin-top: 2px;">08-15 – 08-21</div></div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px;">
+            <div style="border: 1.5px dashed #a46a57; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+              <div style="font-size: 12.5px; color: #8a5140; font-style: italic;">Click to paste here</div>
+            </div>
+            <div style="border: 1.5px dashed #a46a57; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+              <div style="font-size: 12.5px; color: #8a5140; font-style: italic;">Click to paste here</div>
+            </div>
+            <div style="border: 1.5px dashed #a46a57; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+              <div style="font-size: 12.5px; color: #8a5140; font-style: italic;">Click to paste here</div>
+            </div>
+          </div>
+
+          <div style="font-size: 12.5px; font-weight: 700; color: #a8a29e;">4 weeks out<div style="font-size: 10.5px; font-weight: 500; color: #c9c4bd; margin-top: 2px;">08-22 – 08-28</div></div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px;">
+            <div style="border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center;"><div style="font-size: 12.5px; color: #c9c4bd; font-style: italic;">Empty</div></div>
+            <div style="border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center;"><div style="font-size: 12.5px; color: #c9c4bd; font-style: italic;">Empty</div></div>
+            <div style="border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center;"><div style="font-size: 12.5px; color: #c9c4bd; font-style: italic;">Empty</div></div>
+          </div>
+
+          <div style="font-size: 12.5px; font-weight: 700; color: #a8a29e;">5 weeks out<div style="font-size: 10.5px; font-weight: 500; color: #c9c4bd; margin-top: 2px;">08-29 – 09-04</div></div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px;">
+            <div style="border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center;"><div style="font-size: 12.5px; color: #c9c4bd; font-style: italic;">Empty</div></div>
+            <div style="border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center;"><div style="font-size: 12.5px; color: #c9c4bd; font-style: italic;">Empty</div></div>
+            <div style="border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center;"><div style="font-size: 12.5px; color: #c9c4bd; font-style: italic;">Empty</div></div>
+          </div>
+
+          <div style="font-size: 12.5px; font-weight: 700; color: #a8a29e;">6 weeks out<div style="font-size: 10.5px; font-weight: 500; color: #c9c4bd; margin-top: 2px;">09-05 – 09-11</div></div>
+          <div style="background: #fdf6f2; border: 1.5px dashed #e9d3c6; border-radius: 14px; padding: 20px; text-align: center;">
+            <div style="font-size: 12.5px; color: #8a5140; margin-bottom: 8px;">Nothing scheduled yet.</div>
+            <div style="display: inline-block; background: #a46a57; color: #fff; font-size: 12.5px; font-weight: 600; padding: 8px 16px; border-radius: 8px;">Start new block</div>
+          </div>
+        </div>
+
+        <!-- Floating confirm bar for the copy-in-progress state above -->
+        <div style="position: sticky; bottom: 16px; margin-top: 20px; max-width: 900px; background: #44403c; color: #fff; border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 12px 28px rgba(68,64,60,0.25);">
+          <div style="font-size: 13px;">Copying <strong>Session 2 · Wk 2</strong> — 1 tile selected</div>
+          <div style="display: flex; gap: 8px;">
+            <div style="border: 1px solid #78716c; color: #fff; font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 7px;">Cancel</div>
+            <div style="background: #a46a57; color: #fff; font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 7px;">Copy to 1 tile</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- SPC dashboard — restyled: flat/all-clients view (default) with sort, status tiles as clickable filters -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">SPC dashboard — restyled, flat sortable list is the default view; status tiles double as filter chips</div>
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/spc" width="1360" height="860" hint-size="1360,860">
+    <div style="display: flex; height: 100%; background: #fff;">
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 16px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 28px;">
+          <img src="assets/kova-logo.jpg" style="width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;" />
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 18px; color: #a46a57;">Kova Strength</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: #fdf6f2;">
+          <div style="width: 18px; text-align: center; color: #8a5140; font-size: 14px;">▤</div>
+          <div style="font-size: 14px; font-weight: 600; color: #8a5140;">SPC</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; padding: 36px 40px; overflow: auto; background: #faf8f6;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 24px; color: #a46a57;">SPC</div>
+          <div style="font-size: 13px; font-weight: 600; color: #8a5140; white-space: nowrap;">Templates →</div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap;">
+          <div style="display: flex; border: 1px solid #a46a57; border-radius: 999px; overflow: hidden; flex-shrink: 0;">
+            <div style="padding: 8px 16px; font-size: 12.5px; font-weight: 600; color: #8a5140;">Grouped</div>
+            <div style="padding: 8px 16px; font-size: 12.5px; font-weight: 700; color: #fff; background: #a46a57;">All clients</div>
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div style="height: 38px; border: 1px solid #d9d4cd; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; font-size: 13px; color: #44403c; white-space: nowrap;">All coaches ▾</div>
+            <div style="height: 38px; border: 1px solid #d9d4cd; border-radius: 999px; padding: 0 16px; display: flex; align-items: center; font-size: 13px; color: #44403c; white-space: nowrap;">Due soon</div>
+            <div style="height: 38px; border: 1px solid #d9d4cd; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; font-size: 13px; color: #44403c; white-space: nowrap;">Sort: Block ends ▾</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px;">
+          <div style="border: 1px solid #ece7e1; border-radius: 12px; padding: 12px 14px; cursor: pointer;">
+            <div style="background: #fdece5; color: #b23a22; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; display: inline-block;">New Program ASAP</div>
+            <div style="font-size: 12px; color: #a8a29e; margin-top: 8px;">0 clients</div>
+          </div>
+          <div style="border: 1px solid #ece7e1; border-radius: 12px; padding: 12px 14px; cursor: pointer;">
+            <div style="background: #f4ede3; color: #8a5a2e; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; display: inline-block;">Needs Printed</div>
+            <div style="font-size: 12px; color: #a8a29e; margin-top: 8px;">0 clients</div>
+          </div>
+          <div style="border: 1px solid #ece7e1; border-radius: 12px; padding: 12px 14px; cursor: pointer;">
+            <div style="background: #f4ede3; color: #8a5a2e; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; display: inline-block;">Coming Up Next Week</div>
+            <div style="font-size: 12px; color: #a8a29e; margin-top: 8px;">0 clients</div>
+          </div>
+          <div style="border: 2px solid #4d6142; background: #f5f8f1; border-radius: 12px; padding: 11px 13px; cursor: pointer;">
+            <div style="background: #eef1e7; color: #4d6142; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; display: inline-block;">Printed &amp; Ready</div>
+            <div style="font-size: 12px; color: #4d6142; font-weight: 600; margin-top: 8px;">2 clients · filtering</div>
+          </div>
+          <div style="border: 1px solid #ece7e1; border-radius: 12px; padding: 12px 14px; cursor: pointer;">
+            <div style="background: #f1efed; color: #78716c; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; display: inline-block;">Paused</div>
+            <div style="font-size: 12px; color: #a8a29e; margin-top: 8px;">0 clients</div>
+          </div>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; max-width: 900px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1fr 150px 90px 110px 90px 16px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid #ece7e1; background: #faf8f6;">
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em;">Client</div>
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em;">Status</div>
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em;">Freq.</div>
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em;">Block ends</div>
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em;">Coach</div>
+            <div></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 150px 90px 110px 90px 16px; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #ece7e1;">
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+              <div style="width: 34px; height: 34px; border-radius: 50%; background: #fdf6f2; color: #a46a57; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">D</div>
+              <div style="font-size: 14px; font-weight: 600; color: #44403c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Dustin</div>
+            </div>
+            <div style="background: #eef1e7; color: #4d6142; font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; width: fit-content;">Printed &amp; Ready</div>
+            <div style="font-size: 12.5px; color: #57534e;">2x/wk</div>
+            <div style="font-size: 12.5px; color: #57534e;">09-15-2026</div>
+            <div style="font-size: 12.5px; color: #78716c;">test2</div>
+            <div style="color: #c9c4bd; font-size: 15px;">›</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 150px 90px 110px 90px 16px; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #ece7e1;">
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+              <div style="width: 34px; height: 34px; border-radius: 50%; background: #fdf6f2; color: #a46a57; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">T</div>
+              <div style="font-size: 14px; font-weight: 600; color: #44403c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Test1</div>
+            </div>
+            <div style="background: #eef1e7; color: #4d6142; font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; width: fit-content;">Printed &amp; Ready</div>
+            <div style="font-size: 12.5px; color: #57534e;">2x/wk</div>
+            <div style="font-size: 12.5px; color: #c9c4bd; font-style: italic;">No block yet</div>
+            <div style="font-size: 12.5px; color: #78716c;">Admin</div>
+            <div style="color: #c9c4bd; font-size: 15px;">›</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 150px 90px 110px 90px 16px; align-items: center; gap: 10px; padding: 14px 18px;">
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+              <div style="width: 34px; height: 34px; border-radius: 50%; background: #fdf6f2; color: #a46a57; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">S</div>
+              <div style="font-size: 14px; font-weight: 600; color: #44403c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Sarah K.</div>
+            </div>
+            <div style="background: #fdece5; color: #b23a22; font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; width: fit-content;">New Program ASAP</div>
+            <div style="font-size: 12.5px; color: #57534e;">3x/wk</div>
+            <div style="font-size: 12.5px; color: #57534e;">07-18-2026</div>
+            <div style="font-size: 12.5px; color: #78716c;">Abbi</div>
+            <div style="color: #c9c4bd; font-size: 15px;">›</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- SPC client detail — restyled: unified profile card (not disconnected boxes), segmented sessions/week control, notes + history, blocks calendar matches Group Programs -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">SPC client detail — restyled, unified profile card + Group-Programs-matching blocks calendar (with copy flow, plus copy-last-block on new block)</div>
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/spc/dustin" width="1360" height="1000" hint-size="1360,1000">
+    <div style="display: flex; height: 100%; background: #fff;">
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 16px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 28px;">
+          <img src="assets/kova-logo.jpg" style="width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;" />
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 18px; color: #a46a57;">Kova Strength</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: #fdf6f2;">
+          <div style="width: 18px; text-align: center; color: #8a5140; font-size: 14px;">▤</div>
+          <div style="font-size: 14px; font-weight: 600; color: #8a5140;">SPC</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; padding: 36px 40px; overflow: auto; background: #faf8f6;">
+        <div style="font-size: 13px; font-weight: 600; color: #8a5140; margin-bottom: 18px;">‹ Back to SPC</div>
+
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 22px;">
+          <div style="width: 52px; height: 52px; border-radius: 50%; background: #fdf6f2; color: #a46a57; font-weight: 700; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">D</div>
+          <div>
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 22px; color: #a46a57;">Dustin</div>
+            <div style="font-size: 12.5px; font-weight: 700; color: #8a5140; text-transform: uppercase; letter-spacing: 0.04em;">SPC</div>
+          </div>
+        </div>
+
+        <!-- Unified profile card -->
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 20px 22px; margin-bottom: 16px; max-width: 900px;">
+          <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Status</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px;">
+            <div style="background: #eef1e7; color: #4d6142; font-size: 12.5px; font-weight: 700; padding: 8px 16px; border-radius: 999px;">Printed &amp; Ready</div>
+            <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 7.5px 16px; border-radius: 999px;">Needs Printed</div>
+            <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 7.5px 16px; border-radius: 999px; white-space: nowrap;">New Program ASAP</div>
+            <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 7.5px 16px; border-radius: 999px; white-space: nowrap;">Coming Up Next Week</div>
+            <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 7.5px 16px; border-radius: 999px;">Paused</div>
+          </div>
+
+          <div style="display: flex; gap: 32px; padding-top: 16px; border-top: 1px solid #ece7e1; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 220px;">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Assigned coach</div>
+              <div style="height: 40px; border: 1px solid #d9d4cd; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #44403c; max-width: 220px;">test2 <span style="color: #a8a29e;">⌄</span></div>
+            </div>
+            <div style="flex: 1; min-width: 220px;">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Sessions per week</div>
+              <div style="display: flex; border: 1px solid #d9d4cd; border-radius: 8px; overflow: hidden; width: fit-content;">
+                <div style="padding: 8px 16px; font-size: 13px; font-weight: 500; color: #78716c;">1x</div>
+                <div style="padding: 8px 16px; font-size: 13px; font-weight: 700; background: #a46a57; color: #fff; border-left: 1px solid #d9d4cd;">2x</div>
+                <div style="padding: 8px 16px; font-size: 13px; font-weight: 500; color: #78716c; border-left: 1px solid #d9d4cd;">3x</div>
+                <div style="padding: 8px 16px; font-size: 13px; font-weight: 500; color: #78716c; border-left: 1px solid #d9d4cd;">4x</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes + history -->
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; padding: 20px 22px; margin-bottom: 16px; max-width: 900px;">
+          <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Notes / goals / feedback</div>
+          <div style="border: 1px solid #d9d4cd; border-radius: 10px; padding: 12px 14px; font-size: 13.5px; color: #44403c; min-height: 70px; margin-bottom: 10px;">wants to be a badass</div>
+          <div style="display: inline-block; background: #a46a57; color: #fff; font-size: 13px; font-weight: 600; padding: 9px 18px; border-radius: 8px; margin-bottom: 18px; white-space: nowrap;">Save notes</div>
+
+        </div>
+
+        <!-- Blocks calendar — same system as Group Programs, including copy flow. "Past blocks" = block history only, no status/notes log. -->
+        <div style="display: flex; align-items: center; justify-content: space-between; max-width: 900px; margin-bottom: 14px;">
+          <div style="font-size: 15px; font-weight: 700; color: #44403c;">Blocks</div>
+          <div style="display: flex; gap: 10px;">
+            <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 8px; white-space: nowrap; box-shadow: 0 6px 16px rgba(164,106,87,0.25);">+ New block</div>
+            <div style="border: 1px solid #d9d4cd; color: #44403c; font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 8px; white-space: nowrap;">Past blocks</div>
+          </div>
+        </div>
+
+        <!-- New-block modal: shown when "+ New block" is clicked (or when an auto-generated draft is opened) -->
+        <div style="max-width: 900px; margin-bottom: 22px; background: #fff; border: 1px solid #ece7e1; border-radius: 16px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045); padding: 20px 22px;">
+          <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">New block — illustrating the "+ New block" / auto-draft modal</div>
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 19px; color: #a46a57; margin-bottom: 4px;">Start Block 3</div>
+          <div style="font-size: 12.5px; color: #78716c; margin-bottom: 16px;">Reuse Block 2 as a starting point, or begin blank.</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div style="border: 2px solid #a46a57; background: #fdf6f2; border-radius: 12px; padding: 16px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <div style="font-size: 13.5px; font-weight: 700; color: #44403c;">Copy last block</div>
+                <div style="background: #fff; border: 1px solid #e9d3c6; color: #8a5140; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap;">Block 2 · 7 weeks ago</div>
+              </div>
+              <div style="font-size: 12.5px; color: #57534e; line-height: 1.6;">Session 1: OH Press, Barbell Bench Press<br/>Session 2: Seated Cable Row, OH Press</div>
+            </div>
+            <div style="border: 1px solid #ece7e1; border-radius: 12px; padding: 16px;">
+              <div style="font-size: 13.5px; font-weight: 700; color: #44403c; margin-bottom: 4px;">Start blank</div>
+              <div style="font-size: 12px; color: #a8a29e;">Build Block 3 from scratch.</div>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+            <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 8px;">Cancel</div>
+            <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 700; padding: 9px 18px; border-radius: 8px;">Create Block 3</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 118px 1fr; gap: 0 20px; max-width: 900px;">
+
+          <div style="font-size: 12.5px; font-weight: 700; color: #4d6142;">Current week<div style="font-size: 10.5px; font-weight: 500; color: #a8a29e; margin-top: 2px;">08-01 – 08-07</div><div style="font-size: 11px; font-weight: 700; color: #8a5140; margin-top: 4px;">Block 2 ›</div></div>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 22px;">
+            <!-- Copy source -->
+            <div style="border: 2px solid #a46a57; background: #fdf6f2; border-radius: 14px; padding: 14px; position: relative;">
+              <div style="position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; border-radius: 6px; background: #a46a57; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px;">⧉</div>
+              <div style="font-size: 10px; font-weight: 700; color: #8a5140; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Session 1 · copying</div>
+              <div style="font-size: 13px; color: #44403c; line-height: 1.5;">OH Press<br/>Barbell Bench Press</div>
+            </div>
+            <div style="border: 2px solid #4d6142; background: #f5f8f1; border-radius: 14px; padding: 14px; position: relative;">
+              <div style="position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; border-radius: 6px; background: #fff; border: 1px solid #dbe8cf; display: flex; align-items: center; justify-content: center; color: #4d6142; font-size: 12px;">⧉</div>
+              <div style="font-size: 10px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Session 2</div>
+              <div style="font-size: 13px; color: #44403c; line-height: 1.5;">Seated Cable Row<br/>OH Press</div>
+            </div>
+          </div>
+
+          <div style="font-size: 12.5px; font-weight: 700; color: #57534e;">Next week<div style="font-size: 10.5px; font-weight: 500; color: #a8a29e; margin-top: 2px;">08-08 – 08-14</div></div>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 22px;">
+            <div style="border: 1.5px solid #a46a57; background: #fdf6f2; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center; position: relative;">
+              <div style="position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 999px; background: #a46a57; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px;">✓</div>
+              <div style="font-size: 12.5px; color: #8a5140; font-weight: 600;">Selected</div>
+            </div>
+            <div style="border: 1.5px dashed #a46a57; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+              <div style="font-size: 12.5px; color: #8a5140; font-style: italic;">Click to paste here</div>
+            </div>
+          </div>
+
+          <div style="font-size: 12.5px; font-weight: 700; color: #a8a29e;">3 weeks out<div style="font-size: 10.5px; font-weight: 500; color: #c9c4bd; margin-top: 2px;">08-15 – 08-21</div><div style="font-size: 11px; font-weight: 700; color: #8a5140; margin-top: 4px;">Block 3 ›</div></div>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+            <div style="border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center;"><div style="font-size: 12.5px; color: #c9c4bd; font-style: italic;">Empty</div></div>
+            <div style="border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; min-height: 74px; display: flex; align-items: center; justify-content: center;"><div style="font-size: 12.5px; color: #c9c4bd; font-style: italic;">Empty</div></div>
+          </div>
+        </div>
+
+        <!-- Floating confirm bar -->
+        <div style="position: sticky; bottom: 16px; margin-top: 20px; max-width: 900px; background: #44403c; color: #fff; border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 12px 28px rgba(68,64,60,0.25);">
+          <div style="font-size: 13px;">Copying <strong>Session 1 · Wk 2</strong> — 1 tile selected</div>
+          <div style="display: flex; gap: 8px;">
+            <div style="border: 1px solid #78716c; color: #fff; font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 7px;">Cancel</div>
+            <div style="background: #a46a57; color: #fff; font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 7px;">Copy to 1 tile</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- Exercise Library — restyled, Lifts/Warm-ups split as the primary toggle (muscle-group chips only apply within Lifts) -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">Exercise Library — restyled, Lifts/Warm-ups as the primary split so warm-up movements are never mixed with main lifts</div>
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/exercises" width="1360" height="860" hint-size="1360,860">
+    <div style="display: flex; height: 100%; background: #fff;">
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 16px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 28px;">
+          <img src="assets/kova-logo.jpg" style="width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;" />
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 18px; color: #a46a57;">Kova Strength</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: #fdf6f2;">
+          <div style="width: 18px; text-align: center; color: #8a5140; font-size: 14px;">▥</div>
+          <div style="font-size: 14px; font-weight: 600; color: #8a5140;">Exercise Library</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; padding: 36px 40px; overflow: auto; background: #faf8f6;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 24px; color: #a46a57;">Exercise Library</div>
+          <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 8px; white-space: nowrap; box-shadow: 0 6px 16px rgba(164,106,87,0.25);">+ New Exercise</div>
+        </div>
+
+        <div style="height: 40px; border: 1px solid #d9d4cd; border-radius: 8px; background: #fff; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: #a8a29e; max-width: 900px; margin-bottom: 16px;">Search exercises…</div>
+
+        <div style="display: flex; border: 1px solid #a46a57; border-radius: 999px; overflow: hidden; width: fit-content; margin-bottom: 14px;">
+          <div style="padding: 9px 20px; font-size: 13px; font-weight: 700; color: #fff; background: #a46a57;">Lifts</div>
+          <div style="padding: 9px 20px; font-size: 13px; font-weight: 600; color: #8a5140;">Warm-ups</div>
+        </div>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;">
+          <div style="background: #a46a57; color: #fff; font-size: 12.5px; font-weight: 700; padding: 7px 16px; border-radius: 999px;">All</div>
+          <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 16px; border-radius: 999px;">Chest</div>
+          <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 16px; border-radius: 999px;">Back</div>
+          <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 16px; border-radius: 999px;">Shoulders</div>
+          <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 16px; border-radius: 999px;">Legs</div>
+          <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 16px; border-radius: 999px;">Glutes</div>
+          <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 16px; border-radius: 999px;">Core</div>
+          <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 16px; border-radius: 999px;">Arms</div>
+          <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 16px; border-radius: 999px; white-space: nowrap;">Full body</div>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; max-width: 900px; overflow: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #ece7e1;">
+            <div>
+              <div style="font-size: 14px; font-weight: 600; color: #44403c;">Seated Cable Row</div>
+              <div style="font-size: 12px; color: #78716c; margin-top: 2px;">back · row</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; flex-shrink: 0;">
+              <div style="font-size: 12.5px; font-weight: 600; color: #8a5140;">Edit</div>
+              <div style="font-size: 12.5px; font-weight: 600; color: #a8a29e;">Archive</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #ece7e1;">
+            <div>
+              <div style="font-size: 14px; font-weight: 600; color: #44403c;">Barbell Bench Press</div>
+              <div style="font-size: 12px; color: #78716c; margin-top: 2px;">chest · horizontal push</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; flex-shrink: 0;">
+              <div style="font-size: 12.5px; font-weight: 600; color: #8a5140; white-space: nowrap;">▸ video</div>
+              <div style="font-size: 12.5px; font-weight: 600; color: #8a5140;">Edit</div>
+              <div style="font-size: 12.5px; font-weight: 600; color: #a8a29e;">Archive</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #ece7e1;">
+            <div>
+              <div style="font-size: 14px; font-weight: 600; color: #44403c;">Goblet Squat</div>
+              <div style="font-size: 12px; color: #78716c; margin-top: 2px;">legs · squat</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; flex-shrink: 0;">
+              <div style="font-size: 12.5px; font-weight: 600; color: #8a5140;">Edit</div>
+              <div style="font-size: 12.5px; font-weight: 600; color: #a8a29e;">Archive</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px;">
+            <div>
+              <div style="font-size: 14px; font-weight: 600; color: #44403c;">OH Press</div>
+              <div style="font-size: 12px; color: #78716c; margin-top: 2px;">shoulders · vertical push</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; flex-shrink: 0;">
+              <div style="font-size: 12.5px; font-weight: 600; color: #8a5140;">Edit</div>
+              <div style="font-size: 12.5px; font-weight: 600; color: #a8a29e;">Archive</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- Exercise Library — Warm-ups view (same page, "Warm-ups" segment active) -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">Exercise Library — Warm-ups segment active: no muscle-group chips (not relevant), tan tag replaces muscle-group text</div>
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="app.kovastrength.com/exercises?type=warmup" width="1360" height="700" hint-size="1360,700">
+    <div style="display: flex; height: 100%; background: #fff;">
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0;"></div>
+      <div style="flex: 1; padding: 36px 40px; overflow: auto; background: #faf8f6;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 24px; color: #a46a57;">Exercise Library</div>
+          <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 8px; white-space: nowrap; box-shadow: 0 6px 16px rgba(164,106,87,0.25);">+ New Exercise</div>
+        </div>
+        <div style="height: 40px; border: 1px solid #d9d4cd; border-radius: 8px; background: #fff; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: #a8a29e; max-width: 900px; margin-bottom: 16px;">Search exercises…</div>
+        <div style="display: flex; border: 1px solid #a46a57; border-radius: 999px; overflow: hidden; width: fit-content; margin-bottom: 20px;">
+          <div style="padding: 9px 20px; font-size: 13px; font-weight: 600; color: #8a5140;">Lifts</div>
+          <div style="padding: 9px 20px; font-size: 13px; font-weight: 700; color: #fff; background: #a46a57;">Warm-ups</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 16px; max-width: 900px; overflow: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #ece7e1;">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+              <div style="font-size: 14px; font-weight: 600; color: #44403c; white-space: nowrap;">Band Pull-Apart</div>
+              <div style="background: #fdf6ee; color: #8a5a2e; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;">warm-up</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; flex-shrink: 0;">
+              <div style="font-size: 12.5px; font-weight: 600; color: #8a5140;">Edit</div>
+              <div style="font-size: 12.5px; font-weight: 600; color: #a8a29e;">Archive</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px;">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+              <div style="font-size: 14px; font-weight: 600; color: #44403c; white-space: nowrap;">Glute Bridge</div>
+              <div style="background: #fdf6ee; color: #8a5a2e; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;">warm-up</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; flex-shrink: 0;">
+              <div style="font-size: 12.5px; font-weight: 600; color: #8a5140;">Edit</div>
+              <div style="font-size: 12.5px; font-weight: 600; color: #a8a29e;">Archive</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <!-- New Exercise modal — restyled, "Type" (Lift/Warm-up) is now the first choice; Warm-up hides the movement-pattern balance tally (it doesn't apply) -->
+  <div style="font-size: 13px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">New Exercise modal — restyled, Type (Lift/Warm-up) added as the first field</div>
+  <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+    <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 18px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 12px 28px rgba(68,64,60,0.1); padding: 26px; width: 420px;">
+      <div style="font-family: 'Protest Strike', sans-serif; font-size: 19px; color: #a46a57; margin-bottom: 18px;">New exercise</div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Type</div>
+      <div style="display: flex; gap: 8px; margin-bottom: 18px;">
+        <div style="flex: 1; text-align: center; background: #a46a57; color: #fff; font-size: 13px; font-weight: 700; padding: 10px; border-radius: 8px;">Lift</div>
+        <div style="flex: 1; text-align: center; border: 1px solid #d9d4cd; color: #57534e; font-size: 13px; font-weight: 600; padding: 9.5px; border-radius: 8px;">Warm-up</div>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Name</div>
+      <div style="height: 42px; border: 1.5px solid #a46a57; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; font-size: 13.5px; color: #44403c; margin-bottom: 18px;">Incline DB Press</div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Muscle group</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px;">
+        <div style="background: #a46a57; color: #fff; font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px;">Chest</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Back</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Shoulders</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Legs</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Glutes</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Core</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Arms</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px; white-space: nowrap;">Full body</div>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Movement pattern</div>
+      <div style="font-size: 11px; color: #a8907f; margin-bottom: 8px;">For the balance tally — optional, Lifts only</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px;">
+        <div style="background: #a46a57; color: #fff; font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px;">None</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Squat</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Lunge</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Hinge</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Core</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px;">Row</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px; white-space: nowrap;">Horizontal push</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px; white-space: nowrap;">Vertical pull</div>
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; padding: 6.5px 14px; border-radius: 999px; white-space: nowrap;">Vertical push</div>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Cues</div>
+      <div style="height: 60px; border: 1px solid #d9d4cd; border-radius: 8px; margin-bottom: 18px;"></div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Video link (YouTube / Vimeo / Instagram)</div>
+      <div style="height: 42px; border: 1px solid #d9d4cd; border-radius: 8px; margin-bottom: 22px;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 13px; font-weight: 600; padding: 9px 18px; border-radius: 8px;">Cancel</div>
+        <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 700; padding: 9px 18px; border-radius: 8px;">Save</div>
+      </div>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 18px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 12px 28px rgba(68,64,60,0.1); padding: 26px; width: 420px;">
+      <div style="font-family: 'Protest Strike', sans-serif; font-size: 19px; color: #a46a57; margin-bottom: 18px;">New exercise <span style="font-size: 12px; font-weight: 600; color: #8a5a2e; vertical-align: middle;">— Warm-up type selected</span></div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Type</div>
+      <div style="display: flex; gap: 8px; margin-bottom: 18px;">
+        <div style="flex: 1; text-align: center; border: 1px solid #d9d4cd; color: #57534e; font-size: 13px; font-weight: 600; padding: 9.5px; border-radius: 8px;">Lift</div>
+        <div style="flex: 1; text-align: center; background: #8a5a2e; color: #fff; font-size: 13px; font-weight: 700; padding: 10px; border-radius: 8px;">Warm-up</div>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Name</div>
+      <div style="height: 42px; border: 1.5px solid #a46a57; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; font-size: 13.5px; color: #44403c; margin-bottom: 18px;">Band Pull-Apart</div>
+
+      <div style="background: #faf8f6; border: 1px solid #ece7e1; border-radius: 10px; padding: 14px; margin-bottom: 18px;">
+        <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Default sets/reps</div>
+        <div style="display: flex; gap: 10px;">
+          <div style="flex: 1;">
+            <div style="font-size: 10.5px; color: #a8a29e; margin-bottom: 4px;">Sets</div>
+            <div style="height: 38px; border: 1px solid #d9d4cd; border-radius: 8px; background: #fff; display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: #44403c;">2</div>
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 10.5px; color: #a8a29e; margin-bottom: 4px;">Reps</div>
+            <div style="height: 38px; border: 1px solid #d9d4cd; border-radius: 8px; background: #fff; display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: #44403c;">15</div>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: #a8907f; margin-top: 8px;">Pre-fills when inserted into a warm-up — coach can still edit per session.</div>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Cues</div>
+      <div style="height: 60px; border: 1px solid #d9d4cd; border-radius: 8px; margin-bottom: 18px;"></div>
+
+      <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Video link (YouTube / Vimeo / Instagram)</div>
+      <div style="height: 42px; border: 1px solid #d9d4cd; border-radius: 8px; margin-bottom: 22px;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <div style="border: 1px solid #d9d4cd; color: #57534e; font-size: 13px; font-weight: 600; padding: 9px 18px; border-radius: 8px;">Cancel</div>
+        <div style="background: #a46a57; color: #fff; font-size: 13px; font-weight: 700; padding: 9px 18px; border-radius: 8px;">Save</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<template id="__bundler_thumbnail">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#a46a57"/><text x="50" y="58" font-size="34" text-anchor="middle" fill="white" font-family="sans-serif">KS</text></svg>
+</template>
+]]>
+</x-dc>
+</body>
+</html>

@@ -56,7 +56,13 @@ export default function WorkoutBuilderNative() {
 
   const handlePick = async (exercise) => {
     if (pickerTarget === "warmup") {
-      const created = await addWarmup({ workoutId, exerciseId: exercise.id, position: warmups.length + 1 });
+      const created = await addWarmup({
+        workoutId,
+        exerciseId: exercise.id,
+        position: warmups.length + 1,
+        sets: exercise.default_sets != null ? String(exercise.default_sets) : undefined,
+        reps: exercise.default_reps || undefined,
+      });
       setWarmups((prev) => [...prev, created]);
     } else if (pickerTarget === "exercise") {
       const created = await addWorkoutExercise({ workoutId, exerciseId: exercise.id, position: exercises.length + 1 });
@@ -123,7 +129,7 @@ export default function WorkoutBuilderNative() {
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-6">
       <Pressable
-        onPress={() => router.push(`/(coach)/blocks/${workout.group_blocks.id}`)}
+        onPress={() => router.push(`/(coach)/blocks?program=${workout.group_blocks.group_program_id}`)}
         className="mb-3 self-start"
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
@@ -262,7 +268,7 @@ export default function WorkoutBuilderNative() {
 
       <ExercisePickerModal
         visible={pickerTarget !== null}
-        library={library}
+        library={library.filter((e) => (pickerTarget === "warmup" ? e.type === "warmup" : (e.type ?? "lift") !== "warmup"))}
         onClose={() => setPickerTarget(null)}
         onPick={handlePick}
       />

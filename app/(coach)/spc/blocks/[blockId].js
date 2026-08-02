@@ -43,9 +43,9 @@ export default function SpcBlockDetail() {
   const handleCopyLastBlock = async () => {
     setCopying(true);
     try {
-      await copyLastBlockContent(priorBlock.id, block.id, block.block_length_weeks);
+      await copyLastBlockContent(priorBlock.id, block.id);
       setCopied(true);
-      Alert.alert("Copied", "Last block's warm-ups and exercises were copied in — fill in this block's weekly numbers.");
+      Alert.alert("Copied", "Last block's warm-ups, exercises, and weekly numbers were copied in — adjust anything that needs to change.");
     } catch (err) {
       Alert.alert("Failed to copy last block", err.message ?? String(err));
     } finally {

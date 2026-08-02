@@ -3,11 +3,13 @@ import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linkin
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   DndContext,
+  DragOverlay,
   useDraggable,
   useDroppable,
   PointerSensor,
   useSensor,
   useSensors,
+  pointerWithin,
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -34,17 +36,21 @@ import { createExercise } from "../../../lib/programming/exercises";
 import { PatternTally } from "../../../components/PatternTally";
 import { CommentThread } from "../../../components/CommentThread";
 
+// The dragged item itself just fades out — the moving visual a coach
+// actually tracks across the screen is the DragOverlay preview below, not
+// a manually-positioned translate3d on this element. The old self-transform
+// approach only moved the item within the sidebar's own scrolling box, so
+// it visually vanished the moment the cursor left that column (clipped by
+// the ScrollView's overflow) — same class of bug already fixed once for the
+// SPC dashboard's kanban drag.
 function LibraryExercise({ exercise, onInsertClick }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `lib-${exercise.id}`,
     data: { type: "library", exercise },
   });
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
-    : undefined;
 
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+    <div ref={setNodeRef} style={{ opacity: isDragging ? 0.35 : 1 }} {...listeners} {...attributes}>
       <Pressable
         onPress={() => onInsertClick(exercise)}
         className="mb-1.5 cursor-grab rounded-lg border border-stone-200 px-3 py-2 active:opacity-70"
@@ -57,6 +63,26 @@ function LibraryExercise({ exercise, onInsertClick }) {
         ) : null}
       </Pressable>
     </div>
+  );
+}
+
+// Overlay preview that follows the pointer — rendered once, at the
+// DndContext level, positioned by dnd-kit itself (not clipped by any
+// scrolling ancestor), so a coach can see the card the entire way from the
+// library to wherever they drop it.
+function ExerciseDragPreview({ exercise }) {
+  return (
+    <View
+      className="rounded-lg border px-3 py-2"
+      style={{ width: 240, backgroundColor: "white", borderColor: "#a46a57", shadowColor: "#44403c", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 14 }}
+    >
+      <Text style={{ fontFamily: "Montserrat_500Medium" }}>{exercise.name}</Text>
+      {exercise.movement_pattern ? (
+        <Text className="text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+          {exercise.movement_pattern.replace("_", " ")}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -143,6 +169,7 @@ export default function WorkoutBuilderWeb() {
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [activeExercise, setActiveExercise] = useState(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -173,10 +200,17 @@ export default function WorkoutBuilderWeb() {
     return library.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()));
   }, [library, search]);
 
+  // Warm-ups are pinned above the muscle-group-grouped lifts, not bucketed
+  // alongside them — a warm-up exercise has no muscle_group (null since
+  // migration 0012), and mixing warm-up movements into the "back"/"chest"/
+  // etc. lists would make it ambiguous which exercises are actually meant
+  // for a session's warm-up slot.
+  const warmupLibrary = useMemo(() => filteredLibrary.filter((e) => e.type === "warmup"), [filteredLibrary]);
   const libraryByGroup = useMemo(() => {
     const groups = {};
     MUSCLE_GROUPS.forEach((mg) => (groups[mg] = []));
     filteredLibrary.forEach((e) => {
+      if (e.type === "warmup") return;
       if (!groups[e.muscle_group]) groups[e.muscle_group] = [];
       groups[e.muscle_group].push(e);
     });
@@ -207,7 +241,14 @@ export default function WorkoutBuilderWeb() {
     setLibrary((prev) => [...prev, created]);
   };
 
+  const handleDragStart = (event) => {
+    if (event.active.data.current?.type === "library") {
+      setActiveExercise(event.active.data.current.exercise);
+    }
+  };
+
   const handleDragEnd = (event) => {
+    setActiveExercise(null);
     const { active, over } = event;
     if (!over) return;
 
@@ -231,7 +272,13 @@ export default function WorkoutBuilderWeb() {
   };
 
   const handleAddWarmup = async (exercise) => {
-    const created = await addWarmup({ workoutId, exerciseId: exercise.id, position: warmups.length + 1 });
+    const created = await addWarmup({
+      workoutId,
+      exerciseId: exercise.id,
+      position: warmups.length + 1,
+      sets: exercise.default_sets != null ? String(exercise.default_sets) : undefined,
+      reps: exercise.default_reps || undefined,
+    });
     setWarmups((prev) => [...prev, created]);
   };
 
@@ -272,9 +319,19 @@ export default function WorkoutBuilderWeb() {
   const currentPatterns = exercises.map((e) => e.exercises?.movement_pattern).filter(Boolean);
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={pointerWithin}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveExercise(null)}
+    >
       <View className="flex-1 flex-row bg-white">
-        <ScrollView className="w-72 border-r border-stone-200 px-4 py-6">
+        <ScrollView
+          className="border-r border-stone-200 px-4 py-6"
+          style={{ width: 288, flexGrow: 0, flexShrink: 0 }}
+          contentContainerStyle={{ flexGrow: 1 }}
+        >
           <Text className="mb-3 text-lg text-primary" style={{ fontFamily: "Montserrat_600SemiBold" }}>
             Exercise Library
           </Text>
@@ -290,6 +347,16 @@ export default function WorkoutBuilderWeb() {
               + New Exercise
             </Text>
           </Pressable>
+          {warmupLibrary.length > 0 && (
+            <View className="mb-4 rounded-lg p-2" style={{ backgroundColor: "#f4ede3" }}>
+              <Text className="mb-1 text-xs uppercase" style={{ fontFamily: "Montserrat_600SemiBold", color: "#8a5a2e" }}>
+                Warm-ups
+              </Text>
+              {warmupLibrary.map((exercise) => (
+                <LibraryExercise key={exercise.id} exercise={exercise} onInsertClick={handleAddWarmup} />
+              ))}
+            </View>
+          )}
           {MUSCLE_GROUPS.map((mg) =>
             libraryByGroup[mg]?.length ? (
               <View key={mg} className="mb-4">
@@ -306,7 +373,7 @@ export default function WorkoutBuilderWeb() {
 
         <ScrollView className="flex-1 px-8 py-6">
           <Pressable
-            onPress={() => router.push(`/(coach)/blocks/${workout.group_blocks.id}`)}
+            onPress={() => router.push(`/(coach)/blocks?program=${workout.group_blocks.group_program_id}`)}
             className="mb-3 self-start"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
@@ -339,7 +406,11 @@ export default function WorkoutBuilderWeb() {
             style={{ fontFamily: "Montserrat_400Regular" }}
           />
 
-          <View ref={setWarmupDropZoneRef} className="mb-6">
+          <View
+            ref={setWarmupDropZoneRef}
+            className="mb-6 rounded-xl p-2.5"
+            style={isOverWarmup ? { backgroundColor: "#fdf6f2", borderWidth: 2, borderColor: "#a46a57", borderStyle: "dashed" } : { borderWidth: 2, borderColor: "transparent" }}
+          >
             <Text
               className="mb-2 text-xs uppercase text-stone-400"
               style={{ fontFamily: "Montserrat_600SemiBold", letterSpacing: 0.4 }}
@@ -400,7 +471,11 @@ export default function WorkoutBuilderWeb() {
             </Text>
           </View>
 
-          <View ref={setDropZoneRef} className="mb-6">
+          <View
+            ref={setDropZoneRef}
+            className="mb-6 rounded-xl p-2.5"
+            style={isOver ? { backgroundColor: "#fdf6f2", borderWidth: 2, borderColor: "#a46a57", borderStyle: "dashed" } : { borderWidth: 2, borderColor: "transparent" }}
+          >
             <Text
               className="mb-2 text-xs uppercase text-stone-700"
               style={{ fontFamily: "Montserrat_600SemiBold", letterSpacing: 0.4 }}
@@ -430,6 +505,8 @@ export default function WorkoutBuilderWeb() {
         </ScrollView>
       </View>
 
+      <DragOverlay>{activeExercise ? <ExerciseDragPreview exercise={activeExercise} /> : null}</DragOverlay>
+
       <ExerciseFormModal
         visible={newExerciseModalVisible}
         initialExercise={null}
@@ -439,7 +516,7 @@ export default function WorkoutBuilderWeb() {
 
       <ExercisePickerModal
         visible={warmupPickerVisible}
-        library={library}
+        library={library.filter((e) => e.type === "warmup")}
         onClose={() => setWarmupPickerVisible(false)}
         onPick={handleAddWarmup}
       />

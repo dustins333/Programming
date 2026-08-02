@@ -242,7 +242,7 @@ export default function TemplateBuilder() {
 
         <ExercisePickerModal
           visible={pickerTarget !== null}
-          library={library}
+          library={library.filter((e) => (pickerTarget === "warmup" ? e.type === "warmup" : (e.type ?? "lift") !== "warmup"))}
           onClose={() => setPickerTarget(null)}
           onPick={handlePick}
         />

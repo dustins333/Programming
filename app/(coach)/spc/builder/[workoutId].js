@@ -71,7 +71,13 @@ export default function SpcWorkoutBuilderNative() {
 
   const handlePick = async (exercise) => {
     if (pickerTarget === "warmup") {
-      const created = await addSpcWarmup({ workoutId, exerciseId: exercise.id, position: warmups.length + 1 });
+      const created = await addSpcWarmup({
+        workoutId,
+        exerciseId: exercise.id,
+        position: warmups.length + 1,
+        sets: exercise.default_sets != null ? String(exercise.default_sets) : undefined,
+        reps: exercise.default_reps || undefined,
+      });
       setWarmups((prev) => [...prev, created]);
     } else if (pickerTarget === "exercise") {
       const created = await addSpcWorkoutExercise({
@@ -350,7 +356,7 @@ export default function SpcWorkoutBuilderNative() {
 
       <ExercisePickerModal
         visible={pickerTarget !== null}
-        library={library}
+        library={library.filter((e) => (pickerTarget === "warmup" ? e.type === "warmup" : (e.type ?? "lift") !== "warmup"))}
         onClose={() => setPickerTarget(null)}
         onPick={handlePick}
       />
