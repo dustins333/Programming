@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Image, Pressable, Modal, Alert, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, Image, Pressable, Modal, Alert, ActivityIndicator, TextInput, StyleSheet } from "react-native";
 import { pickPhoto } from "../../lib/nutrition/imagePicker";
 import { uploadPhoto } from "../../lib/nutrition/photos";
 import { todayInBoise } from "../../lib/boiseDate";
@@ -10,6 +10,16 @@ const ANGLES = [
   { key: "side", label: "Side" },
   { key: "back", label: "Back" },
 ];
+
+// Custom-made pose guides, restored from the standalone app — pinned to
+// every edge (not just width/height: "100%") plus resizeMode="contain" so RN
+// centers the letterboxed silhouette within the box regardless of aspect
+// ratio, rather than stretching or clipping it.
+const POSE_IMAGES = {
+  front: require("../../assets/nutrition/photo-poses/front.png"),
+  side: require("../../assets/nutrition/photo-poses/side.png"),
+  back: require("../../assets/nutrition/photo-poses/back.png"),
+};
 
 function SourceModal({ visible, onPick, onClose }) {
   return (
@@ -59,10 +69,18 @@ function AngleBox({ angle, label, selected, uploading, onPicked }) {
         {selected ? (
           <Image source={{ uri: selected.uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
         ) : (
-          <Text className="text-center text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-            Tap to add{"\n"}
-            {label}
-          </Text>
+          <>
+            <Image
+              source={POSE_IMAGES[angle]}
+              resizeMode="contain"
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFillObject, { opacity: 0.25 }]}
+            />
+            <Text className="text-center text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+              Tap to add{"\n"}
+              {label}
+            </Text>
+          </>
         )}
       </Pressable>
       <Text className="mt-1 text-center text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>

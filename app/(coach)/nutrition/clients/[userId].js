@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays } from "../../../../lib/boiseDate";
 import { getClient } from "../../../../lib/nutrition/clients";
 import { listTargets, deriveCalories } from "../../../../lib/nutrition/targets";
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
-import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient } from "../../../../lib/nutrition/checkin";
+import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsSince } from "../../../../lib/nutrition/checkin";
 import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
 import { getOnboardingStatus } from "../../../../lib/nutrition/onboarding";
-import { computeWeekWindows, summarizeWeek } from "../../../../lib/nutrition/weekCycle";
+import { computeWeekWindows, summarizeWeek, enumerateUpcomingWeeks } from "../../../../lib/nutrition/weekCycle";
 import { OnboardingStepper } from "../../../../components/nutrition/OnboardingStepper";
 import { PhaseCard } from "../../../../components/nutrition/PhaseCard";
 import { WeekList, enumerateRecentWeeks } from "../../../../components/nutrition/WeekList";
@@ -18,6 +19,7 @@ import { WeekComparison } from "../../../../components/nutrition/WeekComparison"
 import { WeeklySnapshot } from "../../../../components/nutrition/WeeklySnapshot";
 import { TrendTiles } from "../../../../components/nutrition/TrendTiles";
 import { TrendChart } from "../../../../components/nutrition/TrendChart";
+import { MacroPills } from "../../../../components/nutrition/MacroPills";
 import { FocusChecklist } from "../../../../components/nutrition/FocusChecklist";
 import { GamePlan } from "../../../../components/nutrition/GamePlan";
 import { TargetsHistory } from "../../../../components/nutrition/TargetsHistory";
@@ -25,15 +27,18 @@ import { NewTargetForm } from "../../../../components/nutrition/NewTargetForm";
 import { HighlightableAnswer } from "../../../../components/nutrition/HighlightableAnswer";
 import { listAllPhotos } from "../../../../lib/nutrition/photos";
 import { PhotoCompare } from "../../../../components/nutrition/PhotoCompare";
-import { PhotoRequirementControls } from "../../../../components/nutrition/PhotoRequirementControls";
 import { PhotoSubmissionsEditor } from "../../../../components/nutrition/PhotoSubmissionsEditor";
 import { PhotoUpload } from "../../../../components/nutrition/PhotoUpload";
+import { CheckinWeekTimeline } from "../../../../components/nutrition/CheckinWeekTimeline";
+import { ClientSettingsModal } from "../../../../components/nutrition/ClientSettingsModal";
 import { CoachShell } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { fonts, colors } from "../../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
 const WEEKS_SHOWN = 8;
+const TIMELINE_PAST_WEEKS = 6;
+const TIMELINE_UPCOMING_WEEKS = 3;
 
 const TABS = [
   { key: "dashboard", label: "Dashboard" },
@@ -53,10 +58,11 @@ const TREND_METRICS = [
 ];
 
 const TREND_RANGES = [
-  { key: 30, label: "30d" },
-  { key: 90, label: "90d" },
-  { key: 180, label: "6mo" },
-  { key: 365, label: "1yr" },
+  { key: 7, label: "W" },
+  { key: 30, label: "1m" },
+  { key: 90, label: "3m" },
+  { key: 180, label: "6m" },
+  { key: 365, label: "1y" },
 ];
 
 function TabBar({ active, onSelect }) {
@@ -113,6 +119,8 @@ export default function NutritionClientDetail() {
   const [trendMetric, setTrendMetric] = useState("weight");
   const [trendRange, setTrendRange] = useState(30);
   const [loadError, setLoadError] = useState(null);
+  const [checkins, setCheckins] = useState([]);
+  const [settingsVisible, setSettingsVisible] = useState(false);
 
   const selectedWeek = useMemo(() => {
     const { currentWeek } = computeWeekWindows(today);
@@ -123,7 +131,7 @@ export default function NutritionClientDetail() {
 
   const load = useCallback(async () => {
     try {
-      const [clientRow, targetRows, logRows, focusRows, checkinRow, onboardingStatus, photoRows] = await Promise.all([
+      const [clientRow, targetRows, logRows, focusRows, checkinRow, onboardingStatus, photoRows, checkinRows] = await Promise.all([
         getClient(userId),
         listTargets(userId),
         listLogs(userId, { limit: 400 }),
@@ -131,6 +139,7 @@ export default function NutritionClientDetail() {
         getCheckinForWeek(userId, selectedWeek.start),
         getOnboardingStatus(userId),
         listAllPhotos(userId),
+        listCheckinsSince(userId, addDays(today, -7 * TIMELINE_PAST_WEEKS)),
       ]);
       setClient(clientRow);
       setTargets(targetRows);
@@ -139,6 +148,7 @@ export default function NutritionClientDetail() {
       setCheckin(checkinRow);
       setOnboarding(onboardingStatus);
       setPhotos(photoRows);
+      setCheckins(checkinRows);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -237,6 +247,9 @@ export default function NutritionClientDetail() {
                 Onboarding
               </Text>
             </View>
+            <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8}>
+              <Ionicons name="settings-outline" size={19} color="#a8a29e" />
+            </Pressable>
           </View>
           <Text className="mb-6 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
             {client.email} · started {formatDateMDY(client.start_date)}
@@ -306,6 +319,7 @@ export default function NutritionClientDetail() {
               here (Kova has no client_drafts) — the Objective Tracking phase
               card links straight to the assignment UI on its own page. */}
         </ScrollView>
+        <ClientSettingsModal visible={settingsVisible} userId={userId} client={client} onClose={() => setSettingsVisible(false)} onSaved={load} />
       </CoachShell>
     );
   }
@@ -346,9 +360,14 @@ export default function NutritionClientDetail() {
         <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
           ‹ Back to Nutrition
         </Link>
-        <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-          {client.name}
-        </Text>
+        <View className="mb-1 flex-row items-center gap-2">
+          <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+            {client.name}
+          </Text>
+          <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8}>
+            <Ionicons name="settings-outline" size={19} color="#a8a29e" />
+          </Pressable>
+        </View>
         <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
           {client.email}
         </Text>
@@ -365,11 +384,15 @@ export default function NutritionClientDetail() {
               <View style={{ flex: 1 }}>
                 <SectionCard title="Current target">
                   {currentTarget ? (
-                    <Text style={{ fontFamily: fonts.sans }}>
-                      {Math.round(deriveCalories(currentTarget))} cal — P {currentTarget.protein_g}g / C {currentTarget.carb_g}g / F{" "}
-                      {currentTarget.fat_g}g / Fiber {currentTarget.fiber_g}g
-                      {currentTarget.step_goal ? ` · ${currentTarget.step_goal} steps` : ""}
-                    </Text>
+                    <MacroPills
+                      calories={Math.round(deriveCalories(currentTarget))}
+                      protein={currentTarget.protein_g}
+                      carb={currentTarget.carb_g}
+                      fat={currentTarget.fat_g}
+                      fiber={currentTarget.fiber_g}
+                      steps={currentTarget.step_goal}
+                      sleepHours={currentTarget.sleep_hours_goal}
+                    />
                   ) : (
                     <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
                       No target set yet.
@@ -393,9 +416,14 @@ export default function NutritionClientDetail() {
         )}
 
         {tab === "weeks" && (
-          <SectionCard title="Weekly averages">
-            <WeekList weeks={recentWeeks} />
-          </SectionCard>
+          <View>
+            <SectionCard title="Check-in status">
+              <CheckinWeekTimeline userId={userId} client={client} checkins={checkins} photos={photos} today={today} onChanged={load} />
+            </SectionCard>
+            <SectionCard title="Weekly averages">
+              <WeekList weeks={recentWeeks} />
+            </SectionCard>
+          </View>
         )}
 
         {tab === "trends" && (
@@ -489,10 +517,6 @@ export default function NutritionClientDetail() {
 
         {tab === "photos" && (
           <View>
-            <SectionCard title="Photo requirements">
-              <PhotoRequirementControls userId={userId} client={client} onChanged={load} />
-            </SectionCard>
-
             <SectionCard title="Compare">
               <PhotoCompare photos={photos} />
             </SectionCard>
@@ -525,6 +549,7 @@ export default function NutritionClientDetail() {
           </View>
         )}
       </ScrollView>
+      <ClientSettingsModal visible={settingsVisible} userId={userId} client={client} onClose={() => setSettingsVisible(false)} onSaved={load} />
     </CoachShell>
   );
 }

@@ -12,10 +12,9 @@ const isWeb = Platform.OS === "web";
 
 // Standalone compare board — pick any client, compare their progress
 // photos, without going through their full client-detail page. Reuses the
-// same PhotoCompare widget the client-detail Photos tab uses (the
-// standalone app's dedicated board additionally does a 3-photo layout with
-// a logo watermark for social-media screenshots — not ported, since the
-// 2-slot compare already covers the actual coaching use case).
+// same 3-slot/watermarked PhotoCompare widget the client-detail Photos tab
+// uses; this page's own job is just to give that board a clean, screenshot-
+// ready frame for posting to social media.
 export default function NutritionPhotoCompare() {
   const insets = useSafeAreaInsets();
   const [clients, setClients] = useState(null);
@@ -70,12 +69,20 @@ export default function NutritionPhotoCompare() {
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8" contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 700 }}>
+      <ScrollView
+        className="flex-1"
+        style={{ backgroundColor: "#faf8f6" }}
+        contentContainerClassName="px-6 py-8"
+        contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 700, alignSelf: "center", width: "100%" }}
+      >
         <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
           ‹ Back to Nutrition
         </Link>
-        <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+        <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
           Photo Compare
+        </Text>
+        <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Pick 3 dates, then screenshot the board below to share.
         </Text>
 
         {clients.length === 0 ? (
@@ -120,7 +127,12 @@ export default function NutritionPhotoCompare() {
             {!photos ? (
               <ActivityIndicator color={colors.primary} />
             ) : (
-              <PhotoCompare photos={photos} />
+              <View
+                className="rounded-2xl border bg-white p-5"
+                style={{ borderColor: "#ece7e1", shadowColor: "#44403c", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10 }}
+              >
+                <PhotoCompare photos={photos} />
+              </View>
             )}
           </>
         )}

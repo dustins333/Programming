@@ -246,9 +246,6 @@ export default function NutritionDashboardWeb() {
               <Link href="/(coach)/nutrition/photo-compare" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>
                 Photo compare →
               </Link>
-              <Link href="/(coach)/nutrition/questions" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>
-                Check-in questions →
-              </Link>
             </View>
           </View>
 

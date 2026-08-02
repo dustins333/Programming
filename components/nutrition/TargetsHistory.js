@@ -1,6 +1,7 @@
 import { View, Text } from "react-native";
 import { deriveCalories } from "../../lib/nutrition/targets";
 import { formatDateMDY } from "../../lib/formatDate";
+import { MacroPills } from "./MacroPills";
 import { fonts } from "../../lib/theme";
 
 export function TargetsHistory({ history }) {
@@ -22,11 +23,15 @@ export function TargetsHistory({ history }) {
               {formatDateMDY(t.effective_date)}
             </Text>
           </View>
-          <Text style={{ fontFamily: fonts.sans }}>
-            {Math.round(deriveCalories(t))} cal — P {t.protein_g}g / C {t.carb_g}g / F {t.fat_g}g / Fiber {t.fiber_g}g
-            {t.step_goal ? ` · ${t.step_goal} steps` : ""}
-            {t.sleep_hours_goal ? ` · ${t.sleep_hours_goal}h sleep` : ""}
-          </Text>
+          <MacroPills
+            calories={Math.round(deriveCalories(t))}
+            protein={t.protein_g}
+            carb={t.carb_g}
+            fat={t.fat_g}
+            fiber={t.fiber_g}
+            steps={t.step_goal}
+            sleepHours={t.sleep_hours_goal}
+          />
           {t.note ? (
             <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
               {t.note}

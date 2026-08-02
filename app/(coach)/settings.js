@@ -5,9 +5,17 @@ import { useAuth } from "../../lib/auth/AuthProvider";
 import { getSettings, getSetting, updateSetting } from "../../lib/settings";
 import { sendPush } from "../../lib/notifications/sendPush";
 import { listCoaches, updateCoachPermissions, inviteStaffMember } from "../../lib/programming/clients";
+import { listTemplateQuestions, addTemplateQuestion, updateTemplateQuestion, deleteTemplateQuestion } from "../../lib/nutrition/checkin";
+import {
+  listQuestionnaireTemplateQuestions,
+  addQuestionnaireTemplateQuestion,
+  updateQuestionnaireTemplateQuestion,
+  deleteQuestionnaireTemplateQuestion,
+} from "../../lib/nutrition/onboarding";
 import { fonts, colors } from "../../lib/theme";
 import { CoachShell } from "../../components/CoachShell";
 import { AddStaffModal } from "../../components/AddStaffModal";
+import { QuestionListEditor } from "../../components/nutrition/QuestionListEditor";
 
 const LABELS = {
   alert_lead_time_days: "Alert lead time (days before a block ends)",
@@ -57,12 +65,25 @@ export default function Settings() {
   const [savingPermKey, setSavingPermKey] = useState(null);
   const [addStaffVisible, setAddStaffVisible] = useState(false);
   const [addStaffRole, setAddStaffRole] = useState("coach");
+  const [checkinQuestions, setCheckinQuestions] = useState([]);
+  const [questionnaireQuestions, setQuestionnaireQuestions] = useState([]);
 
   const loadCoaches = useCallback(async () => {
     try {
       setCoaches(await listCoaches());
     } catch (err) {
       console.error("Failed to load team list:", err);
+    }
+  }, []);
+
+  // Isolated the same way loadCoaches is — a nutrition-table hiccup
+  // shouldn't take down the rest of Settings.
+  const loadTemplates = useCallback(async () => {
+    try {
+      setCheckinQuestions(await listTemplateQuestions());
+      setQuestionnaireQuestions(await listQuestionnaireTemplateQuestions());
+    } catch (err) {
+      console.error("Failed to load nutrition templates:", err);
     }
   }, []);
 
@@ -81,7 +102,46 @@ export default function Settings() {
     // the page, same reasoning as every other isolated-load pattern in
     // this app.
     await loadCoaches();
-  }, [loadCoaches]);
+    await loadTemplates();
+  }, [loadCoaches, loadTemplates]);
+
+  const nextPosition = (list) => (list.length > 0 ? Math.max(...list.map((q) => q.position)) + 1 : 1);
+
+  const handleAddCheckinQuestion = async (text) => {
+    await addTemplateQuestion(text, nextPosition(checkinQuestions));
+    await loadTemplates();
+  };
+  const handleUpdateCheckinQuestion = async (id, text) => {
+    await updateTemplateQuestion(id, { question_text: text });
+    await loadTemplates();
+  };
+  const handleDeleteCheckinQuestion = async (id) => {
+    await deleteTemplateQuestion(id);
+    await loadTemplates();
+  };
+  const handleMoveCheckinQuestion = async (a, b) => {
+    await updateTemplateQuestion(a.id, { position: b.position });
+    await updateTemplateQuestion(b.id, { position: a.position });
+    await loadTemplates();
+  };
+
+  const handleAddQuestionnaireQuestion = async (text) => {
+    await addQuestionnaireTemplateQuestion(text, nextPosition(questionnaireQuestions));
+    await loadTemplates();
+  };
+  const handleUpdateQuestionnaireQuestion = async (id, text) => {
+    await updateQuestionnaireTemplateQuestion(id, { question_text: text });
+    await loadTemplates();
+  };
+  const handleDeleteQuestionnaireQuestion = async (id) => {
+    await deleteQuestionnaireTemplateQuestion(id);
+    await loadTemplates();
+  };
+  const handleMoveQuestionnaireQuestion = async (a, b) => {
+    await updateQuestionnaireTemplateQuestion(a.id, { position: b.position });
+    await updateQuestionnaireTemplateQuestion(b.id, { position: a.position });
+    await loadTemplates();
+  };
 
   useEffect(() => {
     load();
@@ -278,6 +338,32 @@ export default function Settings() {
           </View>
         </View>
       ))}
+
+      <Text className="mb-2 mt-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+        Nutrition templates
+      </Text>
+      <View className="mb-6 rounded-xl border border-stone-200 p-4">
+        <QuestionListEditor
+          title="Weekly check-in template"
+          description="The master template. Each client gets their own copy — per-client edits live on that client's Client Settings."
+          questions={checkinQuestions}
+          onAdd={handleAddCheckinQuestion}
+          onUpdate={handleUpdateCheckinQuestion}
+          onDelete={handleDeleteCheckinQuestion}
+          onMove={handleMoveCheckinQuestion}
+        />
+      </View>
+      <View className="mb-8 rounded-xl border border-stone-200 p-4">
+        <QuestionListEditor
+          title="Onboarding questionnaire template"
+          description="Copied onto a client automatically when Nutrition is turned on for them."
+          questions={questionnaireQuestions}
+          onAdd={handleAddQuestionnaireQuestion}
+          onUpdate={handleUpdateQuestionnaireQuestion}
+          onDelete={handleDeleteQuestionnaireQuestion}
+          onMove={handleMoveQuestionnaireQuestion}
+        />
+      </View>
 
       <Text className="mb-2 mt-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
         Push notifications

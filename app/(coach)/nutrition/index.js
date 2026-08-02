@@ -95,9 +95,6 @@ export default function NutritionDashboard() {
           <Link href="/(coach)/nutrition/photo-compare" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
             Photo compare
           </Link>
-          <Link href="/(coach)/nutrition/questions" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
-            Check-in questions
-          </Link>
         </View>
       </View>
       <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>

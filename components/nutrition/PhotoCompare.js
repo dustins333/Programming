@@ -73,7 +73,7 @@ function DatePicker({ anglePhotos, selectedDate, onChange }) {
 function DateStepper({ anglePhotos, selectedDate, onChange }) {
   const index = anglePhotos.findIndex((p) => p.date === selectedDate);
   return (
-    <View className="mt-1.5 flex-row items-center justify-center gap-3">
+    <View className="flex-row items-center justify-center gap-3">
       <Pressable onPress={() => index > 0 && onChange(anglePhotos[index - 1].date)} disabled={index <= 0} hitSlop={8}>
         <Text style={{ color: index <= 0 ? "#d6d3d1" : colors.primaryOnWhite, fontFamily: fonts.sansMedium }}>‹</Text>
       </Pressable>
@@ -110,18 +110,30 @@ function Slot({ photo, url, onPress }) {
   );
 }
 
-// 2-slot progress-photo comparison — angle tabs, each slot independently
-// selectable by date (‹/date-picker/›, matching the standalone app's
-// app/components/PhotoCompare.js) rather than a bare index stepper. Selection
-// is tracked by date, not array position — switching the angle tab tries to
-// keep the same date selected (if that angle has a photo on it) instead of
-// resetting to an unrelated photo. Tap either photo to open the full
-// pinch-zoom lightbox. Shared by the coach and member sides.
+// Picks oldest/middle/newest, same "tell a story" default the standalone
+// app's PhotoCompareBoard uses for its 3 slots.
+function defaultDates(anglePhotos) {
+  if (anglePhotos.length === 0) return [null, null, null];
+  const oldest = anglePhotos[0].date;
+  const newest = anglePhotos[anglePhotos.length - 1].date;
+  const middle = anglePhotos[Math.floor((anglePhotos.length - 1) / 2)].date;
+  return [oldest, middle, newest];
+}
+
+// 3-slot progress-photo comparison board — angle tabs, each slot
+// independently selectable by date (‹/date-picker/›, controls above the
+// photo — matches the standalone app's app/dashboard/photo-compare/
+// PhotoCompareBoard.js) rather than a bare index stepper. Selection is
+// tracked by date, not array position — switching the angle tab tries to
+// keep the same 3 dates selected (wherever that angle also has a photo)
+// instead of resetting to unrelated photos. Tap any photo to open the full
+// pinch-zoom lightbox. A low-opacity logo watermark sits in the corner,
+// same as the original — meant for a manual screenshot, not an automated
+// export. Shared by the coach and member sides.
 export function PhotoCompare({ photos }) {
   const [angle, setAngle] = useState("front");
   const [urls, setUrls] = useState({});
-  const [leftDate, setLeftDate] = useState(null);
-  const [rightDate, setRightDate] = useState(null);
+  const [slotDates, setSlotDates] = useState([null, null, null]);
   const [lightboxUrl, setLightboxUrl] = useState(null);
 
   // Oldest-first so the first entry is the earliest photo — matches
@@ -138,18 +150,17 @@ export function PhotoCompare({ photos }) {
 
   useEffect(() => {
     if (anglePhotos.length === 0) return;
-    // Keep whichever date was already selected if this angle also has a
-    // photo on it; otherwise fall back to oldest/newest.
-    setLeftDate((prev) => (prev && anglePhotos.some((p) => p.date === prev) ? prev : anglePhotos[0].date));
-    setRightDate((prev) => (prev && anglePhotos.some((p) => p.date === prev) ? prev : anglePhotos[anglePhotos.length - 1].date));
+    const fallback = defaultDates(anglePhotos);
+    setSlotDates((prev) => prev.map((d, i) => (d && anglePhotos.some((p) => p.date === d) ? d : fallback[i])));
     getPhotoSignedUrls(anglePhotos.map((p) => p.storage_path))
       .then((next) => setUrls((prev) => ({ ...prev, ...next })))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anglePhotos]);
 
-  const left = anglePhotos.find((p) => p.date === leftDate) ?? null;
-  const right = anglePhotos.find((p) => p.date === rightDate) ?? null;
+  const setSlotDate = (index, date) => {
+    setSlotDates((prev) => prev.map((d, i) => (i === index ? date : d)));
+  };
 
   return (
     <View>
@@ -171,15 +182,26 @@ export function PhotoCompare({ photos }) {
           No {angle} photos yet.
         </Text>
       ) : (
-        <View className="flex-row gap-3">
-          <View className="flex-1">
-            <Slot photo={left} url={left ? urls[left.storage_path] : null} onPress={() => left && urls[left.storage_path] && setLightboxUrl(urls[left.storage_path])} />
-            <DateStepper anglePhotos={anglePhotos} selectedDate={leftDate} onChange={setLeftDate} />
+        <View style={{ position: "relative" }}>
+          <View className="flex-row gap-3">
+            {slotDates.map((date, i) => {
+              const photo = anglePhotos.find((p) => p.date === date) ?? null;
+              const url = photo ? urls[photo.storage_path] : null;
+              return (
+                <View key={i} className="flex-1">
+                  <DateStepper anglePhotos={anglePhotos} selectedDate={date} onChange={(d) => setSlotDate(i, d)} />
+                  <View className="mt-1.5">
+                    <Slot photo={photo} url={url} onPress={() => photo && url && setLightboxUrl(url)} />
+                  </View>
+                </View>
+              );
+            })}
           </View>
-          <View className="flex-1">
-            <Slot photo={right} url={right ? urls[right.storage_path] : null} onPress={() => right && urls[right.storage_path] && setLightboxUrl(urls[right.storage_path])} />
-            <DateStepper anglePhotos={anglePhotos} selectedDate={rightDate} onChange={setRightDate} />
-          </View>
+          <Image
+            source={require("../../assets/kova-logo.jpg")}
+            pointerEvents="none"
+            style={{ position: "absolute", bottom: 8, right: 8, width: 40, height: 40, borderRadius: 20, opacity: 0.3 }}
+          />
         </View>
       )}
 
