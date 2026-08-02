@@ -373,7 +373,9 @@ export default function WorkoutBuilderWeb() {
 
         <ScrollView className="flex-1 px-8 py-6">
           <Pressable
-            onPress={() => router.back()}
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.push(`/(coach)/blocks?program=${workout.group_blocks.group_program_id}`)
+            }
             className="mb-3 self-start"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >

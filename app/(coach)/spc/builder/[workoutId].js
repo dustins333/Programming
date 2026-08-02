@@ -140,7 +140,9 @@ export default function SpcWorkoutBuilderNative() {
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-6">
       <Pressable
-        onPress={() => router.back()}
+        onPress={() =>
+          router.canGoBack() ? router.back() : router.push(`/(coach)/spc/blocks/${workout.spc_blocks.id}`)
+        }
         className="mb-3 self-start"
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
