@@ -8,9 +8,9 @@ const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", href: "/(coach)", icon: "home" },
   { key: "clients", label: "Clients", href: "/(coach)/clients", icon: "people" },
   { key: "blocks", label: "Group Programs", href: "/(coach)/blocks", icon: "barbell" },
-  { key: "spc", label: "SPC", href: "/(coach)/spc", icon: "clipboard" },
-  { key: "nutrition", label: "Nutrition", href: "/(coach)/nutrition", icon: "restaurant" },
-  { key: "exercises", label: "Exercise Library", href: "/(coach)/exercises", icon: "library" },
+  { key: "spc", label: "SPC", href: "/(coach)/spc", icon: "clipboard", permission: "can_view_spc" },
+  { key: "nutrition", label: "Nutrition", href: "/(coach)/nutrition", icon: "restaurant", permission: "can_view_nutrition" },
+  { key: "exercises", label: "Exercise Library", href: "/(coach)/exercises", icon: "library", permission: "can_view_exercise_library" },
 ];
 
 // Strips the route-group segment (e.g. "(coach)") since expo-router's
@@ -43,6 +43,13 @@ export function CoachShell({ children }) {
     return children;
   }
 
+  // Admin always sees every module; a coach's own account-level toggles
+  // (Settings → Team) hide the nav entries for modules they've been turned
+  // off from — matches the underlying RLS gating (migration 0015), so a
+  // hidden item isn't just cosmetic, the data really isn't reachable either.
+  const isAdmin = profile?.role === "admin";
+  const visibleNavItems = NAV_ITEMS.filter((item) => isAdmin || !item.permission || profile?.[item.permission]);
+
   return (
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: "#f6f1ec" }}>
       <View
@@ -62,7 +69,7 @@ export function CoachShell({ children }) {
           </Text>
         </View>
 
-        {NAV_ITEMS.map((item) => {
+        {visibleNavItems.map((item) => {
           const active = isActive(pathname, item.href);
           return (
             <Pressable
@@ -78,6 +85,18 @@ export function CoachShell({ children }) {
             </Pressable>
           );
         })}
+
+        {/* Every coach/admin account is also a real training client (per
+            explicit ask) — this jumps into the same member tab experience
+            any client uses, reading this account's own program data. The
+            member layout's staff-only "Coaching" tab is the way back. */}
+        <Pressable
+          onPress={() => router.push("/(member)")}
+          className="mb-1 flex-row items-center gap-3 rounded-lg px-3 py-2.5"
+        >
+          <Ionicons name="body-outline" size={18} color="#78716c" />
+          <Text style={{ fontFamily: fonts.sansMedium, color: "#44403c", fontSize: 14 }}>My Training</Text>
+        </Pressable>
 
         {profile?.role === "admin" ? (
           <Pressable

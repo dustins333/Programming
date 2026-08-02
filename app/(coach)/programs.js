@@ -1,21 +1,25 @@
 import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
+import { useAuth } from "../../lib/auth/AuthProvider";
 import { fonts, colors } from "../../lib/theme";
 
 const ROWS = [
   { href: "/(coach)/blocks", title: "Group Programs", subtitle: "Flagship & Better With Age" },
-  { href: "/(coach)/spc", title: "SPC", subtitle: "Individualized, staggered blocks" },
+  { href: "/(coach)/spc", title: "SPC", subtitle: "Individualized, staggered blocks", permission: "can_view_spc" },
 ];
 
 export default function Programs() {
   const router = useRouter();
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === "admin";
+  const rows = ROWS.filter((row) => isAdmin || !row.permission || profile?.[row.permission]);
 
   return (
     <View className="flex-1 bg-white px-6 py-8">
       <Text className="mb-6 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Programs
       </Text>
-      {ROWS.map((row) => (
+      {rows.map((row) => (
         <Pressable
           key={row.href}
           onPress={() => router.push(row.href)}

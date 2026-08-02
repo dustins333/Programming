@@ -27,6 +27,13 @@ export default function CoachLayout() {
     return <Redirect href="/(member)" />;
   }
 
+  // Admin always sees every module; a coach's account-level toggle
+  // (Settings → Team) hides the Nutrition tab itself when off, matching
+  // the underlying RLS gating from migration 0015. SPC/Exercise Library
+  // aren't tabs on native (reached via Programs/More instead) — those are
+  // filtered in programs.js/more.js.
+  const canViewNutrition = profile.role === "admin" || profile.can_view_nutrition;
+
   return (
     <Tabs
       screenOptions={{
@@ -41,7 +48,10 @@ export default function CoachLayout() {
       <Tabs.Screen name="index" options={{ title: "Home", tabBarIcon: TabIcon("home") }} />
       <Tabs.Screen name="clients" options={{ title: "Clients", tabBarIcon: TabIcon("people") }} />
       <Tabs.Screen name="programs" options={{ title: "Programs", tabBarIcon: TabIcon("barbell") }} />
-      <Tabs.Screen name="nutrition" options={{ title: "Nutrition", tabBarIcon: TabIcon("restaurant") }} />
+      <Tabs.Screen
+        name="nutrition"
+        options={{ title: "Nutrition", tabBarIcon: TabIcon("restaurant"), href: canViewNutrition ? undefined : null }}
+      />
       <Tabs.Screen name="more" options={{ title: "More", tabBarIcon: TabIcon("ellipsis-horizontal-circle") }} />
 
       {/* Routable but not shown as their own tab — reached via Programs/More. */}

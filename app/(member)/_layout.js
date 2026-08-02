@@ -34,9 +34,14 @@ export default function MemberLayout() {
 
   if (!session) return <Redirect href="/login" />;
   if (!profile) return <Redirect href="/pending-setup" />;
-  // Coaches/admins land in the (coach) group instead — a member route
-  // group has nothing for them.
-  if (profile.role !== "member") return <Redirect href="/(coach)" />;
+  // Members always land here (app/index.js sends them straight to this
+  // group on sign-in). Coaches/admins land in (coach) by default instead,
+  // but — since a coach/admin is also a real training client, per explicit
+  // ask — they're allowed through here too rather than bounced back out:
+  // this is how CoachShell's "My Training" link and each Team row's
+  // "Manage own training" link actually work. The "Coaching" tab below
+  // (staff-only) is their way back.
+  const isStaff = profile.role === "admin" || profile.role === "coach";
 
   return (
     <Tabs
@@ -51,6 +56,19 @@ export default function MemberLayout() {
       <Tabs.Screen name="plan" options={{ title: "My Fitness", tabBarIcon: TabIcon("barbell"), tabBarLabel: TabLabel("My Fitness") }} />
       <Tabs.Screen name="nutrition" options={{ title: "My Nutrition", tabBarIcon: TabIcon("restaurant"), tabBarLabel: TabLabel("My Nutrition") }} />
       <Tabs.Screen name="history" options={{ title: "My History", tabBarIcon: TabIcon("time"), tabBarLabel: TabLabel("My History") }} />
+
+      {/* Staff-only way back to the coach dashboard, since a coach/admin
+          can now reach this member tab set too (see the note above) — a
+          plain member never sees this tab at all. */}
+      <Tabs.Screen
+        name="back-to-coaching"
+        options={{
+          title: "Coaching",
+          tabBarIcon: TabIcon("briefcase"),
+          tabBarLabel: TabLabel("Coaching"),
+          href: isStaff ? undefined : null,
+        }}
+      />
 
       {/* Routable but not shown as their own tab — reached from My Fitness's
           "View block" links. */}
