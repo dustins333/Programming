@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   DndContext,
   DragOverlay,
   useDraggable,
-  useDroppable,
   PointerSensor,
   useSensor,
   useSensors,
   pointerWithin,
+  MeasuringStrategy,
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -24,34 +24,22 @@ import {
   removeSpcWarmup,
   listSpcWorkoutExercises,
   addSpcWorkoutExercise,
+  updateSpcWorkoutExercise,
   removeSpcWorkoutExercise,
   reorderSpcWorkoutExercises,
-  updateSpcExerciseWeek,
   getSpcSiblingPatterns,
   setSpcWorkoutStatus,
   setSpcWorkoutTitle,
-  getSpcWorkoutWeekTitles,
-  setSpcWorkoutWeekTitle,
 } from "../../../../lib/programming/spcWorkouts";
 import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
 import { CommentThread } from "../../../../components/CommentThread";
 import { PatternTally } from "../../../../components/PatternTally";
-import { formatDateMDY } from "../../../../lib/formatDate";
 import { fonts, colors } from "../../../../lib/theme";
-
-function initialsFor(name) {
-  if (!name) return "";
-  return name.split(/\s+/).filter(Boolean).map((p) => p[0].toUpperCase()).join("");
-}
 
 // The dragged item itself just fades out — the moving visual a coach
 // actually tracks across the screen is the DragOverlay preview below, not
-// a manually-positioned translate3d on this element. The old self-transform
-// approach only moved the item within the sidebar's own scrolling box, so
-// it visually vanished the moment the cursor left that column (clipped by
-// the ScrollView's overflow) — same class of bug already fixed once for the
-// SPC dashboard's kanban drag.
+// a manually-positioned translate3d on this element.
 function LibraryExercise({ exercise, onInsertClick }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `lib-${exercise.id}`,
@@ -81,50 +69,17 @@ function ExerciseDragPreview({ exercise }) {
   );
 }
 
-function WeekCell({ week, onChange }) {
-  return (
-    <View className="w-24 border-l border-stone-100 px-2">
-      <TextInput
-        value={String(week.sets ?? "")}
-        onChangeText={(v) => onChange(week.id, { sets: v === "" ? null : Number(v) || 0 })}
-        keyboardType="numeric"
-        placeholder="sets"
-        className="mb-1 rounded border border-stone-300 px-1.5 py-1 text-center text-xs"
-        style={{ fontFamily: fonts.sans }}
-      />
-      <TextInput
-        value={week.reps ?? ""}
-        onChangeText={(v) => onChange(week.id, { reps: v })}
-        placeholder="reps"
-        className="mb-1 rounded border border-stone-300 px-1.5 py-1 text-center text-xs"
-        style={{ fontFamily: fonts.sans }}
-      />
-      <TextInput
-        value={week.rest ?? ""}
-        onChangeText={(v) => onChange(week.id, { rest: v })}
-        placeholder="rest"
-        className="rounded border border-stone-300 px-1.5 py-1 text-center text-xs"
-        style={{ fontFamily: fonts.sans }}
-      />
-      <Text className="mt-1 text-center text-[10px] text-stone-400" style={{ fontFamily: fonts.sans }}>
-        {week.coach_initials ? `${week.coach_initials} ${formatDateMDY(week.touched_date)}` : "—"}
-      </Text>
-    </View>
-  );
-}
-
-function SpcExerciseRow({ item, blockLengthWeeks, onChangeWeek, onRemove }) {
+function SpcExerciseRow({ item, onChange, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
-  const weeksByNumber = Object.fromEntries(item.spc_exercise_weeks.map((w) => [w.week_number, w]));
 
   return (
     <div ref={setNodeRef} style={style}>
-      <View className="mb-2 flex-row items-start rounded-lg border border-stone-200 px-3 py-2">
+      <View className="mb-2 flex-row items-center gap-3 rounded-lg border border-stone-200 px-3 py-2">
         <div {...attributes} {...listeners} style={{ cursor: "grab", padding: 4 }}>
           ⠿
         </div>
-        <View className="mr-2 w-40">
+        <View className="flex-1">
           <Text style={{ fontFamily: fonts.sansMedium }}>{item.exercises?.name}</Text>
           {item.exercises?.video_url ? (
             <Pressable
@@ -138,16 +93,37 @@ function SpcExerciseRow({ item, blockLengthWeeks, onChangeWeek, onRemove }) {
             </Pressable>
           ) : null}
         </View>
-        <ScrollView horizontal>
-          {Array.from({ length: blockLengthWeeks }, (_, i) => i + 1).map((weekNumber) => {
-            const week = weeksByNumber[weekNumber];
-            if (!week) return null;
-            return <WeekCell key={week.id} week={week} onChange={(id, fields) => onChangeWeek(item.id, id, fields)} />;
-          })}
-        </ScrollView>
+        <TextInput
+          value={String(item.sets ?? "")}
+          onChangeText={(v) => onChange(item.id, { sets: v === "" ? null : Number(v) || 0 })}
+          keyboardType="numeric"
+          placeholder="sets"
+          className="w-16 rounded-lg border border-stone-300 px-2 py-3 text-center"
+          style={{ fontFamily: fonts.sans }}
+        />
+        <TextInput
+          value={item.reps ?? ""}
+          onChangeText={(v) => onChange(item.id, { reps: v })}
+          placeholder="reps"
+          className="w-16 rounded-lg border border-stone-300 px-2 py-3 text-center"
+          style={{ fontFamily: fonts.sans }}
+        />
+        <TextInput
+          value={item.rest ?? ""}
+          onChangeText={(v) => onChange(item.id, { rest: v })}
+          placeholder="rest"
+          className="w-16 rounded-lg border border-stone-300 px-2 py-3 text-center"
+          style={{ fontFamily: fonts.sans }}
+        />
+        <TextInput
+          value={item.notes ?? ""}
+          onChangeText={(v) => onChange(item.id, { notes: v })}
+          placeholder="notes"
+          className="w-28 rounded-lg border border-stone-300 px-2 py-3"
+          style={{ fontFamily: fonts.sans }}
+        />
         <Pressable
           onPress={() => onRemove(item.id)}
-          className="ml-2"
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityLabel={`Remove ${item.exercises?.name ?? "exercise"}`}
         >
@@ -174,29 +150,58 @@ export default function SpcWorkoutBuilderWeb() {
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [activeExercise, setActiveExercise] = useState(null);
-  const [weekTitles, setWeekTitles] = useState([]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const { setNodeRef: setDropZoneRef, isOver } = useDroppable({ id: "session-dropzone" });
-  const { setNodeRef: setWarmupDropZoneRef, isOver: isOverWarmup } = useDroppable({ id: "warmup-dropzone" });
+
+  // dnd-kit's own collision detection (pointerWithin/`over`) was confirmed
+  // unreliable in this environment: raw diagnostic logging showed the
+  // browser's actual cursor position genuinely and continuously inside the
+  // drop zone's real getBoundingClientRect() for a sustained stretch of a
+  // drag, while dnd-kit's own `over` stayed null the entire time. Rather
+  // than depend on dnd-kit's internal position tracking for library-item
+  // drops, this tracks the raw pointer position directly (same technique
+  // that proved reliable) and hit-tests it against these two zones' real
+  // DOM rects by hand — both for the actual drop decision (handleDragEnd)
+  // and for the visual highlight, so what lights up matches what will
+  // actually happen. Existing-item reordering is untouched and still uses
+  // dnd-kit's own sortable collision detection.
+  const rawDropZoneRef = useRef(null);
+  const rawWarmupZoneRef = useRef(null);
+  const [rawHoverZone, setRawHoverZone] = useState(null); // "session" | "warmup" | null
+
+  useEffect(() => {
+    if (!activeExercise) {
+      setRawHoverZone(null);
+      return;
+    }
+    const handler = (e) => {
+      const warmupRect = rawWarmupZoneRef.current?.getBoundingClientRect();
+      const sessionRect = rawDropZoneRef.current?.getBoundingClientRect();
+      const inRect = (rect) => rect && e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+      setRawHoverZone(inRect(warmupRect) ? "warmup" : inRect(sessionRect) ? "session" : null);
+    };
+    document.addEventListener("pointermove", handler);
+    return () => document.removeEventListener("pointermove", handler);
+  }, [activeExercise]);
+
+  const isOver = rawHoverZone === "session";
+  const isOverWarmup = rawHoverZone === "warmup";
 
   const load = useCallback(async () => {
     const w = await getSpcWorkout(workoutId);
     setWorkout(w);
-    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings, weekTitleRows] = await Promise.all([
+    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
       getUser(w.spc_blocks.spc_client_id),
       listSpcWarmups(workoutId),
       listSpcWorkoutExercises(workoutId),
       listExercises(),
-      getSpcSiblingPatterns(w.spc_blocks.id, workoutId),
-      getSpcWorkoutWeekTitles(workoutId),
+      getSpcSiblingPatterns(w.spc_blocks.id, w.week_number, workoutId),
     ]);
     setMember(memberRow);
     setWarmups(warmupRows);
     setExercises(exerciseRows);
     setLibrary(libraryRows);
     setSiblingPatterns(siblings);
-    setWeekTitles(weekTitleRows);
   }, [workoutId]);
 
   useEffect(() => {
@@ -208,11 +213,6 @@ export default function SpcWorkoutBuilderWeb() {
     return library.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()));
   }, [library, search]);
 
-  // Warm-ups are pinned above the muscle-group-grouped lifts, not bucketed
-  // alongside them — a warm-up exercise has no muscle_group (null since
-  // migration 0012), and mixing warm-up movements into the "back"/"chest"/
-  // etc. lists would make it ambiguous which exercises are actually meant
-  // for a session's warm-up slot.
   const warmupLibrary = useMemo(() => filteredLibrary.filter((e) => e.type === "warmup"), [filteredLibrary]);
   const libraryByGroup = useMemo(() => {
     const groups = {};
@@ -230,28 +230,14 @@ export default function SpcWorkoutBuilderWeb() {
       workoutId,
       exerciseId: exercise.id,
       position: exercises.length + 1,
-      blockLengthWeeks: workout.spc_blocks.block_length_weeks,
       userId: workout.spc_blocks.spc_client_id,
     });
     setExercises((prev) => [...prev, created]);
   };
 
-  const handleChangeWeek = (exerciseId, weekId, fields) => {
-    setExercises((prev) =>
-      prev.map((e) =>
-        e.id !== exerciseId
-          ? e
-          : {
-              ...e,
-              spc_exercise_weeks: e.spc_exercise_weeks.map((w) =>
-                w.id !== weekId
-                  ? w
-                  : { ...w, ...fields, coach_initials: initialsFor(profile.name), touched_date: new Date().toISOString().slice(0, 10) }
-              ),
-            }
-      )
-    );
-    updateSpcExerciseWeek(weekId, fields, profile.name);
+  const handleExerciseChange = (id, fields) => {
+    setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...fields } : e)));
+    updateSpcWorkoutExercise(id, fields);
   };
 
   const handleRemoveExercise = async (id) => {
@@ -273,17 +259,21 @@ export default function SpcWorkoutBuilderWeb() {
   const handleDragEnd = (event) => {
     setActiveExercise(null);
     const { active, over } = event;
-    if (!over) return;
 
     if (active.data.current?.type === "library") {
-      if (over.id === "warmup-dropzone") {
+      // Decided by raw pointer position against the two zones' real DOM
+      // rects (see rawHoverZone above), not dnd-kit's own `over` — confirmed
+      // unreliable in this environment. Warm-up is the one specific target;
+      // anywhere else in this builder means "add to the main session."
+      if (rawHoverZone === "warmup") {
         handleAddWarmup(active.data.current.exercise);
-      } else if (over.id === "session-dropzone" || exercises.some((e) => e.id === over.id)) {
+      } else {
         handleInsertExercise(active.data.current.exercise);
       }
       return;
     }
 
+    if (!over) return;
     if (active.id !== over.id) {
       const oldIndex = exercises.findIndex((e) => e.id === active.id);
       const newIndex = exercises.findIndex((e) => e.id === over.id);
@@ -326,19 +316,9 @@ export default function SpcWorkoutBuilderWeb() {
     }
   };
 
-  const handleDefaultTitleChange = (title) => {
+  const handleTitleChange = (title) => {
     setWorkout((w) => ({ ...w, title }));
     setSpcWorkoutTitle(workoutId, title);
-  };
-
-  // Blank clears the override for that week (falls back to the default
-  // title above) — setSpcWorkoutWeekTitle deletes the row in that case.
-  const handleWeekTitleChange = (weekNumber, title) => {
-    setWeekTitles((prev) => {
-      const others = prev.filter((t) => t.week_number !== weekNumber);
-      return title ? [...others, { week_number: weekNumber, title }] : others;
-    });
-    setSpcWorkoutWeekTitle(workoutId, weekNumber, title);
   };
 
   if (!workout || !member) {
@@ -355,6 +335,9 @@ export default function SpcWorkoutBuilderWeb() {
     <DndContext
       sensors={sensors}
       collisionDetection={pointerWithin}
+      // Kept fresh for existing-item reordering (still dnd-kit-driven) —
+      // library-item drops no longer depend on this at all, see rawHoverZone.
+      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveExercise(null)}
@@ -406,16 +389,16 @@ export default function SpcWorkoutBuilderWeb() {
 
         <ScrollView className="flex-1 px-8 py-6">
           <Pressable
-            onPress={() => router.push(`/(coach)/spc/blocks/${workout.spc_blocks.id}`)}
+            onPress={() => router.back()}
             className="mb-3 self-start"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back to block</Text>
+            <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back</Text>
           </Pressable>
           <View className="mb-6 flex-row items-center justify-between">
             <View>
               <Text className="text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
-                {member.name} — Session {workout.session_number}
+                {member.name} — Week {workout.week_number}, Session {workout.session_number}
               </Text>
               <Text
                 className="text-xs"
@@ -431,19 +414,16 @@ export default function SpcWorkoutBuilderWeb() {
             </Pressable>
           </View>
 
-          <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-            Default title (applies to every week unless overridden below)
-          </Text>
           <TextInput
             value={workout.title ?? ""}
-            onChangeText={handleDefaultTitleChange}
+            onChangeText={handleTitleChange}
             placeholder="Session title (e.g. Back & Bis) — shown to the member"
             className="mb-6 w-96 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: fonts.sans }}
           />
 
           <View
-            ref={setWarmupDropZoneRef}
+            ref={rawWarmupZoneRef}
             className="mb-6 rounded-xl p-2.5"
             style={isOverWarmup ? { backgroundColor: "#fdf6f2", borderWidth: 2, borderColor: "#a46a57", borderStyle: "dashed" } : { borderWidth: 2, borderColor: "transparent" }}
           >
@@ -505,51 +485,42 @@ export default function SpcWorkoutBuilderWeb() {
           </View>
 
           <View
-            ref={setDropZoneRef}
+            ref={rawDropZoneRef}
             className="mb-6 rounded-xl p-2.5"
-            style={isOver ? { backgroundColor: "#fdf6f2", borderWidth: 2, borderColor: "#a46a57", borderStyle: "dashed" } : { borderWidth: 2, borderColor: "transparent" }}
+            // Generous minHeight regardless of content — a big, hard-to-miss
+            // hit region rather than one that shrinks to fit whatever's
+            // currently inside it (which made it easy to drop just outside
+            // the measured area on a session with only one or two rows).
+            style={
+              isOver
+                ? { minHeight: 160, backgroundColor: "#fdf6f2", borderWidth: 2, borderColor: "#a46a57", borderStyle: "dashed" }
+                : { minHeight: 160, borderWidth: 2, borderColor: "transparent" }
+            }
           >
             <Text className="mb-2 text-xs uppercase text-stone-700" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
               Main Session {isOver ? "· drop here" : ""}
             </Text>
 
-            {exercises.length > 0 && (
-              <View className="mb-2 flex-row items-start" style={{ marginLeft: 190 }}>
-                <ScrollView horizontal>
-                  {Array.from({ length: workout.spc_blocks.block_length_weeks }, (_, i) => i + 1).map((weekNumber) => (
-                    <View key={weekNumber} className="w-24 border-l border-stone-100 px-2">
-                      <Text className="mb-1 text-center text-[10px] uppercase text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
-                        Wk {weekNumber} title
-                      </Text>
-                      <TextInput
-                        value={weekTitles.find((t) => t.week_number === weekNumber)?.title ?? ""}
-                        onChangeText={(v) => handleWeekTitleChange(weekNumber, v)}
-                        placeholder={workout.title || "(default)"}
-                        className="rounded border border-stone-300 px-1.5 py-1 text-center text-xs"
-                        style={{ fontFamily: fonts.sans }}
-                      />
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
             <SortableContext items={exercises.map((e) => e.id)} strategy={verticalListSortingStrategy}>
               {exercises.length === 0 ? (
-                <View className="rounded-lg border border-dashed border-stone-300 px-4 py-8">
-                  <Text className="text-center text-stone-400" style={{ fontFamily: fonts.sans }}>
-                    Drag exercises here, or click one in the library.
+                <View
+                  className="items-center justify-center rounded-lg px-4"
+                  style={
+                    isOver
+                      ? { minHeight: 96, borderWidth: 2, borderStyle: "dashed", borderColor: "#a46a57", backgroundColor: "#fdf6f2" }
+                      : { minHeight: 96, borderWidth: 1, borderStyle: "dashed", borderColor: "#d6d3d1" }
+                  }
+                >
+                  <Text
+                    className="text-center"
+                    style={{ fontFamily: isOver ? fonts.sansSemiBold : fonts.sans, color: isOver ? "#8a5140" : "#a8a29e" }}
+                  >
+                    {isOver ? "Drop here" : "Drag exercises here, or click one in the library."}
                   </Text>
                 </View>
               ) : (
                 exercises.map((item) => (
-                  <SpcExerciseRow
-                    key={item.id}
-                    item={item}
-                    blockLengthWeeks={workout.spc_blocks.block_length_weeks}
-                    onChangeWeek={handleChangeWeek}
-                    onRemove={handleRemoveExercise}
-                  />
+                  <SpcExerciseRow key={item.id} item={item} onChange={handleExerciseChange} onRemove={handleRemoveExercise} />
                 ))
               )}
             </SortableContext>

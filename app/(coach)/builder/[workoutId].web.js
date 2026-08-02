@@ -373,11 +373,11 @@ export default function WorkoutBuilderWeb() {
 
         <ScrollView className="flex-1 px-8 py-6">
           <Pressable
-            onPress={() => router.push(`/(coach)/blocks?program=${workout.group_blocks.group_program_id}`)}
+            onPress={() => router.back()}
             className="mb-3 self-start"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back to block</Text>
+            <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back</Text>
           </Pressable>
           <View className="mb-6 flex-row items-center justify-between">
             <View>

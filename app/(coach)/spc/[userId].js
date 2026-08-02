@@ -65,10 +65,10 @@ async function loadGrid(blockRows) {
   const allWorkoutIds = [];
   for (const row of rows) {
     if (!row.block) continue;
-    // No week_number filter (unlike group) — SPC sessions recur weekly off
-    // one spc_workouts row, so every week row covered by this block shows
-    // the same session set.
-    row.sessions = workoutsByBlockId[row.block.id] ?? [];
+    // Same week_number filter as group's loadProgramData now that SPC has
+    // one independent row per (week, session) instead of one row recurring
+    // across every week of the block.
+    row.sessions = (workoutsByBlockId[row.block.id] ?? []).filter((w) => w.week_number === row.weekNum);
     allWorkoutIds.push(...row.sessions.map((s) => s.id));
   }
 
@@ -191,10 +191,12 @@ export default function SpcClientDetail() {
       // blockRows is already newest-start-first, so [0] is the block a
       // "+ New block" click would be reusing — preview its sessions for the
       // choice modal regardless of whether it's still inside the grid's
-      // visible 6-week window.
+      // visible 6-week window. Week 1 only, as a representative sample —
+      // each week can now have its own exercise list, so there's no single
+      // "the" exercise list for a session to show anymore.
       if (blockRows.length > 0) {
         const latest = blockRows[0];
-        const latestWorkouts = await listSpcWorkoutsForBlock(latest.id);
+        const latestWorkouts = (await listSpcWorkoutsForBlock(latest.id)).filter((w) => w.week_number === 1);
         const previewExercises = await listSpcWorkoutExercisesForWorkouts(latestWorkouts.map((w) => w.id));
         setLatestBlockPreview(
           latestWorkouts
@@ -476,7 +478,7 @@ export default function SpcClientDetail() {
               style={{ borderColor: "#d9d4cd" }}
             >
               <Text className="text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
-                Past blocks
+                History
               </Text>
             </Pressable>
           </View>

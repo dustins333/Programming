@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listExercises } from "../../../../lib/programming/exercises";
 import { getUser } from "../../../../lib/programming/clients";
 import {
@@ -11,29 +10,25 @@ import {
   removeSpcWarmup,
   listSpcWorkoutExercises,
   addSpcWorkoutExercise,
+  updateSpcWorkoutExercise,
   removeSpcWorkoutExercise,
   reorderSpcWorkoutExercises,
-  updateSpcExerciseWeek,
   getSpcSiblingPatterns,
   setSpcWorkoutStatus,
   setSpcWorkoutTitle,
-  getSpcWorkoutWeekTitles,
-  setSpcWorkoutWeekTitle,
 } from "../../../../lib/programming/spcWorkouts";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
 import { CommentThread } from "../../../../components/CommentThread";
 import { PatternTally } from "../../../../components/PatternTally";
-import { formatDateMDY } from "../../../../lib/formatDate";
 import { fonts, colors } from "../../../../lib/theme";
 
 // Native is a "view + quick adjust" surface, same philosophy as the group
-// builder's native screen — no drag-and-drop, no wide week-by-week table.
-// Instead of showing every week column at once (unusable on a phone), a
-// week selector picks which week's numbers are being edited.
+// builder's native screen — no drag-and-drop, no week columns anymore
+// either now that SPC has one independently-editable row per (week,
+// session), same as group.
 export default function SpcWorkoutBuilderNative() {
   const { workoutId } = useLocalSearchParams();
   const router = useRouter();
-  const { profile } = useAuth();
 
   const [workout, setWorkout] = useState(null);
   const [member, setMember] = useState(null);
@@ -42,27 +37,23 @@ export default function SpcWorkoutBuilderNative() {
   const [library, setLibrary] = useState([]);
   const [siblingPatterns, setSiblingPatterns] = useState([]);
   const [pickerTarget, setPickerTarget] = useState(null); // "warmup" | "exercise" | null
-  const [selectedWeek, setSelectedWeek] = useState(1);
   const [publishing, setPublishing] = useState(false);
-  const [weekTitles, setWeekTitles] = useState([]);
 
   const load = useCallback(async () => {
     const w = await getSpcWorkout(workoutId);
     setWorkout(w);
-    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings, weekTitleRows] = await Promise.all([
+    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
       getUser(w.spc_blocks.spc_client_id),
       listSpcWarmups(workoutId),
       listSpcWorkoutExercises(workoutId),
       listExercises(),
-      getSpcSiblingPatterns(w.spc_blocks.id, workoutId),
-      getSpcWorkoutWeekTitles(workoutId),
+      getSpcSiblingPatterns(w.spc_blocks.id, w.week_number, workoutId),
     ]);
     setMember(memberRow);
     setWarmups(warmupRows);
     setExercises(exerciseRows);
     setLibrary(libraryRows);
     setSiblingPatterns(siblings);
-    setWeekTitles(weekTitleRows);
   }, [workoutId]);
 
   useEffect(() => {
@@ -84,7 +75,6 @@ export default function SpcWorkoutBuilderNative() {
         workoutId,
         exerciseId: exercise.id,
         position: exercises.length + 1,
-        blockLengthWeeks: workout.spc_blocks.block_length_weeks,
         userId: workout.spc_blocks.spc_client_id,
       });
       setExercises((prev) => [...prev, created]);
@@ -92,15 +82,9 @@ export default function SpcWorkoutBuilderNative() {
     setPickerTarget(null);
   };
 
-  const handleWeekFieldChange = (exerciseId, weekId, fields) => {
-    setExercises((prev) =>
-      prev.map((e) =>
-        e.id !== exerciseId
-          ? e
-          : { ...e, spc_exercise_weeks: e.spc_exercise_weeks.map((w) => (w.id !== weekId ? w : { ...w, ...fields })) }
-      )
-    );
-    updateSpcExerciseWeek(weekId, fields, profile.name);
+  const handleExerciseChange = (id, fields) => {
+    setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...fields } : e)));
+    updateSpcWorkoutExercise(id, fields);
   };
 
   const handleRemoveExercise = async (id) => {
@@ -115,6 +99,11 @@ export default function SpcWorkoutBuilderNative() {
     [reordered[index], reordered[newIndex]] = [reordered[newIndex], reordered[index]];
     setExercises(reordered);
     reorderSpcWorkoutExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 })));
+  };
+
+  const adjustSets = (item, delta) => {
+    const next = Math.max(0, (item.sets ?? 0) + delta);
+    handleExerciseChange(item.id, { sets: next });
   };
 
   const handleRemoveWarmup = async (id) => {
@@ -133,19 +122,9 @@ export default function SpcWorkoutBuilderNative() {
     }
   };
 
-  const handleDefaultTitleChange = (title) => {
+  const handleTitleChange = (title) => {
     setWorkout((w) => ({ ...w, title }));
     setSpcWorkoutTitle(workoutId, title);
-  };
-
-  // Blank clears the override for this week (falls back to the default
-  // title above) — setSpcWorkoutWeekTitle deletes the row in that case.
-  const handleWeekTitleChange = (title) => {
-    setWeekTitles((prev) => {
-      const others = prev.filter((t) => t.week_number !== selectedWeek);
-      return title ? [...others, { week_number: selectedWeek, title }] : others;
-    });
-    setSpcWorkoutWeekTitle(workoutId, selectedWeek, title);
   };
 
   if (!workout || !member) {
@@ -156,20 +135,19 @@ export default function SpcWorkoutBuilderNative() {
     );
   }
 
-  const blockLengthWeeks = workout.spc_blocks.block_length_weeks;
   const currentPatterns = exercises.map((e) => e.exercises?.movement_pattern).filter(Boolean);
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-6">
       <Pressable
-        onPress={() => router.push(`/(coach)/spc/blocks/${workout.spc_blocks.id}`)}
+        onPress={() => router.back()}
         className="mb-3 self-start"
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back to block</Text>
+        <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back</Text>
       </Pressable>
       <Text className="text-xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
-        {member.name} — Session {workout.session_number}
+        {member.name} — Wk {workout.week_number}, Session {workout.session_number}
       </Text>
       <Text
         className="mb-4 text-xs"
@@ -183,12 +161,9 @@ export default function SpcWorkoutBuilderNative() {
         </Text>
       </Pressable>
 
-      <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-        Default title (applies to every week unless overridden below)
-      </Text>
       <TextInput
         value={workout.title ?? ""}
-        onChangeText={handleDefaultTitleChange}
+        onChangeText={handleTitleChange}
         placeholder="Session title (e.g. Back & Bis) — shown to the member"
         className="mb-6 rounded-lg border border-stone-300 px-4 py-3"
         style={{ fontFamily: fonts.sans }}
@@ -229,119 +204,75 @@ export default function SpcWorkoutBuilderNative() {
         Main Session
       </Text>
 
-      <Text className="mb-2 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-        Editing week:
-      </Text>
-      <View className="mb-4 flex-row gap-2">
-        {Array.from({ length: blockLengthWeeks }, (_, i) => i + 1).map((weekNumber) => (
-          <Pressable
-            key={weekNumber}
-            onPress={() => setSelectedWeek(weekNumber)}
-            className={`rounded-full border px-3.5 py-2.5 ${selectedWeek === weekNumber ? "border-primary bg-primary" : "border-stone-300"}`}
-          >
-            <Text className={selectedWeek === weekNumber ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
-              Wk {weekNumber}
+      {exercises.map((item, i) => (
+        <View key={item.id} className="mb-3 rounded-lg border border-stone-200 px-3 py-3">
+          <View className="mb-2 flex-row items-center justify-between">
+            <Text className="flex-1" style={{ fontFamily: fonts.sansMedium }}>
+              {item.exercises?.name}
             </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-        Title override for Week {selectedWeek} (blank uses the default title above)
-      </Text>
-      <TextInput
-        value={weekTitles.find((t) => t.week_number === selectedWeek)?.title ?? ""}
-        onChangeText={handleWeekTitleChange}
-        placeholder={workout.title || "e.g. Last week! Let's crush those delts"}
-        className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
-        style={{ fontFamily: fonts.sans }}
-      />
-
-      {exercises.map((item, i) => {
-        const week = item.spc_exercise_weeks.find((w) => w.week_number === selectedWeek);
-        return (
-          <View key={item.id} className="mb-3 rounded-lg border border-stone-200 px-3 py-3">
-            <View className="mb-2 flex-row items-center justify-between">
-              <Text className="flex-1" style={{ fontFamily: fonts.sansMedium }}>
-                {item.exercises?.name}
-              </Text>
-              {item.exercises?.video_url ? (
-                <Pressable
-                  onPress={() => Linking.openURL(item.exercises.video_url)}
-                  className="mr-2"
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  accessibilityLabel={`Watch video for ${item.exercises.name}`}
-                >
-                  <Text style={{ color: "#8a5140" }}>▶</Text>
-                </Pressable>
-              ) : null}
+            {item.exercises?.video_url ? (
               <Pressable
-                onPress={() => moveExercise(i, -1)}
-                disabled={i === 0}
-                className="mr-1 px-1"
+                onPress={() => Linking.openURL(item.exercises.video_url)}
+                className="mr-2"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityLabel="Move exercise up"
+                accessibilityLabel={`Watch video for ${item.exercises.name}`}
               >
-                <Text className={i === 0 ? "text-stone-200" : "text-stone-500"}>▲</Text>
+                <Text style={{ color: "#8a5140" }}>▶</Text>
               </Pressable>
-              <Pressable
-                onPress={() => moveExercise(i, 1)}
-                disabled={i === exercises.length - 1}
-                className="mr-1 px-1"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityLabel="Move exercise down"
-              >
-                <Text className={i === exercises.length - 1 ? "text-stone-200" : "text-stone-500"}>▼</Text>
+            ) : null}
+            <Pressable
+              onPress={() => moveExercise(i, -1)}
+              disabled={i === 0}
+              className="mr-1 px-1"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Move exercise up"
+            >
+              <Text className={i === 0 ? "text-stone-200" : "text-stone-500"}>▲</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => moveExercise(i, 1)}
+              disabled={i === exercises.length - 1}
+              className="mr-1 px-1"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Move exercise down"
+            >
+              <Text className={i === exercises.length - 1 ? "text-stone-200" : "text-stone-500"}>▼</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => handleRemoveExercise(item.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel={`Remove ${item.exercises?.name ?? "exercise"}`}
+            >
+              <Text className="text-stone-400">✕</Text>
+            </Pressable>
+          </View>
+          <View className="flex-row items-center gap-3">
+            <View className="flex-row items-center gap-2">
+              <Pressable onPress={() => adjustSets(item, -1)} className="rounded border border-stone-300 px-2 py-1">
+                <Text>−</Text>
               </Pressable>
-              <Pressable
-                onPress={() => handleRemoveExercise(item.id)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityLabel={`Remove ${item.exercises?.name ?? "exercise"}`}
-              >
-                <Text className="text-stone-400">✕</Text>
+              <Text style={{ fontFamily: fonts.sans }}>{item.sets ?? 0} sets</Text>
+              <Pressable onPress={() => adjustSets(item, 1)} className="rounded border border-stone-300 px-2 py-1">
+                <Text>+</Text>
               </Pressable>
             </View>
-            {week ? (
-              <>
-                <View className="flex-row items-center gap-3">
-                  <View className="flex-row items-center gap-2">
-                    <Pressable
-                      onPress={() => handleWeekFieldChange(item.id, week.id, { sets: Math.max(0, (week.sets ?? 0) - 1) })}
-                      className="rounded border border-stone-300 px-2 py-1"
-                    >
-                      <Text>−</Text>
-                    </Pressable>
-                    <Text style={{ fontFamily: fonts.sans }}>{week.sets ?? 0} sets</Text>
-                    <Pressable
-                      onPress={() => handleWeekFieldChange(item.id, week.id, { sets: (week.sets ?? 0) + 1 })}
-                      className="rounded border border-stone-300 px-2 py-1"
-                    >
-                      <Text>+</Text>
-                    </Pressable>
-                  </View>
-                  <TextInput
-                    value={week.reps ?? ""}
-                    onChangeText={(v) => handleWeekFieldChange(item.id, week.id, { reps: v })}
-                    placeholder="reps"
-                    className="w-20 rounded-lg border border-stone-300 px-2 py-3"
-                    style={{ fontFamily: fonts.sans }}
-                  />
-                  <TextInput
-                    value={week.rest ?? ""}
-                    onChangeText={(v) => handleWeekFieldChange(item.id, week.id, { rest: v })}
-                    placeholder="rest"
-                    className="w-20 rounded-lg border border-stone-300 px-2 py-3"
-                    style={{ fontFamily: fonts.sans }}
-                  />
-                </View>
-                <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                  {week.coach_initials ? `Last touched ${week.coach_initials} ${formatDateMDY(week.touched_date)}` : "Not touched yet"}
-                </Text>
-              </>
-            ) : null}
+            <TextInput
+              value={item.reps ?? ""}
+              onChangeText={(v) => handleExerciseChange(item.id, { reps: v })}
+              placeholder="reps"
+              className="w-20 rounded-lg border border-stone-300 px-2 py-3"
+              style={{ fontFamily: fonts.sans }}
+            />
+            <TextInput
+              value={item.rest ?? ""}
+              onChangeText={(v) => handleExerciseChange(item.id, { rest: v })}
+              placeholder="rest"
+              className="w-20 rounded-lg border border-stone-300 px-2 py-3"
+              style={{ fontFamily: fonts.sans }}
+            />
           </View>
-        );
-      })}
+        </View>
+      ))}
       <Pressable onPress={() => setPickerTarget("exercise")} className="mb-6 rounded-lg border border-primary px-3 py-2.5">
         <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
           + Insert exercise

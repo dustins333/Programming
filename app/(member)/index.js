@@ -9,8 +9,8 @@ import { currentWeekNumber, sessionNumberForDate, formatSessionDays } from "../.
 import { listMyAssignments, getCurrentBlock, listWorkoutsForWeek } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
-import { getCurrentSpcBlock, listPublishedSpcWorkoutsForBlock } from "../../lib/programming/spcBlocks";
-import { listSpcWorkoutExercises, listSpcWarmups, listSpcWorkoutWeekTitlesForWorkouts } from "../../lib/programming/spcWorkouts";
+import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
+import { listSpcWorkoutExercises, listSpcWarmups } from "../../lib/programming/spcWorkouts";
 import { listGroupCompletionsForWorkouts, getCompletedSpcWorkoutIdsForWeek } from "../../lib/programming/sessionCompletions";
 import { listWeekOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import { listLogsForDateRange } from "../../lib/nutrition/dailyLog";
@@ -320,20 +320,16 @@ export default function MemberHome() {
         if (!block) return { status: "no_block" };
 
         const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
-        const workouts = await listPublishedSpcWorkoutsForBlock(block.id);
+        const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber);
         if (workouts.length === 0) return { status: "not_published" };
 
         const sessionsPerWeek = spcClient.sessions_per_week;
         const workoutIds = workouts.map((w) => w.id);
-        const [completedIds, weekTitles] = await Promise.all([
-          getCompletedSpcWorkoutIdsForWeek(profile.id, workoutIds, weekNumber),
-          listSpcWorkoutWeekTitlesForWorkouts(workoutIds),
-        ]);
+        const completedIds = await getCompletedSpcWorkoutIdsForWeek(profile.id, workoutIds, weekNumber);
 
         const rows = Array.from({ length: sessionsPerWeek }, (_, i) => i + 1).map((sessionNumber) => {
           const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
-          const overrideTitle = workout ? weekTitles[workout.id]?.[weekNumber] : null;
-          const resolvedTitle = overrideTitle || workout?.title || "Untitled session";
+          const resolvedTitle = workout?.title || "Untitled session";
           return {
             key: `spc-session-${sessionNumber}`,
             sessionNumber,
@@ -443,14 +439,11 @@ export default function MemberHome() {
       ...p,
       loading: false,
       warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
-      exercises: exerciseRows.map((ex) => {
-        const weekTarget = ex.spc_exercise_weeks.find((w) => w.week_number === spc.weekNumber);
-        return {
-          id: ex.id,
-          name: ex.exercises?.name,
-          detail: `${weekTarget?.sets ?? "–"}×${weekTarget?.reps ?? "–"}`,
-        };
-      }),
+      exercises: exerciseRows.map((ex) => ({
+        id: ex.id,
+        name: ex.exercises?.name,
+        detail: `${ex.sets ?? "–"}×${ex.reps ?? "–"}`,
+      })),
     }));
   };
 

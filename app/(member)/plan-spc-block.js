@@ -7,7 +7,7 @@ import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
 import { getSpcClient } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listPublishedSpcWorkoutsForBlock } from "../../lib/programming/spcBlocks";
-import { listSpcWarmups, listSpcWorkoutExercises, listSpcWorkoutWeekTitlesForWorkouts } from "../../lib/programming/spcWorkouts";
+import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
 import { listSpcCompletionDetailsForWorkouts, finalizeSpcSession } from "../../lib/programming/sessionCompletions";
 import { retryOnce } from "../../lib/retry";
 import { formatDateMDY } from "../../lib/formatDate";
@@ -30,10 +30,10 @@ const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 
 // shows the real SessionLogger accordion (view + edit whatever was
 // logged — no video links, those stay My Fitness-only, and no Finalize
 // button, this is for correcting history not first-time logging); one that
-// hasn't happened yet shows its plain prescription. Unlike group, one
-// spc_workouts row recurs across every week of the block (progression
-// lives in spc_exercise_weeks columns), so completion and exercise targets
-// are keyed by (workout, week), not workout alone.
+// hasn't happened yet shows its plain prescription. SPC now has one
+// independent row per (week, session) same as group, so each week's tiles
+// are simply that week's own workout rows — no more shared exercise list
+// or per-week sets/reps lookup across a recurring session.
 export default function PlanSpcBlock() {
   const { profile } = useAuth();
   const router = useRouter();
@@ -41,7 +41,7 @@ export default function PlanSpcBlock() {
   const [state, setState] = useState({ status: "loading" });
   const [currentWeek, setCurrentWeek] = useState(null);
   const [sessionContent, setSessionContent] = useState({}); // workoutId -> { warmups, exerciseRows }
-  const [modalContext, setModalContext] = useState(null); // { workoutId, week }
+  const [modalWorkoutId, setModalWorkoutId] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -65,11 +65,8 @@ export default function PlanSpcBlock() {
         if (workouts.length === 0) return { status: "not_published" };
 
         const week = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
-        const [weekTitles, completions] = await Promise.all([
-          listSpcWorkoutWeekTitlesForWorkouts(workouts.map((w) => w.id)),
-          listSpcCompletionDetailsForWorkouts(profile.id, workouts.map((w) => w.id)),
-        ]);
-        return { status: "ready", block, workouts, weekTitles, completions, week };
+        const completions = await listSpcCompletionDetailsForWorkouts(profile.id, workouts.map((w) => w.id));
+        return { status: "ready", block, workouts, completions, week };
       });
       if (result.status === "ready") setCurrentWeek(result.week);
       setState(result);
@@ -93,8 +90,8 @@ export default function PlanSpcBlock() {
     return Array.from({ length: state.block.block_length_weeks }, (_, i) => i + 1);
   }, [state]);
 
-  const openSession = async (workout, week) => {
-    setModalContext({ workoutId: workout.id, week });
+  const openSession = async (workout) => {
+    setModalWorkoutId(workout.id);
     if (sessionContent[workout.id]) return;
     setModalLoading(true);
     const [warmups, exerciseRows] = await Promise.all([listSpcWarmups(workout.id), listSpcWorkoutExercises(workout.id)]);
@@ -105,19 +102,17 @@ export default function PlanSpcBlock() {
     setModalLoading(false);
   };
 
-  const closeModal = () => setModalContext(null);
+  const closeModal = () => setModalWorkoutId(null);
 
   // Logging a missed past session — see plan-block.js's
-  // handleFinalizeMissedSession for the full reasoning (same pattern here,
-  // just keyed by (workout, week) since one spc_workouts row recurs across
-  // every week of the block).
-  const handleFinalizeMissedSession = async (workout, week, logDate) => {
+  // handleFinalizeMissedSession for the full reasoning (same pattern here).
+  const handleFinalizeMissedSession = async (workout, logDate) => {
     const completedAt = new Date(`${logDate}T12:00:00`).toISOString();
-    await finalizeSpcSession(profile.id, workout.id, week, completedAt);
+    await finalizeSpcSession(profile.id, workout.id, workout.week_number, completedAt);
     setState((prev) => {
       if (prev.status !== "ready") return prev;
       const next = new Map(prev.completions);
-      next.set(`${workout.id}:${week}`, completedAt);
+      next.set(`${workout.id}:${workout.week_number}`, completedAt);
       return { ...prev, completions: next };
     });
   };
@@ -132,24 +127,18 @@ export default function PlanSpcBlock() {
     );
   }
 
-  const modalWorkout = modalContext && state.status === "ready" ? state.workouts.find((w) => w.id === modalContext.workoutId) : null;
-  const modalRaw = modalContext ? sessionContent[modalContext.workoutId] : null;
-  const modalCompletedAt = modalContext ? state.completions?.get(`${modalContext.workoutId}:${modalContext.week}`) : null;
-  const modalTitle =
-    modalContext && modalWorkout
-      ? (state.weekTitles[modalWorkout.id]?.[modalContext.week] || modalWorkout.title || `Session ${modalWorkout.session_number}`)
-      : "";
-  const modalExercises = modalContext && modalRaw
-    ? modalRaw.exerciseRows.map((ex) => {
-        const weekTarget = ex.spc_exercise_weeks.find((w) => w.week_number === modalContext.week);
-        return {
-          id: ex.id,
-          exercise: ex.exercises,
-          targetSets: weekTarget?.sets,
-          targetReps: weekTarget?.reps,
-          notes: weekTarget?.rest ? `rest ${weekTarget.rest}` : ex.notes,
-        };
-      })
+  const modalWorkout = modalWorkoutId && state.status === "ready" ? state.workouts.find((w) => w.id === modalWorkoutId) : null;
+  const modalRaw = modalWorkoutId ? sessionContent[modalWorkoutId] : null;
+  const modalCompletedAt = modalWorkout ? state.completions?.get(`${modalWorkout.id}:${modalWorkout.week_number}`) : null;
+  const modalTitle = modalWorkout ? modalWorkout.title || `Session ${modalWorkout.session_number}` : "";
+  const modalExercises = modalRaw
+    ? modalRaw.exerciseRows.map((ex) => ({
+        id: ex.id,
+        exercise: ex.exercises,
+        targetSets: ex.sets,
+        targetReps: ex.reps,
+        notes: ex.rest ? `rest ${ex.rest}` : ex.notes,
+      }))
     : [];
 
   return (
@@ -179,6 +168,9 @@ export default function PlanSpcBlock() {
 
           {weeksInBlock.map((week) => {
             const isCurrent = week === currentWeek;
+            const weekWorkouts = state.workouts
+              .filter((w) => w.week_number === week)
+              .sort((a, b) => a.session_number - b.session_number);
             return (
               <View key={week} className="mb-5">
                 <Text
@@ -190,14 +182,13 @@ export default function PlanSpcBlock() {
                 </Text>
 
                 <View className="flex-row gap-2">
-                  {state.workouts.map((workout) => {
+                  {weekWorkouts.map((workout) => {
                     const completedAt = state.completions.get(`${workout.id}:${week}`);
                     const isCompleted = !!completedAt;
-                    const title = state.weekTitles[workout.id]?.[week] || workout.title || null;
                     return (
                       <Pressable
                         key={workout.id}
-                        onPress={() => openSession(workout, week)}
+                        onPress={() => openSession(workout)}
                         className="items-center justify-center rounded-2xl bg-white px-2 py-3.5"
                         style={{
                           flex: 1,
@@ -209,7 +200,7 @@ export default function PlanSpcBlock() {
                       >
                         <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c", textAlign: "center" }} numberOfLines={2}>
                           Session {workout.session_number}
-                          {title ? ` — ${title}` : ""}
+                          {workout.title ? ` — ${workout.title}` : ""}
                         </Text>
                         {isCompleted ? (
                           <Text className="mt-0.5" style={{ fontFamily: fonts.sansSemiBold, fontSize: 10, color: "#4d6142" }}>
@@ -227,8 +218,8 @@ export default function PlanSpcBlock() {
       )}
 
       <SessionDetailModal
-        key={modalContext ? `${modalContext.workoutId}:${modalContext.week}` : "none"}
-        visible={!!modalContext}
+        key={modalWorkoutId ?? "none"}
+        visible={!!modalWorkoutId}
         onClose={closeModal}
         title={modalTitle}
         completed={!!modalCompletedAt}
@@ -237,11 +228,11 @@ export default function PlanSpcBlock() {
         warmups={modalRaw?.warmups}
         userId={profile.id}
         datePerformed={modalCompletedAt ? dateInBoise(new Date(modalCompletedAt)) : null}
-        loggable={modalContext ? modalContext.week <= currentWeek : false}
+        loggable={modalWorkout ? modalWorkout.week_number <= currentWeek : false}
         defaultLogDate={todayInBoise()}
         source="spc"
         exercises={modalExercises}
-        onFinalize={(logDate) => handleFinalizeMissedSession(modalWorkout, modalContext.week, logDate)}
+        onFinalize={(logDate) => handleFinalizeMissedSession(modalWorkout, logDate)}
       />
     </ScrollView>
   );

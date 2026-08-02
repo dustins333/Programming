@@ -8,8 +8,8 @@ import { currentWeekNumber, sessionNumberForDate } from "../../lib/programming/s
 import { listMyAssignments, getCurrentBlock, getWorkout } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
-import { getCurrentSpcBlock, listPublishedSpcWorkoutsForBlock } from "../../lib/programming/spcBlocks";
-import { listSpcWorkoutExercises, getSpcWorkoutWeekTitles } from "../../lib/programming/spcWorkouts";
+import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
+import { listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
 import { listActiveOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import {
   getGroupCompletion,
@@ -287,10 +287,10 @@ export default function MyFitness() {
         const block = await getCurrentSpcBlock(profile.id, today);
         if (!block) return { active, spc: { status: "no_block" } };
 
-        const workouts = await listPublishedSpcWorkoutsForBlock(block.id);
+        const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+        const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber);
         if (workouts.length === 0) return { active, spc: { status: "not_published" } };
 
-        const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
         const sessionsPerWeek = spcClient.sessions_per_week;
         const relevant = workouts.slice(0, sessionsPerWeek);
         const workoutIds = relevant.map((w) => w.id);
@@ -373,25 +373,18 @@ export default function MyFitness() {
     let cancelled = false;
     setSpcDetailLoading(true);
     (async () => {
-      const [exerciseRows, weekTitles] = await Promise.all([
-        listSpcWorkoutExercises(session.workout.id),
-        getSpcWorkoutWeekTitles(session.workout.id),
-      ]);
+      const exerciseRows = await listSpcWorkoutExercises(session.workout.id);
       if (cancelled) return;
-      const title = weekTitles.find((t) => t.week_number === spc.weekNumber)?.title || session.workout.title || null;
       setSpcDetail({
         sessionNumber: session.sessionNumber,
-        title,
-        exercises: exerciseRows.map((ex) => {
-          const weekTarget = ex.spc_exercise_weeks.find((w) => w.week_number === spc.weekNumber);
-          return {
-            id: ex.id,
-            exercise: ex.exercises,
-            targetSets: weekTarget?.sets,
-            targetReps: weekTarget?.reps,
-            notes: weekTarget?.rest ? `rest ${weekTarget.rest}` : ex.notes,
-          };
-        }),
+        title: session.workout.title || null,
+        exercises: exerciseRows.map((ex) => ({
+          id: ex.id,
+          exercise: ex.exercises,
+          targetSets: ex.sets,
+          targetReps: ex.reps,
+          notes: ex.rest ? `rest ${ex.rest}` : ex.notes,
+        })),
       });
       setSpcDetailLoading(false);
     })();
