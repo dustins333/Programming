@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
@@ -47,6 +47,7 @@ export default function PlanBlock() {
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
+    setSessionContent({});
     try {
       // Wrapped in retryOnce: a transient failure on the first request
       // batch right after navigating here (cold connections, several
@@ -83,9 +84,16 @@ export default function PlanBlock() {
     }
   }, [profile.id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // load() only refetches on focus, not just mount — expo-router's Stack
+  // can keep this screen mounted when you navigate back to it (same class
+  // of staleness bug already fixed on My Week/My Fitness, see their own
+  // useFocusEffect calls), so without this a coach's unpublish/content edit
+  // wouldn't show up here until a hard reload.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const weeksInBlock = useMemo(() => {
     if (state.status !== "ready") return [];

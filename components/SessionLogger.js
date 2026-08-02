@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { getLastLoggedSession, getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { formatDateMDY } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
+import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -24,6 +25,7 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
   const [history, setHistory] = useState(null); // null until loaded — see historyLoaded for "loaded but genuinely empty"
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [saveState, setSaveState] = useState("idle"); // idle | pending | saving | saved | error
   const loaded = useRef(false);
   const debounceRef = useRef(null);
@@ -150,23 +152,34 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
             </Pressable>
           ) : null}
 
-          <Pressable
-            onPress={handleToggleHistory}
-            className="mb-3 flex-row items-center gap-1.5 self-start"
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityLabel={showHistory ? "Hide last time" : "Show last time"}
-          >
-            <Ionicons name={showHistory ? "time" : "time-outline"} size={14} color={colors.primary} />
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>
-              {historyLoading
-                ? "Loading last time…"
-                : showHistory && history
-                  ? `Last time: ${formatDateMDY(history.date)}`
-                  : showHistory
-                    ? "Last time"
-                    : "Show last time"}
-            </Text>
-          </Pressable>
+          <View className="mb-3 flex-row flex-wrap items-center" style={{ gap: 16 }}>
+            <Pressable
+              onPress={handleToggleHistory}
+              className="flex-row items-center gap-1.5"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel={showHistory ? "Hide last time" : "Show last time"}
+            >
+              <Ionicons name={showHistory ? "time" : "time-outline"} size={14} color={colors.primary} />
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>
+                {historyLoading
+                  ? "Loading last time…"
+                  : showHistory && history
+                    ? `Last time: ${formatDateMDY(history.date)}`
+                    : showHistory
+                      ? "Last time"
+                      : "Show last time"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowAllHistory(true)}
+              className="flex-row items-center gap-1.5"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Show all history"
+            >
+              <Ionicons name="list-outline" size={14} color={colors.primary} />
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>Show all history</Text>
+            </Pressable>
+          </View>
           {showHistory && historyLoaded && history === null ? (
             <Text className="mb-2 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
               No previous history for this lift yet.
@@ -243,6 +256,14 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
               {saveState === "error" && "Couldn't save — check your connection."}
             </Text>
           )}
+
+          <ExerciseHistoryModal
+            visible={showAllHistory}
+            onClose={() => setShowAllHistory(false)}
+            userId={userId}
+            exerciseId={item.exercise.id}
+            exerciseName={item.exercise.name}
+          />
         </View>
       )}
     </View>

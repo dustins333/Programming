@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
@@ -46,6 +46,7 @@ export default function PlanSpcBlock() {
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
+    setSessionContent({});
     try {
       // Wrapped in retryOnce: a transient failure on the first request
       // batch right after navigating here (cold connections, several
@@ -78,9 +79,14 @@ export default function PlanSpcBlock() {
     }
   }, [profile.id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // load() only refetches on focus, not just mount — same staleness class
+  // already fixed on My Week/My Fitness and on plan-block.js's group
+  // sibling; see that file's comment for the full reasoning.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const weeksInBlock = useMemo(() => {
     if (state.status !== "ready") return [];

@@ -203,7 +203,7 @@ export default function Blocks() {
 
   return (
     <CoachShell>
-      <View className="flex-1" style={{ backgroundColor: "#faf8f6", paddingHorizontal: 40, paddingVertical: 32 }}>
+      <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ paddingHorizontal: 40, paddingVertical: 32 }}>
         <View className="mb-5 flex-row items-center justify-between">
           <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 24 }}>Group Programs</Text>
           <View className="flex-row gap-2.5">
@@ -432,7 +432,7 @@ export default function Blocks() {
           onClose={() => setEditProgramModalVisible(false)}
           onSubmit={handleUpdateProgram}
         />
-      </View>
+      </ScrollView>
     </CoachShell>
   );
 }
