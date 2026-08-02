@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, Linking } from "react-native";
+import { View, Text, TextInput, Pressable, Linking, Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getLastLoggedSession, getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { formatDateMDY } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
 import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
+import { WeightCalculator } from "./WeightCalculator";
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -27,6 +28,14 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [saveState, setSaveState] = useState("idle"); // idle | pending | saving | saved | error
+  // Which row's calculator modal is open, if any. The icon itself is always
+  // visible next to a weight box (not gated on TextInput focus) — an
+  // opacity/pointerEvents toggle keyed off focus turned out to race with
+  // the tap itself: tapping the icon blurs the TextInput, and on both web
+  // and native that blur can land before the press finishes, hiding the
+  // icon out from under the tap. Not worth chasing further; always-visible
+  // has no such race.
+  const [calcRowIndex, setCalcRowIndex] = useState(null);
   const loaded = useRef(false);
   const debounceRef = useRef(null);
   // The load-on-expand effect below sets rows/notes from whatever's already
@@ -205,15 +214,37 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
                     className="flex-1 text-center"
                     style={{ fontFamily: fonts.sans, fontSize: 14, color: "#44403c", height: 44, borderWidth: 1, borderColor: INPUT_BORDER, borderRadius: 10 }}
                   />
-                  <TextInput
-                    value={row.weight}
-                    onChangeText={(v) => updateRow(i, "weight", v)}
-                    placeholder="weight"
-                    keyboardType="numeric"
-                    placeholderTextColor="#a8a29e"
-                    className="flex-1 text-center"
-                    style={{ fontFamily: fonts.sans, fontSize: 14, color: "#44403c", height: 44, borderWidth: 1, borderColor: INPUT_BORDER, borderRadius: 10 }}
-                  />
+                  <View className="flex-1" style={{ position: "relative" }}>
+                    <TextInput
+                      value={row.weight}
+                      onChangeText={(v) => updateRow(i, "weight", v)}
+                      placeholder="weight"
+                      keyboardType="numeric"
+                      placeholderTextColor="#a8a29e"
+                      className="text-center"
+                      style={{
+                        fontFamily: fonts.sans,
+                        fontSize: 14,
+                        color: "#44403c",
+                        height: 44,
+                        borderWidth: 1,
+                        borderColor: INPUT_BORDER,
+                        borderRadius: 10,
+                        paddingRight: 30,
+                      }}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setCalcRowIndex(i);
+                      }}
+                      hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
+                      accessibilityLabel="Open weight calculator"
+                      style={{ position: "absolute", right: 6, top: 0, bottom: 0, justifyContent: "center" }}
+                    >
+                      <Ionicons name="calculator-outline" size={17} color={colors.primaryOnWhite} />
+                    </Pressable>
+                  </View>
                 </View>
                 {histSet ? (
                   <View className="mt-1.5 items-center">
@@ -263,6 +294,12 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
             userId={userId}
             exerciseId={item.exercise.id}
             exerciseName={item.exercise.name}
+          />
+
+          <WeightCalculator
+            visible={calcRowIndex !== null}
+            onClose={() => setCalcRowIndex(null)}
+            onInsert={(value) => updateRow(calcRowIndex, "weight", String(value))}
           />
         </View>
       )}
