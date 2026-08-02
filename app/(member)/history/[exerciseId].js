@@ -55,7 +55,7 @@ export default function ExerciseHistory() {
 
   return (
     <View className="flex-1 px-6 pb-8" style={{ backgroundColor: CANVAS, paddingTop: insets.top + 6 }}>
-      <Pressable onPress={() => router.back()} className="mb-3 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+      <Pressable onPress={() => router.push("/(member)/history")} className="mb-3 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>‹ My History</Text>
       </Pressable>
       <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>

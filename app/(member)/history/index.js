@@ -9,6 +9,7 @@ import { listDayTimeline } from "../../../lib/history";
 import { todayInBoise, addDays } from "../../../lib/boiseDate";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { SessionHistoryModal } from "../../../components/SessionHistoryModal";
 import { fonts, colors } from "../../../lib/theme";
 
 const CANVAS = "#faf8f6";
@@ -20,7 +21,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 const MODES = [
   { key: "day", label: "By Day" },
-  { key: "workout", label: "By Workout" },
+  { key: "workout", label: "Exercises" },
 ];
 
 function shortDateLabel(isoDate) {
@@ -46,10 +47,12 @@ function groupByDay(entries, today) {
   return sections;
 }
 
-function DayRow({ entry }) {
+function DayRow({ entry, onPress }) {
   const isSession = entry.type === "session";
+  const Wrapper = isSession ? Pressable : View;
   return (
-    <View
+    <Wrapper
+      {...(isSession ? { onPress } : {})}
       className="mb-2 flex-row items-center gap-3 rounded-2xl bg-white px-3.5 py-3"
       style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}
     >
@@ -67,13 +70,15 @@ function DayRow({ entry }) {
           {entry.subtitle}
         </Text>
       </View>
-    </View>
+      {isSession ? <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} /> : null}
+    </Wrapper>
   );
 }
 
 function ByDayView({ profile }) {
   const [entries, setEntries] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [selectedEntry, setSelectedEntry] = useState(null);
 
   useEffect(() => {
     listDayTimeline(profile.id)
@@ -107,10 +112,18 @@ function ByDayView({ profile }) {
         <View key={section.date} className="mb-1">
           <Text style={EYEBROW_MUTED}>{section.label}</Text>
           {section.items.map((entry) => (
-            <DayRow key={`${entry.type}-${entry.id}`} entry={entry} />
+            <DayRow key={`${entry.type}-${entry.id}`} entry={entry} onPress={() => setSelectedEntry(entry)} />
           ))}
         </View>
       ))}
+
+      <SessionHistoryModal
+        visible={!!selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+        title={selectedEntry?.label ?? ""}
+        date={selectedEntry?.date}
+        userId={profile.id}
+      />
     </View>
   );
 }
