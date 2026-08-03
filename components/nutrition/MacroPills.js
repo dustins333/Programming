@@ -4,7 +4,7 @@ import { fonts } from "../../lib/theme";
 // Port of the standalone app's MacroBubbles.js — color is fixed per macro
 // type (always the same regardless of on-track/off-track), not a
 // target-vs-actual comparison. Any value that's null/undefined is skipped.
-const STYLES = {
+export const MACRO_STYLES = {
   protein: { bg: "#eff6ff", text: "#1d4ed8" },
   carb: { bg: "#fffbeb", text: "#b45309" },
   fat: { bg: "#fff1f2", text: "#be123c" },
@@ -12,11 +12,12 @@ const STYLES = {
   calories: { bg: "#f5f5f4", text: "#44403c" },
   steps: { bg: "#ecfeff", text: "#0e7490" },
   sleep: { bg: "#eef2ff", text: "#4338ca" },
+  weight: { bg: "#f5f5f4", text: "#57534e" },
 };
 
 function Pill({ styleKey, label, value, unit }) {
   if (value === null || value === undefined || value === "") return null;
-  const s = STYLES[styleKey];
+  const s = MACRO_STYLES[styleKey];
   return (
     <View className="flex-row items-center gap-1 rounded-full px-2.5 py-1" style={{ backgroundColor: s.bg }}>
       <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: s.text }}>{label}</Text>

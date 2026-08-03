@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { View, Text, Image, Pressable, Modal, Alert, ActivityIndicator, TextInput, StyleSheet } from "react-native";
+import { View, Text, Image, Pressable, Modal, Alert, ActivityIndicator, TextInput, Platform, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { pickPhoto } from "../../lib/nutrition/imagePicker";
 import { uploadPhoto } from "../../lib/nutrition/photos";
 import { todayInBoise } from "../../lib/boiseDate";
 import { fonts, colors } from "../../lib/theme";
+
+const isWeb = Platform.OS === "web";
 
 const ANGLES = [
   { key: "front", label: "Front" },
@@ -11,10 +14,10 @@ const ANGLES = [
   { key: "back", label: "Back" },
 ];
 
-// Custom-made pose guides, restored from the standalone app — pinned to
-// every edge (not just width/height: "100%") plus resizeMode="contain" so RN
-// centers the letterboxed silhouette within the box regardless of aspect
-// ratio, rather than stretching or clipping it.
+// Custom-made pose guides, restored from the standalone app — full-bleed
+// illustrations, rendered edge-to-edge (resizeMode="cover") with a "+" badge
+// on top, matching the standalone app's own upload screen (a shrunk/faded
+// version tried earlier read as "invisible" against these colorful images).
 const POSE_IMAGES = {
   front: require("../../assets/nutrition/photo-poses/front.png"),
   side: require("../../assets/nutrition/photo-poses/side.png"),
@@ -70,16 +73,15 @@ function AngleBox({ angle, label, selected, uploading, onPicked }) {
           <Image source={{ uri: selected.uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
         ) : (
           <>
-            <Image
-              source={POSE_IMAGES[angle]}
-              resizeMode="contain"
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFillObject, { opacity: 0.25 }]}
-            />
-            <Text className="text-center text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-              Tap to add{"\n"}
-              {label}
-            </Text>
+            <Image source={POSE_IMAGES[angle]} resizeMode="contain" style={{ width: "100%", height: "100%" }} />
+            <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { alignItems: "center", justifyContent: "center" }]}>
+              <View
+                className="items-center justify-center rounded-full"
+                style={{ width: 36, height: 36, backgroundColor: "rgba(0,0,0,0.35)" }}
+              >
+                <Ionicons name="add" size={22} color="white" />
+              </View>
+            </View>
           </>
         )}
       </Pressable>
@@ -133,13 +135,22 @@ export function PhotoUpload({ userId, onUploaded, allowDatePick = false }) {
           <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
             Date photo was taken
           </Text>
-          <TextInput
-            value={date}
-            onChangeText={setDate}
-            placeholder="YYYY-MM-DD"
-            className="rounded border border-stone-300 px-3 py-2 text-sm"
-            style={{ fontFamily: fonts.sans, maxWidth: 160 }}
-          />
+          {isWeb ? (
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              style={{ fontFamily: fonts.sans, fontSize: 14, padding: "8px 10px", borderRadius: 6, border: "1px solid #d6d3d1", maxWidth: 160, color: "#44403c" }}
+            />
+          ) : (
+            <TextInput
+              value={date}
+              onChangeText={setDate}
+              placeholder="YYYY-MM-DD"
+              className="rounded border border-stone-300 px-3 py-2 text-sm"
+              style={{ fontFamily: fonts.sans, maxWidth: 160 }}
+            />
+          )}
         </View>
       ) : null}
       <View className="flex-row gap-3">

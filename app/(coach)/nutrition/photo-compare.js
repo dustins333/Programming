@@ -73,7 +73,7 @@ export default function NutritionPhotoCompare() {
         className="flex-1"
         style={{ backgroundColor: "#faf8f6" }}
         contentContainerClassName="px-6 py-8"
-        contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 700, alignSelf: "center", width: "100%" }}
+        contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 1100 }}
       >
         <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
           ‹ Back to Nutrition
@@ -131,7 +131,7 @@ export default function NutritionPhotoCompare() {
                 className="rounded-2xl border bg-white p-5"
                 style={{ borderColor: "#ece7e1", shadowColor: "#44403c", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10 }}
               >
-                <PhotoCompare photos={photos} />
+                <PhotoCompare photos={photos} slots={3} />
               </View>
             )}
           </>

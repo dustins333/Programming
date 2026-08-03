@@ -1,11 +1,38 @@
 import { useEffect, useState, useCallback } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, Alert } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { updateClient } from "../../lib/nutrition/clients";
 import { getClientQuestions, addClientQuestion, updateClientQuestion, deleteClientQuestion } from "../../lib/nutrition/checkin";
 import { todayInBoise, addDays } from "../../lib/boiseDate";
 import { SegmentedControl } from "../SegmentedControl";
 import { QuestionListEditor } from "./QuestionListEditor";
+import { CheckinWeekTimeline } from "./CheckinWeekTimeline";
 import { fonts, colors } from "../../lib/theme";
+
+// Collapsed-by-default section — click the header to expand, matching the
+// "button that expands into the data" pattern used for both check-in
+// questions and check-in status inside this modal.
+function ExpandableSection({ title, badge, badgeColor, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View className="mb-2">
+      <Pressable onPress={() => setOpen((o) => !o)} className="flex-row items-center justify-between py-2">
+        <View className="flex-row items-center gap-2">
+          <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+            {title}
+          </Text>
+          {badge ? (
+            <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: badgeColor === "warn" ? "#fdece5" : "#eef1e7" }}>
+              <Text style={{ fontFamily: fonts.sansMedium, fontSize: 10.5, color: badgeColor === "warn" ? "#b23a22" : "#4d6142" }}>{badge}</Text>
+            </View>
+          ) : null}
+        </View>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={16} color="#a8a29e" />
+      </Pressable>
+      {open ? <View className="pb-2 pt-1">{children}</View> : null}
+    </View>
+  );
+}
 
 const STATUS_OPTIONS = [
   { key: "active", label: "Active" },
@@ -27,7 +54,7 @@ const FREQUENCIES = [
 // than a separate page. "Starting the week of" maps to the DB column
 // photo_frequency_started_at even though the field is labeled differently
 // in the UI — same naming split the original app uses.
-export function ClientSettingsModal({ visible, userId, client, onClose, onSaved }) {
+export function ClientSettingsModal({ visible, userId, client, checkins = [], photos = [], today, onClose, onSaved }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -191,15 +218,28 @@ export function ClientSettingsModal({ visible, userId, client, onClose, onSaved 
 
             <View className="my-4 h-px bg-stone-100" />
 
-            <QuestionListEditor
+            <ExpandableSection
               title="Weekly check-in questions"
-              description="This client's own copy — editing here doesn't affect the shared template or any other client."
-              questions={questions}
-              onAdd={handleAddQuestion}
-              onUpdate={handleUpdateQuestion}
-              onDelete={handleDeleteQuestion}
-              onMove={handleMoveQuestion}
-            />
+              badge={questions.length > 0 ? "Available to client" : "Not available yet"}
+              badgeColor={questions.length > 0 ? "ok" : "warn"}
+            >
+              <QuestionListEditor
+                description="This client's own copy — editing here doesn't affect the shared template or any other client."
+                questions={questions}
+                onAdd={handleAddQuestion}
+                onUpdate={handleUpdateQuestion}
+                onDelete={handleDeleteQuestion}
+                onMove={handleMoveQuestion}
+              />
+            </ExpandableSection>
+
+            <View className="my-2 h-px bg-stone-100" />
+
+            <ExpandableSection title="Check-in status">
+              {today ? (
+                <CheckinWeekTimeline userId={userId} client={client} checkins={checkins} photos={photos} today={today} onChanged={onSaved} />
+              ) : null}
+            </ExpandableSection>
           </ScrollView>
 
           <View className="flex-row justify-end gap-3 border-t border-stone-100 p-4">

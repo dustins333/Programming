@@ -29,7 +29,6 @@ import { listAllPhotos } from "../../../../lib/nutrition/photos";
 import { PhotoCompare } from "../../../../components/nutrition/PhotoCompare";
 import { PhotoSubmissionsEditor } from "../../../../components/nutrition/PhotoSubmissionsEditor";
 import { PhotoUpload } from "../../../../components/nutrition/PhotoUpload";
-import { CheckinWeekTimeline } from "../../../../components/nutrition/CheckinWeekTimeline";
 import { ClientSettingsModal } from "../../../../components/nutrition/ClientSettingsModal";
 import { CoachShell } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
@@ -319,7 +318,16 @@ export default function NutritionClientDetail() {
               here (Kova has no client_drafts) — the Objective Tracking phase
               card links straight to the assignment UI on its own page. */}
         </ScrollView>
-        <ClientSettingsModal visible={settingsVisible} userId={userId} client={client} onClose={() => setSettingsVisible(false)} onSaved={load} />
+        <ClientSettingsModal
+          visible={settingsVisible}
+          userId={userId}
+          client={client}
+          checkins={checkins}
+          photos={photos}
+          today={today}
+          onClose={() => setSettingsVisible(false)}
+          onSaved={load}
+        />
       </CoachShell>
     );
   }
@@ -417,9 +425,6 @@ export default function NutritionClientDetail() {
 
         {tab === "weeks" && (
           <View>
-            <SectionCard title="Check-in status">
-              <CheckinWeekTimeline userId={userId} client={client} checkins={checkins} photos={photos} today={today} onChanged={load} />
-            </SectionCard>
             <SectionCard title="Weekly averages">
               <WeekList weeks={recentWeeks} />
             </SectionCard>
@@ -541,7 +546,7 @@ export default function NutritionClientDetail() {
         {tab === "targets" && (
           <View>
             <SectionCard title="Set new target">
-              <NewTargetForm userId={userId} setBy={profile.id} onSaved={load} />
+              <NewTargetForm userId={userId} setBy={profile.id} currentTarget={currentTarget} onSaved={load} />
             </SectionCard>
             <SectionCard title="Target history">
               <TargetsHistory history={targets} />
@@ -549,7 +554,16 @@ export default function NutritionClientDetail() {
           </View>
         )}
       </ScrollView>
-      <ClientSettingsModal visible={settingsVisible} userId={userId} client={client} onClose={() => setSettingsVisible(false)} onSaved={load} />
+      <ClientSettingsModal
+        visible={settingsVisible}
+        userId={userId}
+        client={client}
+        checkins={checkins}
+        photos={photos}
+        today={today}
+        onClose={() => setSettingsVisible(false)}
+        onSaved={load}
+      />
     </CoachShell>
   );
 }

@@ -110,30 +110,33 @@ function Slot({ photo, url, onPress }) {
   );
 }
 
-// Picks oldest/middle/newest, same "tell a story" default the standalone
-// app's PhotoCompareBoard uses for its 3 slots.
-function defaultDates(anglePhotos) {
-  if (anglePhotos.length === 0) return [null, null, null];
-  const oldest = anglePhotos[0].date;
-  const newest = anglePhotos[anglePhotos.length - 1].date;
-  const middle = anglePhotos[Math.floor((anglePhotos.length - 1) / 2)].date;
-  return [oldest, middle, newest];
+// Picks `count` evenly-spaced dates from oldest to newest inclusive (e.g.
+// oldest/newest for 2 slots, oldest/middle/newest for 3) — same "tell a
+// story" default the standalone app's PhotoCompareBoard uses for its slots.
+function defaultDates(anglePhotos, count) {
+  if (anglePhotos.length === 0) return Array(count).fill(null);
+  if (count === 1) return [anglePhotos[anglePhotos.length - 1].date];
+  return Array.from({ length: count }, (_, i) => {
+    const idx = Math.round((i / (count - 1)) * (anglePhotos.length - 1));
+    return anglePhotos[idx].date;
+  });
 }
 
-// 3-slot progress-photo comparison board — angle tabs, each slot
-// independently selectable by date (‹/date-picker/›, controls above the
-// photo — matches the standalone app's app/dashboard/photo-compare/
-// PhotoCompareBoard.js) rather than a bare index stepper. Selection is
-// tracked by date, not array position — switching the angle tab tries to
-// keep the same 3 dates selected (wherever that angle also has a photo)
-// instead of resetting to unrelated photos. Tap any photo to open the full
-// pinch-zoom lightbox. A low-opacity logo watermark sits in the corner,
-// same as the original — meant for a manual screenshot, not an automated
-// export. Shared by the coach and member sides.
-export function PhotoCompare({ photos }) {
+// Progress-photo comparison board — angle tabs, each slot independently
+// selectable by date (‹/date-picker/›, controls above the photo — matches
+// the standalone app's app/dashboard/photo-compare/PhotoCompareBoard.js)
+// rather than a bare index stepper. Selection is tracked by date, not array
+// position — switching the angle tab tries to keep the same dates selected
+// (wherever that angle also has a photo) instead of resetting to unrelated
+// photos. Tap any photo to open the full pinch-zoom lightbox. A low-opacity
+// logo watermark sits in the corner, same as the original — meant for a
+// manual screenshot, not an automated export. Shared by the coach and
+// member sides. `slots` defaults to 2 (a client's own quick before/after) —
+// only the dedicated coach Photo Compare tool page opts into 3.
+export function PhotoCompare({ photos, slots = 2 }) {
   const [angle, setAngle] = useState("front");
   const [urls, setUrls] = useState({});
-  const [slotDates, setSlotDates] = useState([null, null, null]);
+  const [slotDates, setSlotDates] = useState(() => Array(slots).fill(null));
   const [lightboxUrl, setLightboxUrl] = useState(null);
 
   // Oldest-first so the first entry is the earliest photo — matches
@@ -150,13 +153,13 @@ export function PhotoCompare({ photos }) {
 
   useEffect(() => {
     if (anglePhotos.length === 0) return;
-    const fallback = defaultDates(anglePhotos);
-    setSlotDates((prev) => prev.map((d, i) => (d && anglePhotos.some((p) => p.date === d) ? d : fallback[i])));
+    const fallback = defaultDates(anglePhotos, slots);
+    setSlotDates((prev) => fallback.map((d, i) => (prev[i] && anglePhotos.some((p) => p.date === prev[i]) ? prev[i] : d)));
     getPhotoSignedUrls(anglePhotos.map((p) => p.storage_path))
       .then((next) => setUrls((prev) => ({ ...prev, ...next })))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anglePhotos]);
+  }, [anglePhotos, slots]);
 
   const setSlotDate = (index, date) => {
     setSlotDates((prev) => prev.map((d, i) => (i === index ? date : d)));

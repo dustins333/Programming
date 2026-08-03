@@ -15,7 +15,7 @@ import {
 import { fonts, colors } from "../../lib/theme";
 import { CoachShell } from "../../components/CoachShell";
 import { AddStaffModal } from "../../components/AddStaffModal";
-import { QuestionListEditor } from "../../components/nutrition/QuestionListEditor";
+import { TemplateEditorButton } from "../../components/nutrition/TemplateEditorButton";
 
 const LABELS = {
   alert_lead_time_days: "Alert lead time (days before a block ends)",
@@ -342,9 +342,9 @@ export default function Settings() {
       <Text className="mb-2 mt-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
         Nutrition templates
       </Text>
-      <View className="mb-6 rounded-xl border border-stone-200 p-4">
-        <QuestionListEditor
-          title="Weekly check-in template"
+      <View className="mb-3">
+        <TemplateEditorButton
+          label="Weekly check-in template"
           description="The master template. Each client gets their own copy — per-client edits live on that client's Client Settings."
           questions={checkinQuestions}
           onAdd={handleAddCheckinQuestion}
@@ -353,9 +353,9 @@ export default function Settings() {
           onMove={handleMoveCheckinQuestion}
         />
       </View>
-      <View className="mb-8 rounded-xl border border-stone-200 p-4">
-        <QuestionListEditor
-          title="Onboarding questionnaire template"
+      <View className="mb-8">
+        <TemplateEditorButton
+          label="Onboarding questionnaire template"
           description="Copied onto a client automatically when Nutrition is turned on for them."
           questions={questionnaireQuestions}
           onAdd={handleAddQuestionnaireQuestion}
