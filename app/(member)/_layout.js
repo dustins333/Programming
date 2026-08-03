@@ -2,6 +2,7 @@ import { Redirect, Tabs } from "expo-router";
 import { View, Text, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
+import { useNutritionAccess } from "../../lib/nutrition/useNutritionAccess";
 import { colors, fonts } from "../../lib/theme";
 
 // 21px line icons regardless of whatever size the navigator would
@@ -23,6 +24,13 @@ function TabLabel(title) {
 
 export default function MemberLayout() {
   const { session, profile, ready } = useAuth();
+  // Called unconditionally (Rules of Hooks) even before we know whether
+  // there's a real session yet — the hook itself no-ops until it has a
+  // userId. Defaults to hidden while status is unresolved, matching "a
+  // toggled-off client shouldn't even see this tab exists" — briefly
+  // hiding-then-showing on load reads better than the reverse.
+  const { status: nutritionStatus } = useNutritionAccess(session?.user?.id);
+  const showNutritionTab = nutritionStatus === "active" || nutritionStatus === "onboarding";
 
   if (!ready) {
     return (
@@ -54,7 +62,15 @@ export default function MemberLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "My Week", tabBarIcon: TabIcon("today"), tabBarLabel: TabLabel("My Week") }} />
       <Tabs.Screen name="plan" options={{ title: "My Fitness", tabBarIcon: TabIcon("barbell"), tabBarLabel: TabLabel("My Fitness") }} />
-      <Tabs.Screen name="nutrition" options={{ title: "My Nutrition", tabBarIcon: TabIcon("restaurant"), tabBarLabel: TabLabel("My Nutrition") }} />
+      <Tabs.Screen
+        name="nutrition"
+        options={{
+          title: "My Nutrition",
+          tabBarIcon: TabIcon("restaurant"),
+          tabBarLabel: TabLabel("My Nutrition"),
+          href: showNutritionTab ? undefined : null,
+        }}
+      />
       <Tabs.Screen name="history" options={{ title: "My History", tabBarIcon: TabIcon("time"), tabBarLabel: TabLabel("My History") }} />
 
       {/* Staff-only way back to the coach dashboard, since a coach/admin

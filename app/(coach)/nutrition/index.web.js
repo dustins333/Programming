@@ -165,7 +165,11 @@ export default function NutritionDashboardWeb() {
 
   const load = useCallback(async () => {
     try {
-      setRoster(await getNutritionRoster());
+      // Archived clients are deliberately excluded here — they get their
+      // own Archived list (still pullable, just not mixed into the roster
+      // a coach scans day to day). Paused ones stay visible; that's still
+      // a "temporarily off" state worth seeing at a glance.
+      setRoster((await getNutritionRoster()).filter((c) => c.status !== "archived"));
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -243,6 +247,9 @@ export default function NutritionDashboardWeb() {
           <View className="mb-4 flex-row items-center justify-between">
             <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 24 }}>Nutrition</Text>
             <View className="flex-row gap-5">
+              <Link href="/(coach)/nutrition/archived" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>
+                Archived →
+              </Link>
               <Link href="/(coach)/nutrition/photo-compare" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>
                 Photo compare →
               </Link>

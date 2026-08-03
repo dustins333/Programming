@@ -21,7 +21,8 @@ import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus"
 import { todayInBoise } from "../../../lib/boiseDate";
 import { fonts, colors } from "../../../lib/theme";
 
-const NUTRITION_TONES = { active: "onTrack", paused: "paused" };
+const NUTRITION_TONES = { active: "onTrack", paused: "paused", archived: "paused" };
+const NUTRITION_STATUS_LABELS = { active: "Active", paused: "Paused", archived: "Archived" };
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
 const isWeb = Platform.OS === "web";
 
@@ -235,7 +236,14 @@ export default function ClientProfile() {
   const handleNutritionToggle = async (enrolled) => {
     try {
       if (!enrolled) {
-        await setNutritionStatus(userId, "paused");
+        // Archived, not just paused — this is the coarse "turn nutrition
+        // off" switch, and per explicit product decision that should move
+        // them off the main nutrition roster into the Archived list (still
+        // pullable, not deleted) rather than leaving them sitting in the
+        // active roster tagged "Paused". The Client Settings modal still
+        // offers a real Paused option for a finer-grained "temporarily off"
+        // case that doesn't archive them.
+        await setNutritionStatus(userId, "archived");
       } else {
         // Existing public.clients row (a real standalone-app client) just
         // gets reactivated; a brand-new-to-nutrition member gets a fresh
@@ -431,7 +439,10 @@ export default function ClientProfile() {
               title="Nutrition"
               headerRight={
                 nutritionClient ? (
-                  <StatusBadge tone={NUTRITION_TONES[nutritionClient.status] ?? "paused"} label={nutritionActive ? "Active" : "Paused"} />
+                  <StatusBadge
+                    tone={NUTRITION_TONES[nutritionClient.status] ?? "paused"}
+                    label={NUTRITION_STATUS_LABELS[nutritionClient.status] ?? "Paused"}
+                  />
                 ) : null
               }
             >
