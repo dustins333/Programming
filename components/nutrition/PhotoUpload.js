@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Image, Pressable, Modal, Alert, ActivityIndicator, TextInput, Platform, StyleSheet } from "react-native";
+import { View, Text, Image, Pressable, Modal, Alert, ActivityIndicator, TextInput, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { pickPhoto } from "../../lib/nutrition/imagePicker";
 import { uploadPhoto } from "../../lib/nutrition/photos";
@@ -74,7 +74,10 @@ function AngleBox({ angle, label, selected, uploading, onPicked }) {
         ) : (
           <>
             <Image source={POSE_IMAGES[angle]} resizeMode="contain" style={{ width: "100%", height: "100%" }} />
-            <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { alignItems: "center", justifyContent: "center" }]}>
+            <View
+              pointerEvents="none"
+              style={{ position: "absolute", top: 0, width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
+            >
               <View
                 className="items-center justify-center rounded-full"
                 style={{ width: 36, height: 36, backgroundColor: "rgba(0,0,0,0.35)" }}

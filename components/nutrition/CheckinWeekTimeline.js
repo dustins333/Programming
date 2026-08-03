@@ -93,7 +93,6 @@ export function CheckinWeekTimeline({ userId, client, checkins, photos, today, o
   const checkinsByWeek = Object.fromEntries(checkins.map((c) => [c.week_start, c]));
 
   const rowProps = (week, isCurrent, isUpcoming) => ({
-    key: week.start,
     week,
     isCurrent,
     isUpcoming,
@@ -110,7 +109,7 @@ export function CheckinWeekTimeline({ userId, client, checkins, photos, today, o
         Upcoming
       </Text>
       {upcoming.map((w) => (
-        <Row {...rowProps(w, false, true)} />
+        <Row key={w.start} {...rowProps(w, false, true)} />
       ))}
 
       <Text className="mb-1.5 mt-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
@@ -122,7 +121,7 @@ export function CheckinWeekTimeline({ userId, client, checkins, photos, today, o
         Past
       </Text>
       {recent.slice(1).map((w) => (
-        <Row {...rowProps(w, false, false)} />
+        <Row key={w.start} {...rowProps(w, false, false)} />
       ))}
     </View>
   );

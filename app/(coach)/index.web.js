@@ -3,7 +3,8 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-nati
 import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
-import { getCoachDashboardStats, computeAttentionItems } from "../../lib/programming/coachDashboard";
+import { getCoachDashboardStats, computeAttentionItems, filterDismissedItems } from "../../lib/programming/coachDashboard";
+import { listDismissals, dismissAttentionItem } from "../../lib/programming/dashboardDismissals";
 import { STATUS_LABELS as SPC_STATUS_LABELS, STATUS_TONES as SPC_STATUS_TONES, STATUS_ORDER as SPC_STATUS_ORDER } from "../../lib/programming/spcStatus";
 import { CoachShell } from "../../components/CoachShell";
 import { fonts, colors, statusColors } from "../../lib/theme";
@@ -41,21 +42,25 @@ function Panel({ title, children, style }) {
   );
 }
 
-function AttentionRow({ title, subtitle, onPress }) {
+function AttentionRow({ title, subtitle, onPress, onDismiss }) {
   return (
-    <Pressable
-      onPress={onPress}
-      className="mb-2 flex-row items-center justify-between rounded-xl px-4 py-3.5"
+    <View
+      className="mb-2 flex-row items-center rounded-xl px-4 py-3.5"
       style={{ backgroundColor: "#fdece5", borderWidth: 1, borderColor: "#f0d4c9" }}
     >
-      <View className="flex-1 pr-2">
-        <Text style={{ fontFamily: fonts.sansBold, color: "#8a3a24", fontSize: 13.5 }}>{title}</Text>
-        <Text className="mt-0.5" style={{ fontFamily: fonts.sans, color: "#a8574a", fontSize: 12 }}>
-          {subtitle}
-        </Text>
-      </View>
-      <Text style={{ color: "#c2543a", fontSize: 15 }}>›</Text>
-    </Pressable>
+      <Pressable onPress={onPress} className="flex-1 flex-row items-center pr-2">
+        <View className="flex-1 pr-2">
+          <Text style={{ fontFamily: fonts.sansBold, color: "#8a3a24", fontSize: 13.5 }}>{title}</Text>
+          <Text className="mt-0.5" style={{ fontFamily: fonts.sans, color: "#a8574a", fontSize: 12 }}>
+            {subtitle}
+          </Text>
+        </View>
+        <Text style={{ color: "#c2543a", fontSize: 15 }}>›</Text>
+      </Pressable>
+      <Pressable onPress={onDismiss} hitSlop={8} className="ml-2 items-center justify-center rounded-full" style={{ width: 22, height: 22 }}>
+        <Text style={{ color: "#c2543a", fontSize: 15, fontFamily: fonts.sansBold }}>×</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -237,6 +242,7 @@ export default function CoachHomeWeb() {
   const { profile } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState(null);
+  const [dismissals, setDismissals] = useState({});
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
@@ -244,6 +250,16 @@ export default function CoachHomeWeb() {
       setStats(await getCoachDashboardStats());
     } catch (err) {
       setLoadError(err.message ?? String(err));
+      return;
+    }
+    // Isolated from the stats fetch on purpose — same pattern as the
+    // SPC/nutrition rosters inside getCoachDashboardStats: a not-yet-run
+    // migration for this table shouldn't take down the whole dashboard,
+    // it should just leave every attention item un-dismissable for now.
+    try {
+      setDismissals(await listDismissals());
+    } catch {
+      setDismissals({});
     }
   }, []);
 
@@ -276,7 +292,21 @@ export default function CoachHomeWeb() {
   // Shared with the native dashboard (lib/programming/coachDashboard.js) so
   // the two can't drift on what counts as "needs attention" — this used to
   // be computed inline here only.
-  const attentionItems = computeAttentionItems(stats).map((item) => ({ ...item, onPress: () => router.push(item.route) }));
+  const allAttentionItems = computeAttentionItems(stats);
+  const attentionItems = filterDismissedItems(allAttentionItems, dismissals, todayInBoise()).map((item) => ({
+    ...item,
+    onPress: () => router.push(item.route),
+  }));
+
+  const handleDismiss = (item) => {
+    // Optimistic — the row disappears immediately, the write happens in
+    // the background. If it fails, the next load() will bring the row
+    // back rather than leaving the UI lying about what's dismissed.
+    setDismissals((prev) => ({ ...prev, [item.key]: { signature: item.signature, dismissedAt: new Date().toISOString() } }));
+    dismissAttentionItem(item.key, item.signature, profile?.id).catch((err) => {
+      console.error("Failed to dismiss attention item:", err);
+    });
+  };
 
   const goToClients = (programParam) => {
     router.push(programParam ? `/(coach)/clients?program=${programParam}` : "/(coach)/clients");
@@ -298,7 +328,13 @@ export default function CoachHomeWeb() {
               </Text>
             ) : (
               attentionItems.map((item) => (
-                <AttentionRow key={item.key} title={item.title} subtitle={item.subtitle} onPress={item.onPress} />
+                <AttentionRow
+                  key={item.key}
+                  title={item.title}
+                  subtitle={item.subtitle}
+                  onPress={item.onPress}
+                  onDismiss={() => handleDismiss(item)}
+                />
               ))
             )}
           </Panel>
