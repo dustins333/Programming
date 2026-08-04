@@ -14,8 +14,10 @@ Two EAS commands, run in order, from this Expo app's project root (`/Users/Dusti
 
 ## Build
 
+`eas-cli` isn't installed globally on this machine (confirmed — only reachable via `npx`), so use `npx eas-cli` rather than a bare `eas` command:
+
 ```bash
-eas build --platform ios --profile production
+npx eas-cli build --platform ios --profile production
 ```
 
 Run this in the foreground, not backgrounded — it's a real cloud build (typically 10-20 minutes), and its output is where any login prompt or real build error will show up. Don't move on until it reports success or failure.
@@ -29,7 +31,7 @@ If the build fails, stop and report the actual error rather than retrying blindl
 Once the build succeeds:
 
 ```bash
-eas submit --platform ios --profile production --latest
+npx eas-cli submit --platform ios --profile production --latest
 ```
 
 `--latest` picks up the build that was just produced, so there's no build ID to hunt down by hand.
