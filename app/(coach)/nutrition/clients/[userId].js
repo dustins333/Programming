@@ -10,6 +10,7 @@ import { listTargets, deriveCalories } from "../../../../lib/nutrition/targets";
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
 import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsSince } from "../../../../lib/nutrition/checkin";
 import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
+import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
 import { computeWeekWindows, currentCalendarWeek, summarizeWeek, enumerateUpcomingWeeks } from "../../../../lib/nutrition/weekCycle";
 import { OnboardingStepper } from "../../../../components/nutrition/OnboardingStepper";
@@ -22,6 +23,7 @@ import { TrendChart } from "../../../../components/nutrition/TrendChart";
 import { MacroPills } from "../../../../components/nutrition/MacroPills";
 import { FocusChecklist } from "../../../../components/nutrition/FocusChecklist";
 import { GamePlan } from "../../../../components/nutrition/GamePlan";
+import { MilestoneSlots } from "../../../../components/nutrition/MilestoneSlots";
 import { TargetsHistory } from "../../../../components/nutrition/TargetsHistory";
 import { ObjectiveTrackingHistory } from "../../../../components/nutrition/ObjectiveTrackingHistory";
 import { NewTargetForm } from "../../../../components/nutrition/NewTargetForm";
@@ -127,6 +129,7 @@ export default function NutritionClientDetail() {
   const [targets, setTargets] = useState(null);
   const [logs, setLogs] = useState(null);
   const [focusItems, setFocusItems] = useState([]);
+  const [milestones, setMilestones] = useState([]);
   const [onboarding, setOnboarding] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -172,6 +175,15 @@ export default function NutritionClientDetail() {
       setOtLogs(otLogRows);
     } catch (err) {
       setLoadError(err.message ?? String(err));
+    }
+
+    // Isolated from the Promise.all above — migration 0023 (nutrition
+    // milestones) may not be run yet on a given environment, and that
+    // shouldn't take down the rest of an already-working page.
+    try {
+      setMilestones(await listActiveMilestones(userId));
+    } catch (err) {
+      console.error("Failed to load milestones:", err);
     }
   }, [userId, selectedWeek.start]);
 
@@ -498,7 +510,7 @@ export default function NutritionClientDetail() {
 
         {tab === "dashboard" && (
           <View>
-            {/* Focus items + Game plan lead the page (design_handoff_v2 —
+            {/* Focus items + Notes lead the page (design_handoff_v2 —
                 explicit reorder ask), above the metrics cards below. */}
             <View style={{ flexDirection: isWeb ? "row" : "column", gap: 20 }}>
               <View style={{ flex: 1 }}>
@@ -507,11 +519,15 @@ export default function NutritionClientDetail() {
                 </SectionCard>
               </View>
               <View style={{ flex: 1 }}>
-                <SectionCard title="Game plan">
+                <SectionCard title="Notes">
                   <GamePlan userId={userId} initialGamePlan={client.game_plan} />
                 </SectionCard>
               </View>
             </View>
+
+            <SectionCard title="Milestones">
+              <MilestoneSlots userId={userId} coachId={profile.id} milestones={milestones} onChanged={load} />
+            </SectionCard>
 
             <SectionCard title="This week at a glance">
               <TrendTiles thisWeek={thisWeekSummary} lastWeek={lastWeekSummary} />

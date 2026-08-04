@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Image, TextInput, Pressable, ScrollView, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays } from "../../../lib/boiseDate";
@@ -10,7 +10,10 @@ import { NutritionAccessMessage } from "../../../components/nutrition/NutritionA
 import { getCurrentTarget, deriveCalories } from "../../../lib/nutrition/targets";
 import { getLogForDate, saveDraftLog, finalizeLog } from "../../../lib/nutrition/dailyLog";
 import { listFocusItems, toggleFocusItem } from "../../../lib/nutrition/coachClient";
+import { listActiveMilestones, getUnseenCompletedMilestone, acknowledgeMilestone, MILESTONE_COLORS } from "../../../lib/nutrition/milestones";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { TodayCardSlider } from "../../../components/nutrition/TodayCardSlider";
+import { MilestoneCongratsModal } from "../../../components/nutrition/MilestoneCongratsModal";
 import { TargetField } from "../../../components/nutrition/TargetField";
 import { RatingSelect } from "../../../components/nutrition/RatingSelect";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
@@ -111,6 +114,8 @@ export default function NutritionToday() {
 
   const [target, setTarget] = useState(null);
   const [focusItems, setFocusItems] = useState([]);
+  const [milestones, setMilestones] = useState([]);
+  const [congratsMilestone, setCongratsMilestone] = useState(null);
   const [values, setValues] = useState(EMPTY_VALUES);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -132,11 +137,41 @@ export default function NutritionToday() {
     }
   };
 
-  useEffect(() => {
-    if (access.status !== "active") return;
-    loadFocus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [access.status]);
+  const loadMilestones = async () => {
+    try {
+      setMilestones(await listActiveMilestones(profile.id));
+    } catch (err) {
+      console.error("Failed to load milestones:", err);
+    }
+  };
+
+  // useFocusEffect (not a mount-only useEffect) so returning to this tab —
+  // from Weekly/Check-in/Photos, or backgrounding and re-foregrounding the
+  // app — re-checks for anything the coach changed elsewhere, e.g. a newly
+  // closed-out milestone. A plain useEffect only ran once on first mount,
+  // which is why the congrats popup needed a full page reload to appear —
+  // same class of bug noted elsewhere in this app (My Week/My Fitness).
+  useFocusEffect(
+    useCallback(() => {
+      if (access.status !== "active") return;
+      loadFocus();
+      loadMilestones();
+      getUnseenCompletedMilestone(profile.id)
+        .then(setCongratsMilestone)
+        .catch((err) => console.error("Failed to check for completed milestones:", err));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [access.status])
+  );
+
+  const handleCloseCongrats = async () => {
+    const milestone = congratsMilestone;
+    setCongratsMilestone(null);
+    try {
+      await acknowledgeMilestone(milestone.id);
+    } catch (err) {
+      console.error("Failed to acknowledge milestone:", err);
+    }
+  };
 
   useEffect(() => {
     if (access.status !== "active") return;
@@ -266,28 +301,59 @@ export default function NutritionToday() {
         <NutritionAccessMessage status="loading" />
       ) : (
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8">
-          {(focusItems.length > 0 || access.client?.game_plan) ? (
-            <View className="mb-5 rounded-lg border border-stone-200 bg-white p-4">
-              {focusItems.length > 0 ? (
-                <View className="mb-3">
-                  <Text className="mb-1.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-                    Focus
-                  </Text>
-                  {focusItems.map((item) => (
-                    <FocusRow key={item.id} item={item} onChanged={loadFocus} />
-                  ))}
-                </View>
-              ) : null}
-              {access.client?.game_plan ? (
-                <View>
-                  <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-                    Game Plan
-                  </Text>
-                  <Text style={{ fontFamily: fonts.sans }}>{access.client.game_plan}</Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
+          <TodayCardSlider
+            slides={[
+              ...(focusItems.length > 0
+                ? [
+                    {
+                      key: "focus",
+                      content: (
+                        <View className="rounded-lg border border-stone-200 bg-white p-4">
+                          <Text className="mb-1.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+                            Focus
+                          </Text>
+                          {focusItems.map((item) => (
+                            <FocusRow key={item.id} item={item} onChanged={loadFocus} />
+                          ))}
+                        </View>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(access.client?.game_plan
+                ? [
+                    {
+                      key: "notes",
+                      content: (
+                        <View className="rounded-lg border border-stone-200 bg-white p-4">
+                          <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+                            Notes
+                          </Text>
+                          <Text style={{ fontFamily: fonts.sans }}>{access.client.game_plan}</Text>
+                        </View>
+                      ),
+                    },
+                  ]
+                : []),
+              ...milestones.map((m) => {
+                const palette = MILESTONE_COLORS[m.color_index % MILESTONE_COLORS.length];
+                return {
+                  key: `milestone-${m.id}`,
+                  content: (
+                    <View className="rounded-lg p-4" style={{ borderWidth: 1, borderColor: palette.border, backgroundColor: palette.bg }}>
+                      <Text className="mb-1 text-xs uppercase" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5, color: palette.text }}>
+                        Milestone
+                      </Text>
+                      <Text className="mb-1" style={{ fontFamily: fonts.sansBold, fontSize: 15, color: palette.text }}>
+                        {m.title}
+                      </Text>
+                      {m.details ? <Text style={{ fontFamily: fonts.sans, color: "#57534e" }}>{m.details}</Text> : null}
+                    </View>
+                  ),
+                };
+              }),
+            ]}
+          />
 
           <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold }}>
             Daily Log
@@ -371,6 +437,7 @@ export default function NutritionToday() {
           </Pressable>
         </ScrollView>
       )}
+      <MilestoneCongratsModal milestone={congratsMilestone} onClose={handleCloseCongrats} />
     </View>
   );
 }
