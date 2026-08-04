@@ -3,7 +3,7 @@ import { View, Text, Pressable, Alert } from "react-native";
 import { computeWeekWindows, enumerateUpcomingWeeks, deriveCheckinStatus } from "../../lib/nutrition/weekCycle";
 import { enumerateRecentWeeks } from "./WeekList";
 import { isPhotoRequirementWeek, hasAllAngles, requirePhotosNextCheckin, clearPhotosNextCheckin } from "../../lib/nutrition/photos";
-import { addDays } from "../../lib/boiseDate";
+import { addDays, formatDateTimeInBoise } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
 
@@ -65,9 +65,14 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, onC
       </View>
 
       {status ? (
-        <Text className="mr-3" style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: status.color }}>
-          {status.label}
-        </Text>
+        <View className="mr-3 items-end">
+          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: status.color }}>
+            {status.label}
+          </Text>
+          {checkin?.submitted_at ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e" }}>{formatDateTimeInBoise(checkin.submitted_at)}</Text>
+          ) : null}
+        </View>
       ) : null}
 
       {(isCurrent || isUpcoming) && (

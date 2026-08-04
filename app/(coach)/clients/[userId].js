@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Alert, Platform } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
+import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
+import { supabase, core } from "../../../lib/supabase/client";
 import { getUser, listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../../lib/programming/clients";
 import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { getCurrentBlock } from "../../../lib/programming/memberPlan";
@@ -146,6 +148,8 @@ export default function ClientProfile() {
   const [templates, setTemplates] = useState([]);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [lastSignInAt, setLastSignInAt] = useState(undefined);
+  const [resending, setResending] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -160,6 +164,19 @@ export default function ClientProfile() {
         listTemplates(),
       ]);
       setMember(memberRow);
+
+      // Staff-only, reads auth.users.last_sign_in_at (migration 0022) — real
+      // account-level signal for "has this person ever actually opened the
+      // app," independent of which module (Programming/SPC/Nutrition)
+      // they're using it for. Own try/catch so a failure here (e.g.
+      // migration not run yet) doesn't take down the whole page.
+      try {
+        const { data: loginRows, error: loginError } = await core.rpc("get_login_activity", { user_ids: [userId] });
+        if (loginError) throw loginError;
+        setLastSignInAt(loginRows?.[0]?.last_sign_in_at ?? null);
+      } catch {
+        setLastSignInAt(null);
+      }
       setAssignments(assignmentRows);
       setPrograms(programRows);
       setSpcClient(spcRow);
@@ -262,6 +279,26 @@ export default function ClientProfile() {
     }
   };
 
+  // Kova has no separate email-invite system (a member's auth.users row
+  // already exists before any module is turned on for them) — this really
+  // means "send them a fresh link to set their password and get in for the
+  // first time," which works regardless of whether they've ever signed in.
+  // Same mechanism as this app's own "Forgot / set up password?" flow.
+  const handleResendInvite = async () => {
+    setResending(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(member.email, {
+        redirectTo: Linking.createURL("set-password"),
+      });
+      if (error) throw error;
+      Alert.alert("Sent", `A sign-in link was sent to ${member.email}.`);
+    } catch (err) {
+      Alert.alert("Failed to send", err.message ?? String(err));
+    } finally {
+      setResending(false);
+    }
+  };
+
   const handleAssignOneOff = async (template) => {
     try {
       await createOneOffFromTemplate({ userId, templateId: template.id, templateName: template.name, assignedBy: profile.id });
@@ -341,6 +378,19 @@ export default function ClientProfile() {
               {member.email}
               {member.phone ? ` · ${member.phone}` : ""}
             </Text>
+            {lastSignInAt === null ? (
+              <View className="mt-1 flex-row items-center gap-2">
+                <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>
+                  Never signed in
+                </Text>
+                <Text style={{ color: "#d6d3d1" }}>·</Text>
+                <Pressable onPress={handleResendInvite} disabled={resending} hitSlop={6}>
+                  <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                    {resending ? "Sending…" : "Resend invite"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </View>
 

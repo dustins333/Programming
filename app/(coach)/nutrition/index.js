@@ -12,8 +12,10 @@ const FILTER_ORDER = STATUS_ORDER;
 
 function metaLine(client) {
   if (client.rosterStatus === "paused") return "Paused";
-  if (client.rosterStatus === "onboarding") return "Not yet approved for targets";
   if (client.rosterStatus === "needsTarget") return "No target set yet";
+  if (client.rosterStatus === "otSetup") return "Waiting on you to add tracking days";
+  if (client.rosterStatus === "otInProgress") return `${client.trackingLoggedCount} of ${client.trackingDatesCount} tracking days logged`;
+  if (client.rosterStatus === "readyForReview") return "Ready for your review";
   const logLine = client.loggedToday
     ? "Logged today"
     : client.missedDays > 0
@@ -96,9 +98,6 @@ export default function NutritionDashboard() {
           Nutrition
         </Text>
         <View className="flex-row gap-4">
-          <Link href="/(coach)/nutrition/onboarding" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
-            Onboarding
-          </Link>
           <Link href="/(coach)/nutrition/archived" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
             Archived
           </Link>

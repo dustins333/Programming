@@ -18,6 +18,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--web", "--port", "8095"],
       "port": 8095
+    },
+    {
+      "name": "kova-strength-web-scratch2",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8098"],
+      "port": 8098
     }
   ]
 }

@@ -10,7 +10,7 @@ import { listTargets, deriveCalories } from "../../../../lib/nutrition/targets";
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
 import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsSince } from "../../../../lib/nutrition/checkin";
 import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
-import { getOnboardingStatus, bypassOnboarding } from "../../../../lib/nutrition/onboarding";
+import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
 import { computeWeekWindows, currentCalendarWeek, summarizeWeek, enumerateUpcomingWeeks } from "../../../../lib/nutrition/weekCycle";
 import { OnboardingStepper } from "../../../../components/nutrition/OnboardingStepper";
 import { PhaseCard } from "../../../../components/nutrition/PhaseCard";
@@ -23,6 +23,7 @@ import { MacroPills } from "../../../../components/nutrition/MacroPills";
 import { FocusChecklist } from "../../../../components/nutrition/FocusChecklist";
 import { GamePlan } from "../../../../components/nutrition/GamePlan";
 import { TargetsHistory } from "../../../../components/nutrition/TargetsHistory";
+import { ObjectiveTrackingHistory } from "../../../../components/nutrition/ObjectiveTrackingHistory";
 import { NewTargetForm } from "../../../../components/nutrition/NewTargetForm";
 import { HighlightableAnswer } from "../../../../components/nutrition/HighlightableAnswer";
 import { listAllPhotos } from "../../../../lib/nutrition/photos";
@@ -136,6 +137,7 @@ export default function NutritionClientDetail() {
   const [trendRange, setTrendRange] = useState(30);
   const [loadError, setLoadError] = useState(null);
   const [checkins, setCheckins] = useState([]);
+  const [otLogs, setOtLogs] = useState([]);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [bypassing, setBypassing] = useState(false);
 
@@ -148,7 +150,7 @@ export default function NutritionClientDetail() {
 
   const load = useCallback(async () => {
     try {
-      const [clientRow, targetRows, logRows, focusRows, checkinRow, onboardingStatus, photoRows, checkinRows] = await Promise.all([
+      const [clientRow, targetRows, logRows, focusRows, checkinRow, onboardingStatus, photoRows, checkinRows, otLogRows] = await Promise.all([
         getClient(userId),
         listTargets(userId),
         listLogs(userId, { limit: 400 }),
@@ -157,6 +159,7 @@ export default function NutritionClientDetail() {
         getOnboardingStatus(userId),
         listAllPhotos(userId),
         listCheckinsSince(userId, addDays(today, -7 * TIMELINE_PAST_WEEKS)),
+        listObjectiveTrackingLogs(userId),
       ]);
       setClient(clientRow);
       setTargets(targetRows);
@@ -166,6 +169,7 @@ export default function NutritionClientDetail() {
       setOnboarding(onboardingStatus);
       setPhotos(photoRows);
       setCheckins(checkinRows);
+      setOtLogs(otLogRows);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -187,18 +191,23 @@ export default function NutritionClientDetail() {
     }
   };
 
+  // Goes straight into Approve & Set Targets right after bypassing, rather
+  // than leaving the coach to remember to come back and set one later — a
+  // bypassed client with no target sitting around is exactly the
+  // "needsTarget" limbo state that shouldn't exist. approve.js's own gate
+  // only checks whether a target exists yet (not the approval timestamp),
+  // so it's already the right screen to land on here.
   const handleBypassOnboarding = async () => {
     const confirmed = await confirmBypassOnboarding(
-      `${client.name} will be marked approved without completing the questionnaire, tracking, or photos. You'll still set their target afterward.`
+      `${client.name} will be marked approved without completing the questionnaire, tracking, or photos. You'll set their target on the next screen.`
     );
     if (!confirmed) return;
     setBypassing(true);
     try {
       await bypassOnboarding(userId);
-      await load();
+      router.replace(`/(coach)/nutrition/clients/${userId}/onboarding/approve`);
     } catch (err) {
       Alert.alert("Failed to skip onboarding", err.message ?? String(err));
-    } finally {
       setBypassing(false);
     }
   };
@@ -411,19 +420,47 @@ export default function NutritionClientDetail() {
     photosByDate[p.date].push(p);
   }
 
+  // Backs the top-of-page Finalize button's photo indicator — whether the
+  // currently-loaded check-in week (selectedWeek, same week the button
+  // itself finalizes) has any progress photos in yet.
+  const weekPhotos = photos.filter((p) => p.date >= selectedWeek.start && p.date <= selectedWeek.end);
+
   return (
     <CoachShell>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8" contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 1000 }}>
         <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
           ‹ Back to Nutrition
         </Link>
-        <View className="mb-1 flex-row items-center gap-2">
-          <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-            {client.name}
-          </Text>
-          <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8}>
-            <Ionicons name="settings-outline" size={19} color="#a8a29e" />
-          </Pressable>
+        <View className="mb-1 flex-row items-center justify-between">
+          <View className="flex-row items-center gap-2">
+            <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+              {client.name}
+            </Text>
+            <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8}>
+              <Ionicons name="settings-outline" size={19} color="#a8a29e" />
+            </Pressable>
+          </View>
+          {/* Ready-to-finalize check-in action, relocated here from the
+              bottom of the Check-In tab so it's visible regardless of which
+              tab a coach lands on. Tied to the same `checkin`/`selectedWeek`
+              state the Check-In tab's week-navigator drives, so paging to a
+              late-submitted prior week (weekOffset > 0) still works through
+              this same button. The small person icon is a lightweight "there
+              are photos in this check-in" flag — not unread tracking, just
+              whether any were uploaded for this cycle. */}
+          {checkin && !checkin.finalized_at ? (
+            <Pressable
+              onPress={handleFinalizeCheckin}
+              disabled={finalizing}
+              className="flex-row items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50"
+              style={{ backgroundColor: colors.primary }}
+            >
+              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
+                {finalizing ? "Finalizing…" : "Finalize Check-In"}
+              </Text>
+              {weekPhotos.length > 0 ? <Ionicons name="person" size={15} color="white" /> : null}
+            </Pressable>
+          ) : null}
         </View>
         <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
           {client.email}
@@ -586,16 +623,12 @@ export default function NutritionClientDetail() {
                       />
                     </View>
                   ))}
-                  <Pressable
-                    onPress={handleFinalizeCheckin}
-                    disabled={finalizing || !!checkin.finalized_at}
-                    className="mt-2 items-center rounded-lg border py-3 disabled:opacity-50"
-                    style={{ borderColor: colors.primary }}
-                  >
-                    <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primary }}>
-                      {checkin.finalized_at ? "Finalized ✓" : finalizing ? "Finalizing…" : "Finalize Check-In"}
-                    </Text>
-                  </Pressable>
+                  {/* Finalize action itself lives at the top of the page now,
+                      next to the client's name — this is just a status
+                      readout for whoever's down here reading the answers. */}
+                  <Text className="mt-2 text-center" style={{ fontFamily: fonts.sansSemiBold, color: checkin.finalized_at ? "#4d6142" : "#b3843a" }}>
+                    {checkin.finalized_at ? "Finalized ✓" : "Awaiting your review — Finalize at the top of the page"}
+                  </Text>
                 </View>
               ) : (
                 <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
@@ -636,6 +669,9 @@ export default function NutritionClientDetail() {
             </SectionCard>
             <SectionCard title="Target history">
               <TargetsHistory history={targets} />
+            </SectionCard>
+            <SectionCard title="Objective Tracking">
+              <ObjectiveTrackingHistory logs={otLogs} />
             </SectionCard>
           </View>
         )}
