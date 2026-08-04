@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../../../lib/auth/AuthProvider";
 import { getClient } from "../../../../../../lib/nutrition/clients";
+import { listTargets } from "../../../../../../lib/nutrition/targets";
 import { computeBaseline } from "../../../../../../lib/nutrition/onboarding";
 import { supabase } from "../../../../../../lib/supabase/client";
 import { BaselineSummary } from "../../../../../../components/nutrition/BaselineSummary";
@@ -23,12 +24,18 @@ export default function OnboardingApprove() {
 
   const load = useCallback(async () => {
     try {
-      const [clientRow, { data: logs }] = await Promise.all([
+      const [clientRow, { data: logs }, targetRows] = await Promise.all([
         getClient(userId),
         supabase.from("objective_tracking_logs").select("date, protein_g, carb_g, fat_g, fiber_g").eq("client_id", userId),
+        listTargets(userId),
       ]);
-      // Already graduated — nothing left to approve here.
-      if (clientRow?.objective_tracking_approved_at) {
+      // Already has a target — nothing left to approve here. Deliberately
+      // gated on having a target, not on objective_tracking_approved_at:
+      // a client can be already-approved (e.g. a pre-existing standalone-
+      // app client whose Kova nutrition switch was just turned on) but
+      // still have zero targets, and that case still needs this review
+      // screen — see approveAndSetTargets' handling of that edge case.
+      if (targetRows.length > 0) {
         router.replace(`/(coach)/nutrition/clients/${userId}`);
         return;
       }

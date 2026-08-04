@@ -137,6 +137,58 @@ export function WeekList({ weeks }) {
   );
 }
 
+// design_handoff_v2_settings_nutrition's member Weekly tab wants the
+// current week always shown day-by-day (no click-to-expand — it's the one
+// week a member actually cares about seeing in full), separately from the
+// "Prior weeks" table below it which keeps WeekList's collapsed/expandable
+// rows. Reuses the exact same column set/coloring/day-label logic as
+// WeekList's own expanded rows so the two tables read as one continuous
+// column layout.
+export function WeekDayTable({ week }) {
+  const logByDate = Object.fromEntries(week.summary.days.map((d) => [d.date, d]));
+  const allDates = [];
+  for (let d = week.start; d <= week.end; d = addDays(d, 1)) {
+    allDates.push(d);
+  }
+  const tableWidth = WEEK_COL_WIDTH + METRIC_COLUMNS.reduce((sum, c) => sum + c.width, 0) + NOTE_COL_WIDTH;
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={{ width: tableWidth }}>
+        <View className="flex-row border-b border-stone-200 pb-2">
+          <Text style={{ width: WEEK_COL_WIDTH, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Day</Text>
+          {METRIC_COLUMNS.map((c) => (
+            <Text key={c.key} style={{ width: c.width, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>
+              {c.label}
+            </Text>
+          ))}
+          <Text style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Note</Text>
+        </View>
+        {allDates.map((date) => {
+          const log = logByDate[date] ?? null;
+          return (
+            <View key={date} className="flex-row items-center border-b border-stone-100 py-1.5">
+              <Text style={{ width: WEEK_COL_WIDTH, fontFamily: fonts.sansSemiBold, fontSize: 12.5 }}>{dayLabel(date)}</Text>
+              {METRIC_COLUMNS.map((c) => {
+                const target = c.targetKey ? week.target?.[c.targetKey] : null;
+                const color = colorForColumn(c.key, log?.[c.key], target);
+                return (
+                  <Text key={c.key} style={{ width: c.width, fontFamily: fonts.sans, fontSize: 12.5, color: color ? COLOR[color] : "#57534e" }}>
+                    {fmt(log?.[c.key])}
+                  </Text>
+                );
+              })}
+              <Text numberOfLines={1} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
+                {log?.client_note || "—"}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+}
+
 // Computes the last `count` Monday-Sunday weeks (most recent first) —
 // shared enumeration so the member and coach screens can't drift apart.
 export function enumerateRecentWeeks(currentWeek, addDays, count) {

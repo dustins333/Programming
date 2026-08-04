@@ -17,6 +17,7 @@ import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
 
 const AUTOSAVE_DELAY_MS = 900;
+const CANVAS = "#faf8f6";
 
 const EMPTY_VALUES = {
   weight: "",
@@ -47,6 +48,27 @@ function toRowValues(log) {
 function formatDateWeekday(isoDate) {
   const d = new Date(`${isoDate}T12:00:00`);
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+// design_handoff_v2_settings_nutrition — the 3 Daily Log cards need visible
+// separation. First two attempts tinted the whole card body: too subtle at
+// near-white, then too heavy/muddy once saturated enough to actually read,
+// and the saturated version fought with each field's fixed target-pill
+// color (steps' pale blue landing on a tan card looked especially bad, per
+// direct feedback). Landed on tinting only a thin header band instead —
+// same two-tone-header technique My Week's WeekSection cards already use —
+// so the pill colors sit on plain white further down and never clash.
+function DailyLogCard({ color, title, children }) {
+  return (
+    <View className="mb-4 rounded-lg border border-stone-200" style={{ overflow: "hidden" }}>
+      <View style={{ backgroundColor: color, paddingHorizontal: 16, paddingVertical: 10 }}>
+        <Text className="text-xs uppercase text-stone-500" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+          {title}
+        </Text>
+      </View>
+      <View style={{ padding: 16, backgroundColor: "white" }}>{children}</View>
+    </View>
+  );
 }
 
 function FocusRow({ item, onChanged }) {
@@ -182,7 +204,7 @@ export default function NutritionToday() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
+      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
         <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
           Something went wrong loading your nutrition data: {loadError}
         </Text>
@@ -198,8 +220,8 @@ export default function NutritionToday() {
   const calorieTarget = target ? Math.round(deriveCalories(target)) : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: "white" }}>
-      <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24, backgroundColor: "white" }}>
+    <View style={{ flex: 1, backgroundColor: CANVAS }}>
+      <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24, backgroundColor: CANVAS }}>
         <View className="flex-row items-center gap-3">
           <Text className="mb-1 flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
             My Nutrition
@@ -218,8 +240,11 @@ export default function NutritionToday() {
 
         {/* Sticky date nav — pinned above the scroll content (not part of
             it) so it stays visible no matter how far down the form the
-            member scrolls, per explicit ask to make it "always visible". */}
-        <View className="mb-4 flex-row items-center justify-between rounded-xl border border-stone-200 px-2 py-2.5">
+            member scrolls, per explicit ask to make it "always visible".
+            Background matches the segmented tab bar right above it
+            (stone-100, same as SegmentedControl.js) per direct ask, instead
+            of sitting on plain white like a separate, unrelated element. */}
+        <View className="mb-4 flex-row items-center justify-between rounded-xl border border-stone-200 bg-stone-100 px-2 py-2.5">
           <Pressable onPress={() => setDateOffset((o) => o + 1)} hitSlop={10} className="px-2">
             <Ionicons name="chevron-back" size={18} color="#57534e" />
           </Pressable>
@@ -242,7 +267,7 @@ export default function NutritionToday() {
       ) : (
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8">
           {(focusItems.length > 0 || access.client?.game_plan) ? (
-            <View className="mb-5 rounded-lg border border-stone-200 p-4">
+            <View className="mb-5 rounded-lg border border-stone-200 bg-white p-4">
               {focusItems.length > 0 ? (
                 <View className="mb-3">
                   <Text className="mb-1.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
@@ -268,21 +293,15 @@ export default function NutritionToday() {
             Daily Log
           </Text>
 
-          <View className="mb-4 rounded-lg border border-stone-200 p-4">
-            <Text className="mb-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-              Log these first thing when you wake up
-            </Text>
+          <DailyLogCard color="#eef1e7" title="Log these first thing when you wake up">
             <TargetField label="Weight" styleKey="weight" current={target?.weight_target} value={values.weight} onChangeText={(t) => update("weight", t)} />
             <View className="flex-row gap-3">
               <TargetField label="Sleep (hrs)" styleKey="sleep" current={target?.sleep_hours_goal} flex value={values.sleep_hours} onChangeText={(t) => update("sleep_hours", t)} />
               <RatingSelect label="Sleep quality (1-5)" flex value={values.sleep_quality} onChangeText={(t) => update("sleep_quality", t)} />
             </View>
-          </View>
+          </DailyLogCard>
 
-          <View className="mb-4 rounded-lg border border-stone-200 p-4">
-            <Text className="mb-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-              Macros
-            </Text>
+          <DailyLogCard color="#fdf6f2" title="Macros">
             <View className="flex-row gap-3">
               <TargetField label="Protein (g)" styleKey="protein" current={target?.protein_g} flex value={values.protein_g} onChangeText={(t) => update("protein_g", t)} />
               <TargetField label="Carb (g)" styleKey="carb" current={target?.carb_g} flex value={values.carb_g} onChangeText={(t) => update("carb_g", t)} />
@@ -307,18 +326,15 @@ export default function NutritionToday() {
               className="rounded-lg border border-stone-300 px-4 py-3 text-base"
               style={{ fontFamily: fonts.sans }}
             />
-          </View>
+          </DailyLogCard>
 
-          <View className="mb-4 rounded-lg border border-stone-200 p-4">
-            <Text className="mb-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-              Activity
-            </Text>
+          <DailyLogCard color="#f4ede3" title="Activity">
             <View className="flex-row gap-3">
               <TargetField label="Steps" styleKey="steps" current={target?.step_goal} flex value={values.steps} onChangeText={(t) => update("steps", t)} />
               <RatingSelect label="Hunger (1-5)" flex value={values.hunger} onChangeText={(t) => update("hunger", t)} />
               <RatingSelect label="Energy (1-5)" flex value={values.energy} onChangeText={(t) => update("energy", t)} />
             </View>
-          </View>
+          </DailyLogCard>
 
           <Text className="mb-1 mt-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
             Notes

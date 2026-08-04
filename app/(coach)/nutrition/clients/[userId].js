@@ -10,8 +10,8 @@ import { listTargets, deriveCalories } from "../../../../lib/nutrition/targets";
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
 import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsSince } from "../../../../lib/nutrition/checkin";
 import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
-import { getOnboardingStatus } from "../../../../lib/nutrition/onboarding";
-import { computeWeekWindows, summarizeWeek, enumerateUpcomingWeeks } from "../../../../lib/nutrition/weekCycle";
+import { getOnboardingStatus, bypassOnboarding } from "../../../../lib/nutrition/onboarding";
+import { computeWeekWindows, currentCalendarWeek, summarizeWeek, enumerateUpcomingWeeks } from "../../../../lib/nutrition/weekCycle";
 import { OnboardingStepper } from "../../../../components/nutrition/OnboardingStepper";
 import { PhaseCard } from "../../../../components/nutrition/PhaseCard";
 import { WeekList, enumerateRecentWeeks } from "../../../../components/nutrition/WeekList";
@@ -32,6 +32,7 @@ import { PhotoUpload } from "../../../../components/nutrition/PhotoUpload";
 import { ClientSettingsModal } from "../../../../components/nutrition/ClientSettingsModal";
 import { CoachShell } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
+import { confirmBypassOnboarding } from "../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
@@ -83,9 +84,25 @@ function TabBar({ active, onSelect }) {
   );
 }
 
+// design_handoff_v2_settings_nutrition tokens: card border #ece7e1 (not the
+// plain stone-200 gray this used before), 12-16px radius, soft two-layer
+// shadow (approximated in RN with one shadow, same convention used
+// elsewhere in the app — RN doesn't support multi-layer box-shadow).
 function SectionCard({ title, children, headerRight }) {
   return (
-    <View className="mb-5 rounded-lg border border-stone-200 p-4">
+    <View
+      className="mb-5 rounded-xl p-4"
+      style={{
+        borderWidth: 1,
+        borderColor: "#ece7e1",
+        backgroundColor: "white",
+        shadowColor: "#44403c",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 1,
+      }}
+    >
       <View className="mb-3 flex-row items-center justify-between">
         <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansBold }}>
           {title}
@@ -120,6 +137,7 @@ export default function NutritionClientDetail() {
   const [loadError, setLoadError] = useState(null);
   const [checkins, setCheckins] = useState([]);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [bypassing, setBypassing] = useState(false);
 
   const selectedWeek = useMemo(() => {
     const { currentWeek } = computeWeekWindows(today);
@@ -166,6 +184,22 @@ export default function NutritionClientDetail() {
       Alert.alert("Failed to finalize check-in", err.message ?? String(err));
     } finally {
       setFinalizing(false);
+    }
+  };
+
+  const handleBypassOnboarding = async () => {
+    const confirmed = await confirmBypassOnboarding(
+      `${client.name} will be marked approved without completing the questionnaire, tracking, or photos. You'll still set their target afterward.`
+    );
+    if (!confirmed) return;
+    setBypassing(true);
+    try {
+      await bypassOnboarding(userId);
+      await load();
+    } catch (err) {
+      Alert.alert("Failed to skip onboarding", err.message ?? String(err));
+    } finally {
+      setBypassing(false);
     }
   };
 
@@ -302,17 +336,31 @@ export default function NutritionClientDetail() {
             </View>
           </View>
 
-          {onboarding.phases.readyForReview ? (
-            <Pressable
-              onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/approve`)}
-              className="mt-5 items-center self-start rounded-lg px-5 py-3"
-              style={{ backgroundColor: colors.primary }}
-            >
-              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                Approve & Set Targets
+          <View className="mt-5 flex-row flex-wrap items-center gap-4">
+            {onboarding.phases.readyForReview ? (
+              <Pressable
+                onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/approve`)}
+                className="items-center self-start rounded-lg px-5 py-3"
+                style={{ backgroundColor: colors.primary }}
+              >
+                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                  Approve & Set Targets
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {/* For a client who won't do the questionnaire/tracking/photos
+                in-app at all — ported from the standalone app's
+                bypassObjectiveTracking (see lib/nutrition/onboarding.js's
+                bypassOnboarding). Available regardless of how far along the
+                3 phases are, since "won't ever log in" isn't something the
+                phase checklist can detect on its own. */}
+            <Pressable onPress={handleBypassOnboarding} disabled={bypassing} hitSlop={8}>
+              <Text style={{ fontFamily: fonts.sansMedium, color: "#a8a29e", fontSize: 13, textDecorationLine: "underline" }}>
+                {bypassing ? "Skipping…" : "Skip in-app onboarding →"}
               </Text>
             </Pressable>
-          ) : null}
+          </View>
 
           {/* Tracking dates aren't assigned during a coach-run draft stage
               here (Kova has no client_drafts) — the Objective Tracking phase
@@ -333,15 +381,16 @@ export default function NutritionClientDetail() {
   }
 
   const currentTarget = targets[0] ?? null;
-  const { currentWeek, lastWeek } = computeWeekWindows(today);
-  const thisWeekSummary = summarizeWeek(logs, currentWeek.start, currentWeek.end);
-  const lastWeekSummary = summarizeWeek(logs, lastWeek.start, lastWeek.end);
+  const calendarWeek = currentCalendarWeek(today);
+  const priorCalendarWeek = { start: addDays(calendarWeek.start, -7), end: addDays(calendarWeek.end, -7) };
+  const thisWeekSummary = summarizeWeek(logs, calendarWeek.start, calendarWeek.end);
+  const lastWeekSummary = summarizeWeek(logs, priorCalendarWeek.start, priorCalendarWeek.end);
   const selectedWeekSummary = summarizeWeek(logs, selectedWeek.start, selectedWeek.end);
   const priorToSelectedEnd = addDays(selectedWeek.start, -1);
   const priorToSelectedStart = addDays(priorToSelectedEnd, -6);
   const priorToSelectedSummary = summarizeWeek(logs, priorToSelectedStart, priorToSelectedEnd);
 
-  const recentWeeks = enumerateRecentWeeks(currentWeek, addDays, WEEKS_SHOWN).map((w) => ({
+  const recentWeeks = enumerateRecentWeeks(calendarWeek, addDays, WEEKS_SHOWN).map((w) => ({
     ...w,
     summary: summarizeWeek(logs, w.start, w.end),
     target: targets.find((t) => t.effective_date <= w.end) ?? null,
@@ -382,8 +431,51 @@ export default function NutritionClientDetail() {
 
         <TabBar active={tab} onSelect={setTab} />
 
+        {/* Entry point for reviewing + setting a client's first target —
+            previously only reachable from the onboarding hub, which a
+            client stops seeing the moment objective_tracking_approved_at
+            is set. A client can be already-approved but still have zero
+            targets (e.g. a pre-existing standalone-app client whose Kova
+            nutrition switch was just turned on, never run through Kova's
+            own onboarding cycle) — that's exactly what the roster's "Needs
+            target" status means, and until now there was no way to reach
+            the baseline-informed review screen for that case. Shown across
+            every tab, not just Dashboard, since a coach might land here
+            from a saved link or a different tab. */}
+        {!currentTarget ? (
+          <Link href={`/(coach)/nutrition/clients/${userId}/onboarding/approve`} asChild>
+            <Pressable
+              className="mb-5 flex-row items-center justify-between rounded-lg border px-4 py-3.5"
+              style={{ borderColor: "#e9d3ae", backgroundColor: "#f4ede3" }}
+            >
+              <View className="flex-1 pr-3">
+                <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5a2e" }}>No target set yet</Text>
+                <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#8a5a2e" }}>
+                  Review their objective tracking baseline and set their first macros.
+                </Text>
+              </View>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5a2e" }}>Review & Set Targets ›</Text>
+            </Pressable>
+          </Link>
+        ) : null}
+
         {tab === "dashboard" && (
           <View>
+            {/* Focus items + Game plan lead the page (design_handoff_v2 —
+                explicit reorder ask), above the metrics cards below. */}
+            <View style={{ flexDirection: isWeb ? "row" : "column", gap: 20 }}>
+              <View style={{ flex: 1 }}>
+                <SectionCard title="Focus items">
+                  <FocusChecklist userId={userId} items={focusItems} onChanged={load} />
+                </SectionCard>
+              </View>
+              <View style={{ flex: 1 }}>
+                <SectionCard title="Game plan">
+                  <GamePlan userId={userId} initialGamePlan={client.game_plan} />
+                </SectionCard>
+              </View>
+            </View>
+
             <SectionCard title="This week at a glance">
               <TrendTiles thisWeek={thisWeekSummary} lastWeek={lastWeekSummary} />
             </SectionCard>
@@ -406,12 +498,6 @@ export default function NutritionClientDetail() {
                       No target set yet.
                     </Text>
                   )}
-                </SectionCard>
-                <SectionCard title="Focus items">
-                  <FocusChecklist userId={userId} items={focusItems} onChanged={load} />
-                </SectionCard>
-                <SectionCard title="Game plan">
-                  <GamePlan userId={userId} initialGamePlan={client.game_plan} />
                 </SectionCard>
               </View>
               <View style={{ flex: 1 }}>

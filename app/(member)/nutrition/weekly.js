@@ -8,12 +8,13 @@ import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { listLogs } from "../../../lib/nutrition/dailyLog";
 import { getCurrentTarget } from "../../../lib/nutrition/targets";
-import { computeWeekWindows, summarizeWeek } from "../../../lib/nutrition/weekCycle";
-import { WeekList, enumerateRecentWeeks } from "../../../components/nutrition/WeekList";
+import { currentCalendarWeek, summarizeWeek } from "../../../lib/nutrition/weekCycle";
+import { WeekList, WeekDayTable, enumerateRecentWeeks } from "../../../components/nutrition/WeekList";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
 
+const CANVAS = "#faf8f6";
 const WEEKS_SHOWN = 8;
 
 export default function NutritionWeekly() {
@@ -28,8 +29,7 @@ export default function NutritionWeekly() {
   const [loadError, setLoadError] = useState(null);
 
   const weeks = useMemo(() => {
-    const { currentWeek } = computeWeekWindows(today);
-    return enumerateRecentWeeks(currentWeek, addDays, WEEKS_SHOWN);
+    return enumerateRecentWeeks(currentCalendarWeek(today), addDays, WEEKS_SHOWN);
   }, [today]);
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function NutritionWeekly() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
+      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
         <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
           Something went wrong loading your weekly averages: {loadError}
         </Text>
@@ -71,10 +71,24 @@ export default function NutritionWeekly() {
     return <NutritionAccessMessage status="loading" />;
   }
 
+  // weekSummaries[0] is always the current (possibly partial) week —
+  // enumerateRecentWeeks is most-recent-first.
   const weekSummaries = weeks.map((w) => ({ ...w, summary: summarizeWeek(logs, w.start, w.end), target: targetsByWeekEnd[w.end] }));
+  const currentWeekSummary = weekSummaries[0];
+  const priorWeeks = weekSummaries.slice(1);
+
+  // 8-week weight trend: newest logged weekly average minus the oldest —
+  // skips any week with no logged weight rather than assuming index 0/last
+  // both have data (a brand-new client's earliest "weeks" may be empty).
+  const weightWeeks = weekSummaries.filter((w) => w.summary.averages.weight != null);
+  const weightTrend =
+    weightWeeks.length >= 2 ? Math.round((weightWeeks[0].summary.averages.weight - weightWeeks[weightWeeks.length - 1].summary.averages.weight) * 10) / 10 : null;
+
+  const loggedWeeks = weekSummaries.filter((w) => w.summary.days.length > 0);
+  const avgAdherence = loggedWeeks.length > 0 ? Math.round((loggedWeeks.reduce((sum, w) => sum + w.summary.adherence, 0) / loggedWeeks.length) * 100) : null;
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
+    <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
       <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Nutrition
       </Text>
@@ -91,7 +105,38 @@ export default function NutritionWeekly() {
         }}
       />
 
-      <WeekList weeks={weekSummaries} />
+      <View className="mb-6 flex-row gap-3">
+        <View className="flex-1 rounded-xl border border-stone-200 bg-white p-4">
+          <Text className="text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+            {WEEKS_SHOWN}-week weight trend
+          </Text>
+          <Text className="mt-1 text-xl" style={{ fontFamily: fonts.display, color: weightTrend !== null && weightTrend < 0 ? "#4d6142" : colors.primary }}>
+            {weightTrend !== null ? `${weightTrend > 0 ? "+" : ""}${weightTrend} lb` : "—"}
+          </Text>
+        </View>
+        <View className="flex-1 rounded-xl border border-stone-200 bg-white p-4">
+          <Text className="text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+            Avg adherence
+          </Text>
+          <Text className="mt-1 text-xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+            {avgAdherence !== null ? `${avgAdherence}%` : "—"}
+          </Text>
+        </View>
+      </View>
+
+      <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+        This week — day by day
+      </Text>
+      <View className="mb-6 rounded-xl border border-stone-200 bg-white p-4">
+        <WeekDayTable week={currentWeekSummary} />
+      </View>
+
+      <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+        Prior weeks
+      </Text>
+      <View className="rounded-xl border border-stone-200 bg-white p-4">
+        <WeekList weeks={priorWeeks} />
+      </View>
     </ScrollView>
   );
 }

@@ -96,6 +96,9 @@ export default function NutritionDashboard() {
           Nutrition
         </Text>
         <View className="flex-row gap-4">
+          <Link href="/(coach)/nutrition/onboarding" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
+            Onboarding
+          </Link>
           <Link href="/(coach)/nutrition/archived" style={{ fontFamily: fonts.sansMedium }} className="text-[#8a5140]">
             Archived
           </Link>
