@@ -91,6 +91,10 @@ export default function MemberLayout() {
       <Tabs.Screen name="plan-block" options={{ href: null }} />
       <Tabs.Screen name="plan-spc-block" options={{ href: null }} />
 
+      {/* Reached via the gear icon on My Week's header, not its own tab —
+          keeps the tab bar at 4 items. */}
+      <Tabs.Screen name="settings" options={{ href: null }} />
+
       {/* Nested screens inside the nutrition/history folders have no nested
           _layout of their own, so expo-router flattens them as siblings —
           without these, each one leaks into the tab bar as its own item. */}

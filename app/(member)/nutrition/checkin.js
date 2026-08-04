@@ -15,6 +15,13 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
 
+// Matches My Week/My Fitness/My History's shared canvas — the 4 nutrition
+// screens were left on plain white, which read as inconsistent with the
+// rest of the app once actually seen side by side. Card surfaces inside
+// (TaskRow etc.) stay bg-white, same "white card on canvas" pattern those
+// other tabs already use.
+const CANVAS = "#faf8f6";
+
 function TaskRow({ title, subtitle, done, onPress }) {
   return (
     <Pressable
@@ -185,7 +192,7 @@ export default function WeeklyCheckin() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
+      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
         <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
           Something went wrong loading your check-in: {loadError}
         </Text>
@@ -198,7 +205,7 @@ export default function WeeklyCheckin() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
+    <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
       <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Nutrition
       </Text>

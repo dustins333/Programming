@@ -12,6 +12,8 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
 
+const CANVAS = "#faf8f6";
+
 export default function NutritionPhotos() {
   const { profile } = useAuth();
   const router = useRouter();
@@ -38,7 +40,7 @@ export default function NutritionPhotos() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
+      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
         <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
           Something went wrong loading your photos: {loadError}
         </Text>
@@ -51,7 +53,7 @@ export default function NutritionPhotos() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
+    <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
       <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Nutrition
       </Text>

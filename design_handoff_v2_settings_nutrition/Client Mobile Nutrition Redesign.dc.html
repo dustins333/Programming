@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<![CDATA[<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet">
+<script src="./image-slot.js"></script>
+<style>
+  body { margin: 0; background: #f3ede6; font-family: 'Montserrat', sans-serif; }
+  ::-webkit-scrollbar { display: none; }
+</style>
+</helmet>
+
+<div style="padding: 40px; display: flex; flex-direction: column; gap: 20px; align-items: center;">
+  <div style="max-width: 900px; align-self: flex-start;">
+    <div style="font-family: 'Protest Strike', sans-serif; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; color: #a46a57; margin-bottom: 4px;">Client mobile app — redesign pass</div>
+    <div style="font-size: 24px; font-weight: 600; color: #44403c;">Nutrition's 4 tabs tightened up, plus a new app-wide Settings screen</div>
+    <div style="font-size: 13px; color: #78716c; margin-top: 6px; line-height: 1.5;">Weekly/Check-In/Photos each had a lot of empty space below their content — filled with more useful summary/history content instead of just anchoring things to the top. Settings is new: reached via a small gear icon added to the top-right of every tab's header (shown on My Week), not a 5th tab — keeps the tab bar at 4 items. Bug flagged, not fixed: Photo Compare renders a raw Supabase error instead of photos on both this screen and the coach's Photo Compare page.</div>
+  </div>
+
+  <div style="display: flex; gap: 8px; flex-wrap: wrap; max-width: 900px;">
+    <sc-for list="{{ screenTabs }}" as="t" hint-placeholder-count="6">
+      <button onclick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+    </sc-for>
+  </div>
+
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" title="{{ deviceTitle }}" hint-size="390,844">
+    <div style="display: flex; flex-direction: column; height: 100%; background: #faf8f6; font-family: 'Montserrat', sans-serif;">
+
+      <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ true }}">
+        <div style="padding: 16px 20px 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <button onclick="{{ goSettings }}" style="background: none; border: none; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; color: #57534e; font-size: 22px; cursor: pointer; padding: 0; margin-left: -6px;">⚙</button>
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 24px; color: #a46a57;">My Week</div>
+            <img src="assets/kova-logo.jpg" style="width: 30px; height: 30px; border-radius: 15px;" />
+          </div>
+        </div>
+        <div style="padding: 12px 20px; text-align: center; color: #a8a29e; font-size: 13px;">(My Week content unchanged; only the gear icon is new)</div>
+      </sc-if>
+
+      <sc-if value="{{ isToday }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 16px 20px 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 22px; color: #a46a57;">My Nutrition</div>
+            <img src="assets/kova-logo.jpg" style="width: 30px; height: 30px; border-radius: 15px;" />
+          </div>
+          <div style="display: flex; background: #f1efed; border-radius: 10px; padding: 3px; margin-bottom: 12px;">
+            <sc-for list="{{ nutritionSegments }}" as="s" hint-placeholder-count="4">
+              <div style="flex: 1; text-align: center; padding: 7px 0; border-radius: 8px; font-size: 12.5px; font-weight: 600; background: {{ s.bg }}; color: {{ s.color }};">{{ s.label }}</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex: 1; overflow: auto; padding: 0 20px 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #ece7e1; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;">
+            <span style="color: #a8a29e;">‹</span>
+            <div style="text-align: center;"><div style="font-weight: 600; font-size: 14px;">Sun, Aug 2</div><div style="font-size: 11px; color: #a8a29e;">Today</div></div>
+            <span style="color: #a8a29e;">›</span>
+          </div>
+          <div style="background: #fbf9f6; border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; margin-bottom: 14px;">
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">Focus</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;"><div style="width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid #d9d4cd;"></div><span style="font-size: 13px;">Full week of tracking</span></div>
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Game plan</div>
+            <div style="font-size: 13px; color: #44403c; line-height: 1.4;">Focus on hitting protein daily, hydration first thing in the morning.</div>
+          </div>
+          <div style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">Daily Log</div>
+
+          <div style="background: #ffffff; border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; margin-bottom: 8px;">Log these first thing when you wake up</div>
+            <div style="font-size: 13px; margin-bottom: 4px;">Weight</div>
+            <div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; margin-bottom: 10px; background: #fff;"></div>
+            <div style="display: flex; gap: 10px;">
+              <div style="flex: 1;"><div style="font-size: 13px; margin-bottom: 4px; min-height: 32px;">Sleep (hrs) <span style="color:#8a5140;font-size:11px;">target: 8</span></div><div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff;"></div></div>
+              <div style="flex: 1;"><div style="font-size: 13px; margin-bottom: 4px; min-height: 32px;">Sleep quality</div><div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff;"></div></div>
+            </div>
+          </div>
+
+          <div style="background: #fbf9f6; border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; margin-bottom: 8px;">Macros</div>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+              <div style="flex: 1;"><div style="font-size: 13px; margin-bottom: 4px; min-height: 32px;">Protein (g) <span style="color:#8a5140;font-size:11px;">target: 200</span></div><div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff;"></div></div>
+              <div style="flex: 1;"><div style="font-size: 13px; margin-bottom: 4px; min-height: 32px;">Carb (g) <span style="color:#b8860b;font-size:11px;">target: 260</span></div><div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff;"></div></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+              <div style="flex: 1;"><div style="font-size: 13px; margin-bottom: 4px; min-height: 32px;">Fat (g) <span style="color:#b23a22;font-size:11px;">target: 60</span></div><div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff;"></div></div>
+              <div style="flex: 1;"><div style="font-size: 13px; margin-bottom: 4px; min-height: 32px;">Fiber (g) <span style="color:#4d6142;font-size:11px;">target: 30</span></div><div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff;"></div></div>
+            </div>
+            <div style="font-size: 12.5px; font-weight: 600; color: #8a5140; margin-bottom: 10px;">Calculated Calories (from Macros): 0 · target: 2380</div>
+            <div style="font-size: 13px; margin-bottom: 4px;">Calories from Cronometer (optional)</div>
+            <div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff; display: flex; align-items: center; padding: 0 10px; font-size: 12px; color: #c9c4bd;">Leave blank to use calculated calories</div>
+          </div>
+
+          <div style="background: #ffffff; border: 1px solid #ece7e1; border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+            <div style="font-size: 10.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; margin-bottom: 8px;">Activity</div>
+            <div style="display: flex; gap: 8px;">
+              <div style="flex: 1;"><div style="font-size: 13px; margin-bottom: 4px; min-height: 32px;">Steps <span style="color:#2c7a9b;font-size:11px;">target: 12000</span></div><div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff;"></div></div>
+              <div style="flex: 1;"><div style="font-size: 13px; margin-bottom: 4px; min-height: 32px;">Hunger (1-5)</div><div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff;"></div></div>
+              <div style="flex: 1;"><div style="font-size: 13px; margin-bottom: 4px; min-height: 32px;">Energy (1-5)</div><div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 38px; background: #fff;"></div></div>
+            </div>
+          </div>
+
+          <div style="font-size: 13px; margin-bottom: 4px;">Notes</div>
+          <div style="border: 1px solid #d9d4cd; border-radius: 8px; height: 70px; background: #fff; margin-bottom: 14px;"></div>
+
+          <div style="font-size: 12.5px; color: #a8a29e; margin-bottom: 12px;">All changes saved automatically.</div>
+
+          <button style="width: 100%; background: #a46a57; color: #fff; border: none; border-radius: 12px; padding: 14px; font-weight: 700; font-size: 15px; margin-bottom: 20px;">Finalize Day</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isWeekly }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 16px 20px 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 22px; color: #a46a57;">Nutrition</div>
+            <img src="assets/kova-logo.jpg" style="width: 30px; height: 30px; border-radius: 15px;" />
+          </div>
+          <div style="color: #78716c; font-size: 13px; margin-bottom: 12px;">Weekly averages</div>
+          <div style="display: flex; background: #f1efed; border-radius: 10px; padding: 3px; margin-bottom: 14px;">
+            <sc-for list="{{ nutritionSegmentsWeekly }}" as="s" hint-placeholder-count="4">
+              <div style="flex: 1; text-align: center; padding: 7px 0; border-radius: 8px; font-size: 12.5px; font-weight: 600; background: {{ s.bg }}; color: {{ s.color }};">{{ s.label }}</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex: 1; overflow: auto; padding: 0 20px 24px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+            <div style="background: #fbf9f6; border: 1px solid #ece7e1; border-radius: 12px; padding: 12px;"><div style="font-size: 11px; color: #a8a29e;">8-week weight trend</div><div style="font-size: 20px; font-weight: 700; color: #4d6142; margin-top: 2px;">-6.4 lb</div></div>
+            <div style="background: #f7f3ee; border: 1px solid #ece7e1; border-radius: 12px; padding: 12px;"><div style="font-size: 11px; color: #a8a29e;">Avg adherence</div><div style="font-size: 20px; font-weight: 700; margin-top: 2px;">86%</div></div>
+          </div>
+          <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; margin-bottom: 8px;">This week — day by day</div>
+          <div style="background: #ffffff; border: 1px solid #ece7e1; border-radius: 12px; overflow: hidden; margin-bottom: 18px;">
+            <div style="display: grid; grid-template-columns: 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr; padding: 8px 10px; font-size: 9.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; background: #f7f3ee; border-bottom: 1px solid #ece7e1;"><div>Day</div><div>Wt</div><div>Prot</div><div>Carb</div><div>Fat</div><div>Fiber</div><div>Steps</div><div>Sleep</div></div>
+            <sc-for list="{{ weeklyDayRows }}" as="d" hint-placeholder-count="7">
+              <div style="display: grid; grid-template-columns: 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr; padding: 8px 10px; font-size: 10.5px; border-bottom: 1px solid #f4f1ec; background: {{ d.bg }};"><div style="font-weight: 600;">{{ d.day }}</div><div>{{ d.weight }}</div><div>{{ d.protein }}</div><div>{{ d.carb }}</div><div>{{ d.fat }}</div><div>{{ d.fiber }}</div><div>{{ d.steps }}</div><div>{{ d.sleep }}</div></div>
+            </sc-for>
+          </div>
+          <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; margin-bottom: 8px;">Prior weeks</div>
+          <div style="background: #ffffff; border: 1px solid #ece7e1; border-radius: 12px; overflow: hidden;">
+            <div style="display: grid; grid-template-columns: 1.3fr 0.7fr 0.7fr 0.7fr 0.7fr 0.7fr 0.9fr 0.7fr 16px; padding: 8px 10px; font-size: 9.5px; font-weight: 700; color: #a8a29e; text-transform: uppercase; background: #f7f3ee; border-bottom: 1px solid #ece7e1;"><div>Week</div><div>Wt</div><div>Prot</div><div>Carb</div><div>Fat</div><div>Fiber</div><div>Steps</div><div>Sleep</div><div></div></div>
+            <sc-for list="{{ priorWeeks }}" as="w" hint-placeholder-count="3">
+              <div onclick="{{ w.toggle }}" style="display: grid; grid-template-columns: 1.3fr 0.7fr 0.7fr 0.7fr 0.7fr 0.7fr 0.9fr 0.7fr 16px; padding: 8px 10px; font-size: 10px; border-bottom: 1px solid #f4f1ec; align-items: center; cursor: pointer; background: {{ w.rowBg }};">
+                <div style="font-weight: 600;">{{ w.range }}</div><div>{{ w.weight }}</div><div>{{ w.protein }}</div><div>{{ w.carb }}</div><div>{{ w.fat }}</div><div>{{ w.fiber }}</div><div>{{ w.steps }}</div><div>{{ w.sleep }}</div>
+                <div style="color: #a8a29e; font-size: 9px;">{{ w.chevron }}</div>
+              </div>
+              <sc-if value="{{ w.open }}" hint-placeholder-val="{{ false }}">
+                <div style="background: #fbf9f6; border-bottom: 1px solid #f4f1ec;">
+                  <sc-for list="{{ w.days }}" as="d" hint-placeholder-count="7">
+                    <div style="display: grid; grid-template-columns: 1.3fr 0.7fr 0.7fr 0.7fr 0.7fr 0.7fr 0.9fr 0.7fr 16px; padding: 6px 10px; font-size: 10px; color: #57534e; border-top: 1px solid #f0ede6;">
+                      <div style="font-weight: 600;">{{ d.day }}</div><div>{{ d.weight }}</div><div>{{ d.protein }}</div><div>{{ d.carb }}</div><div>{{ d.fat }}</div><div>{{ d.fiber }}</div><div>{{ d.steps }}</div><div>{{ d.sleep }}</div><div></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCheckin }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 16px 20px 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 22px; color: #a46a57;">Nutrition</div>
+            <img src="assets/kova-logo.jpg" style="width: 30px; height: 30px; border-radius: 15px;" />
+          </div>
+          <div style="color: #78716c; font-size: 13px; margin-bottom: 12px;">Week of 2026-07-27</div>
+          <div style="display: flex; background: #f1efed; border-radius: 10px; padding: 3px; margin-bottom: 14px;">
+            <sc-for list="{{ nutritionSegmentsCheckin }}" as="s" hint-placeholder-count="4">
+              <div style="flex: 1; text-align: center; padding: 7px 0; border-radius: 8px; font-size: 12.5px; font-weight: 600; background: {{ s.bg }}; color: {{ s.color }};">{{ s.label }}</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex: 1; overflow: auto; padding: 0 20px 24px;">
+          <div style="border: 2px solid #4d6142; background: #eef1e7; border-radius: 14px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+            <div style="width: 26px; height: 26px; border-radius: 13px; background: #4d6142; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px;">✓</div>
+            <div style="flex: 1;"><div style="font-weight: 700; font-size: 14px;">This week's progress photos</div><div style="font-size: 12px; color: #6b7a5e;">Submitted</div></div>
+            <span style="color: #4d6142;">›</span>
+          </div>
+          <div style="background: #ffffff; border: 1px solid #ece7e1; border-radius: 14px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div style="width: 26px; height: 26px; border-radius: 13px; border: 1.5px solid #d9d4cd;"></div>
+            <div style="flex: 1;"><div style="font-weight: 700; font-size: 14px;">Check-in form</div><div style="font-size: 12px; color: #78716c;">14 questions</div></div>
+            <span style="color: #c9c4bd;">›</span>
+          </div>
+          <button style="width: 100%; background: #a46a57; color: #fff; border: none; border-radius: 12px; padding: 15px; font-weight: 700; font-size: 15px; margin-bottom: 20px;">Finalize Check-In</button>
+          <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; margin-bottom: 8px;">Past check-ins</div>
+          <sc-for list="{{ pastCheckins }}" as="c" hint-placeholder-count="4">
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #fbf9f6; padding: 10px 12px; border: 1px solid #ece7e1; border-radius: 10px; margin-bottom: 8px;">
+              <div style="font-size: 12.5px; font-weight: 600;">Week of {{ c.date }}</div>
+              <div style="font-size: 12px; font-weight: 700; color: #4d6142; background: #eef1e7; border-radius: 999px; padding: 3px 10px;">{{ c.status }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPhotos }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 16px 20px 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 22px; color: #a46a57;">Nutrition</div>
+            <img src="assets/kova-logo.jpg" style="width: 30px; height: 30px; border-radius: 15px;" />
+          </div>
+          <div style="color: #78716c; font-size: 13px; margin-bottom: 12px;">Progress photos</div>
+          <div style="display: flex; background: #f1efed; border-radius: 10px; padding: 3px; margin-bottom: 14px;">
+            <sc-for list="{{ nutritionSegmentsPhotos }}" as="s" hint-placeholder-count="4">
+              <div style="flex: 1; text-align: center; padding: 7px 0; border-radius: 8px; font-size: 12.5px; font-weight: 600; background: {{ s.bg }}; color: {{ s.color }};">{{ s.label }}</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex: 1; overflow: auto; padding: 0 20px 24px;">
+          <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">Add today's photos</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px;">
+            <sc-for list="{{ uploadSlots }}" as="u" hint-placeholder-count="3">
+              <div>
+                <div style="aspect-ratio: 3/5; border-radius: 10px; border: 1px dashed #d9d4cd; background: #fdf6f2; position: relative; display: flex; align-items: flex-end; justify-content: center; overflow: hidden;">
+                  <div style="width: 34%; aspect-ratio: 1/1; border-radius: 999px; background: #e3c2ab; position: absolute; top: 14%; left: 50%; transform: translateX(-50%);"></div>
+                  <div style="width: 62%; height: 56%; border-radius: 40% 40% 16px 16px; background: #e3c2ab;"></div>
+                  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 26px; height: 26px; border-radius: 999px; background: #a46a57; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 2px 6px rgba(68,64,60,0.2);">+</div>
+                </div>
+                <div style="text-align: center; font-size: 10.5px; color: #a8907f; margin-top: 4px;">{{ u.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <button style="width: 100%; background: #a46a57; color: #fff; border: none; border-radius: 12px; padding: 13px; font-weight: 700; font-size: 14px; margin-bottom: 24px;">Upload</button>
+
+          <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">Compare</div>
+          <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+            <span style="background: #a46a57; color: #fff; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 6px 14px;">Front</span>
+            <span style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 6px 14px;">Side</span>
+            <span style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 6px 14px;">Back</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+            <div style="border: 1px solid #d9d4cd; border-radius: 8px; padding: 7px 4px; font-size: 11.5px; color: #57534e; text-align: center;">‹ 08-02-2025 | 217 lb ›</div>
+            <div style="border: 1px solid #d9d4cd; border-radius: 8px; padding: 7px 4px; font-size: 11.5px; color: #57534e; text-align: center;">‹ 08-02-2026 | 212 lb ›</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div style="height: 220px; border-radius: 10px; background: repeating-linear-gradient(45deg, #efe9e2, #efe9e2 8px, #f6f1ec 8px, #f6f1ec 16px); display: flex; align-items: center; justify-content: center; text-align: center; color: #a8907f; font-family: monospace; font-size: 10.5px; padding: 8px;">front · progress photo</div>
+            <div style="height: 220px; border-radius: 10px; background: repeating-linear-gradient(45deg, #efe9e2, #efe9e2 8px, #f6f1ec 8px, #f6f1ec 16px); display: flex; align-items: center; justify-content: center; text-align: center; color: #a8907f; font-family: monospace; font-size: 10.5px; padding: 8px;">front · progress photo</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 16px 20px 0;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+            <button onclick="{{ goWeek }}" style="background: none; border: none; color: #8a5140; font-size: 20px; cursor: pointer; padding: 0;">‹</button>
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 22px; color: #a46a57;">Settings</div>
+          </div>
+        </div>
+        <div style="flex: 1; overflow: auto; padding: 12px 20px 24px;">
+          <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Account</div>
+          <div style="background: #ffffff; border: 1px solid #ece7e1; border-radius: 14px; margin-bottom: 20px; overflow: hidden;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #f0ede8;">
+              <div><div style="font-size: 14px; font-weight: 600;">Email</div><div style="font-size: 12px; color: #78716c; margin-top: 1px;">getsingerbob@gmail.com</div></div>
+              <span style="color: #8a5140; font-size: 13px; font-weight: 600;">Change ›</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px;">
+              <div><div style="font-size: 14px; font-weight: 600;">Password</div><div style="font-size: 12px; color: #78716c; margin-top: 1px;">Last changed 3 months ago</div></div>
+              <span style="color: #8a5140; font-size: 13px; font-weight: 600;">Change ›</span>
+            </div>
+          </div>
+
+          <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Notifications</div>
+          <div style="background: #fbf9f6; border: 1px solid #ece7e1; border-radius: 14px; margin-bottom: 20px; overflow: hidden;">
+            <sc-for list="{{ memberNotifToggles }}" as="n" hint-placeholder-count="3">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #f0ede8;">
+                <div style="flex: 1; margin-right: 12px;"><div style="font-size: 14px; font-weight: 500;">{{ n.label }}</div><div style="font-size: 12px; color: #78716c; margin-top: 1px;">{{ n.description }}</div></div>
+                <div style="width: 34px; height: 20px; border-radius: 999px; background: #4d6142; position: relative; flex-shrink: 0;"><div style="width: 16px; height: 16px; border-radius: 999px; background: #fff; position: absolute; top: 2px; right: 2px;"></div></div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">About</div>
+          <div style="background: #ffffff; border: 1px solid #ece7e1; border-radius: 14px; margin-bottom: 20px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="font-size: 14px; font-weight: 500;">Assigned coach</div>
+            <div style="font-size: 13px; color: #78716c;">Terra</div>
+          </div>
+
+          <button style="width: 100%; border: 1px solid #d9d4cd; background: #fff; color: #44403c; border-radius: 12px; padding: 13px; font-weight: 600; font-size: 14px; margin-bottom: 20px;">Sign out</button>
+
+          <div style="font-size: 11px; font-weight: 700; color: #b23a22; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Danger zone</div>
+          <div style="border: 1px solid #f0d4c9; background: #fdece5; border-radius: 14px; padding: 14px 16px;">
+            <div style="font-size: 13px; color: #8a3a24; margin-bottom: 10px; line-height: 1.4;">Permanently deletes your account, logs, and photos. This can't be undone.</div>
+            <button style="width: 100%; background: #b23a22; color: #fff; border: none; border-radius: 10px; padding: 12px; font-weight: 700; font-size: 13.5px;">Delete account</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="border-top: 1px solid #e7e5e4; display: flex; padding: 8px 0 4px; background: #fff;">
+        <sc-for list="{{ navTabs }}" as="nv" hint-placeholder-count="4">
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 19px; color: {{ nv.color }};">{{ nv.icon }}</div>
+            <div style="font-size: 10px; font-weight: 600; color: {{ nv.color }}; margin-top: 2px;">{{ nv.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </x-import>
+</div>
+]]>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { screen: "week", openWeeks: {} };
+  goScreen(s) { return () => this.setState({ screen: s }); }
+  toggleWeek(range) { return () => this.setState((s) => ({ openWeeks: { ...s.openWeeks, [range]: !s.openWeeks[range] } })); }
+
+  renderVals() {
+    const { screen } = this.state;
+    const defs = [
+      ["week", "My Week (+ gear icon)"], ["today", "Nutrition - Today"], ["weekly", "Nutrition - Weekly"],
+      ["checkin", "Nutrition - Check-In"], ["photos", "Nutrition - Photos"], ["settings", "New: Settings"],
+    ];
+    const screenTabs = defs.map((row) => ({
+      label: row[1], onClick: this.goScreen(row[0]),
+      style: "border-radius:999px;padding:9px 16px;font-family:'Montserrat',sans-serif;font-weight:600;font-size:13px;cursor:pointer;border:1px solid " + (screen === row[0] ? "#a46a57" : "#d9d4cd") + ";background:" + (screen === row[0] ? "#a46a57" : "#fff") + ";color:" + (screen === row[0] ? "#fff" : "#57534e") + ";",
+    }));
+
+    const segFor = (active) => ["Today", "Weekly", "Check-In", "Photos"].map((label, i) => {
+      const keys = ["today", "weekly", "checkin", "photos"];
+      const isActive = keys[i] === active;
+      return { label: label, bg: isActive ? "#fff" : "transparent", color: isActive ? "#8a5140" : "#78716c" };
+    });
+
+    const titles = { week: "My Week", today: "My Nutrition - Today", weekly: "Nutrition - Weekly", checkin: "Nutrition - Check-In", photos: "Nutrition - Photos", settings: "Settings" };
+
+    const navDefs = [
+      ["today", "W", "My Week"], ["barbell", "F", "My Fitness"], ["restaurant", "N", "My Nutrition"], ["time", "H", "My History"],
+    ];
+    const activeNavKey = screen === "week" ? "today" : (["today", "weekly", "checkin", "photos"].indexOf(screen) >= 0 ? "restaurant" : null);
+    const navTabs = navDefs.map((row) => ({ icon: row[1], label: row[2], color: row[0] === activeNavKey ? "#8a5140" : "#b5afa6" }));
+
+    return {
+      deviceTitle: titles[screen],
+      goSettings: this.goScreen("settings"),
+      goWeek: this.goScreen("week"),
+      screenTabs: screenTabs,
+      isWeek: screen === "week", isToday: screen === "today", isWeekly: screen === "weekly",
+      isCheckin: screen === "checkin", isPhotos: screen === "photos", isSettings: screen === "settings",
+      nutritionSegments: segFor("today"),
+      nutritionSegmentsWeekly: segFor("weekly"),
+      nutritionSegmentsCheckin: segFor("checkin"),
+      nutritionSegmentsPhotos: segFor("photos"),
+      navTabs: navTabs,
+
+      weeklyDayRows: [
+        { day: "Sun 8/2", weight: "210.6", protein: "204", carb: "218", fat: "62", fiber: "41", steps: "13.1k", sleep: "6.9h", bg: "#faf8f6" },
+        { day: "Sat 8/1", weight: "-", protein: "198", carb: "222", fat: "60", fiber: "38", steps: "12.6k", sleep: "7.2h", bg: "#fff" },
+        { day: "Fri 7/31", weight: "210.8", protein: "205", carb: "210", fat: "64", fiber: "44", steps: "13.9k", sleep: "6.5h", bg: "#faf8f6" },
+        { day: "Thu 7/30", weight: "-", protein: "201", carb: "230", fat: "63", fiber: "40", steps: "12.1k", sleep: "7.0h", bg: "#fff" },
+        { day: "Wed 7/29", weight: "211.4", protein: "199", carb: "225", fat: "61", fiber: "36", steps: "13.4k", sleep: "6.8h", bg: "#faf8f6" },
+      ],
+      priorWeeks: [
+        { range: "07/20-07/26", weight: "212.2", protein: "173.8", carb: "245.3", fat: "60.3", fiber: "107.0", steps: "12,468", sleep: "7.0",
+          days: [
+            { day: "Sun 7/26", weight: "212.2", protein: "170", carb: "240", fat: "58", fiber: "112", steps: "12.9k", sleep: "7.1h" },
+            { day: "Sat 7/25", weight: "-", protein: "165", carb: "250", fat: "62", fiber: "104", steps: "11.8k", sleep: "6.8h" },
+            { day: "Fri 7/24", weight: "212.6", protein: "178", carb: "238", fat: "59", fiber: "110", steps: "13.0k", sleep: "7.0h" },
+            { day: "Thu 7/23", weight: "-", protein: "172", carb: "252", fat: "61", fiber: "105", steps: "12.2k", sleep: "6.9h" },
+            { day: "Wed 7/22", weight: "213.0", protein: "180", carb: "246", fat: "60", fiber: "108", steps: "12.5k", sleep: "6.9h" },
+            { day: "Tue 7/21", weight: "-", protein: "175", carb: "244", fat: "60", fiber: "106", steps: "12.7k", sleep: "7.0h" },
+            { day: "Mon 7/20", weight: "-", protein: "177", carb: "247", fat: "62", fiber: "104", steps: "12.3k", sleep: "7.0h" },
+          ] },
+        { range: "07/13-07/19", weight: "212.3", protein: "202.6", carb: "261.2", fat: "63.6", fiber: "35.6", steps: "13,334", sleep: "6.9",
+          days: [
+            { day: "Sun 7/19", weight: "212.3", protein: "200", carb: "260", fat: "64", fiber: "36", steps: "13.4k", sleep: "6.9h" },
+            { day: "Sat 7/18", weight: "-", protein: "205", carb: "258", fat: "63", fiber: "34", steps: "13.6k", sleep: "6.8h" },
+            { day: "Fri 7/17", weight: "212.5", protein: "199", carb: "263", fat: "65", fiber: "37", steps: "13.1k", sleep: "6.9h" },
+            { day: "Thu 7/16", weight: "-", protein: "203", carb: "262", fat: "63", fiber: "35", steps: "13.5k", sleep: "6.9h" },
+            { day: "Wed 7/15", weight: "212.8", protein: "206", carb: "259", fat: "64", fiber: "36", steps: "13.2k", sleep: "7.0h" },
+            { day: "Tue 7/14", weight: "-", protein: "201", carb: "264", fat: "63", fiber: "35", steps: "13.3k", sleep: "6.9h" },
+            { day: "Mon 7/13", weight: "-", protein: "204", carb: "261", fat: "63", fiber: "36", steps: "13.3k", sleep: "6.9h" },
+          ] },
+        { range: "07/06-07/12", weight: "211.9", protein: "201.0", carb: "259.8", fat: "61.7", fiber: "0", steps: "12,472", sleep: "7.0",
+          days: [
+            { day: "Sun 7/12", weight: "211.9", protein: "199", carb: "258", fat: "62", fiber: "0", steps: "12.5k", sleep: "7.0h" },
+            { day: "Sat 7/11", weight: "-", protein: "202", carb: "261", fat: "61", fiber: "0", steps: "12.4k", sleep: "7.1h" },
+            { day: "Fri 7/10", weight: "212.1", protein: "200", carb: "260", fat: "62", fiber: "0", steps: "12.6k", sleep: "6.9h" },
+            { day: "Thu 7/9", weight: "-", protein: "203", carb: "259", fat: "61", fiber: "0", steps: "12.3k", sleep: "7.0h" },
+            { day: "Wed 7/8", weight: "212.3", protein: "198", carb: "260", fat: "62", fiber: "0", steps: "12.5k", sleep: "7.0h" },
+            { day: "Tue 7/7", weight: "-", protein: "201", carb: "258", fat: "61", fiber: "0", steps: "12.4k", sleep: "7.0h" },
+            { day: "Mon 7/6", weight: "-", protein: "204", carb: "262", fat: "62", fiber: "0", steps: "12.5k", sleep: "7.0h" },
+          ] },
+      ].map((w, i) => {
+        const open = !!this.state.openWeeks[w.range];
+        return { ...w, open, chevron: open ? "\u25B4" : "\u25BE", toggle: this.toggleWeek(w.range), rowBg: i % 2 === 0 ? "#ffffff" : "#fbf9f6" };
+      }),
+      pastCheckins: [
+        { date: "07-20-2026", status: "Done" }, { date: "07-13-2026", status: "Done" }, { date: "07-06-2026", status: "Done" },
+      ],
+      uploadSlots: [{ label: "Front" }, { label: "Side" }, { label: "Back" }],
+      memberNotifToggles: [
+        { label: "Daily log reminder", description: "Evening nudge if today's log isn't finalized." },
+        { label: "Weekly check-in available", description: "Sunday announcement the new week is open." },
+        { label: "Coach messages", description: "New notes or feedback from your coach." },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

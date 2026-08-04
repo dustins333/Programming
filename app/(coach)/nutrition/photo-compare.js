@@ -1,26 +1,37 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Platform, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { listClients } from "../../../lib/nutrition/clients";
-import { listAllPhotos } from "../../../lib/nutrition/photos";
-import { PhotoCompare } from "../../../components/nutrition/PhotoCompare";
+import { listAllPhotos, getPhotoSignedUrls } from "../../../lib/nutrition/photos";
+import { DateStepper, defaultDates } from "../../../components/nutrition/PhotoCompare";
+import { PhotoCompareBoard } from "../../../components/nutrition/PhotoCompareBoard";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
+const ANGLES = [
+  { key: "front", label: "Front" },
+  { key: "side", label: "Side" },
+  { key: "back", label: "Back" },
+];
 
 // Standalone compare board — pick any client, compare their progress
-// photos, without going through their full client-detail page. Reuses the
-// same 3-slot/watermarked PhotoCompare widget the client-detail Photos tab
-// uses; this page's own job is just to give that board a clean, screenshot-
-// ready frame for posting to social media.
+// photos, without going through their full client-detail page. The board
+// itself (PhotoCompareBoard) is a distinct branded, screenshot-ready design
+// from the plain PhotoCompare widget used elsewhere (client-detail Photos
+// tab) — date-selection controls stay outside the board as picker "chrome"
+// (design_handoff_v2_settings_nutrition, Screen 3b) so a screenshot of the
+// board alone doesn't include the pickers.
 export default function NutritionPhotoCompare() {
   const insets = useSafeAreaInsets();
   const [clients, setClients] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [photos, setPhotos] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [angle, setAngle] = useState("front");
+  const [slotDates, setSlotDates] = useState([null, null, null]);
+  const [urls, setUrls] = useState({});
 
   useEffect(() => {
     listClients()
@@ -44,6 +55,36 @@ export default function NutritionPhotoCompare() {
     setPhotos(null);
     loadPhotos(selectedId);
   }, [selectedId, loadPhotos]);
+
+  const anglePhotos = useMemo(
+    () => (photos ?? []).filter((p) => p.angle === angle).slice().sort((a, b) => (a.date < b.date ? -1 : 1)),
+    [photos, angle]
+  );
+
+  useEffect(() => {
+    if (anglePhotos.length === 0) return;
+    const fallback = defaultDates(anglePhotos, 3);
+    setSlotDates((prev) => fallback.map((d, i) => (prev[i] && anglePhotos.some((p) => p.date === prev[i]) ? prev[i] : d)));
+    getPhotoSignedUrls(anglePhotos.map((p) => p.storage_path))
+      .then((next) => setUrls((prev) => ({ ...prev, ...next })))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anglePhotos]);
+
+  const setSlotDate = (index, date) => {
+    setSlotDates((prev) => prev.map((d, i) => (i === index ? date : d)));
+  };
+
+  const boardSlots = slotDates.map((date) => {
+    const photo = anglePhotos.find((p) => p.date === date);
+    return photo ? { date: photo.date, weight: photo.weight } : null;
+  });
+  const boardUrls = Object.fromEntries(
+    slotDates.map((date) => {
+      const photo = anglePhotos.find((p) => p.date === date);
+      return [date, photo ? urls[photo.storage_path] : null];
+    })
+  );
 
   if (loadError) {
     return (
@@ -124,15 +165,44 @@ export default function NutritionPhotoCompare() {
               </View>
             )}
 
+            <View className="mb-5 flex-row gap-2">
+              {ANGLES.map((a) => (
+                <Text
+                  key={a.key}
+                  onPress={() => setAngle(a.key)}
+                  className="rounded-full border px-3.5 py-1.5"
+                  style={{
+                    fontFamily: fonts.sansMedium,
+                    fontSize: 13,
+                    borderColor: angle === a.key ? colors.primary : "#d6d3d1",
+                    backgroundColor: angle === a.key ? colors.primary : "transparent",
+                    color: angle === a.key ? "white" : "#57534e",
+                  }}
+                >
+                  {a.label}
+                </Text>
+              ))}
+            </View>
+
             {!photos ? (
               <ActivityIndicator color={colors.primary} />
+            ) : anglePhotos.length === 0 ? (
+              <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
+                No {angle} photos for this client yet.
+              </Text>
             ) : (
-              <View
-                className="rounded-2xl border bg-white p-5"
-                style={{ borderColor: "#ece7e1", shadowColor: "#44403c", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10 }}
-              >
-                <PhotoCompare photos={photos} slots={3} />
-              </View>
+              <>
+                {/* Date pickers are picker "chrome" — kept outside the board
+                    so a screenshot of the board alone doesn't include them. */}
+                <View className="mb-4 flex-row gap-3">
+                  {slotDates.map((date, i) => (
+                    <View key={i} style={{ flex: 1 }}>
+                      <DateStepper anglePhotos={anglePhotos} selectedDate={date} onChange={(d) => setSlotDate(i, d)} />
+                    </View>
+                  ))}
+                </View>
+                <PhotoCompareBoard clientName={clients.find((c) => c.id === selectedId)?.name ?? ""} slots={boardSlots} urls={boardUrls} />
+              </>
             )}
           </>
         )}

@@ -161,7 +161,10 @@ export default function NutritionDashboardWeb() {
   const [loadError, setLoadError] = useState(null);
   const [filterCoach, setFilterCoach] = useState(null);
   const [statusFilter, setStatusFilter] = useState(null);
-  const [sort, setSort] = useState("status");
+  // Defaults to alphabetical, not status-grouped — per direct feedback, an
+  // unfiltered roster should read as a plain client list; "Sort: Status"
+  // stays available in the dropdown for anyone who wants grouping back.
+  const [sort, setSort] = useState("name");
 
   const load = useCallback(async () => {
     try {
@@ -247,6 +250,9 @@ export default function NutritionDashboardWeb() {
           <View className="mb-4 flex-row items-center justify-between">
             <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 24 }}>Nutrition</Text>
             <View className="flex-row gap-5">
+              <Link href="/(coach)/nutrition/onboarding" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>
+                Onboarding →
+              </Link>
               <Link href="/(coach)/nutrition/archived" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>
                 Archived →
               </Link>
@@ -282,6 +288,19 @@ export default function NutritionDashboardWeb() {
         </View>
 
         <View style={{ paddingHorizontal: 40, paddingTop: 20, paddingBottom: 40 }}>
+          {statusFilter ? (
+            <View className="mb-3 flex-row items-center gap-2">
+              <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+                Filtered: <Text style={{ fontFamily: fonts.sansSemiBold, color: "#4d6142" }}>{STATUS_META[statusFilter].label}</Text>
+              </Text>
+              <Text style={{ color: "#d6d3d1" }}>·</Text>
+              <Pressable onPress={() => setStatusFilter(null)}>
+                <Text className="text-sm" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                  Clear filter
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
           <View className="rounded-2xl border bg-white" style={{ borderColor: "#ece7e1", maxWidth: 900, overflow: "hidden" }}>
             {sorted.length === 0 ? (
               <Text className="p-6 text-stone-500" style={{ fontFamily: fonts.sans }}>

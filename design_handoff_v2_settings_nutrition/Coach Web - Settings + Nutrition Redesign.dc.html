@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<![CDATA[<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #f3ede6; font-family: 'Montserrat', sans-serif; }
+  ::-webkit-scrollbar { display: none; }
+  a { color: #8a5140; }
+  a:hover { color: #a46a57; }
+</style>
+</helmet>
+
+<div style="padding: 40px; display: flex; flex-direction: column; gap: 20px;">
+  <div>
+    <div style="font-family: 'Protest Strike', sans-serif; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; color: #a46a57; margin-bottom: 4px;">Coach web — redesign pass</div>
+    <div style="font-size: 24px; font-weight: 600; color: #44403c;">Settings restructured into sections; Nutrition roster + full client detail polished</div>
+    <div style="font-size: 13px; color: #78716c; margin-top: 6px; max-width: 900px; line-height: 1.5;">Settings was one long scroll — now grouped into sub-tabs (Team / Program Defaults / Templates / Notifications / Diagnostics), same pattern the Nutrition client-detail page already uses elsewhere in the app. Nutrition roster and every client-detail tab got a visual tidy-up. Two real bugs found while reviewing, not fixed here (flagged only): Photo Compare renders a raw Supabase error instead of photos, and the Trends chart's first two x-axis date labels overlap.</div>
+  </div>
+
+  <div style="display: flex; gap: 8px;">
+    <button onclick="{{ goSettingsScreen }}" style="{{ settingsScreenBtnStyle }}">Settings</button>
+    <button onclick="{{ goRosterScreen }}" style="{{ rosterScreenBtnStyle }}">Nutrition — Roster</button>
+    <button onclick="{{ goClientScreen }}" style="{{ clientScreenBtnStyle }}">Nutrition — Client Detail</button>
+    <button onclick="{{ goPhotoCompareScreen }}" style="{{ photoCompareScreenBtnStyle }}">Nutrition — Photo Compare</button>
+  </div>
+
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="{{ chromeUrl }}" width="1360" height="900" hint-size="1360,900">
+    <div style="display: flex; height: 100%; background: #f6f1ec; font-family: 'Montserrat', sans-serif;">
+
+      <div style="width: 232px; background: #fff; border-right: 1px solid #e7e5e4; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 16px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 28px;">
+          <img src="assets/kova-logo.jpg" style="width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;" />
+          <div style="font-family: 'Protest Strike', sans-serif; font-size: 18px; color: #a46a57; white-space: nowrap;">Kova Strength</div>
+        </div>
+        <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="6">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: {{ item.bg }}; margin-bottom: 2px;">
+            <div style="width: 18px; text-align: center; font-size: 14px; color: {{ item.color }};">{{ item.icon }}</div>
+            <div style="font-size: 14px; font-weight: {{ item.weight }}; color: {{ item.color }};">{{ item.label }}</div>
+          </div>
+        </sc-for>
+        <div style="flex: 1;"></div>
+        <div style="border-top: 1px solid #e7e5e4; padding-top: 16px; margin-top: 16px;">
+          <div style="font-size: 12px; color: #a8a29e; padding: 0 8px; margin-bottom: 8px;">Terra Whitfield</div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;">
+            <div style="width: 18px; text-align: center; color: #78716c; font-size: 14px;">⏻</div>
+            <div style="font-size: 14px; font-weight: 500; color: #44403c;">Sign out</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex: 1; min-width: 0; overflow: auto; background: #faf8f6;">
+
+        <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ true }}">
+          <div style="padding: 36px 40px; max-width: 880px;">
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; color: #a46a57; margin-bottom: 4px;">Settings</div>
+            <div style="font-size: 13px; color: #78716c; margin-bottom: 22px;">Admin-only configuration for the whole gym.</div>
+
+            <div style="display: flex; gap: 4px; border-bottom: 1px solid #ece7e1; margin-bottom: 26px;">
+              <sc-for list="{{ settingsTabs }}" as="t" hint-placeholder-count="5">
+                <button onclick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ isTeamTab }}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em;">Coaches &amp; admins</div>
+                <div style="display: flex; gap: 8px;">
+                  <button style="border: 1px solid #a46a57; background: #fff; border-radius: 8px; padding: 8px 14px; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 13px; color: #8a5140; cursor: pointer;">+ Add coach</button>
+                  <button style="border: 1px solid #a46a57; background: #fff; border-radius: 8px; padding: 8px 14px; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 13px; color: #8a5140; cursor: pointer;">+ Add admin</button>
+                </div>
+              </div>
+
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #292524;">Admin</div>
+                    <div style="font-size: 12px; color: #78716c; margin-top: 2px;">terra@kovastrength.com · Admin</div>
+                  </div>
+                  <a href="#" style="font-size: 13px; font-weight: 600; text-decoration: none;">Manage own training →</a>
+                </div>
+                <div style="font-size: 12px; color: #a8a29e; margin-top: 10px;">Full access to every module.</div>
+              </div>
+
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+                  <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #292524;">test2</div>
+                    <div style="font-size: 12px; color: #78716c; margin-top: 2px;">test2@kovastrength.com · Coach</div>
+                  </div>
+                  <a href="#" style="font-size: 13px; font-weight: 600; text-decoration: none;">Manage own training →</a>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #faf8f6; border-radius: 10px; padding: 12px 14px;">
+                  <sc-for list="{{ permissionRows }}" as="p" hint-placeholder-count="3">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                      <div style="font-size: 13px; color: #57534e;">{{ p.label }}</div>
+                      <div style="width: 34px; height: 20px; border-radius: 999px; background: #4d6142; position: relative;">
+                        <div style="width: 16px; height: 16px; border-radius: 999px; background: #fff; position: absolute; top: 2px; right: 2px;"></div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isDefaultsTab }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px;">Program defaults</div>
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 22px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px;">
+                  <sc-for list="{{ defaultFields }}" as="f" hint-placeholder-count="4">
+                    <div>
+                      <div style="font-size: 13px; color: #57534e; margin-bottom: 6px;">{{ f.label }}</div>
+                      <input value="{{ f.value }}" style="width: 100%; box-sizing: border-box; border: 1px solid #d9d4cd; border-radius: 8px; padding: 10px 12px; font-family: 'Montserrat', sans-serif; font-size: 14px; color: #292524;" />
+                    </div>
+                  </sc-for>
+                </div>
+                <button style="margin-top: 22px; background: #a46a57; color: #fff; border: none; border-radius: 8px; padding: 11px 22px; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 14px; cursor: pointer; box-shadow: 0 6px 16px rgba(164,106,87,0.25);">Save changes</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isTemplatesTab }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px;">Nutrition templates</div>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                  <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #292524;">Weekly check-in template</div>
+                    <div style="font-size: 12px; color: #78716c; margin-top: 2px;">14 questions · each client gets their own editable copy</div>
+                  </div>
+                  <a href="#" style="font-size: 13px; font-weight: 600; text-decoration: none;">Manage →</a>
+                </div>
+                <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                  <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #292524;">Onboarding questionnaire template</div>
+                    <div style="font-size: 12px; color: #78716c; margin-top: 2px;">22 questions · copied onto a client when Nutrition turns on</div>
+                  </div>
+                  <a href="#" style="font-size: 13px; font-weight: 600; text-decoration: none;">Manage →</a>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isNotifsTab }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px;">Push notifications</div>
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <sc-for list="{{ notifToggles }}" as="n" hint-placeholder-count="4">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border-bottom: 1px solid #f0ede8;">
+                    <div>
+                      <div style="font-size: 14px; font-weight: 500; color: #292524;">{{ n.label }}</div>
+                      <div style="font-size: 12px; color: #78716c; margin-top: 2px;">{{ n.description }}</div>
+                    </div>
+                    <div style="width: 34px; height: 20px; border-radius: 999px; background: #4d6142; position: relative; flex-shrink: 0;">
+                      <div style="width: 16px; height: 16px; border-radius: 999px; background: #fff; position: absolute; top: 2px; right: 2px;"></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isDiagnosticsTab }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px;">Diagnostics</div>
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <div style="font-size: 13px; color: #57534e; margin-bottom: 14px;">Send a real push notification to your own account to confirm delivery is wired up end to end.</div>
+                <button style="border: 1px solid #a46a57; background: #fff; border-radius: 8px; padding: 10px 20px; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 13px; color: #8a5140; cursor: pointer;">Send test push to myself</button>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isRoster }}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 32px 40px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px;">
+              <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; color: #a46a57;">Nutrition</div>
+              <a href="#" onclick="{{ goPhotoCompareScreen }}" style="font-size: 13px; font-weight: 600; text-decoration: none;">Photo compare →</a>
+            </div>
+            <div style="font-size: 13px; color: #78716c; margin-bottom: 18px;">{{ rosterFilterLabel }}16 clients <sc-if value="{{ clearFilterVisible }}" hint-placeholder-val="{{ false }}">· <a href="#" onclick="{{ clearFilter }}" style="font-size: 13px; font-weight: 600;">Clear filter</a></sc-if></div>
+
+            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 22px;">
+              <sc-for list="{{ statusChips }}" as="s" hint-placeholder-count="7">
+                <div onclick="{{ s.onClick }}" style="cursor: pointer; background: {{ s.bg }}; border-radius: 12px; padding: 12px 14px; {{ s.border }}">
+                  <div style="display: inline-block; font-size: 12.5px; font-weight: 700; color: {{ s.text }}; background: {{ s.pillBg }}; border-radius: 999px; padding: 3px 10px; margin-bottom: 8px;">{{ s.label }}</div>
+                  <div style="font-size: 12px; color: #78716c;">{{ s.count }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; overflow: hidden; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+              <div style="display: grid; grid-template-columns: 2fr 1fr 2fr 1fr 20px; gap: 12px; padding: 12px 20px; font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #ece7e1;">
+                <div>Client</div><div>Status</div><div>Activity</div><div>Coach</div><div></div>
+              </div>
+              <sc-for list="{{ rosterRows }}" as="r" hint-placeholder-count="6">
+                <div style="display: grid; grid-template-columns: 2fr 1fr 2fr 1fr 20px; gap: 12px; align-items: center; padding: 14px 20px; border-bottom: 1px solid #f4f1ec;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #f4ede3; color: #8a5a2e; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center;">{{ r.initials }}</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #292524;">{{ r.name }}</div>
+                  </div>
+                  <div><span style="font-size: 12px; font-weight: 700; background: {{ r.pillBg }}; color: {{ r.pillText }}; border-radius: 999px; padding: 4px 10px;">{{ r.status }}</span></div>
+                  <div style="font-size: 13px; color: #57534e;">{{ r.activity }}</div>
+                  <div style="font-size: 13px; color: #57534e;">{{ r.coach }}</div>
+                  <div style="color: #c9c4bd;">›</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isClient }}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 32px 40px;">
+            <a href="#" style="font-size: 13px; font-weight: 600; text-decoration: none;">‹ Back to Nutrition</a>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+              <div style="font-family: 'Protest Strike', sans-serif; font-size: 25px; color: #a46a57;">Bob Getsinger</div>
+              <button onclick="{{ openClientSettings }}" style="background: none; border: none; color: #a8a29e; font-size: 16px; cursor: pointer; padding: 0;">⚙</button>
+            </div>
+            <div style="font-size: 13px; color: #78716c; margin-bottom: 16px;">getsingerbob@gmail.com</div>
+
+            <div style="display: flex; gap: 4px; border-bottom: 1px solid #ece7e1; margin-bottom: 22px;">
+              <sc-for list="{{ clientTabs }}" as="t" hint-placeholder-count="6">
+                <button onclick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ isCDash }}" hint-placeholder-val="{{ true }}">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                  <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 12px;">Focus items</div>
+                  <sc-for list="{{ focusItems }}" as="f" hint-placeholder-count="5">
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 7px 0;">
+                      <div style="width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid #d9d4cd;"></div>
+                      <div style="font-size: 13.5px; color: #44403c; flex: 1;">{{ f.label }}</div>
+                    </div>
+                  </sc-for>
+                  <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <input placeholder="New focus item" style="flex: 1; border: 1px solid #d9d4cd; border-radius: 8px; padding: 9px 12px; font-family: 'Montserrat', sans-serif; font-size: 13px;" />
+                    <button style="background: #a46a57; color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font-weight: 600; font-size: 13px; cursor: pointer;">Add</button>
+                  </div>
+                </div>
+
+                <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                  <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 10px;">Game plan</div>
+                  <textarea style="width: 100%; box-sizing: border-box; height: 90px; border: 1px solid #d9d4cd; border-radius: 8px; padding: 10px 12px; font-family: 'Montserrat', sans-serif; font-size: 13px; color: #44403c; resize: none;">Nutrition- Track sauces/condiments this week - be curious&#10;&#10;Lifts- Can you feel yourself approaching failure?</textarea>
+                  <button style="margin-top: 10px; background: #a46a57; color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font-weight: 600; font-size: 13px; cursor: pointer;">Save game plan</button>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px;">
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                  <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                    <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 12px;">This week at a glance</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                      <sc-for list="{{ glanceStats }}" as="g" hint-placeholder-count="6">
+                        <div style="background: #faf8f6; border-radius: 10px; padding: 10px 12px;">
+                          <div style="font-size: 11.5px; color: #a8a29e;">{{ g.label }}</div>
+                          <div style="font-size: 17px; font-weight: 700; color: #292524; margin-top: 2px;">{{ g.value }}</div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+
+                  <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                    <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 12px;">Current target</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                      <sc-for list="{{ targetChips }}" as="c" hint-placeholder-count="6">
+                        <span style="font-size: 12.5px; font-weight: 600; background: #f4f1ec; color: #57534e; border-radius: 999px; padding: 5px 12px;">{{ c.label }} <b style="color: {{ c.color }};">{{ c.value }}</b></span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                  <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 12px;">This week vs. last week</div>
+                  <sc-for list="{{ compareRows }}" as="c" hint-placeholder-count="7">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-top: 1px solid #f4f1ec;">
+                      <div style="font-size: 13px; color: #57534e;">{{ c.label }}</div>
+                      <div style="text-align: right;">
+                        <span style="font-size: 13.5px; font-weight: 700; color: {{ c.color }};">{{ c.value }}</span>
+                        <span style="font-size: 11.5px; color: #a8a29e; margin-left: 6px;">(last: {{ c.last }})</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCWeeks }}" hint-placeholder-val="{{ false }}">
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 14px;">Weekly averages</div>
+                <div style="display: grid; grid-template-columns: 1.3fr repeat(7, 0.8fr) 1.2fr 16px; gap: 8px; font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; padding-bottom: 8px; border-bottom: 1px solid #ece7e1;">
+                  <div>Week</div><div>Weight</div><div>Protein</div><div>Carb</div><div>Fat</div><div>Fiber</div><div>Steps</div><div>Sleep</div><div>Note</div><div></div>
+                </div>
+                <sc-for list="{{ weekRows }}" as="w" hint-placeholder-count="8">
+                  <div onclick="{{ w.toggle }}" style="display: grid; grid-template-columns: 1.3fr repeat(7, 0.8fr) 1.2fr 16px; gap: 8px; padding: 10px 0; border-bottom: 1px solid #f4f1ec; font-size: 13px; color: #44403c; align-items: center; cursor: pointer;">
+                    <div style="font-weight: 600;">{{ w.range }}</div>
+                    <div>{{ w.weight }}</div>
+                    <div style="color: {{ w.proteinColor }}; font-weight: 600;">{{ w.protein }}</div>
+                    <div style="color: {{ w.carbColor }}; font-weight: 600;">{{ w.carb }}</div>
+                    <div>{{ w.fat }}</div>
+                    <div style="color: {{ w.fiberColor }}; font-weight: 600;">{{ w.fiber }}</div>
+                    <div>{{ w.steps }}</div>
+                    <div>{{ w.sleep }}</div>
+                    <div style="color: #a8a29e;">{{ w.note }}</div>
+                    <div style="color: #a8a29e; font-size: 10px;">{{ w.chevron }}</div>
+                  </div>
+                  <sc-if value="{{ w.open }}" hint-placeholder-val="{{ false }}">
+                    <div style="background: #faf8f6; border-bottom: 1px solid #f4f1ec; margin: 0 -20px; padding: 4px 20px;">
+                      <sc-for list="{{ w.days }}" as="d" hint-placeholder-count="7">
+                        <div style="display: grid; grid-template-columns: 1.3fr repeat(7, 0.8fr) 1.2fr 16px; gap: 8px; padding: 7px 0; font-size: 12.5px; color: #57534e;">
+                          <div style="font-weight: 600;">{{ d.day }}</div><div>{{ d.weight }}</div><div>{{ d.protein }}</div><div>{{ d.carb }}</div><div>{{ d.fat }}</div><div>{{ d.fiber }}</div><div>{{ d.steps }}</div><div>{{ d.sleep }}</div><div></div><div></div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCTrends }}" hint-placeholder-val="{{ false }}">
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                  <div style="font-size: 13px; font-weight: 600; color: #292524;">Trends</div>
+                  <div style="display: flex; gap: 12px; font-size: 12px; color: #a8a29e;"><span style="color: #a46a57; font-weight: 700;">1m</span><span>3m</span><span>6m</span><span>1y</span></div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+                  <sc-for list="{{ trendPills }}" as="p" hint-placeholder-count="5">
+                    <span style="font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 6px 14px; {{ p.style }}">{{ p.label }}</span>
+                  </sc-for>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                  <div style="display: flex; flex-direction: column; justify-content: space-between; font-size: 10.5px; color: #a8a29e; padding: 2px 0 22px; text-align: right;">
+                    <span>{{ trendMaxLabel }}</span><span>{{ trendMidLabel }}</span><span>{{ trendMinLabel }}</span>
+                  </div>
+                  <div style="flex: 1;">
+                    <svg viewBox="0 0 640 160" style="width: 100%; height: 160px; overflow: visible;">
+                      <line x1="0" y1="6" x2="640" y2="6" stroke="#ece7e1" stroke-width="1" />
+                      <line x1="0" y1="80" x2="640" y2="80" stroke="#ece7e1" stroke-width="1" />
+                      <line x1="0" y1="154" x2="640" y2="154" stroke="#ece7e1" stroke-width="1" />
+                      <polygon points="{{ trendAreaPoints }}" fill="#ad816d" opacity="0.08" />
+                      <polyline points="{{ trendLinePoints }}" fill="none" stroke="#ad816d" stroke-width="2.5" />
+                      <sc-for list="{{ trendPoints }}" as="p" hint-placeholder-count="14">
+                        <circle cx="{{ p.x }}" cy="{{ p.y }}" r="{{ p.r }}" fill="#a46a57" />
+                      </sc-for>
+                    </svg>
+                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #a8a29e;">
+                      <span>07/03</span><span>07/17</span><span>07/31</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="text-align: center; margin-top: 8px; font-size: 12px; color: #a8a29e;">Hover a point to see its value</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCCheckin }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <a href="#" style="font-size: 13px; font-weight: 600; text-decoration: none;">‹ Prior week</a>
+                <div style="font-size: 14px; font-weight: 700; color: #292524;">Week of 07-20-2026</div>
+                <a href="#" style="font-size: 13px; font-weight: 600; text-decoration: none;">Next week ›</a>
+              </div>
+
+              <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 10px;">This week's snapshot</div>
+              <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;">
+                <div style="background: #fff; border: 1px solid #ece7e1; border-left: 3px solid #a46a57; border-radius: 12px; padding: 14px;">
+                  <div style="font-size: 13px; font-weight: 700; color: #292524; margin-bottom: 8px;">Weight</div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c; margin-bottom: 3px;"><span>This week</span><b style="color:#292524;">212.2</b></div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c; margin-bottom: 3px;"><span>Last week</span><b style="color:#292524;">212.3</b></div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c;"><span>Change</span><b style="color:#4d6142;">-0.2</b></div>
+                </div>
+                <div style="background: #fff; border: 1px solid #ece7e1; border-left: 3px solid #a46a57; border-radius: 12px; padding: 14px;">
+                  <div style="font-size: 13px; font-weight: 700; color: #292524; margin-bottom: 8px;">Nutrition</div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c; margin-bottom: 3px;"><span>Protein (g)</span><b style="color:#292524;">173.8</b></div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c; margin-bottom: 3px;"><span>Carb (g)</span><b style="color:#292524;">245.3</b></div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c;"><span>Fat (g)</span><b style="color:#292524;">60.3</b></div>
+                </div>
+                <div style="background: #fff; border: 1px solid #ece7e1; border-left: 3px solid #a46a57; border-radius: 12px; padding: 14px;">
+                  <div style="font-size: 13px; font-weight: 700; color: #292524; margin-bottom: 8px;">Steps</div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c;"><span>Daily average</span><b style="color:#292524;">12,468</b></div>
+                </div>
+                <div style="background: #fff; border: 1px solid #ece7e1; border-left: 3px solid #a46a57; border-radius: 12px; padding: 14px;">
+                  <div style="font-size: 13px; font-weight: 700; color: #292524; margin-bottom: 8px;">Sleep</div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c; margin-bottom: 3px;"><span>Hours</span><b style="color:#292524;">7.0h</b></div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c;"><span>Quality (1-5)</span><b style="color:#292524;">4</b></div>
+                </div>
+                <div style="background: #fff; border: 1px solid #ece7e1; border-left: 3px solid #a46a57; border-radius: 12px; padding: 14px;">
+                  <div style="font-size: 13px; font-weight: 700; color: #292524; margin-bottom: 8px;">Hunger &amp; Energy</div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c; margin-bottom: 3px;"><span>Hunger (1-5)</span><b style="color:#292524;">1.2</b></div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: #78716c;"><span>Energy (1-5)</span><b style="color:#292524;">3.4</b></div>
+                </div>
+              </div>
+
+              <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 14px;">Check-in answers</div>
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <sc-for list="{{ checkinQA }}" as="qa" hint-placeholder-count="4">
+                  <div>
+                    <div style="font-size: 13.5px; font-weight: 600; color: #292524; margin-bottom: 4px;">{{ qa.q }}</div>
+                    <div style="font-size: 13.5px; color: #57534e; line-height: 1.5;">{{ qa.a }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCPhotos }}" hint-placeholder-val="{{ false }}">
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+                  <div style="font-size: 13px; font-weight: 600; color: #292524;">Compare</div>
+                  <div style="display: flex; gap: 8px;">
+                    <span style="background: #a46a57; color: #fff; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 6px 16px;">Front</span>
+                    <span style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 6px 16px;">Side</span>
+                    <span style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 6px 16px;">Back</span>
+                  </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                  <sc-for list="{{ photoSlots }}" as="ph" hint-placeholder-count="2">
+                    <div>
+                      <div style="border: 1px solid #d9d4cd; border-radius: 8px; padding: 8px 12px; font-size: 12.5px; color: #57534e; margin-bottom: 8px; text-align: center;">{{ ph.date }}</div>
+                      <div style="height: 300px; border-radius: 10px; background: repeating-linear-gradient(45deg, #efe9e2, #efe9e2 10px, #f6f1ec 10px, #f6f1ec 20px); display: flex; align-items: center; justify-content: center; text-align: center; color: #a8907f; font-family: monospace; font-size: 11.5px; padding: 12px;">{{ ph.label }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 18px 20px; margin-top: 16px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045); display: flex; align-items: center; justify-content: space-between; gap: 20px;">
+                <div>
+                  <div style="font-size: 13.5px; font-weight: 700; color: #292524; margin-bottom: 4px;">Fix a day's photos</div>
+                  <div style="font-size: 12.5px; color: #78716c;">Use Edit above if a photo's angle or weight is wrong.</div>
+                </div>
+                <button style="border: 1px solid #d9d4cd; background: #fff; color: #44403c; border-radius: 8px; padding: 9px 18px; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap;">Edit</button>
+              </div>
+
+              <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 20px; margin-top: 16px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                <div style="font-size: 13.5px; font-weight: 700; color: #292524; margin-bottom: 14px;">Add photos (e.g. old/starting photos)</div>
+                <div style="font-size: 12.5px; color: #57534e; margin-bottom: 6px;">Date photo was taken</div>
+                <input value="08/02/2026" style="width: 220px; box-sizing: border-box; border: 1px solid #d9d4cd; border-radius: 8px; padding: 9px 12px; font-family: 'Montserrat', sans-serif; font-size: 13px; margin-bottom: 16px;" />
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; max-width: 480px; margin-bottom: 16px;">
+                  <sc-for list="{{ addPhotoSlots }}" as="a" hint-placeholder-count="3">
+                    <div>
+                      <div style="aspect-ratio: 3/5; border-radius: 10px; border: 1px dashed #d9d4cd; background: #fdf6f2; position: relative; display: flex; align-items: flex-end; justify-content: center; overflow: hidden;">
+                        <div style="width: 34%; aspect-ratio: 1/1; border-radius: 999px; background: #e3c2ab; position: absolute; top: 14%; left: 50%; transform: translateX(-50%);"></div>
+                        <div style="width: 62%; height: 56%; border-radius: 40% 40% 16px 16px; background: #e3c2ab;"></div>
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 28px; height: 28px; border-radius: 999px; background: #a46a57; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 2px 6px rgba(68,64,60,0.2);">+</div>
+                      </div>
+                      <div style="text-align: center; font-size: 11.5px; color: #a8907f; margin-top: 6px;">{{ a.label }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <button style="background: #a46a57; color: #fff; border: none; border-radius: 8px; padding: 11px 26px; font-weight: 700; font-size: 14px; cursor: pointer;">Upload</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCTargets }}" hint-placeholder-val="{{ false }}">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                  <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 14px;">Set new target</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <sc-for list="{{ targetFields }}" as="f" hint-placeholder-count="6">
+                      <div>
+                        <div style="font-size: 13px; color: #57534e; margin-bottom: 6px;">{{ f.label }} <span style="font-size: 11px; font-weight: 600; background: #f4f1ec; color: #57534e; border-radius: 999px; padding: 2px 8px; margin-left: 4px;">now: {{ f.now }}</span></div>
+                        <input style="width: 100%; box-sizing: border-box; border: 1px solid #d9d4cd; border-radius: 8px; padding: 9px 12px; font-family: 'Montserrat', sans-serif; font-size: 13px;" />
+                      </div>
+                    </sc-for>
+                  </div>
+                  <input placeholder="Note (what changed and why)…" style="width: 100%; box-sizing: border-box; margin-top: 14px; border: 1px solid #d9d4cd; border-radius: 8px; padding: 10px 12px; font-family: 'Montserrat', sans-serif; font-size: 13px;" />
+                  <button style="width: 100%; margin-top: 14px; background: #a46a57; color: #fff; border: none; border-radius: 8px; padding: 12px; font-weight: 700; font-size: 14px; cursor: pointer;">Save new target</button>
+                </div>
+                <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 14px; padding: 20px; box-shadow: 0 1px 2px rgba(68,64,60,0.03), 0 6px 16px rgba(68,64,60,0.045);">
+                  <div style="font-size: 13px; font-weight: 600; color: #292524; margin-bottom: 14px;">Target history</div>
+                  <sc-for list="{{ targetHistory }}" as="h" hint-placeholder-count="2">
+                    <div style="padding: 12px 0; border-top: 1px solid #f4f1ec;">
+                      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <sc-if value="{{ h.current }}" hint-placeholder-val="{{ false }}"><span style="background: #a46a57; color: #fff; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 10px;">current</span></sc-if>
+                        <span style="font-size: 12.5px; color: #a8a29e;">{{ h.date }}</span>
+                      </div>
+                      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        <sc-for list="{{ h.chips }}" as="c" hint-placeholder-count="6">
+                          <span style="font-size: 12px; font-weight: 600; background: #f4f1ec; color: #57534e; border-radius: 999px; padding: 4px 10px;">{{ c }}</span>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPhotoCompare }}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 32px 40px;">
+            <a href="#" style="font-size: 13px; font-weight: 600; text-decoration: none;">‹ Back to Nutrition</a>
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; color: #a46a57; margin-top: 4px;">Photo Compare</div>
+            <div style="font-size: 13px; color: #78716c; margin-bottom: 18px;">Pick 3 dates, then screenshot the board below to share.</div>
+
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 22px;">
+              <select style="border: 1px solid #d9d4cd; border-radius: 8px; padding: 9px 14px; font-family: 'Montserrat', sans-serif; font-size: 13.5px; background: #fff;"><option>Bob Getsinger</option></select>
+              <div style="display: flex; gap: 6px;">
+                <span style="background: #a46a57; color: #fff; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 6px 16px;">Front</span>
+                <span style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 6px 16px;">Side</span>
+                <span style="border: 1px solid #d9d4cd; color: #57534e; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 6px 16px;">Back</span>
+              </div>
+            </div>
+
+            <!-- Shareable board -->
+            <div style="max-width: 900px; border-radius: 22px; overflow: hidden; box-shadow: 0 10px 30px rgba(68,64,60,0.16), 0 2px 8px rgba(68,64,60,0.08); border: 1px solid #ecdccf;">
+              <div style="background: linear-gradient(160deg, #fbeee4 0%, #f6ded0 45%, #f0cdb8 100%); padding: 28px 32px 24px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <img src="assets/kova-logo.jpg" style="width: 34px; height: 34px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(68,64,60,0.15);" />
+                    <div>
+                      <div style="font-family: 'Protest Strike', sans-serif; font-size: 16px; color: #8a3a24; letter-spacing: 0.02em;">KOVA STRENGTH</div>
+                      <div style="font-size: 10px; font-weight: 700; color: #a8574a; text-transform: uppercase; letter-spacing: 0.12em; margin-top: -2px;">Real Results, Real Women</div>
+                    </div>
+                  </div>
+                  <div style="text-align: right;">
+                    <div style="font-size: 13.5px; font-weight: 700; color: #6b3323;">Bob Getsinger</div>
+                    <div style="font-size: 11.5px; color: #a8574a;">June 8 → August 2, 2026</div>
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+                  <sc-for list="{{ shareBoardPhotos }}" as="p" hint-placeholder-count="3">
+                    <div>
+                      <div style="height: 340px; border-radius: 14px; background: repeating-linear-gradient(45deg, #e9d3c4, #e9d3c4 10px, #f2e2d4 10px, #f2e2d4 20px); box-shadow: 0 6px 16px rgba(107,51,35,0.18); display: flex; align-items: center; justify-content: center; text-align: center; color: #8a5a45; font-family: monospace; font-size: 11px; padding: 12px;">{{ p.label }}</div>
+                      <div style="text-align: center; margin-top: 10px; font-size: 12.5px; font-weight: 700; color: #6b3323;">{{ p.date }}</div>
+                      <div style="text-align: center; font-size: 11.5px; color: #a8574a;">{{ p.weight }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="background: #fff; padding: 22px 32px; display: flex; align-items: center; justify-content: center; gap: 32px; border-top: 3px solid #a46a57;">
+                <div style="text-align: center;">
+                  <div style="font-family: 'Protest Strike', sans-serif; font-size: 34px; color: #4d6142;">-6.4 lb</div>
+                  <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.08em;">Total change</div>
+                </div>
+                <div style="width: 1px; height: 40px; background: #ece7e1;"></div>
+                <div style="text-align: center;">
+                  <div style="font-family: 'Protest Strike', sans-serif; font-size: 34px; color: #a46a57;">8</div>
+                  <div style="font-size: 11px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.08em;">Weeks</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ clientSettingsOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position: fixed; inset: 0; background: rgba(68,64,60,0.4); display: flex; align-items: center; justify-content: center; z-index: 50;">
+            <div style="background: #fff; border-radius: 16px; width: 460px; max-height: 86%; overflow: auto; padding: 26px 28px;">
+              <div style="font-family: 'Protest Strike', sans-serif; font-size: 20px; color: #a46a57; margin-bottom: 18px;">Bob Getsinger — Client Settings</div>
+
+              <div style="font-size: 12.5px; color: #57534e; margin-bottom: 6px;">Name</div>
+              <input value="Bob Getsinger" style="width: 100%; box-sizing: border-box; border: 1.5px solid #a46a57; border-radius: 8px; padding: 10px 12px; font-family: 'Montserrat', sans-serif; font-size: 14px; margin-bottom: 16px;" />
+
+              <div style="font-size: 12.5px; color: #57534e; margin-bottom: 6px;">Phone</div>
+              <input value="2085208471" style="width: 100%; box-sizing: border-box; border: 1px solid #d9d4cd; border-radius: 8px; padding: 10px 12px; font-family: 'Montserrat', sans-serif; font-size: 14px; margin-bottom: 16px;" />
+
+              <div style="font-size: 12.5px; color: #57534e; margin-bottom: 6px;">Start date</div>
+              <input value="2026-07-17" style="width: 100%; box-sizing: border-box; border: 1px solid #d9d4cd; border-radius: 8px; padding: 10px 12px; font-family: 'Montserrat', sans-serif; font-size: 14px; margin-bottom: 16px;" />
+
+              <div style="font-size: 12.5px; color: #57534e; margin-bottom: 8px;">Status</div>
+              <div style="display: flex; background: #f1efed; border-radius: 10px; padding: 3px; margin-bottom: 16px;">
+                <sc-for list="{{ clientStatusOptions }}" as="s" hint-placeholder-count="3">
+                  <div onclick="{{ s.onClick }}" style="flex: 1; text-align: center; padding: 9px 0; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; background: {{ s.bg }}; color: {{ s.color }};">{{ s.label }}</div>
+                </sc-for>
+              </div>
+
+              <div style="font-size: 12.5px; color: #57534e; margin-bottom: 8px;">Progress photo frequency</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px;">
+                <sc-for list="{{ photoFrequencyOptions }}" as="p" hint-placeholder-count="5">
+                  <div onclick="{{ p.onClick }}" style="border-radius: 999px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid {{ p.border }}; background: {{ p.bg }}; color: {{ p.color }};">{{ p.label }}</div>
+                </sc-for>
+              </div>
+
+              <div style="border-top: 1px solid #ece7e1;"></div>
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #ece7e1; cursor: pointer;">
+                <div style="font-size: 13.5px; font-weight: 600; color: #292524;">Weekly check-in questions</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 11px; font-weight: 700; background: #eef1e7; color: #4d6142; border-radius: 999px; padding: 3px 9px;">Available to client</span>
+                  <span style="color: #a8a29e;">⌄</span>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #ece7e1; cursor: pointer; margin-bottom: 22px;">
+                <div style="font-size: 13.5px; font-weight: 600; color: #292524;">Check-in status</div>
+                <span style="color: #a8a29e;">⌄</span>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button onclick="{{ closeClientSettings }}" style="border: 1px solid #d9d4cd; background: #fff; color: #44403c; border-radius: 8px; padding: 10px 20px; font-weight: 600; font-size: 13.5px; cursor: pointer;">Cancel</button>
+                <button onclick="{{ closeClientSettings }}" style="background: #a46a57; color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-weight: 700; font-size: 13.5px; cursor: pointer;">Save</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </x-import>
+</div>
+]]>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const TAB_STYLE_ACTIVE = "background:none;border:none;border-bottom:2px solid #a46a57;color:#8a5140;font-family:'Montserrat',sans-serif;font-weight:600;font-size:13.5px;padding:10px 4px;margin-right:20px;cursor:pointer;";
+const TAB_STYLE_INACTIVE = "background:none;border:none;border-bottom:2px solid transparent;color:#78716c;font-family:'Montserrat',sans-serif;font-weight:500;font-size:13.5px;padding:10px 4px;margin-right:20px;cursor:pointer;";
+
+class Component extends DCLogic {
+  state = { screen: "settings", settingsTab: "team", clientTab: "dashboard", rosterFilter: null, openWeekRows: {}, clientSettingsOpen: false, clientStatus: "Active", photoFrequency: "Off" };
+
+  goScreen(screen) { return () => this.setState({ screen }); }
+  goSettingsTab(t) { return () => this.setState({ settingsTab: t }); }
+  goClientTab(t) { return () => this.setState({ clientTab: t }); }
+  setRosterFilter(f) { return () => this.setState({ rosterFilter: f }); }
+  toggleWeekRow(range) { return () => this.setState((s) => ({ openWeekRows: { ...s.openWeekRows, [range]: !s.openWeekRows[range] } })); }
+  setClientSettingsOpen(v) { return () => this.setState({ clientSettingsOpen: v }); }
+  setClientStatus(v) { return () => this.setState({ clientStatus: v }); }
+  setPhotoFrequency(v) { return () => this.setState({ photoFrequency: v }); }
+
+  renderVals() {
+    const { screen, settingsTab, clientTab, rosterFilter, clientSettingsOpen, clientStatus, photoFrequency } = this.state;
+
+    const tabBtnStyle = (s) => {
+      const active = screen === s;
+      return `border-radius:999px;padding:9px 16px;font-family:'Montserrat',sans-serif;font-weight:600;font-size:13px;cursor:pointer;border:1px solid ${active ? "#a46a57" : "#d9d4cd"};background:${active ? "#a46a57" : "#fff"};color:${active ? "#fff" : "#57534e"};`;
+    };
+
+    const settingsTabDefs = [
+      ["team", "Team"], ["defaults", "Program Defaults"], ["templates", "Nutrition Templates"], ["notifs", "Notifications"], ["diagnostics", "Diagnostics"],
+    ];
+    const settingsTabs = settingsTabDefs.map(([key, label]) => ({
+      label, onClick: this.goSettingsTab(key),
+      style: settingsTab === key ? TAB_STYLE_ACTIVE : TAB_STYLE_INACTIVE,
+    }));
+
+    const clientTabDefs = [
+      ["dashboard", "Dashboard"], ["weeks", "Weeks"], ["trends", "Trends"], ["checkin", "Check-In"], ["photos", "Photos"], ["targets", "Targets"],
+    ];
+    const clientTabs = clientTabDefs.map(([key, label]) => ({
+      label, onClick: this.goClientTab(key),
+      style: clientTab === key ? TAB_STYLE_ACTIVE : TAB_STYLE_INACTIVE,
+    }));
+
+    const navItems = [
+      { icon: "⌂", label: "Dashboard", color: "#78716c", bg: "transparent", weight: 500 },
+      { icon: "◍", label: "Clients", color: "#78716c", bg: "transparent", weight: 500 },
+      { icon: "▤", label: "Group Programs", color: "#78716c", bg: "transparent", weight: 500 },
+      { icon: "▦", label: "SPC", color: "#78716c", bg: "transparent", weight: 500 },
+      { icon: "◐", label: "Nutrition", color: "#8a5140", bg: "#fdf6f2", weight: 600 },
+      { icon: "▥", label: "Exercise Library", color: "#78716c", bg: "transparent", weight: 500 },
+      { icon: "⚙", label: "Settings", color: screen === "settings" ? "#8a5140" : "#78716c", bg: screen === "settings" ? "#fdf6f2" : "transparent", weight: screen === "settings" ? 600 : 500 },
+    ];
+
+    return {
+      chromeUrl: screen === "settings" ? "app.kovastrength.com/settings" : screen === "roster" ? "app.kovastrength.com/nutrition" : screen === "photocompare" ? "app.kovastrength.com/nutrition/photo-compare" : "app.kovastrength.com/nutrition/clients/bob",
+      goSettingsScreen: this.goScreen("settings"),
+      goRosterScreen: this.goScreen("roster"),
+      goClientScreen: this.goScreen("client"),
+      settingsScreenBtnStyle: tabBtnStyle("settings"),
+      rosterScreenBtnStyle: tabBtnStyle("roster"),
+      clientScreenBtnStyle: tabBtnStyle("client"),
+      goPhotoCompareScreen: this.goScreen("photocompare"),
+      photoCompareScreenBtnStyle: tabBtnStyle("photocompare"),
+      navItems,
+      isSettings: screen === "settings",
+      isRoster: screen === "roster",
+      isClient: screen === "client",
+      isPhotoCompare: screen === "photocompare",
+      settingsTabs,
+      clientTabs,
+      isCDash: clientTab === "dashboard",
+      isCWeeks: clientTab === "weeks",
+      isCTrends: clientTab === "trends",
+      isCCheckin: clientTab === "checkin",
+      isCPhotos: clientTab === "photos",
+      isCTargets: clientTab === "targets",
+      openClientSettings: this.setClientSettingsOpen(true),
+      closeClientSettings: this.setClientSettingsOpen(false),
+      clientSettingsOpen,
+      clientStatusOptions: ["Active", "Paused", "Archived"].map((label) => ({
+        label, onClick: this.setClientStatus(label),
+        bg: clientStatus === label ? "#fff" : "transparent",
+        color: clientStatus === label ? "#8a5140" : "#78716c",
+      })),
+      photoFrequencyOptions: ["Off", "Weekly", "Biweekly", "Monthly", "Bimonthly"].map((label) => ({
+        label, onClick: this.setPhotoFrequency(label),
+        bg: photoFrequency === label ? "#a46a57" : "#fff",
+        color: photoFrequency === label ? "#fff" : "#57534e",
+        border: photoFrequency === label ? "#a46a57" : "#d9d4cd",
+      })),
+      isTeamTab: settingsTab === "team",
+      isDefaultsTab: settingsTab === "defaults",
+      isTemplatesTab: settingsTab === "templates",
+      isNotifsTab: settingsTab === "notifs",
+      isDiagnosticsTab: settingsTab === "diagnostics",
+
+      permissionRows: [
+        { label: "SPC" }, { label: "Nutrition" }, { label: "Exercise Library" },
+      ],
+      defaultFields: [
+        { label: "Alert lead time (days before a block ends)", value: "3" },
+        { label: "Default Flagship block length (weeks)", value: "4" },
+        { label: "Default Better With Age block length (weeks)", value: "6" },
+        { label: "Default SPC block length (weeks)", value: "4" },
+      ],
+      notifToggles: [
+        { label: "SPC block-ending alerts", description: "Notify the assigned coach when a client's next SPC block is auto-drafted." },
+        { label: "Daily log reminder", description: "Remind a nutrition client in the evening if today's log isn't finalized yet." },
+        { label: "Weekly check-in still needed", description: "Monday nudge if last week's check-in was never submitted." },
+        { label: "Weekly check-in available", description: "Sunday announcement that the new week's check-in is open." },
+      ],
+
+      statusChips: [
+        { key: "Onboarding", label: "Onboarding", count: "5 clients", pillBg: "#f4ede3", text: "#8a5a2e" },
+        { key: "Check-in due", label: "Check-in due", count: "5 clients", pillBg: "#fdece5", text: "#b23a22" },
+        { key: "Needs target", label: "Needs target", count: "1 client", pillBg: "#f4ede3", text: "#8a5a2e" },
+        { key: "Awaiting review", label: "Awaiting review", count: "1 client", pillBg: "#fdece5", text: "#b23a22" },
+        { key: "On track", label: "On track", count: "4 clients", pillBg: "#eef1e7", text: "#4d6142" },
+        { key: "Paused", label: "Paused", count: "0 clients", pillBg: "#f1efed", text: "#78716c" },
+        { key: "Archived", label: "Archived", count: "2 clients", pillBg: "#f1efed", text: "#78716c" },
+      ].map((c) => ({
+        ...c, onClick: this.setRosterFilter(rosterFilter === c.key ? null : c.key),
+        border: rosterFilter === c.key ? "border:1.5px solid #a46a57;" : "border:1px solid #ece7e1;",
+        bg: rosterFilter === c.key ? "#fdf6f2" : "#fff",
+      })),
+      rosterFilterLabel: rosterFilter ? `Filtered: ${rosterFilter} · ` : "",
+      clearFilterVisible: !!rosterFilter,
+      clearFilter: this.setRosterFilter(null),
+      rosterRows: [
+        { initials: "AS", name: "Abbi Stauffer", status: "Onboarding", pillBg: "#f4ede3", pillText: "#8a5a2e", activity: "Not yet approved for targets", coach: "Terra" },
+        { initials: "AT", name: "Abby Thompson", status: "Check-in due", pillBg: "#fdece5", pillText: "#b23a22", activity: "Missed 3 days this week · ▼ 0.2 lb", coach: "Terra" },
+        { initials: "BG", name: "Banesa Getsinger", status: "Check-in due", pillBg: "#fdece5", pillText: "#b23a22", activity: "Missed 1 day this week · ▼ 1.2 lb", coach: "Terra" },
+        { initials: "BG", name: "Bob Getsinger", status: "On track", pillBg: "#eef1e7", pillText: "#4d6142", activity: "100% adherence · ▼ 1.6 lb", coach: "Terra" },
+        { initials: "RF", name: "Roxy Franco", status: "Needs target", pillBg: "#f4ede3", pillText: "#8a5a2e", activity: "No target set yet", coach: "Terra" },
+        { initials: "D", name: "Dustin", status: "Check-in due", pillBg: "#fdece5", pillText: "#b23a22", activity: "Missed 7 days this week", coach: "Terra" },
+        { initials: "LA", name: "Lisa Allen", status: "Archived", pillBg: "#f1efed", pillText: "#78716c", activity: "No longer training", coach: "Terra" },
+        { initials: "RD", name: "Rosa Delgado", status: "Archived", pillBg: "#f1efed", pillText: "#78716c", activity: "No longer training", coach: "Terra" },
+      ].filter((r) => !rosterFilter || r.status === rosterFilter),
+
+      glanceStats: [
+        { label: "Weight change/wk", value: "-1.6" }, { label: "Adherence", value: "100%" }, { label: "Avg steps", value: "13,117" },
+        { label: "Avg sleep", value: "6.9h" }, { label: "Avg hunger", value: "1.3" }, { label: "Avg energy", value: "4.0" },
+      ],
+      targetChips: [
+        { label: "Cal", value: "2260", color: "#57534e" }, { label: "P", value: "200g", color: "#8a5140" }, { label: "C", value: "230g", color: "#b8860b" },
+        { label: "F", value: "60g", color: "#b23a22" }, { label: "Fiber", value: "30g", color: "#4d6142" }, { label: "Steps", value: "12000", color: "#2c7a9b" }, { label: "Sleep", value: "8h", color: "#6b5b95" },
+      ],
+      focusItems: [
+        { label: "Feeling Accomplished" }, { label: "3 lifts per week" }, { label: "Proximity to failure" }, { label: "1 Video per week" }, { label: "Give Dustin San Diego Deets" },
+      ],
+      compareRows: [
+        { label: "Protein (g)", value: "202.9", last: "173.8", color: "#4d6142" },
+        { label: "Carb (g)", value: "216.9", last: "245.3", color: "#4d6142" },
+        { label: "Fat (g)", value: "65.2", last: "60.3", color: "#44403c" },
+        { label: "Fiber (g)", value: "47.3", last: "107.0", color: "#b23a22" },
+        { label: "Steps", value: "13,117.3", last: "12,468.4", color: "#4d6142" },
+        { label: "Sleep (hrs)", value: "6.9", last: "7.0", color: "#b23a22" },
+        { label: "Weight", value: "210.6", last: "212.2", color: "#44403c" },
+      ],
+
+      weekRows: [
+        { range: "07/27–08/02", weight: "210.6", protein: "202.9", proteinColor: "#4d6142", carb: "216.9", carbColor: "#4d6142", fat: "65.2", fiber: "47.3", fiberColor: "#b23a22", steps: "13,117", sleep: "6.9", note: "—",
+          days: [
+            { day: "Sun 8/2", weight: "210.6", protein: "204", carb: "218", fat: "62", fiber: "41", steps: "13.1k", sleep: "6.9h" },
+            { day: "Sat 8/1", weight: "—", protein: "198", carb: "222", fat: "60", fiber: "38", steps: "12.6k", sleep: "7.2h" },
+            { day: "Fri 7/31", weight: "210.8", protein: "205", carb: "210", fat: "64", fiber: "44", steps: "13.9k", sleep: "6.5h" },
+            { day: "Thu 7/30", weight: "—", protein: "201", carb: "230", fat: "63", fiber: "40", steps: "12.1k", sleep: "7.0h" },
+            { day: "Wed 7/29", weight: "211.4", protein: "199", carb: "225", fat: "61", fiber: "36", steps: "13.4k", sleep: "6.8h" },
+          ] },
+        { range: "07/20–07/26", weight: "212.2", protein: "173.8", proteinColor: "#b23a22", carb: "245.3", carbColor: "#b23a22", fat: "60.3", fiber: "107.0", fiberColor: "#4d6142", steps: "12,468", sleep: "7.0", note: "—",
+          days: [
+            { day: "Sun 7/26", weight: "212.2", protein: "170", carb: "240", fat: "58", fiber: "112", steps: "12.9k", sleep: "7.1h" },
+            { day: "Sat 7/25", weight: "—", protein: "165", carb: "250", fat: "62", fiber: "104", steps: "11.8k", sleep: "6.8h" },
+            { day: "Fri 7/24", weight: "212.6", protein: "178", carb: "238", fat: "59", fiber: "110", steps: "13.0k", sleep: "7.0h" },
+            { day: "Thu 7/23", weight: "—", protein: "172", carb: "252", fat: "61", fiber: "105", steps: "12.2k", sleep: "6.9h" },
+            { day: "Wed 7/22", weight: "213.0", protein: "180", carb: "246", fat: "60", fiber: "108", steps: "12.5k", sleep: "6.9h" },
+          ] },
+        { range: "07/13–07/19", weight: "212.3", protein: "202.6", proteinColor: "#4d6142", carb: "261.2", carbColor: "#b23a22", fat: "63.6", fiber: "35.6", fiberColor: "#b23a22", steps: "13,334", sleep: "6.9", note: "—",
+          days: [
+            { day: "Sun 7/19", weight: "212.3", protein: "200", carb: "260", fat: "64", fiber: "36", steps: "13.4k", sleep: "6.9h" },
+            { day: "Sat 7/18", weight: "—", protein: "205", carb: "258", fat: "63", fiber: "34", steps: "13.6k", sleep: "6.8h" },
+            { day: "Fri 7/17", weight: "212.5", protein: "199", carb: "263", fat: "65", fiber: "37", steps: "13.1k", sleep: "6.9h" },
+            { day: "Thu 7/16", weight: "—", protein: "203", carb: "262", fat: "63", fiber: "35", steps: "13.5k", sleep: "6.9h" },
+            { day: "Wed 7/15", weight: "212.8", protein: "206", carb: "259", fat: "64", fiber: "36", steps: "13.2k", sleep: "7.0h" },
+          ] },
+        { range: "07/06–07/12", weight: "211.9", protein: "201", proteinColor: "#44403c", carb: "259.8", carbColor: "#44403c", fat: "61.7", fiber: "0", fiberColor: "#44403c", steps: "12,472", sleep: "7.0", note: "—",
+          days: [
+            { day: "Sun 7/12", weight: "211.9", protein: "199", carb: "258", fat: "62", fiber: "0", steps: "12.5k", sleep: "7.0h" },
+            { day: "Sat 7/11", weight: "—", protein: "202", carb: "261", fat: "61", fiber: "0", steps: "12.4k", sleep: "7.1h" },
+            { day: "Fri 7/10", weight: "212.1", protein: "200", carb: "260", fat: "62", fiber: "0", steps: "12.6k", sleep: "6.9h" },
+            { day: "Thu 7/9", weight: "—", protein: "203", carb: "259", fat: "61", fiber: "0", steps: "12.3k", sleep: "7.0h" },
+            { day: "Wed 7/8", weight: "212.3", protein: "198", carb: "260", fat: "62", fiber: "0", steps: "12.5k", sleep: "7.0h" },
+          ] },
+        { range: "06/29–07/05", weight: "211.0", protein: "201.7", proteinColor: "#44403c", carb: "246.3", carbColor: "#44403c", fat: "59.7", fiber: "0", fiberColor: "#44403c", steps: "13,727", sleep: "7.0", note: "—",
+          days: [
+            { day: "Sun 7/5", weight: "211.0", protein: "199", carb: "244", fat: "59", fiber: "0", steps: "13.8k", sleep: "7.0h" },
+            { day: "Sat 7/4", weight: "—", protein: "204", carb: "248", fat: "60", fiber: "0", steps: "14.2k", sleep: "7.1h" },
+            { day: "Fri 7/3", weight: "211.3", protein: "200", carb: "247", fat: "60", fiber: "0", steps: "13.5k", sleep: "6.9h" },
+            { day: "Thu 7/2", weight: "—", protein: "202", carb: "245", fat: "59", fiber: "0", steps: "13.6k", sleep: "7.0h" },
+            { day: "Wed 7/1", weight: "211.6", protein: "203", carb: "247", fat: "60", fiber: "0", steps: "13.9k", sleep: "7.0h" },
+          ] },
+      ].map((w) => {
+        const open = !!this.state.openWeekRows[w.range];
+        return { ...w, open, chevron: open ? "\u25B4" : "\u25BE", toggle: this.toggleWeekRow(w.range) };
+      }),
+
+      trendPills: [
+        { label: "Weight", style: "background:#a46a57;color:#fff;" },
+        { label: "Sleep", style: "border:1px solid #d9d4cd;color:#57534e;" },
+        { label: "Steps", style: "border:1px solid #d9d4cd;color:#57534e;" },
+        { label: "Hunger", style: "border:1px solid #d9d4cd;color:#57534e;" },
+        { label: "Energy", style: "border:1px solid #d9d4cd;color:#57534e;" },
+      ],
+      trendPoints: (() => {
+        const values = [214, 213.2, 213.6, 212.9, 213.8, 213.4, 212.6, 213.1, 212.8, 211.6, 210.4, 210.6, 210.9, 210.8, 210.6];
+        const min = Math.min(...values), max = Math.max(...values);
+        const w = 640, h = 160, pad = 6;
+        return values.map((v, i) => ({
+          x: Math.round((i / (values.length - 1)) * (w - pad * 2) + pad),
+          y: Math.round(h - pad - ((v - min) / (max - min || 1)) * (h - pad * 2)),
+          r: i === values.length - 1 ? 4 : 3,
+        }));
+      })(),
+      trendMaxLabel: "214.0",
+      trendMidLabel: "212.0",
+      trendMinLabel: "210.4",
+      get trendLinePoints() {
+        return this.trendPoints.map((p) => `${p.x},${p.y}`).join(" ");
+      },
+      get trendAreaPoints() {
+        const pts = this.trendPoints;
+        return `${pts[0].x},154 ` + pts.map((p) => `${p.x},${p.y}`).join(" ") + ` ${pts[pts.length - 1].x},154`;
+      },
+
+      checkinQA: [
+        { q: "In a few sentences how do you feel this week went overall?", a: "Week went good." },
+        { q: "List a win from the week", a: "Got a new computer for work." },
+        { q: "How was your nutrition overall this week?", a: "80/20. Little over on Wednesday." },
+        { q: "Did you stick to your calorie and protein targets this week?", a: "Stuck to it for the most part. Trying to perfect the balancing act between all the macros." },
+      ],
+
+      addPhotoSlots: [{ label: "Front" }, { label: "Side" }, { label: "Back" }],
+      shareBoardPhotos: [
+        { label: "front · progress photo", date: "06-08-2026", weight: "217 lb" },
+        { label: "front · progress photo", date: "07-06-2026", weight: "213 lb" },
+        { label: "front · progress photo", date: "08-02-2026", weight: "210.6 lb" },
+      ],
+      photoSlots: [
+        { date: "‹  07-31-2026 | 210.8 lb  ›", label: "front · progress photo\n(client upload)" },
+        { date: "‹  08-02-2026 | 212 lb  ›", label: "front · progress photo\n(client upload)" },
+      ],
+
+      targetFields: [
+        { label: "Protein (g)", now: "200" }, { label: "Carb (g)", now: "230" }, { label: "Fat (g)", now: "60" },
+        { label: "Fiber (g)", now: "30" }, { label: "Step goal", now: "12000" }, { label: "Sleep goal (hrs)", now: "8" },
+      ],
+      targetHistory: [
+        { current: true, date: "07-21-2026", chips: ["Cal 2260", "P 200g", "C 230g", "F 60g", "Fiber 30g", "Steps 12000", "Sleep 8h"] },
+        { current: false, date: "07-17-2026", chips: ["Cal 2380", "P 200g", "C 260g", "F 60g", "Fiber 30g", "Steps 12000", "Sleep 8h"] },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

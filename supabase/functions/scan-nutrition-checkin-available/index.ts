@@ -49,10 +49,23 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: clientsError.message }), { status: 500 });
   }
 
+  // Per-user opt-out (design_handoff_v2_settings_nutrition's member Settings
+  // screen — migration 0020): the gym-wide toggle above gates whether this
+  // announcement sends at all, this gates whether a given member wants it.
+  // public.clients.id IS core.users.id (same auth.users row, shared project).
+  const clientIds = (clients ?? []).map((c) => c.id);
+  const { data: prefRows } = await core
+    .from("users")
+    .select("id, notify_checkin_available")
+    .in("id", clientIds.length > 0 ? clientIds : ["00000000-0000-0000-0000-000000000000"]);
+  const prefsByUserId = Object.fromEntries((prefRows ?? []).map((r) => [r.id, r]));
+
   const results = { scanned: clients?.length ?? 0, pushed: 0, errors: [] as string[] };
 
   for (const client of clients ?? []) {
     try {
+      if (prefsByUserId[client.id]?.notify_checkin_available === false) continue;
+
       const result = await sendPushToUser(
         admin,
         client.id,

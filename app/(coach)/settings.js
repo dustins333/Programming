@@ -24,6 +24,36 @@ const LABELS = {
   default_block_length_spc_weeks: "Default SPC block length (weeks)",
 };
 
+// design_handoff_v2_settings_nutrition — one long scroll replaced with an
+// underline sub-tab bar, same visual pattern as the nutrition client-detail
+// page's TabBar (app/(coach)/nutrition/clients/[userId].js).
+const SETTINGS_TABS = [
+  { key: "team", label: "Team" },
+  { key: "defaults", label: "Program Defaults" },
+  { key: "templates", label: "Nutrition Templates" },
+  { key: "notifications", label: "Notifications" },
+  { key: "diagnostics", label: "Diagnostics" },
+];
+
+function TabBar({ active, onSelect }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-7 border-b border-stone-200">
+      <View className="flex-row">
+        {SETTINGS_TABS.map((t) => {
+          const isActive = t.key === active;
+          return (
+            <Pressable key={t.key} onPress={() => onSelect(t.key)} className="mr-6 pb-3" style={isActive ? { borderBottomWidth: 2, borderBottomColor: colors.primary } : undefined}>
+              <Text style={{ fontFamily: isActive ? fonts.sansSemiBold : fonts.sansMedium, color: isActive ? colors.primaryOnWhite : "#78716c" }}>
+                {t.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+}
+
 // Boolean settings, rendered as toggles below rather than in the generic
 // numeric-input list above. Each defaults on (matches the always-on behavior
 // before these toggles existed) — only an explicit false in core.settings
@@ -55,6 +85,7 @@ const NOTIFICATION_TOGGLES = [
 
 export default function Settings() {
   const { profile } = useAuth();
+  const [tab, setTab] = useState("team");
   const [settings, setSettings] = useState(null);
   const [values, setValues] = useState({});
   const [savingKey, setSavingKey] = useState(null);
@@ -151,11 +182,18 @@ export default function Settings() {
     return <Redirect href="/(coach)" />;
   }
 
-  const handleSave = async (key) => {
-    setSavingKey(key);
+  // Combined save, per the mock: the 4 numeric defaults live in one card now
+  // instead of one input+Save pair per row, so one button saves whichever of
+  // them changed rather than requiring 4 separate taps.
+  const handleSaveAll = async () => {
+    setSavingKey("all");
     try {
-      const numeric = Number(values[key]);
-      await updateSetting(key, Number.isFinite(numeric) ? numeric : values[key]);
+      await Promise.all(
+        settings.map((row) => {
+          const numeric = Number(values[row.key]);
+          return updateSetting(row.key, Number.isFinite(numeric) ? numeric : values[row.key]);
+        })
+      );
       await load();
     } catch (err) {
       Alert.alert("Failed to save", err.message ?? String(err));
@@ -226,14 +264,20 @@ export default function Settings() {
   return (
     <CoachShell>
     <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
-      <Text className="mb-6 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+      <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Settings
       </Text>
+      <Text className="mb-5 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+        Admin-only configuration for the whole gym.
+      </Text>
 
-      <View className="mb-8">
+      <TabBar active={tab} onSelect={setTab} />
+
+      {tab === "team" && (
+      <View>
         <View className="mb-3 flex-row items-center justify-between">
           <Text className="text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
-            Team
+            Coaches &amp; Admins
           </Text>
           <View className="flex-row gap-2">
             <Pressable
@@ -312,64 +356,78 @@ export default function Settings() {
           ))
         )}
       </View>
+      )}
 
-      {settings.map((row) => (
-        <View key={row.key} className="mb-6">
-          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-            {LABELS[row.key] ?? row.key}
-          </Text>
-          <View className="flex-row items-center gap-3">
-            <TextInput
-              value={values[row.key] ?? ""}
-              onChangeText={(text) => setValues((v) => ({ ...v, [row.key]: text }))}
-              keyboardType="numeric"
-              className="flex-1 rounded-lg border border-stone-300 px-4 py-3 text-base"
-              style={{ fontFamily: fonts.sans }}
-            />
-            <Pressable
-              onPress={() => handleSave(row.key)}
-              disabled={savingKey === row.key}
-              className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
-            >
-              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                {savingKey === row.key ? "Saving…" : "Save"}
+      {tab === "defaults" && (
+      <View className="rounded-xl border border-stone-200 p-5">
+        <Text className="mb-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+          Program Defaults
+        </Text>
+        <View className="flex-row flex-wrap" style={{ marginHorizontal: -8 }}>
+          {settings.map((row) => (
+            <View key={row.key} style={{ width: "50%", paddingHorizontal: 8 }} className="mb-5">
+              <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                {LABELS[row.key] ?? row.key}
               </Text>
-            </Pressable>
-          </View>
+              <TextInput
+                value={values[row.key] ?? ""}
+                onChangeText={(text) => setValues((v) => ({ ...v, [row.key]: text }))}
+                keyboardType="numeric"
+                className="rounded-lg border border-stone-300 px-4 py-3 text-base"
+                style={{ fontFamily: fonts.sans }}
+              />
+            </View>
+          ))}
         </View>
-      ))}
-
-      <Text className="mb-2 mt-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
-        Nutrition templates
-      </Text>
-      <View className="mb-3">
-        <TemplateEditorButton
-          label="Weekly check-in template"
-          description="The master template. Each client gets their own copy — per-client edits live on that client's Client Settings."
-          questions={checkinQuestions}
-          onAdd={handleAddCheckinQuestion}
-          onUpdate={handleUpdateCheckinQuestion}
-          onDelete={handleDeleteCheckinQuestion}
-          onMove={handleMoveCheckinQuestion}
-        />
+        <Pressable
+          onPress={handleSaveAll}
+          disabled={savingKey === "all"}
+          className="mt-1 self-start rounded-lg bg-primary px-5 py-3 disabled:opacity-50"
+        >
+          <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+            {savingKey === "all" ? "Saving…" : "Save changes"}
+          </Text>
+        </Pressable>
       </View>
-      <View className="mb-8">
-        <TemplateEditorButton
-          label="Onboarding questionnaire template"
-          description="Copied onto a client automatically when Nutrition is turned on for them."
-          questions={questionnaireQuestions}
-          onAdd={handleAddQuestionnaireQuestion}
-          onUpdate={handleUpdateQuestionnaireQuestion}
-          onDelete={handleDeleteQuestionnaireQuestion}
-          onMove={handleMoveQuestionnaireQuestion}
-        />
-      </View>
+      )}
 
-      <Text className="mb-2 mt-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
-        Push notifications
-      </Text>
-      {NOTIFICATION_TOGGLES.map((toggle) => (
-        <View key={toggle.key} className="mb-5 flex-row items-center justify-between gap-4">
+      {tab === "templates" && (
+      <View>
+        <Text className="mb-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+          Nutrition Templates
+        </Text>
+        <View className="mb-3">
+          <TemplateEditorButton
+            label="Weekly check-in template"
+            description="The master template. Each client gets their own copy — per-client edits live on that client's Client Settings."
+            questions={checkinQuestions}
+            onAdd={handleAddCheckinQuestion}
+            onUpdate={handleUpdateCheckinQuestion}
+            onDelete={handleDeleteCheckinQuestion}
+            onMove={handleMoveCheckinQuestion}
+          />
+        </View>
+        <View>
+          <TemplateEditorButton
+            label="Onboarding questionnaire template"
+            description="Copied onto a client automatically when Nutrition is turned on for them."
+            questions={questionnaireQuestions}
+            onAdd={handleAddQuestionnaireQuestion}
+            onUpdate={handleUpdateQuestionnaireQuestion}
+            onDelete={handleDeleteQuestionnaireQuestion}
+            onMove={handleMoveQuestionnaireQuestion}
+          />
+        </View>
+      </View>
+      )}
+
+      {tab === "notifications" && (
+      <View className="rounded-xl border border-stone-200 p-5">
+        <Text className="mb-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+          Push Notifications
+        </Text>
+        {NOTIFICATION_TOGGLES.map((toggle, i) => (
+        <View key={toggle.key} className="flex-row items-center justify-between gap-4 py-4" style={i > 0 ? { borderTopWidth: 1, borderTopColor: "#f1efed" } : undefined}>
           <View className="flex-1">
             <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
               {toggle.label}
@@ -386,20 +444,29 @@ export default function Settings() {
             thumbColor="#ffffff"
           />
         </View>
-      ))}
+        ))}
+      </View>
+      )}
 
-      <Text className="mb-2 mt-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
-        Diagnostics
-      </Text>
-      <Pressable
-        onPress={handleSendTestPush}
-        disabled={sendingPush}
-        className="self-start rounded-lg border border-primary px-5 py-3 disabled:opacity-50"
-      >
-        <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-          {sendingPush ? "Sending…" : "Send test push to myself"}
+      {tab === "diagnostics" && (
+      <View className="rounded-xl border border-stone-200 p-5">
+        <Text className="mb-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+          Diagnostics
         </Text>
-      </Pressable>
+        <Text className="mb-3 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Send a real push notification to your own account to confirm delivery is wired up end to end.
+        </Text>
+        <Pressable
+          onPress={handleSendTestPush}
+          disabled={sendingPush}
+          className="self-start rounded-lg border border-primary px-5 py-3 disabled:opacity-50"
+        >
+          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+            {sendingPush ? "Sending…" : "Send test push to myself"}
+          </Text>
+        </Pressable>
+      </View>
+      )}
     </ScrollView>
 
     <AddStaffModal

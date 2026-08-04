@@ -90,11 +90,32 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: clientsError.message }), { status: 500 });
   }
 
+  // Per-user opt-out (design_handoff_v2_settings_nutrition's member Settings
+  // screen — migration 0020) on top of the gym-wide toggle above, for the
+  // daily-log reminder only: both have to allow it for it to send. The
+  // Monday check-in nag below has no matching member-facing toggle (the
+  // mock's 3 member toggles are Daily log reminder / Weekly check-in
+  // available / Coach messages — "available" maps to the OTHER function,
+  // scan-nutrition-checkin-available's Sunday announcement, not this nag) —
+  // it stays gated by the admin toggle only, same as before. Batched in one
+  // query rather than per-client, same "no N+1" convention this app uses
+  // elsewhere. public.clients.id IS core.users.id (same auth.users row,
+  // shared project).
+  const clientIds = (clients ?? []).map((c) => c.id);
+  const { data: prefRows } = await core
+    .from("users")
+    .select("id, notify_daily_log_reminder")
+    .in("id", clientIds.length > 0 ? clientIds : ["00000000-0000-0000-0000-000000000000"]);
+  const prefsByUserId = Object.fromEntries((prefRows ?? []).map((r) => [r.id, r]));
+
   const results = { scanned: clients?.length ?? 0, dailyLogPushed: 0, checkinNagPushed: 0, errors: [] as string[] };
 
   for (const client of clients ?? []) {
     try {
-      if (dailyLogEnabled) {
+      const prefs = prefsByUserId[client.id];
+      const userWantsDailyLog = prefs?.notify_daily_log_reminder !== false;
+
+      if (dailyLogEnabled && userWantsDailyLog) {
         const { data: todayLog, error: logError } = await admin
           .from("daily_logs")
           .select("finalized_at")

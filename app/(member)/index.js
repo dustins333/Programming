@@ -489,6 +489,12 @@ export default function MemberHome() {
       contentContainerStyle={{ paddingTop: insets.top + 6 }}
     >
       <View className="flex-row items-center gap-3">
+        {/* design_handoff_v2_settings_nutrition — only mocked on My Week's
+            header (the README flagged it as realistically belonging on
+            every tab, but only drew it here); easy to extend if asked. */}
+        <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={HITSLOP}>
+          <Ionicons name="settings-outline" size={22} color="#78716c" />
+        </Pressable>
         <Text className="flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
           Hi, {profile?.name}
         </Text>

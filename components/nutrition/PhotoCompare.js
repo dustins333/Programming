@@ -70,7 +70,7 @@ function DatePicker({ anglePhotos, selectedDate, onChange }) {
   );
 }
 
-function DateStepper({ anglePhotos, selectedDate, onChange }) {
+export function DateStepper({ anglePhotos, selectedDate, onChange }) {
   const index = anglePhotos.findIndex((p) => p.date === selectedDate);
   return (
     <View className="flex-row items-center justify-center gap-3">
@@ -113,7 +113,7 @@ function Slot({ photo, url, onPress }) {
 // Picks `count` evenly-spaced dates from oldest to newest inclusive (e.g.
 // oldest/newest for 2 slots, oldest/middle/newest for 3) — same "tell a
 // story" default the standalone app's PhotoCompareBoard uses for its slots.
-function defaultDates(anglePhotos, count) {
+export function defaultDates(anglePhotos, count) {
   if (anglePhotos.length === 0) return Array(count).fill(null);
   if (count === 1) return [anglePhotos[anglePhotos.length - 1].date];
   return Array.from({ length: count }, (_, i) => {
