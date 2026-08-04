@@ -10,11 +10,12 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kovastrength.app",
+      "bundleIdentifier": "com.kovastrength.mobile",
       "infoPlist": {
         "UIApplicationSceneManifest": {
           "UIApplicationSupportsMultipleScenes": false
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -51,6 +52,13 @@
           "cameraPermission": "Kova Strength needs access to your camera to take progress photos."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2f6a5da8-3f8c-4b8e-ab41-82dc26336219"
+      }
+    },
+    "owner": "kova-strength"
   }
 }
