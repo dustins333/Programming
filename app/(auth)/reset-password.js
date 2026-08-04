@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
-import * as Linking from "expo-linking";
 import { supabase } from "../../lib/supabase/client";
 
 export default function ResetPassword() {
@@ -14,7 +13,7 @@ export default function ResetPassword() {
     setErrorMessage(null);
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: Linking.createURL("set-password"),
+      redirectTo: "https://app.kovastrength.com/set-password",
     });
     setLoading(false);
     if (error) {

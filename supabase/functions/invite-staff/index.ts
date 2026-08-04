@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
   // existing user rather than treating that as a hard failure.
   let authUserId;
   const invite = await adminClient.auth.admin.inviteUserByEmail(email, {
-    redirectTo: "kovastrength://set-password",
+    redirectTo: "https://app.kovastrength.com/set-password",
   });
 
   if (invite.error) {

@@ -42,3 +42,5 @@ yarn-error.*
 
 # Supabase CLI local state (project ref, versions — machine-specific)
 supabase/.temp/
+.vercel
+.env*

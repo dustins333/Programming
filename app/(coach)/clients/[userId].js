@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Alert, Platform } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
-import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase, core } from "../../../lib/supabase/client";
 import { getUser, listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../../lib/programming/clients";
@@ -288,7 +287,7 @@ export default function ClientProfile() {
     setResending(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(member.email, {
-        redirectTo: Linking.createURL("set-password"),
+        redirectTo: "https://app.kovastrength.com/set-password",
       });
       if (error) throw error;
       Alert.alert("Sent", `A sign-in link was sent to ${member.email}.`);
