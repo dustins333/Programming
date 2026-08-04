@@ -48,6 +48,20 @@ export default function More() {
 
       {profile?.role === "admin" ? (
         <Pressable
+          onPress={() => router.push("/(coach)/announcements")}
+          className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+        >
+          <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+            Announcements
+          </Text>
+          <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+            Send a note to clients
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {profile?.role === "admin" ? (
+        <Pressable
           onPress={() => router.push("/(coach)/settings")}
           className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
         >

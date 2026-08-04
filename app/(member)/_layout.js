@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../lib/nutrition/useNutritionAccess";
+import { AnnouncementChecker } from "../../lib/notifications/AnnouncementChecker";
 import { colors, fonts } from "../../lib/theme";
 
 // 21px line icons regardless of whatever size the navigator would
@@ -52,7 +53,9 @@ export default function MemberLayout() {
   const isStaff = profile.role === "admin" || profile.role === "coach";
 
   return (
-    <Tabs
+    <>
+      <AnnouncementChecker />
+      <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primaryOnWhite,
@@ -103,6 +106,7 @@ export default function MemberLayout() {
       <Tabs.Screen name="nutrition/photos" options={{ href: null }} />
       <Tabs.Screen name="nutrition/onboarding" options={{ href: null }} />
       <Tabs.Screen name="history/[exerciseId]" options={{ href: null }} />
-    </Tabs>
+      </Tabs>
+    </>
   );
 }

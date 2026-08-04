@@ -108,6 +108,29 @@ export function CoachShell({ children }) {
 
         {profile?.role === "admin" ? (
           <Pressable
+            onPress={() => router.push("/(coach)/announcements")}
+            className="mb-1 flex-row items-center gap-3 rounded-lg px-3 py-2.5"
+            style={isActive(pathname, "/(coach)/announcements") ? { backgroundColor: "#fdf6f2" } : undefined}
+          >
+            <Ionicons
+              name={isActive(pathname, "/(coach)/announcements") ? "megaphone" : "megaphone-outline"}
+              size={18}
+              color={isActive(pathname, "/(coach)/announcements") ? colors.primaryOnWhite : "#78716c"}
+            />
+            <Text
+              style={{
+                fontFamily: isActive(pathname, "/(coach)/announcements") ? fonts.sansSemiBold : fonts.sansMedium,
+                color: isActive(pathname, "/(coach)/announcements") ? colors.primaryOnWhite : "#44403c",
+                fontSize: 14,
+              }}
+            >
+              Announcements
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {profile?.role === "admin" ? (
+          <Pressable
             onPress={() => router.push("/(coach)/settings")}
             className="mb-1 flex-row items-center gap-3 rounded-lg px-3 py-2.5"
             style={isActive(pathname, "/(coach)/settings") ? { backgroundColor: "#fdf6f2" } : undefined}
