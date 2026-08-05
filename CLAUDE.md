@@ -456,6 +456,22 @@ Direct ask: a way to write a note, send it to all clients (or a filtered subset)
 
 **New: a "Not registered yet" option on the web Clients list's Status filter** (`app/(coach)/clients/index.web.js`) — repurposed the existing Flags dropdown into a combined Status filter (All / Has flag / Not registered yet) rather than adding a fifth control, per direct ask to reuse either the Sort or Flags dropdown instead of growing the row. Backed by `core.get_login_activity` (migration 0022, same RPC the individual client detail page already used) called once for the whole roster, not per-row. Lets a coach pull up exactly who's been bulk-imported but hasn't gone through Register yet, to follow up in person — the actual reason this was asked for, ahead of migrating the existing ~140-200 clients over. Bundle-checked only, same standing login limitation as every other coach-side change in this file.
 
+## Nutrition/mobile polish batch: milestone emojis, real bugs, layout asks (2026-08-05)
+
+A batch of direct feedback from actually using the app — several real bugs, not just polish.
+
+**Milestones can now carry a coach-picked emoji** (migration `0027_milestone_emoji.sql`, **run**). `MilestoneFormModal.js` gained a quick-pick row of common emoji plus a free-text field (typed/pasted, no picker library needed — RN's native emoji keyboard handles entry fine on both platforms). Shown wherever a completed milestone surfaces on the member side: a new "Completed milestones" slide on the Nutrition Today tab's `TodayCardSlider` (a row of tappable emoji chips, trophy icon fallback for milestones predating this feature) and a new entry type in My History's day timeline (`lib/history.js`'s `listDayTimeline`, own try/catch-isolated fetch so a milestones failure can't take down session/nutrition history). Tapping an emoji in either place opens new `components/nutrition/MilestoneDetailModal.js` — a generic reusable detail popup, distinct from `MilestoneCongratsModal.js` (a one-time "you just completed this" notification, not a reusable view).
+
+**Real bug: the native progress-photo date picker had no scroll mechanism at all.** `components/nutrition/PhotoCompare.js`'s native `DatePicker` modal listed every date via a plain `.map()` inside a `maxHeight: "70%"` `Pressable` — fine for a client with a handful of photos, but a client with "a bunch" (found via a real client's photo page) just overflowed past the modal's bounds instead of scrolling. Fixed by wrapping the date list in a `ScrollView`.
+
+**Weeks tab (shared by the member's Weekly tab and the coach's per-client Weeks tab) got two layout fixes**: the date/week label column was tightened (150px → 120px — the actual text never came close to filling 150px, leaving a dead gap before the Weight column), and — the bigger one — that label column is no longer inside the same horizontal `ScrollView` as the metric columns. `WeekList`/`WeekDayTable` now render a frozen (non-scrolling) label column alongside a separately-scrolling metrics table, built from one shared flattened `rows` array so the two sides can't desync on which week/day is expanded. Previously, scrolling right to see Steps/Sleep/Note meant the date column scrolled away too, losing track of which row you were looking at.
+
+**Finalize Check-In's "this cycle has photos" indicator is now a camera icon**, not a person icon — same lightweight flag as before (`weekPhotos.length > 0`), just a more legible pairing with "photos."
+
+**Native (mobile) coach Nutrition roster's status filter row now stacks 3-per-row** (`app/(coach)/nutrition/index.js`) instead of scrolling horizontally — a wrapping grid (`flex-wrap`, `width: "31%"` each) so every status is visible without sideways scrolling. Native only; the web roster's two-row `TileSection` layout is a different, already-non-scrolling design and wasn't touched.
+
+**Not yet verified** — same standing login limitation as everywhere else in this file (no password entry in this environment); bundle-checked only (`expo export -p web`, clean, zero errors). Worth a real click-through, especially the frozen-column Weeks tab (row-height parity between the frozen and scrolling sides is the easiest thing to get subtly wrong) and the milestone emoji flow end-to-end.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -483,6 +499,7 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0024_announcements.sql` — **run**, confirmed live the same way. Adds `programming.announcements` + `announcement_acknowledgments` (admin-manage, member-reads-due RLS). See "Gym-wide announcements + real push notifications finally unblocked" above.
 - `0025_announcement_push_cron.sql` — **run**, confirmed live — `announcement-scan` shows in `select * from cron.job;`, firing every 15 minutes. Not a schema migration — registers the `pg_cron` job hitting `scan-announcements` so scheduled (not "send now") announcements still push once their time arrives.
 - `0026_ghl_import_and_registration.sql` — **run.** Adds `core.users.ghl_contact_id` (nullable, unique) and `core.registration_codes` (hashed one-time codes, no RLS policies — service-role-only access). See "iOS push confirmed live, Universal Links, GHL import groundwork" above.
+- `0027_milestone_emoji.sql` — **run.** Adds `programming.nutrition_milestones.emoji` (nullable text). See "Nutrition/mobile polish batch" above.
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.
 
