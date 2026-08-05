@@ -3,6 +3,7 @@ import { View, Text, Pressable, Alert } from "react-native";
 import { computeWeekWindows, enumerateUpcomingWeeks, deriveCheckinStatus } from "../../lib/nutrition/weekCycle";
 import { enumerateRecentWeeks } from "./WeekList";
 import { isPhotoRequirementWeek, hasAllAngles, requirePhotosNextCheckin, clearPhotosNextCheckin } from "../../lib/nutrition/photos";
+import { reopenCheckin } from "../../lib/nutrition/checkin";
 import { addDays, formatDateTimeInBoise } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
@@ -14,6 +15,7 @@ const STATUS_STYLE = {
   completed: { label: "Completed", color: "#4d6142" },
   ready: { label: "Awaiting review", color: "#b3843a" },
   missed: { label: "Missed", color: "#b23a22" },
+  reopened: { label: "Reopened", color: "#8a5a2e" },
   notDue: { label: "Not due yet", color: "#a8a29e" },
 };
 
@@ -21,17 +23,20 @@ function weekLabel(start, end) {
   return `${formatDateMDY(start)} – ${formatDateMDY(end)}`;
 }
 
-function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, onChanged }) {
+function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coachId, today, reopen, onChanged }) {
   const [busy, setBusy] = useState(false);
   const required = isPhotoRequirementWeek(client, week.start);
   const isOneOff = client.photo_requirement_next_checkin === week.start;
   const weekPhotos = photos.filter((p) => p.date >= week.start && p.date <= week.end);
   const photosOk = required ? hasAllAngles(weekPhotos) : null;
+  const isMissed = !isCurrent && !isUpcoming && !checkin;
+  const reopenActive = !!reopen && reopen.expires_at >= today;
 
   let status = null;
   if (!isUpcoming) {
     if (checkin) status = STATUS_STYLE[deriveCheckinStatus(checkin) === "ready" ? "ready" : "completed"];
-    else status = isCurrent ? STATUS_STYLE.notDue : STATUS_STYLE.missed;
+    else if (isCurrent) status = STATUS_STYLE.notDue;
+    else status = reopenActive ? STATUS_STYLE.reopened : STATUS_STYLE.missed;
   }
 
   const toggleRequirement = async () => {
@@ -42,6 +47,18 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, onC
       await onChanged();
     } catch (err) {
       Alert.alert("Failed to update", err.message ?? String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReopen = async () => {
+    setBusy(true);
+    try {
+      await reopenCheckin(userId, week.start, coachId, today);
+      await onChanged();
+    } catch (err) {
+      Alert.alert("Failed to reopen check-in", err.message ?? String(err));
     } finally {
       setBusy(false);
     }
@@ -71,17 +88,23 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, onC
           </Text>
           {checkin?.submitted_at ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e" }}>{formatDateTimeInBoise(checkin.submitted_at)}</Text>
+          ) : reopenActive ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e" }}>until {formatDateMDY(reopen.expires_at)}</Text>
           ) : null}
         </View>
       ) : null}
 
-      {(isCurrent || isUpcoming) && (
+      {isCurrent || isUpcoming ? (
         <Pressable onPress={toggleRequirement} disabled={busy} hitSlop={6}>
           <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: isOneOff ? "#78716c" : colors.primaryOnWhite }}>
             {busy ? "…" : isOneOff ? "✓ Required — remove" : "+ Require photos"}
           </Text>
         </Pressable>
-      )}
+      ) : isMissed && !reopenActive ? (
+        <Pressable onPress={handleReopen} disabled={busy} hitSlop={6}>
+          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: colors.primaryOnWhite }}>{busy ? "…" : "Reopen"}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -91,20 +114,28 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, onC
 // place instead of coach guesswork. Upcoming (next 3) / This week / Past
 // (last 5) — enumerateRecentWeeks includes the current week as its own
 // index 0, so it's split off from the rest here.
-export function CheckinWeekTimeline({ userId, client, checkins, photos, today, onChanged }) {
+export function CheckinWeekTimeline({ userId, coachId, client, checkins, reopens = [], photos, today, onChanged }) {
   const { currentWeek } = computeWeekWindows(today);
   const recent = enumerateRecentWeeks(currentWeek, addDays, PAST_WEEKS);
   const upcoming = enumerateUpcomingWeeks(currentWeek, addDays, UPCOMING_WEEKS);
   const checkinsByWeek = Object.fromEntries(checkins.map((c) => [c.week_start, c]));
+  // Several reopen rows can exist historically for the same week (an
+  // earlier one that already expired, say) — most-recently-opened wins,
+  // matching listCheckinReopensSince's own newest-first ordering.
+  const reopensByWeek = {};
+  for (const r of reopens) if (!(r.week_start in reopensByWeek)) reopensByWeek[r.week_start] = r;
 
   const rowProps = (week, isCurrent, isUpcoming) => ({
     week,
     isCurrent,
     isUpcoming,
     checkin: checkinsByWeek[week.start] ?? null,
+    reopen: reopensByWeek[week.start] ?? null,
     client,
     photos,
     userId,
+    coachId,
+    today,
     onChanged,
   });
 

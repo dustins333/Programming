@@ -8,11 +8,12 @@ import { todayInBoise, addDays } from "../../../lib/boiseDate";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
-import { getClientQuestions, getCheckinForWeek, submitCheckin } from "../../../lib/nutrition/checkin";
+import { getClientQuestions, getCheckinForWeek, submitCheckin, getActiveCheckinReopen } from "../../../lib/nutrition/checkin";
 import { listAllPhotos, isPhotoRequirementWeek, hasAllAngles, PHOTO_RECENCY_DAYS } from "../../../lib/nutrition/photos";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
+import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 
 // Matches My Week/My Fitness/My History's shared canvas — the 4 nutrition
@@ -130,6 +131,19 @@ export default function WeeklyCheckin() {
   const [skipReason, setSkipReason] = useState(null);
   const [skipModalOpen, setSkipModalOpen] = useState(false);
 
+  // A coach-reopened missed week (see CheckinWeekTimeline's "Reopen"
+  // action) — a second, independent submission target alongside the live
+  // currentWeek above, not a replacement for it.
+  const [reopen, setReopen] = useState(null);
+  const [reopenAnswers, setReopenAnswers] = useState({});
+  const [reopenPhotoPopupOpen, setReopenPhotoPopupOpen] = useState(false);
+  const [reopenFormPopupOpen, setReopenFormPopupOpen] = useState(false);
+  const [reopenSkipReason, setReopenSkipReason] = useState(null);
+  const [reopenSkipModalOpen, setReopenSkipModalOpen] = useState(false);
+  const [reopenSubmitting, setReopenSubmitting] = useState(false);
+  const [reopenSubmitError, setReopenSubmitError] = useState(null);
+  const [reopenSubmitted, setReopenSubmitted] = useState(false);
+
   const load = async () => {
     try {
       const [q, r, p] = await Promise.all([
@@ -142,6 +156,15 @@ export default function WeeklyCheckin() {
       setPhotos(p);
     } catch (err) {
       setLoadError(err.message ?? String(err));
+    }
+
+    // Isolated from the load above — migration 0028 (check-in reopens) may
+    // not be run yet on a given environment, and that shouldn't block the
+    // normal current-week check-in from loading.
+    try {
+      setReopen(await getActiveCheckinReopen(profile.id, today));
+    } catch (err) {
+      console.error("Failed to load check-in reopen status:", err);
     }
   };
 
@@ -162,12 +185,52 @@ export default function WeeklyCheckin() {
   const formSatisfied = questions ? questions.every((q) => (answers[q.id] || "").trim().length > 0) : false;
   const canFinalize = photosSatisfied && (questions?.length === 0 || formSatisfied);
 
+  const reopenWeekEnd = reopen ? addDays(reopen.week_start, 6) : null;
+  const reopenPhotosRequired = access.client && reopen ? isPhotoRequirementWeek(access.client, reopen.week_start) : false;
+  // That week's own photos, not a recency window relative to today — a
+  // late submission is filed well after the missed week itself, so "in the
+  // last 5 days" would almost never match. Anything from that week onward
+  // (including a fresh upload made right now, while catching up) counts.
+  const reopenRecentPhotos = useMemo(() => (reopen ? (photos ?? []).filter((p) => p.date >= reopen.week_start) : []), [photos, reopen]);
+  const reopenPhotosUploaded = hasAllAngles(reopenRecentPhotos);
+  const reopenPhotosSatisfied = !reopenPhotosRequired || reopenPhotosUploaded || !!reopenSkipReason;
+  const reopenFormSatisfied = questions ? questions.every((q) => (reopenAnswers[q.id] || "").trim().length > 0) : false;
+  const reopenCanFinalize = reopenPhotosSatisfied && (questions?.length === 0 || reopenFormSatisfied);
+
   const handlePhotosUploaded = async () => {
     setPhotoPopupOpen(false);
     try {
       setPhotos(await listAllPhotos(profile.id));
     } catch (err) {
       console.error("Failed to refresh photos:", err);
+    }
+  };
+
+  const handleReopenPhotosUploaded = async () => {
+    setReopenPhotoPopupOpen(false);
+    try {
+      setPhotos(await listAllPhotos(profile.id));
+    } catch (err) {
+      console.error("Failed to refresh photos:", err);
+    }
+  };
+
+  const handleReopenSubmit = async () => {
+    setReopenSubmitting(true);
+    setReopenSubmitError(null);
+    try {
+      const payload = questions.map((q) => ({ question: q.question_text, answer: reopenAnswers[q.id] || "" }));
+      await submitCheckin(profile.id, payload, {
+        weekStart: reopen.week_start,
+        photosSkipReason: !reopenPhotosUploaded ? reopenSkipReason : null,
+      });
+      setReopenSubmitted(true);
+      setReopen(null);
+    } catch (err) {
+      setReopenSubmitError(err.message ?? String(err));
+      Alert.alert("Failed to submit", err.message ?? String(err));
+    } finally {
+      setReopenSubmitting(false);
     }
   };
 
@@ -221,6 +284,55 @@ export default function WeeklyCheckin() {
           if (seg && seg.key !== "checkin") router.push(seg.href);
         }}
       />
+
+      {reopen ? (
+        <View className="mb-5 rounded-2xl border px-4 py-3.5" style={{ borderColor: "#b23a22", borderWidth: 1.5, backgroundColor: "#fdf6f2" }}>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: "#b23a22" }}>Missed check-in reopened</Text>
+          <Text className="mb-3 mt-0.5 text-xs text-stone-600" style={{ fontFamily: fonts.sans }}>
+            Week of {formatDateMDY(reopen.week_start)} – {formatDateMDY(reopenWeekEnd)} · complete by {formatDateMDY(reopen.expires_at)}
+          </Text>
+
+          {reopenPhotosRequired ? (
+            <TaskRow
+              title="That week's progress photos"
+              done={reopenPhotosSatisfied}
+              subtitle={reopenPhotosUploaded ? "Submitted" : reopenSkipReason ? `Skipped — ${reopenSkipReason}` : "Tap to upload"}
+              onPress={() => setReopenPhotoPopupOpen(true)}
+            />
+          ) : null}
+
+          {questions.length > 0 ? (
+            <TaskRow
+              title="Check-in form"
+              done={reopenFormSatisfied}
+              subtitle={reopenFormSatisfied ? "Ready to submit" : `${questions.length} question${questions.length === 1 ? "" : "s"}`}
+              onPress={() => setReopenFormPopupOpen(true)}
+            />
+          ) : null}
+
+          {reopenSubmitError ? (
+            <Text className="mb-2 text-sm text-red-600" style={{ fontFamily: fonts.sans }}>
+              {reopenSubmitError}
+            </Text>
+          ) : null}
+
+          <Pressable
+            onPress={handleReopenSubmit}
+            disabled={reopenSubmitting || !reopenCanFinalize}
+            className="mt-1 items-center rounded-lg bg-primary py-3 disabled:opacity-50"
+          >
+            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+              {reopenSubmitting ? "Submitting…" : "Submit missed check-in"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : reopenSubmitted ? (
+        <View className="mb-5 rounded-2xl border px-4 py-3.5" style={{ borderColor: "#4d6142", borderWidth: 2, backgroundColor: "#f3f6ef" }}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#4d6142" }}>
+            Missed check-in submitted — thanks for catching up!
+          </Text>
+        </View>
+      ) : null}
 
       {response ? (
         <View>
@@ -337,6 +449,66 @@ export default function WeeklyCheckin() {
           setPhotoPopupOpen(false);
         }}
       />
+
+      {reopen ? (
+        <>
+          <PopupModal visible={reopenPhotoPopupOpen} title="That week's progress photos" onClose={() => setReopenPhotoPopupOpen(false)}>
+            <PhotoUpload userId={profile.id} onUploaded={handleReopenPhotosUploaded} />
+            {!reopenPhotosUploaded ? (
+              reopenSkipReason ? (
+                <View className="mt-4 flex-row items-center justify-between rounded-lg border border-stone-200 px-3 py-2.5">
+                  <Text className="flex-1 text-xs text-stone-600" style={{ fontFamily: fonts.sans }}>
+                    Skipped: {reopenSkipReason}
+                  </Text>
+                  <Pressable onPress={() => setReopenSkipReason(null)} hitSlop={8}>
+                    <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                      Undo
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={() => setReopenSkipModalOpen(true)} className="mt-4 items-center py-1">
+                  <Text className="text-xs underline text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
+                    I can't provide photos for that week
+                  </Text>
+                </Pressable>
+              )
+            ) : null}
+          </PopupModal>
+
+          <PopupModal visible={reopenFormPopupOpen} title="Check-in form" onClose={() => setReopenFormPopupOpen(false)}>
+            {questions.map((q) => (
+              <View key={q.id} className="mb-4">
+                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                  {q.question_text}
+                </Text>
+                <TextInput
+                  value={reopenAnswers[q.id] || ""}
+                  onChangeText={(t) => setReopenAnswers((a) => ({ ...a, [q.id]: t }))}
+                  multiline
+                  className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
+                  style={{ fontFamily: fonts.sans }}
+                />
+              </View>
+            ))}
+            <Pressable onPress={() => setReopenFormPopupOpen(false)} className="items-center rounded-lg bg-primary py-3">
+              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                Done
+              </Text>
+            </Pressable>
+          </PopupModal>
+
+          <SkipReasonModal
+            visible={reopenSkipModalOpen}
+            onClose={() => setReopenSkipModalOpen(false)}
+            onSubmit={(reason) => {
+              setReopenSkipReason(reason);
+              setReopenSkipModalOpen(false);
+              setReopenPhotoPopupOpen(false);
+            }}
+          />
+        </>
+      ) : null}
     </ScrollView>
   );
 }

@@ -54,7 +54,7 @@ const FREQUENCIES = [
 // than a separate page. "Starting the week of" maps to the DB column
 // photo_frequency_started_at even though the field is labeled differently
 // in the UI — same naming split the original app uses.
-export function ClientSettingsModal({ visible, userId, client, checkins = [], photos = [], today, onClose, onSaved }) {
+export function ClientSettingsModal({ visible, userId, coachId, client, checkins = [], reopens = [], photos = [], today, onClose, onSaved }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -237,7 +237,7 @@ export function ClientSettingsModal({ visible, userId, client, checkins = [], ph
 
             <ExpandableSection title="Check-in status">
               {today ? (
-                <CheckinWeekTimeline userId={userId} client={client} checkins={checkins} photos={photos} today={today} onChanged={onSaved} />
+                <CheckinWeekTimeline userId={userId} coachId={coachId} client={client} checkins={checkins} reopens={reopens} photos={photos} today={today} onChanged={onSaved} />
               ) : null}
             </ExpandableSection>
           </ScrollView>

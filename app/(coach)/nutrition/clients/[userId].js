@@ -8,7 +8,7 @@ import { todayInBoise, addDays } from "../../../../lib/boiseDate";
 import { getClient } from "../../../../lib/nutrition/clients";
 import { listTargets, deriveCalories } from "../../../../lib/nutrition/targets";
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
-import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsSince } from "../../../../lib/nutrition/checkin";
+import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsSince, listCheckinReopensSince } from "../../../../lib/nutrition/checkin";
 import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
 import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
@@ -140,6 +140,7 @@ export default function NutritionClientDetail() {
   const [trendRange, setTrendRange] = useState(30);
   const [loadError, setLoadError] = useState(null);
   const [checkins, setCheckins] = useState([]);
+  const [checkinReopens, setCheckinReopens] = useState([]);
   const [otLogs, setOtLogs] = useState([]);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [bypassing, setBypassing] = useState(false);
@@ -184,6 +185,13 @@ export default function NutritionClientDetail() {
       setMilestones(await listActiveMilestones(userId));
     } catch (err) {
       console.error("Failed to load milestones:", err);
+    }
+
+    // Same isolation, migration 0028 (check-in reopens).
+    try {
+      setCheckinReopens(await listCheckinReopensSince(userId, addDays(today, -7 * TIMELINE_PAST_WEEKS)));
+    } catch (err) {
+      console.error("Failed to load check-in reopens:", err);
     }
   }, [userId, selectedWeek.start]);
 
@@ -390,8 +398,10 @@ export default function NutritionClientDetail() {
         <ClientSettingsModal
           visible={settingsVisible}
           userId={userId}
+          coachId={profile.id}
           client={client}
           checkins={checkins}
+          reopens={checkinReopens}
           photos={photos}
           today={today}
           onClose={() => setSettingsVisible(false)}
@@ -695,8 +705,10 @@ export default function NutritionClientDetail() {
       <ClientSettingsModal
         visible={settingsVisible}
         userId={userId}
+        coachId={profile.id}
         client={client}
         checkins={checkins}
+        reopens={checkinReopens}
         photos={photos}
         today={today}
         onClose={() => setSettingsVisible(false)}
