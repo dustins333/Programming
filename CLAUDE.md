@@ -579,6 +579,16 @@ Done at least twice now from sessions that unusually had real Bash access to Dus
 
 Not deployed anywhere yet — everything so far is local dev server only (`npx expo start --web`, port 8081, `.claude/launch.json` target `kova-strength-web`). No Vercel/EAS build has been attempted.
 
+**Stale as of 2026-08-04**: the web build actually is live, at `app.kovastrength.com` (Vercel project `kovaapp`, git-connected to `main` — see "iOS push confirmed live, Universal Links, GHL import groundwork" above for the deploy mechanics and the "don't run `vercel --prod` directly" lesson). This line just never got updated when that happened.
+
+## Web build is installable as a PWA (2026-08-04)
+
+Prompted by Terra realizing clients like Roxy (see the check-in-reopen investigation above — Roxy turned out to have no `core.users` row, i.e. never linked into Kova at all) don't need to wait on App Store review to start using Kova — the already-live web build works today. It just wasn't set up to install cleanly: no manifest, no iOS meta tags, so "Add to Home Screen" would have produced a plain bookmark that opens in Safari chrome, not a real standalone app icon.
+
+Added `app/+html.js` — Expo Router's static-export root-document override (only runs in Node during `expo export`, confirmed via `docs.expo.dev/router/web/static-rendering` since this SDK's docs can genuinely differ from memory, per this repo's own standing "Expo HAS CHANGED" rule) — with a `<link rel="manifest">`, `apple-touch-icon`, `theme-color`, and the `apple-mobile-web-app-*` meta tags iOS Safari specifically needs to launch without its address bar once added to the home screen (manifest.json's `display: "standalone"` alone isn't enough on iOS). `public/manifest.json` + `public/icon-192.png`/`icon-512.png`/`apple-touch-icon.png` (derived from the existing `assets/icon.png`, same source used for every other platform's icon) live in `public/`, the same static-passthrough directory the Universal Links `.well-known` file already uses.
+
+Verified for real, not just bundle-checked: ran a real `npx expo export -p web` and confirmed the manifest link/icons/meta tags all land in the generated `dist/index.html`, served the export locally, and screenshotted the login screen rendering normally (no regression from the new root document).
+
 ## Working notes for future sessions
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.
