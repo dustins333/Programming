@@ -116,29 +116,33 @@ export default function NutritionDashboard() {
         </Text>
       ) : (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-6 mb-5 px-6">
-            <View className="flex-row gap-2">
+          <View className="mb-5 flex-row flex-wrap justify-between">
+            <Pressable
+              onPress={() => setFilter(null)}
+              className={`mb-2 items-center justify-center rounded-xl border px-2 py-2.5 ${!filter ? "border-primary bg-primary" : "border-stone-300"}`}
+              style={{ width: "31%" }}
+            >
+              <Text numberOfLines={2} className={`text-center ${!filter ? "text-white" : "text-stone-700"}`} style={{ fontFamily: fonts.sans, fontSize: 12.5 }}>
+                All ({roster.length})
+              </Text>
+            </Pressable>
+            {FILTER_ORDER.filter((key) => counts[key] > 0).map((key) => (
               <Pressable
-                onPress={() => setFilter(null)}
-                className={`rounded-full border px-3.5 py-2.5 ${!filter ? "border-primary bg-primary" : "border-stone-300"}`}
+                key={key}
+                onPress={() => setFilter(key)}
+                className={`mb-2 items-center justify-center rounded-xl border px-2 py-2.5 ${filter === key ? "border-primary bg-primary" : "border-stone-300"}`}
+                style={{ width: "31%" }}
               >
-                <Text className={!filter ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
-                  All ({roster.length})
+                <Text
+                  numberOfLines={2}
+                  className={`text-center ${filter === key ? "text-white" : "text-stone-700"}`}
+                  style={{ fontFamily: fonts.sans, fontSize: 12.5 }}
+                >
+                  {STATUS_META[key].label} ({counts[key]})
                 </Text>
               </Pressable>
-              {FILTER_ORDER.filter((key) => counts[key] > 0).map((key) => (
-                <Pressable
-                  key={key}
-                  onPress={() => setFilter(key)}
-                  className={`rounded-full border px-3.5 py-2.5 ${filter === key ? "border-primary bg-primary" : "border-stone-300"}`}
-                >
-                  <Text className={filter === key ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
-                    {STATUS_META[key].label} ({counts[key]})
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
+            ))}
+          </View>
 
           {filtered.map((c) => (
             <Link key={c.userId} href={`/(coach)/nutrition/clients/${c.userId}`} asChild>
