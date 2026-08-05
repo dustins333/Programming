@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from "react-native";
 import { Link, router } from "expo-router";
 import { supabase } from "../../lib/supabase/client";
@@ -104,6 +105,15 @@ export default function Login() {
               Sign In
             </Text>
           )}
+        </Pressable>
+
+        <Pressable
+          onPress={() => Linking.openURL("https://kovastrength.com/privacy-policy/")}
+          className="mt-6 items-center"
+        >
+          <Text className="text-xs text-stone-400" style={{ fontFamily: "Montserrat_400Regular" }}>
+            Privacy Policy
+          </Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
