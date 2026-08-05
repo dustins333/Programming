@@ -1,0 +1,12 @@
+{
+  "short_name": "Kova Strength",
+  "name": "Kova Strength",
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#a46a57",
+  "background_color": "#faf8f6"
+}
