@@ -83,6 +83,17 @@ export function SessionCell({ workout, weekNum, exerciseNames, onPress, highligh
         </View>
       ) : (
         <>
+          {/* The published/draft difference used to be a subtle background
+              tint only — easy to miss at a glance scanning a whole grid
+              (exactly what led to a session reading as unpublished with no
+              clear signal why). A plain label is unambiguous; in-flow above
+              the week line rather than an absolute overlay so it can't
+              collide with the "Wk N" text sharing the same top-left corner. */}
+          {!isPublished && !copyRole ? (
+            <View className="mb-1 self-start rounded-full" style={{ backgroundColor: "#fdf1de", paddingHorizontal: 7, paddingVertical: 2 }}>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, color: "#92400e", letterSpacing: 0.4 }}>DRAFT</Text>
+            </View>
+          ) : null}
           <Text
             style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: copyRole === "source" ? RUST_TEXT : undefined }}
             className={copyRole === "source" ? "mb-1.5" : "mb-1.5 text-stone-500"}

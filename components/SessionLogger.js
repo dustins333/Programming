@@ -330,6 +330,7 @@ export function SessionLogger({
   datePerformed,
   source,
   exercises,
+  isCompleted,
   onFinalize,
   hideFinalizeButton,
   hideVideo,
@@ -413,15 +414,15 @@ export function SessionLogger({
           style={{
             height: 52,
             borderRadius: 12,
-            backgroundColor: colors.primary,
-            shadowColor: colors.primary,
+            backgroundColor: isCompleted ? "#4d6142" : colors.primary,
+            shadowColor: isCompleted ? "#4d6142" : colors.primary,
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.25,
             shadowRadius: 16,
           }}
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
-            {finalizing ? "Saving…" : "Finalize workout"}
+            {finalizing ? "Saving…" : isCompleted ? "✓ Finalized — tap to update" : "Finalize workout"}
           </Text>
         </Pressable>
       )}

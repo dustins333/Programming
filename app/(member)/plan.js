@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber, sessionNumberForDate } from "../../lib/programming/schedule";
-import { listMyAssignments, getCurrentBlock, getWorkout } from "../../lib/programming/memberPlan";
+import { listMyAssignments, getCurrentBlock, getWorkout, listWorkoutsForWeek } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
@@ -13,6 +14,7 @@ import { listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
 import { listActiveOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import {
   getGroupCompletion,
+  listGroupCompletionsForWorkouts,
   getCompletedSpcWorkoutIdsForWeek,
   finalizeGroupSession,
   finalizeSpcSession,
@@ -125,12 +127,16 @@ function SpcSessionPicker({ sessions, selected, onSelect }) {
 // Which session is currently loaded below — eyebrow (program · week, small/
 // uppercase, truncates rather than wrapping into the title) + title (the
 // session's own name, falling back to "Session N"), plus a pill shortcut to
-// the full multi-week block view.
-function SelectedSessionBanner({ eyebrow, title, onViewBlock }) {
+// the full multi-week block view. `completed` surfaces a small "Finalized"
+// pill right here at the top of the page — the only place on My Fitness
+// that previously showed no completion state at all, which made it hard to
+// tell whether today's session had actually been finalized without
+// scrolling all the way down to check the Finalize button itself.
+function SelectedSessionBanner({ eyebrow, title, completed, onViewBlock }) {
   return (
     <View
       className="mb-4 flex-row items-center gap-3 rounded-2xl px-3.5 py-3"
-      style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#f0ddd2" }}
+      style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: completed ? "#4d6142" : "#f0ddd2" }}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
@@ -139,7 +145,15 @@ function SelectedSessionBanner({ eyebrow, title, onViewBlock }) {
         >
           {eyebrow}
         </Text>
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#44403c" }}>{title}</Text>
+        <View className="flex-row items-center gap-2">
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#44403c" }}>{title}</Text>
+          {completed && (
+            <View className="flex-row items-center rounded-full" style={{ backgroundColor: "#e9f0e1", paddingLeft: 6, paddingRight: 8, paddingVertical: 2 }}>
+              <Ionicons name="checkmark" size={9} color="#3f5136" style={{ marginRight: 3 }} />
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, color: "#3f5136" }}>Finalized</Text>
+            </View>
+          )}
+        </View>
       </View>
       <Pressable
         onPress={onViewBlock}
@@ -229,13 +243,37 @@ export default function MyFitness() {
             const block = await getCurrentBlock(program.id, today);
             if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };
 
+            const weekNumber = currentWeekNumber(block.block_start_date, program.block_length_weeks, today);
+
+            // A client on a reduced schedule (e.g. 1x/week) can already be
+            // done for the week on a day that the program's own calendar
+            // mapping still assigns to a *different* session number — the
+            // day-of-week map is shared program-wide, it has no idea this
+            // particular client only needs 1 of the 3 slots. Check the
+            // per-client target against this week's actual completions
+            // first, same as SPC's "no remaining sessions this week" done
+            // state below, before falling through to "what does today map
+            // to" at all. Crucially this counts *any* completed session
+            // this week toward the cap, not specifically the first N in
+            // session-number order — unlike SPC, a group client isn't
+            // restricted to a fixed subset of slots; they can attend
+            // whichever day's session fits their schedule that week (a
+            // 1x/week client who did Wednesday's Session 2 has met their
+            // cap just as much as one who did Monday's Session 1).
+            const sessionsPerWeek = assignment.sessions_per_week ?? program.sessions_per_week;
+            const weekWorkouts = await listWorkoutsForWeek(block.id, weekNumber);
+            const completedThisWeek = await listGroupCompletionsForWorkouts(profile.id, weekWorkouts.map((w) => w.id));
+            const completedCountThisWeek = weekWorkouts.filter((w) => completedThisWeek.has(w.id)).length;
+            if (weekWorkouts.length > 0 && completedCountThisWeek >= sessionsPerWeek) {
+              return { groupProgramId: program.id, programName: program.name, status: "done", weekNumber };
+            }
+
             // Every program owns its own day-of-week map now (migration
             // 0011) — Flagship/BWA's Mon/Tue-Wed/Thu-Fri/Sat scheme is just
             // this program's data, not a rule every group program follows.
             const sessionNumber = sessionNumberForDate(today, program.session_days);
             if (!sessionNumber) return { groupProgramId: program.id, programName: program.name, status: "rest_day" };
 
-            const weekNumber = currentWeekNumber(block.block_start_date, program.block_length_weeks, today);
             const workout = await getWorkout(block.id, weekNumber, sessionNumber);
             if (!workout) {
               return { groupProgramId: program.id, programName: program.name, status: "not_published", weekNumber, sessionNumber };
@@ -461,11 +499,13 @@ export default function MyFitness() {
   if (visibleGroup) {
     activeFinalize = {
       key: visibleGroup.groupProgramId,
+      completed: visibleGroup.completed,
       onFinalize: () => handleFinalizeGroup(visibleGroup),
     };
   } else if ((!showTabs || selectedProgram === "spc") && spc?.status === "ready" && spcDetail) {
     activeFinalize = {
       key: "spc",
+      completed: spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false,
       onFinalize: handleFinalizeSpc,
     };
   }
@@ -539,11 +579,29 @@ export default function MyFitness() {
               </Text>
             )}
 
+            {groupEntry.status === "done" && (
+              <FitnessCard title={showTabs ? null : groupEntry.programName}>
+                <Text className="mb-2 text-center text-sm" style={{ fontFamily: fonts.sansMedium, color: "#4d6142" }}>
+                  ✓ No remaining sessions this week
+                </Text>
+                <Pressable
+                  onPress={() => router.push({ pathname: "/(member)/plan-block", params: { programId: groupEntry.groupProgramId } })}
+                  className="self-center"
+                  hitSlop={HITSLOP}
+                >
+                  <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                    View full block →
+                  </Text>
+                </Pressable>
+              </FitnessCard>
+            )}
+
             {groupEntry.status === "ready" && (
               <FitnessCard title={showTabs ? null : groupEntry.programName}>
                 <SelectedSessionBanner
                   eyebrow={`${groupEntry.programName} · WEEK ${groupEntry.weekNumber}`}
                   title={groupEntry.workout.title || `Session ${groupEntry.sessionNumber}`}
+                  completed={groupEntry.completed}
                   onViewBlock={() => router.push({ pathname: "/(member)/plan-block", params: { programId: groupEntry.groupProgramId } })}
                 />
 
@@ -612,6 +670,7 @@ export default function MyFitness() {
                   <SelectedSessionBanner
                     eyebrow={`SPC · SESSION ${spcDetail.sessionNumber}`}
                     title={spcDetail.title || `Session ${spcDetail.sessionNumber}`}
+                    completed={spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false}
                     onViewBlock={() => router.push("/(member)/plan-spc-block")}
                   />
 
@@ -657,15 +716,15 @@ export default function MyFitness() {
           style={{
             height: 52,
             borderRadius: 12,
-            backgroundColor: colors.primary,
-            shadowColor: colors.primary,
+            backgroundColor: activeFinalize.completed ? "#4d6142" : colors.primary,
+            shadowColor: activeFinalize.completed ? "#4d6142" : colors.primary,
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.25,
             shadowRadius: 16,
           }}
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
-            {footerFinalizing ? "Saving…" : "Finalize workout"}
+            {footerFinalizing ? "Saving…" : activeFinalize.completed ? "✓ Finalized — tap to update" : "Finalize workout"}
           </Text>
         </Pressable>
       </View>

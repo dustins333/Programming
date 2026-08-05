@@ -51,13 +51,20 @@ function formatToday() {
 }
 
 // One tappable bubble in a session row — a preview, not a logging control.
-// Completion is signaled purely by border weight/color (2px olive vs. the
-// card's default border), no checkmark badge/fill. Fixed 3-row skeleton —
-// title / description (blank, not omitted, when there's none) / day caption
-// (blank for SPC) — so the day caption always lands at the same y-position
-// regardless of how many lines the description needs.
-function SessionBubble({ label, description, completed, published, onPress, caption, cardDone, fixedWidth }) {
-  const borderColor = completed ? TILE_COMPLETED_BORDER : cardDone ? CARD_BORDER_DONE : CARD_BORDER;
+// Day-of-week captions (Mon/Tue, Wed/Thu, Fri/Sat) always show, regardless
+// of whether the client's hit their weekly target — those reflect the
+// program's real schedule, not this client's personal attendance. Normal
+// completion is signaled by border weight/color (2px olive vs. the card's
+// default border). Once the whole card's weekly target is met (`weekDone`),
+// every bubble in the row greys out uniformly instead — the individual
+// completed/not-completed distinction stops mattering once nothing more is
+// required this week, and ProgramCard shows a "Training complete" line
+// above the row to say so. Fixed 3-row skeleton — title / description
+// (blank, not omitted, when there's none) / day caption — so the day
+// caption always lands at the same y-position regardless of how many lines
+// the description needs.
+function SessionBubble({ label, description, completed, published, onPress, caption, weekDone, fixedWidth }) {
+  const borderColor = weekDone ? "#d6d3cd" : completed ? TILE_COMPLETED_BORDER : CARD_BORDER;
   return (
     <Pressable
       onPress={published ? onPress : undefined}
@@ -66,14 +73,14 @@ function SessionBubble({ label, description, completed, published, onPress, capt
         width: fixedWidth || undefined,
         minHeight: 78,
         flexDirection: "column",
-        backgroundColor: CANVAS,
-        borderWidth: completed ? 2 : 1,
+        backgroundColor: weekDone ? "#efece6" : CANVAS,
+        borderWidth: completed && !weekDone ? 2 : 1,
         borderColor,
         borderRadius: 14,
         paddingHorizontal: 8,
         paddingTop: 12,
         paddingBottom: 10,
-        opacity: published ? 1 : 0.5,
+        opacity: weekDone ? 0.55 : published ? 1 : 0.5,
       }}
     >
       <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c", textAlign: "center" }}>
@@ -98,7 +105,11 @@ function SessionBubble({ label, description, completed, published, onPress, capt
 // left, completed-count pill + chevron right. The pill switches to an
 // olive/check tint once every session for the week is done, and the card's
 // own border tints toward that same olive family — a subtle nod, not a
-// full-color fill.
+// full-color fill. Once done, a "Training complete" line appears above the
+// bubble row (pushing it down slightly) and every bubble greys out — per
+// explicit ask, replacing an earlier attempt that swapped individual
+// bubbles' day-of-week captions for "Not needed" text, which read as
+// confusing/inconsistent with the always-real day captions elsewhere.
 function ProgramCard({ title, rows, target, completedCount, onNavigate, navigateLabel }) {
   const isDone = completedCount >= target;
   return (
@@ -128,6 +139,11 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
           </Pressable>
         </View>
       </View>
+      {isDone && (
+        <Text className="mb-2.5 text-center" style={{ fontFamily: fonts.sansBold, fontSize: 12, color: PILL_TEXT_DONE, letterSpacing: 0.3 }}>
+          ✓ Training complete
+        </Text>
+      )}
       <View className="flex-row gap-2">
         {rows.map(({ key, label, title: rowTitle, completed, published, onPress, caption, fixedWidth }) => (
           <SessionBubble
@@ -138,7 +154,7 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
             published={published}
             onPress={onPress}
             caption={caption}
-            cardDone={isDone}
+            weekDone={isDone}
             fixedWidth={fixedWidth}
           />
         ))}
@@ -273,7 +289,18 @@ export default function MemberHome() {
               // Every program owns its own session count and day-of-week map
               // now (migrations 0010/0011) — Flagship/BWA's 3-sessions-
               // Mon/Tue-Wed/Thu-Fri/Sat shape is just this program's data,
-              // not a rule every group program follows.
+              // not a rule every group program follows. sessionsPerWeek is
+              // the per-client *target* (how many the member is expected to
+              // attend), not a restriction on which slots they're allowed to
+              // see — a 1x/week client can still attend whichever of the
+              // week's sessions fits their schedule (Monday's, Wednesday's,
+              // or Friday's), they just only need to do one of them. So
+              // every session slot for the program still gets its own
+              // bubble with its own real day-of-week caption, regardless of
+              // the client's target — ProgramCard below is what shows
+              // "Training complete" and greys the whole row out once the
+              // target's met, not a per-bubble caption swap.
+              const sessionsPerWeek = assignment.sessions_per_week ?? program.sessions_per_week;
               const todaysSessionNumber = sessionNumberForDate(today, program.session_days);
               const rows = Array.from({ length: program.sessions_per_week }, (_, i) => i + 1).map((sessionNumber) => {
                 const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
@@ -295,7 +322,7 @@ export default function MemberHome() {
                 programName: program.name,
                 status: "ready",
                 weekNumber,
-                sessionsPerWeek: assignment.sessions_per_week ?? program.sessions_per_week,
+                sessionsPerWeek,
                 rows,
               };
             } catch (err) {
