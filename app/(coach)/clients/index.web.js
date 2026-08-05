@@ -3,6 +3,7 @@ import { View, Text, Pressable, TextInput, ActivityIndicator, Alert } from "reac
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { listMembers, listAssignments, linkMemberByAuthId } from "../../../lib/programming/clients";
+import { core } from "../../../lib/supabase/client";
 import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { getSpcRoster } from "../../../lib/programming/spcDashboard";
 import { getNutritionRoster } from "../../../lib/nutrition/dashboard";
@@ -66,6 +67,20 @@ async function loadRoster() {
   const [members, assignments, programs] = await Promise.all([listMembers(), listAssignments(), listGroupPrograms()]);
   const programsById = Object.fromEntries(programs.map((p) => [p.id, p]));
 
+  // Own try/catch, same isolation as SPC/nutrition/flags below — a roster
+  // this size fits in one call (get_login_activity takes the whole
+  // user_ids array at once, not per-row), so this doesn't turn into an
+  // N+1 the way per-client calls elsewhere in this app were careful to
+  // avoid.
+  let lastSignInById = new Map();
+  try {
+    const { data: loginRows, error } = await core.rpc("get_login_activity", { user_ids: members.map((m) => m.id) });
+    if (error) throw error;
+    lastSignInById = new Map((loginRows ?? []).map((r) => [r.id, r.last_sign_in_at]));
+  } catch {
+    // leave empty — "not registered yet" just won't be filterable/shown
+  }
+
   let spcRoster = [];
   try {
     spcRoster = await getSpcRoster();
@@ -102,6 +117,7 @@ async function loadRoster() {
       programKeys,
       unassigned: tags.length === 0,
       flagCount: flagsByUser.get(m.id)?.length ?? 0,
+      neverRegistered: !lastSignInById.get(m.id),
     };
   });
 
@@ -116,7 +132,7 @@ export default function ClientsWeb() {
   const [modalVisible, setModalVisible] = useState(false);
   const [search, setSearch] = useState("");
   const [programFilter, setProgramFilter] = useState(typeof params.program === "string" ? params.program : "");
-  const [flagsFilter, setFlagsFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [sort, setSort] = useState("name");
   const [page, setPage] = useState(1);
 
@@ -143,7 +159,7 @@ export default function ClientsWeb() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, programFilter, flagsFilter, sort]);
+  }, [search, programFilter, statusFilter, sort]);
 
   const handleLink = async (form) => {
     try {
@@ -169,7 +185,8 @@ export default function ClientsWeb() {
       if (q && !m.name.toLowerCase().includes(q) && !m.email.toLowerCase().includes(q)) return false;
       if (programFilter === "unassigned" && !m.unassigned) return false;
       if (programFilter && programFilter !== "unassigned" && !m.programKeys.has(programFilter)) return false;
-      if (flagsFilter === "has-flag" && m.flagCount === 0) return false;
+      if (statusFilter === "has-flag" && m.flagCount === 0) return false;
+      if (statusFilter === "not-registered" && !m.neverRegistered) return false;
       return true;
     });
     rows = [...rows].sort((a, b) => {
@@ -177,7 +194,7 @@ export default function ClientsWeb() {
       return a.name.localeCompare(b.name);
     });
     return rows;
-  }, [state, search, programFilter, flagsFilter, sort]);
+  }, [state, search, programFilter, statusFilter, sort]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount);
@@ -226,11 +243,12 @@ export default function ClientsWeb() {
               />
               <Select value={programFilter} onChange={setProgramFilter} options={programOptions} />
               <Select
-                value={flagsFilter}
-                onChange={setFlagsFilter}
+                value={statusFilter}
+                onChange={setStatusFilter}
                 options={[
-                  { value: "", label: "Flags: All" },
+                  { value: "", label: "Status: All" },
                   { value: "has-flag", label: "Has flag" },
+                  { value: "not-registered", label: "Not registered yet" },
                 ]}
               />
               <Select
@@ -268,6 +286,15 @@ export default function ClientsWeb() {
                               style={{ fontFamily: fonts.sansBold, color: "#b23a22", fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3 }}
                             >
                               {item.flagCount} flag{item.flagCount === 1 ? "" : "s"}
+                            </Text>
+                          </View>
+                        )}
+                        {item.neverRegistered && (
+                          <View className="rounded-full px-2 py-[3px]" style={{ backgroundColor: "#f1efed" }}>
+                            <Text
+                              style={{ fontFamily: fonts.sansBold, color: "#78716c", fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3 }}
+                            >
+                              Not registered
                             </Text>
                           </View>
                         )}
