@@ -72,10 +72,18 @@ export default function Login() {
 
         <Link
           href="/reset-password"
-          className="mb-6 self-end text-sm"
+          className="mb-2 self-end text-sm"
           style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140" }}
         >
           Forgot / set up password?
+        </Link>
+
+        <Link
+          href="/register"
+          className="mb-6 self-end text-sm"
+          style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140" }}
+        >
+          New here? Set up your account
         </Link>
 
         {errorMessage ? (

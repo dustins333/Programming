@@ -32,12 +32,16 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400 });
   }
 
-  const name = body?.name;
+  // Confirmed against a real GHL "Webhook" workflow action payload (not
+  // just the synthetic contract this was originally written against):
+  // name/email/phone/etc. are native top-level fields on every such
+  // payload regardless of the action's own Custom Data config — only
+  // contact_id needs to be added there explicitly (GHL has no native
+  // top-level contactId field on this trigger type), landing under
+  // `customData` as a result.
+  const name = body?.name ?? body?.full_name ?? [body?.first_name, body?.last_name].filter(Boolean).join(" ");
   const email = body?.email;
-  // Accept both casings — GHL's exact webhook field naming hasn't been
-  // confirmed against a real automation yet (see CLAUDE.md), only tested
-  // with a synthetic payload matching this documented contract.
-  const contactId = body?.contact_id ?? body?.contactId;
+  const contactId = body?.customData?.contact_id ?? body?.customData?.contactId ?? body?.contact_id ?? body?.contactId;
 
   if (!name || !email || !contactId) {
     return new Response(

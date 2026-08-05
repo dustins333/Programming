@@ -1,0 +1,145 @@
+import { useState } from "react";
+import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { router } from "expo-router";
+import { supabase } from "../../lib/supabase/client";
+
+// Email -> SMS code (via GHL, using the account's stored ghl_contact_id —
+// see import-client) -> set password -> signed in. For members created
+// ahead of time by the GHL "won" webhook, who've never opened the app or
+// set a password before. See CLAUDE.md's GHL import section for the full
+// design and why this doesn't use email links (spam deliverability) or
+// store a phone number itself (GHL stays the source of truth for that).
+export default function Register() {
+  const [step, setStep] = useState("email"); // "email" | "code"
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const handleRequestCode = async () => {
+    setErrorMessage(null);
+    setLoading(true);
+    const { error } = await supabase.functions.invoke("request-registration-code", { body: { email } });
+    setLoading(false);
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+    setStep("code");
+  };
+
+  const handleVerify = async () => {
+    setErrorMessage(null);
+    setLoading(true);
+    const { data, error } = await supabase.functions.invoke("verify-registration-code", {
+      body: { email, code, password },
+    });
+    if (error || data?.error) {
+      setLoading(false);
+      setErrorMessage(data?.error ?? error.message);
+      return;
+    }
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (signInError) {
+      setErrorMessage(signInError.message);
+      return;
+    }
+    router.replace("/");
+  };
+
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1 bg-white">
+      <View className="flex-1 justify-center px-6">
+        <Text className="mb-2 text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
+          Set up your account
+        </Text>
+
+        {step === "email" ? (
+          <>
+            <Text className="mb-6 text-base text-stone-600" style={{ fontFamily: "Montserrat_400Regular" }}>
+              Enter the email your gym has on file. We'll text a code to the phone number on your account.
+            </Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              placeholder="Email"
+              className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
+              style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
+            />
+            {errorMessage ? (
+              <Text className="mb-4 text-sm text-red-600" style={{ fontFamily: "Montserrat_400Regular" }}>
+                {errorMessage}
+              </Text>
+            ) : null}
+            <Pressable
+              onPress={handleRequestCode}
+              disabled={loading || !email}
+              className="items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+            >
+              {loading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="text-base text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+                  Send code
+                </Text>
+              )}
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text className="mb-6 text-base text-stone-600" style={{ fontFamily: "Montserrat_400Regular" }}>
+              Enter the code we texted you, and choose a password.
+            </Text>
+            <TextInput
+              value={code}
+              onChangeText={setCode}
+              keyboardType="number-pad"
+              placeholder="6-digit code"
+              maxLength={6}
+              className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
+              style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
+            />
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              placeholder="New password"
+              className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
+              style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
+            />
+            {errorMessage ? (
+              <Text className="mb-4 text-sm text-red-600" style={{ fontFamily: "Montserrat_400Regular" }}>
+                {errorMessage}
+              </Text>
+            ) : null}
+            <Pressable
+              onPress={handleVerify}
+              disabled={loading || code.length !== 6 || password.length < 8}
+              className="items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+            >
+              {loading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="text-base text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+                  Verify & sign in
+                </Text>
+              )}
+            </Pressable>
+            <Pressable onPress={() => setStep("email")} className="mt-4 items-center">
+              <Text className="text-sm" style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140" }}>
+                Use a different email
+              </Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
