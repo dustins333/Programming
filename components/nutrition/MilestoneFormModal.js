@@ -5,8 +5,12 @@ import { confirmDeleteMilestone } from "../../lib/confirmDialog";
 import { MilestoneCompleteCheckbox } from "./MilestoneCompleteCheckbox";
 import { fonts, colors } from "../../lib/theme";
 
-const EMPTY = { title: "", details: "" };
+const EMPTY = { title: "", details: "", emoji: "" };
 const DETAILS_MIN_HEIGHT = 90;
+// Quick-pick row for the common case — the text field next to it still
+// takes anything typed/pasted (including via the OS emoji keyboard), this
+// is just a shortcut for the celebratory ones a coach reaches for most.
+const QUICK_EMOJI = ["🎯", "🔥", "💪", "🏆", "🌟", "✅", "🎉", "👏"];
 
 // Creates a new active milestone, or edits an existing one when `milestone`
 // is passed — same isEdit-via-optional-prop shape as NewGroupProgramModal.
@@ -23,7 +27,7 @@ export function MilestoneFormModal({ visible, milestone, userId, createdBy, onCl
 
   useEffect(() => {
     if (visible) {
-      setForm(milestone ? { title: milestone.title, details: milestone.details ?? "" } : EMPTY);
+      setForm(milestone ? { title: milestone.title, details: milestone.details ?? "", emoji: milestone.emoji ?? "" } : EMPTY);
       setDetailsHeight(DETAILS_MIN_HEIGHT);
     }
   }, [visible, milestone]);
@@ -104,6 +108,30 @@ export function MilestoneFormModal({ visible, milestone, userId, createdBy, onCl
             placeholder="Supporting details, visible to the client…"
             className="mb-5 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: fonts.sans, textAlignVertical: "top", height: detailsHeight }}
+          />
+
+          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+            Emoji (shown when this is completed)
+          </Text>
+          <View className="mb-2 flex-row flex-wrap gap-2">
+            {QUICK_EMOJI.map((e) => (
+              <Pressable
+                key={e}
+                onPress={() => setForm((f) => ({ ...f, emoji: e }))}
+                className="items-center justify-center rounded-lg border"
+                style={{ width: 38, height: 38, borderColor: form.emoji === e ? colors.primary : "#d9d4cd", backgroundColor: form.emoji === e ? "#fdf6f2" : "white" }}
+              >
+                <Text style={{ fontSize: 18 }}>{e}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <TextInput
+            value={form.emoji}
+            onChangeText={(v) => setForm((f) => ({ ...f, emoji: v }))}
+            placeholder="Or type/paste any emoji"
+            maxLength={4}
+            className="mb-5 rounded-lg border border-stone-300 px-4 py-3"
+            style={{ fontFamily: fonts.sans, width: 140 }}
           />
 
           {isEdit ? (

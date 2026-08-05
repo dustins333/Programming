@@ -10,10 +10,11 @@ import { NutritionAccessMessage } from "../../../components/nutrition/NutritionA
 import { getCurrentTarget, deriveCalories } from "../../../lib/nutrition/targets";
 import { getLogForDate, saveDraftLog, finalizeLog } from "../../../lib/nutrition/dailyLog";
 import { listFocusItems, toggleFocusItem } from "../../../lib/nutrition/coachClient";
-import { listActiveMilestones, getUnseenCompletedMilestone, acknowledgeMilestone, MILESTONE_COLORS } from "../../../lib/nutrition/milestones";
+import { listActiveMilestones, listCompletedMilestones, getUnseenCompletedMilestone, acknowledgeMilestone, MILESTONE_COLORS } from "../../../lib/nutrition/milestones";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { TodayCardSlider } from "../../../components/nutrition/TodayCardSlider";
 import { MilestoneCongratsModal } from "../../../components/nutrition/MilestoneCongratsModal";
+import { MilestoneDetailModal } from "../../../components/nutrition/MilestoneDetailModal";
 import { TargetField } from "../../../components/nutrition/TargetField";
 import { RatingSelect } from "../../../components/nutrition/RatingSelect";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
@@ -115,6 +116,8 @@ export default function NutritionToday() {
   const [target, setTarget] = useState(null);
   const [focusItems, setFocusItems] = useState([]);
   const [milestones, setMilestones] = useState([]);
+  const [completedMilestones, setCompletedMilestones] = useState([]);
+  const [selectedMilestone, setSelectedMilestone] = useState(null);
   const [congratsMilestone, setCongratsMilestone] = useState(null);
   const [values, setValues] = useState(EMPTY_VALUES);
   const [ready, setReady] = useState(false);
@@ -142,6 +145,11 @@ export default function NutritionToday() {
       setMilestones(await listActiveMilestones(profile.id));
     } catch (err) {
       console.error("Failed to load milestones:", err);
+    }
+    try {
+      setCompletedMilestones(await listCompletedMilestones(profile.id));
+    } catch (err) {
+      console.error("Failed to load completed milestones:", err);
     }
   };
 
@@ -352,6 +360,36 @@ export default function NutritionToday() {
                   ),
                 };
               }),
+              ...(completedMilestones.length > 0
+                ? [
+                    {
+                      key: "completed-milestones",
+                      content: (
+                        <View className="rounded-lg border border-stone-200 bg-white p-4">
+                          <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+                            Completed milestones
+                          </Text>
+                          <View className="flex-row flex-wrap gap-2">
+                            {completedMilestones.map((m) => (
+                              <Pressable
+                                key={m.id}
+                                onPress={() => setSelectedMilestone(m)}
+                                className="items-center justify-center rounded-full"
+                                style={{ width: 40, height: 40, backgroundColor: "#eef1e7" }}
+                              >
+                                {m.emoji ? (
+                                  <Text style={{ fontSize: 18 }}>{m.emoji}</Text>
+                                ) : (
+                                  <Ionicons name="trophy" size={16} color="#4d6142" />
+                                )}
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      ),
+                    },
+                  ]
+                : []),
             ]}
           />
 
@@ -438,6 +476,7 @@ export default function NutritionToday() {
         </ScrollView>
       )}
       <MilestoneCongratsModal milestone={congratsMilestone} onClose={handleCloseCongrats} />
+      <MilestoneDetailModal milestone={selectedMilestone} onClose={() => setSelectedMilestone(null)} />
     </View>
   );
 }

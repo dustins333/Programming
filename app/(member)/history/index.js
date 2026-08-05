@@ -10,6 +10,7 @@ import { todayInBoise, addDays } from "../../../lib/boiseDate";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { SessionHistoryModal } from "../../../components/SessionHistoryModal";
+import { MilestoneDetailModal } from "../../../components/nutrition/MilestoneDetailModal";
 import { fonts, colors } from "../../../lib/theme";
 
 const CANVAS = "#faf8f6";
@@ -49,18 +50,28 @@ function groupByDay(entries, today) {
 
 function DayRow({ entry, onPress }) {
   const isSession = entry.type === "session";
-  const Wrapper = isSession ? Pressable : View;
+  const isMilestone = entry.type === "milestone";
+  const isPressable = isSession || isMilestone;
+  const Wrapper = isPressable ? Pressable : View;
   return (
     <Wrapper
-      {...(isSession ? { onPress } : {})}
+      {...(isPressable ? { onPress } : {})}
       className="mb-2 flex-row items-center gap-3 rounded-2xl bg-white px-3.5 py-3"
       style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}
     >
       <View
         className="items-center justify-center rounded-full"
-        style={{ width: 24, height: 24, backgroundColor: isSession ? "#4d6142" : "#f5f1ec" }}
+        style={{ width: 24, height: 24, backgroundColor: isSession ? "#4d6142" : isMilestone ? "#eef1e7" : "#f5f1ec" }}
       >
-        <Ionicons name={isSession ? "checkmark" : "restaurant"} size={isSession ? 12 : 12} color={isSession ? "#fff" : colors.primaryOnWhite} />
+        {isMilestone ? (
+          entry.emoji ? (
+            <Text style={{ fontSize: 12 }}>{entry.emoji}</Text>
+          ) : (
+            <Ionicons name="trophy" size={12} color="#4d6142" />
+          )
+        ) : (
+          <Ionicons name={isSession ? "checkmark" : "restaurant"} size={12} color={isSession ? "#fff" : colors.primaryOnWhite} />
+        )}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#44403c" }}>
@@ -70,7 +81,7 @@ function DayRow({ entry, onPress }) {
           {entry.subtitle}
         </Text>
       </View>
-      {isSession ? <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} /> : null}
+      {isPressable ? <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} /> : null}
     </Wrapper>
   );
 }
@@ -118,11 +129,15 @@ function ByDayView({ profile }) {
       ))}
 
       <SessionHistoryModal
-        visible={!!selectedEntry}
+        visible={selectedEntry?.type === "session"}
         onClose={() => setSelectedEntry(null)}
         title={selectedEntry?.label ?? ""}
         date={selectedEntry?.date}
         userId={profile.id}
+      />
+      <MilestoneDetailModal
+        milestone={selectedEntry?.type === "milestone" ? selectedEntry : null}
+        onClose={() => setSelectedEntry(null)}
       />
     </View>
   );

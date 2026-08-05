@@ -457,7 +457,7 @@ export default function NutritionClientDetail() {
               tab a coach lands on. Tied to the same `checkin`/`selectedWeek`
               state the Check-In tab's week-navigator drives, so paging to a
               late-submitted prior week (weekOffset > 0) still works through
-              this same button. The small person icon is a lightweight "there
+              this same button. The small camera icon is a lightweight "there
               are photos in this check-in" flag — not unread tracking, just
               whether any were uploaded for this cycle. */}
           {checkin && !checkin.finalized_at ? (
@@ -470,7 +470,7 @@ export default function NutritionClientDetail() {
               <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
                 {finalizing ? "Finalizing…" : "Finalize Check-In"}
               </Text>
-              {weekPhotos.length > 0 ? <Ionicons name="person" size={15} color="white" /> : null}
+              {weekPhotos.length > 0 ? <Ionicons name="camera" size={15} color="white" /> : null}
             </Pressable>
           ) : null}
         </View>

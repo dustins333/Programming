@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, Image, Pressable, Modal, Platform, ActivityIndicator } from "react-native";
+import { View, Text, Image, Pressable, Modal, Platform, ActivityIndicator, ScrollView } from "react-native";
 import { getPhotoSignedUrls } from "../../lib/nutrition/photos";
 import { ZoomableImage } from "./ZoomableImage";
 import { formatDateMDY } from "../../lib/formatDate";
@@ -50,19 +50,21 @@ function DatePicker({ anglePhotos, selectedDate, onChange }) {
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable onPress={() => setOpen(false)} className="flex-1 items-center justify-center px-8" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
           <Pressable onPress={(e) => e.stopPropagation()} className="w-full max-w-xs rounded-2xl bg-white p-2" style={{ maxHeight: "70%" }}>
-            {anglePhotos.map((p) => (
-              <Pressable
-                key={p.date}
-                onPress={() => {
-                  onChange(p.date);
-                  setOpen(false);
-                }}
-                className="rounded-xl px-4 py-3"
-                style={p.date === selectedDate ? { backgroundColor: "#fdf6f2" } : undefined}
-              >
-                <Text style={{ fontFamily: fonts.sansMedium, color: p.date === selectedDate ? colors.primaryOnWhite : "#44403c" }}>{photoOptionLabel(p)}</Text>
-              </Pressable>
-            ))}
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {anglePhotos.map((p) => (
+                <Pressable
+                  key={p.date}
+                  onPress={() => {
+                    onChange(p.date);
+                    setOpen(false);
+                  }}
+                  className="rounded-xl px-4 py-3"
+                  style={p.date === selectedDate ? { backgroundColor: "#fdf6f2" } : undefined}
+                >
+                  <Text style={{ fontFamily: fonts.sansMedium, color: p.date === selectedDate ? colors.primaryOnWhite : "#44403c" }}>{photoOptionLabel(p)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
