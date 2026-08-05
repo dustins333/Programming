@@ -1,19 +1,84 @@
 import { useEffect, useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "react-native";
 import { MUSCLE_GROUPS, MOVEMENT_PATTERNS } from "../lib/programming/exercises";
 import { fonts, colors } from "../lib/theme";
 
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
 
 function emptyForm(type) {
-  return { name: "", type, muscleGroup: MUSCLE_GROUPS[0], movementPattern: "", defaultSets: "", defaultReps: "", cues: "", videoUrl: "" };
+  return { name: "", type, muscleGroups: [], movementPatterns: [], parentExerciseId: "", defaultSets: "", defaultReps: "", cues: "", videoUrl: "" };
+}
+
+// Single-select against parent-less lift exercises — a variation can't
+// itself have variations (enforced here by only ever offering parent-less
+// options, not a DB constraint), can't be its own parent, and warm-ups
+// don't participate at all.
+function ParentExercisePicker({ value, options, onChange }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const selected = options.find((o) => o.id === value);
+  const label = selected ? selected.name : "None (top-level movement)";
+
+  if (Platform.OS === "web") {
+    return (
+      <select
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ fontFamily: "Montserrat_400Regular", borderColor: "#d6d3d1", borderWidth: 1, borderRadius: 8, padding: 12, width: "100%" }}
+      >
+        <option value="">None (top-level movement)</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.name}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <>
+      <Pressable onPress={() => setPickerOpen(true)} className="rounded-lg border border-stone-300 px-4 py-3">
+        <Text style={{ fontFamily: "Montserrat_400Regular", color: selected ? "#292524" : "#a8a29e" }}>{label}</Text>
+      </Pressable>
+      <Modal visible={pickerOpen} animationType="fade" transparent onRequestClose={() => setPickerOpen(false)}>
+        <Pressable className="flex-1 items-center justify-center bg-black/40 px-6" onPress={() => setPickerOpen(false)}>
+          <View className="max-h-[70%] w-full max-w-sm overflow-hidden rounded-2xl bg-white">
+            <ScrollView>
+              <Pressable
+                onPress={() => {
+                  onChange("");
+                  setPickerOpen(false);
+                }}
+                className="border-b border-stone-100 px-4 py-3.5"
+              >
+                <Text style={{ fontFamily: "Montserrat_500Medium" }}>None (top-level movement)</Text>
+              </Pressable>
+              {options.map((o) => (
+                <Pressable
+                  key={o.id}
+                  onPress={() => {
+                    onChange(o.id);
+                    setPickerOpen(false);
+                  }}
+                  className="border-b border-stone-100 px-4 py-3.5"
+                >
+                  <Text style={{ fontFamily: o.id === value ? "Montserrat_600SemiBold" : "Montserrat_400Regular" }}>{o.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
 }
 
 // initialType: which tab ("lift"/"warmup") the coach was on when they hit
 // "+ New Exercise" — only used for a brand-new exercise, an edit always
 // reflects the exercise's own stored type regardless of which tab it was
-// opened from.
-export function ExerciseFormModal({ visible, initialExercise, initialType = "lift", onClose, onSubmit }) {
+// opened from. allExercises: the full current library, used to build the
+// "Variation of" picker's options.
+export function ExerciseFormModal({ visible, initialExercise, initialType = "lift", allExercises = [], onClose, onSubmit }) {
   const [form, setForm] = useState(emptyForm(initialType));
   const [saving, setSaving] = useState(false);
 
@@ -24,8 +89,9 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
           ? {
               name: initialExercise.name,
               type: initialExercise.type ?? "lift",
-              muscleGroup: initialExercise.muscle_group ?? MUSCLE_GROUPS[0],
-              movementPattern: initialExercise.movement_pattern || "",
+              muscleGroups: initialExercise.muscle_group ?? [],
+              movementPatterns: initialExercise.movement_pattern ?? [],
+              parentExerciseId: initialExercise.parent_exercise_id ?? "",
               defaultSets: initialExercise.default_sets != null ? String(initialExercise.default_sets) : "",
               defaultReps: initialExercise.default_reps || "",
               cues: initialExercise.cues || "",
@@ -38,6 +104,20 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
 
   const isWarmup = form.type === "warmup";
   const videoUrlLooksOff = form.videoUrl && !LOOKS_LIKE_VIDEO_LINK.test(form.videoUrl);
+  const noMuscleGroupSelected = !isWarmup && form.muscleGroups.length === 0;
+
+  // Only parent-less lift exercises can be picked as a parent — caps
+  // nesting at one level — and an exercise can't be parented to itself.
+  const parentOptions = allExercises.filter(
+    (ex) => ex.type !== "warmup" && !ex.parent_exercise_id && ex.id !== initialExercise?.id
+  );
+
+  const toggleInArray = (field, value) => {
+    setForm((f) => ({
+      ...f,
+      [field]: f[field].includes(value) ? f[field].filter((v) => v !== value) : [...f[field], value],
+    }));
+  };
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -129,60 +209,74 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
             ) : (
               <>
                 <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-                  Muscle group
+                  Muscle group (select all that apply)
                 </Text>
-                <View className="mb-4 flex-row flex-wrap gap-2">
-                  {MUSCLE_GROUPS.map((mg) => (
-                    <Pressable
-                      key={mg}
-                      onPress={() => setForm((f) => ({ ...f, muscleGroup: mg }))}
-                      className={`rounded-full border px-3.5 py-2.5 ${
-                        form.muscleGroup === mg ? "border-primary bg-primary" : "border-stone-300"
-                      }`}
-                    >
-                      <Text
-                        className={form.muscleGroup === mg ? "text-white" : "text-stone-700"}
-                        style={{ fontFamily: "Montserrat_400Regular" }}
+                <View className="mb-1 flex-row flex-wrap gap-2">
+                  {MUSCLE_GROUPS.map((mg) => {
+                    const active = form.muscleGroups.includes(mg);
+                    return (
+                      <Pressable
+                        key={mg}
+                        onPress={() => toggleInArray("muscleGroups", mg)}
+                        className={`rounded-full border px-3.5 py-2.5 ${active ? "border-primary bg-primary" : "border-stone-300"}`}
                       >
-                        {mg.replace("_", " ")}
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <Text className={active ? "text-white" : "text-stone-700"} style={{ fontFamily: "Montserrat_400Regular" }}>
+                          {mg.replace("_", " ")}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
+                {noMuscleGroupSelected ? (
+                  <Text className="mb-4 text-xs" style={{ fontFamily: fonts.sans, color: "#b23a22" }}>
+                    Pick at least one muscle group.
+                  </Text>
+                ) : (
+                  <View className="mb-4" />
+                )}
 
                 <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-                  Movement pattern (for the balance tally — optional)
+                  Movement pattern (for the balance tally — optional, select all that apply)
                 </Text>
                 <View className="mb-4 flex-row flex-wrap gap-2">
                   <Pressable
-                    onPress={() => setForm((f) => ({ ...f, movementPattern: "" }))}
+                    onPress={() => setForm((f) => ({ ...f, movementPatterns: [] }))}
                     className={`rounded-full border px-3.5 py-2.5 ${
-                      !form.movementPattern ? "border-primary bg-primary" : "border-stone-300"
+                      form.movementPatterns.length === 0 ? "border-primary bg-primary" : "border-stone-300"
                     }`}
                   >
                     <Text
-                      className={!form.movementPattern ? "text-white" : "text-stone-700"}
+                      className={form.movementPatterns.length === 0 ? "text-white" : "text-stone-700"}
                       style={{ fontFamily: "Montserrat_400Regular" }}
                     >
                       none
                     </Text>
                   </Pressable>
-                  {MOVEMENT_PATTERNS.map((mp) => (
-                    <Pressable
-                      key={mp}
-                      onPress={() => setForm((f) => ({ ...f, movementPattern: mp }))}
-                      className={`rounded-full border px-3.5 py-2.5 ${
-                        form.movementPattern === mp ? "border-primary bg-primary" : "border-stone-300"
-                      }`}
-                    >
-                      <Text
-                        className={form.movementPattern === mp ? "text-white" : "text-stone-700"}
-                        style={{ fontFamily: "Montserrat_400Regular" }}
+                  {MOVEMENT_PATTERNS.map((mp) => {
+                    const active = form.movementPatterns.includes(mp);
+                    return (
+                      <Pressable
+                        key={mp}
+                        onPress={() => toggleInArray("movementPatterns", mp)}
+                        className={`rounded-full border px-3.5 py-2.5 ${active ? "border-primary bg-primary" : "border-stone-300"}`}
                       >
-                        {mp.replace("_", " ")}
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <Text className={active ? "text-white" : "text-stone-700"} style={{ fontFamily: "Montserrat_400Regular" }}>
+                          {mp.replace("_", " ")}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+                  Variation of (optional — groups this under a parent movement in the builder sidebar)
+                </Text>
+                <View className="mb-4">
+                  <ParentExercisePicker
+                    value={form.parentExerciseId}
+                    options={parentOptions}
+                    onChange={(parentExerciseId) => setForm((f) => ({ ...f, parentExerciseId }))}
+                  />
                 </View>
               </>
             )}
@@ -224,7 +318,7 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               </Pressable>
               <Pressable
                 onPress={handleSubmit}
-                disabled={saving || !form.name}
+                disabled={saving || !form.name || noMuscleGroupSelected}
                 className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
               >
                 <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>

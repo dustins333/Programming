@@ -32,11 +32,17 @@ export default function Exercises() {
     load();
   }, [load]);
 
+  const parentNameById = useMemo(() => {
+    const map = new Map();
+    (exercises ?? []).forEach((ex) => map.set(ex.id, ex.name));
+    return map;
+  }, [exercises]);
+
   const filtered = useMemo(() => {
     if (!exercises) return [];
     return exercises.filter((ex) => {
       if ((ex.type ?? "lift") !== typeFilter) return false;
-      if (typeFilter === "lift" && muscleFilter && ex.muscle_group !== muscleFilter) return false;
+      if (typeFilter === "lift" && muscleFilter && !ex.muscle_group?.includes(muscleFilter)) return false;
       if (search && !ex.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -166,10 +172,19 @@ export default function Exercises() {
                         <Text style={{ fontFamily: fonts.sansBold, color: "#8a5a2e", fontSize: 10.5 }}>warm-up</Text>
                       </View>
                     ) : (
-                      <Text className="text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 12 }}>
-                        {item.muscle_group?.replace("_", " ")}
-                        {item.movement_pattern ? ` · ${item.movement_pattern.replace("_", " ")}` : ""}
-                      </Text>
+                      <View>
+                        <Text className="text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 12 }}>
+                          {item.muscle_group?.map((mg) => mg.replace("_", " ")).join(", ")}
+                          {item.movement_pattern?.length
+                            ? ` · ${item.movement_pattern.map((mp) => mp.replace("_", " ")).join(", ")}`
+                            : ""}
+                        </Text>
+                        {item.parent_exercise_id ? (
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+                            ↳ variation of {parentNameById.get(item.parent_exercise_id) ?? "…"}
+                          </Text>
+                        ) : null}
+                      </View>
                     )}
                   </View>
                   <View className="flex-row items-center gap-4" style={{ flexShrink: 0 }}>
@@ -210,6 +225,7 @@ export default function Exercises() {
           visible={modalVisible}
           initialExercise={editing}
           initialType={typeFilter}
+          allExercises={exercises ?? []}
           onClose={() => setModalVisible(false)}
           onSubmit={handleSubmit}
         />

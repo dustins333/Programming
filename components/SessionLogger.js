@@ -15,6 +15,14 @@ const INPUT_BORDER = "#d9d4cd";
 const PILL_BG = "#fdece5";
 const PILL_TEXT = "#b23a22";
 
+// Only worth showing as a per-set breakdown when the sets actually differ —
+// a uniform scheme reads better as the existing flat "X sets × Y reps".
+function repSchemeSummary(repScheme) {
+  if (!repScheme?.length) return null;
+  const unique = [...new Set(repScheme)];
+  return unique.length > 1 ? repScheme.join(", ") : null;
+}
+
 function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle, hideVideo }) {
   const targetSets = item.targetSets && item.targetSets > 0 ? item.targetSets : 3;
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
@@ -140,7 +148,7 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
             {item.exercise.name}
           </Text>
           <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", marginTop: 1 }}>
-            Target: {targetSets} sets × {item.targetReps ?? "–"}
+            Target: {targetSets} sets × {repSchemeSummary(item.repScheme) ?? item.targetReps ?? "–"}
             {item.notes ? ` · ${item.notes}` : ""}
           </Text>
         </View>
@@ -208,7 +216,7 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
                   <TextInput
                     value={row.reps}
                     onChangeText={(v) => updateRow(i, "reps", v)}
-                    placeholder={item.targetReps ?? "reps"}
+                    placeholder={item.repScheme?.[i] ?? item.targetReps ?? "reps"}
                     keyboardType="numeric"
                     placeholderTextColor="#a8a29e"
                     className="flex-1 text-center"
@@ -344,20 +352,58 @@ export function SessionLogger({
     }
   };
 
+  // Superset pairs render adjacently regardless of stored position — group
+  // by supersetGroupId (falling back to the item's own id so an unlinked
+  // exercise is its own group of one), preserving first-occurrence order.
+  const groups = [];
+  const groupIndexByKey = new Map();
+  exercises.forEach((item) => {
+    const key = item.supersetGroupId ?? item.id;
+    if (!groupIndexByKey.has(key)) {
+      groupIndexByKey.set(key, groups.length);
+      groups.push([]);
+    }
+    groups[groupIndexByKey.get(key)].push(item);
+  });
+
   return (
     <View>
-      {exercises.map((item) => (
-        <ExerciseCard
-          key={item.id}
-          userId={userId}
-          datePerformed={datePerformed}
-          source={source}
-          item={item}
-          expanded={expandedId === item.id}
-          onToggle={handleToggle}
-          hideVideo={hideVideo}
-        />
-      ))}
+      {groups.map((group) =>
+        group.length > 1 ? (
+          <View
+            key={group[0].id}
+            className="mb-2.5 rounded-2xl px-2 pt-2"
+            style={{ borderWidth: 1.5, borderColor: "#a46a57", borderStyle: "dashed" }}
+          >
+            <Text className="mb-1 self-start rounded-full px-2.5 py-0.5" style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#b23a22", backgroundColor: "#fdece5" }}>
+              ⚭ SUPERSET
+            </Text>
+            {group.map((item) => (
+              <ExerciseCard
+                key={item.id}
+                userId={userId}
+                datePerformed={datePerformed}
+                source={source}
+                item={item}
+                expanded={expandedId === item.id}
+                onToggle={handleToggle}
+                hideVideo={hideVideo}
+              />
+            ))}
+          </View>
+        ) : (
+          <ExerciseCard
+            key={group[0].id}
+            userId={userId}
+            datePerformed={datePerformed}
+            source={source}
+            item={group[0]}
+            expanded={expandedId === group[0].id}
+            onToggle={handleToggle}
+            hideVideo={hideVideo}
+          />
+        )
+      )}
 
       {!hideFinalizeButton && (
         <Pressable

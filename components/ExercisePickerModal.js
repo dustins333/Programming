@@ -37,7 +37,7 @@ export function ExercisePickerModal({ visible, library, onClose, onPick }) {
               >
                 <Text style={{ fontFamily: "Montserrat_500Medium" }}>{item.name}</Text>
                 <Text className="text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
-                  {item.type === "warmup" ? "warm-up" : item.muscle_group?.replace("_", " ") ?? ""}
+                  {item.type === "warmup" ? "warm-up" : item.muscle_group?.map((mg) => mg.replace("_", " ")).join(", ") ?? ""}
                 </Text>
               </Pressable>
             )}

@@ -137,6 +137,8 @@ export default function PlanSpcBlock() {
         exercise: ex.exercises,
         targetSets: ex.sets,
         targetReps: ex.reps,
+        repScheme: ex.rep_scheme,
+        supersetGroupId: ex.superset_group_id,
         notes: ex.rest ? `rest ${ex.rest}` : ex.notes,
       }))
     : [];

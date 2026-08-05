@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from "r
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getWorkout, listWarmups, listWorkoutExercises, getSiblingPatterns } from "../../../lib/programming/workouts";
+import { summarizeRepScheme } from "../../../lib/programming/exercises";
 import { PatternTally } from "../../../components/PatternTally";
 import { CommentThread } from "../../../components/CommentThread";
 import { fonts, colors } from "../../../lib/theme";
@@ -48,7 +49,7 @@ export default function WorkoutBuilderNative() {
     );
   }
 
-  const currentPatterns = exercises.map((e) => e.exercises?.movement_pattern).filter(Boolean);
+  const currentPatterns = exercises.flatMap((e) => e.exercises?.movement_pattern ?? []);
 
   return (
     <ScrollView
@@ -120,6 +121,11 @@ export default function WorkoutBuilderNative() {
               <Text className="flex-1" style={{ fontFamily: fonts.sansMedium }}>
                 {item.exercises?.name}
               </Text>
+              {item.superset_group_id ? (
+                <View className="mr-2 rounded-full px-2.5 py-1" style={{ backgroundColor: "#fdece5" }}>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#b23a22" }}>⚭ Superset</Text>
+                </View>
+              ) : null}
               {item.exercises?.video_url ? (
                 <Pressable
                   onPress={() => Linking.openURL(item.exercises.video_url)}
@@ -131,7 +137,7 @@ export default function WorkoutBuilderNative() {
               ) : null}
             </View>
             <Text style={{ fontFamily: fonts.sans }} className="text-stone-600">
-              {item.sets ?? 0} sets x {item.reps || "—"}
+              {item.sets ?? 0} sets x {summarizeRepScheme(item.rep_scheme ?? []) || item.reps || "—"}
             </Text>
           </View>
         ))

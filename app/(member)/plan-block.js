@@ -114,6 +114,8 @@ export default function PlanBlock() {
           exercise: ex.exercises,
           targetSets: ex.sets,
           targetReps: ex.reps,
+          repScheme: ex.rep_scheme,
+          supersetGroupId: ex.superset_group_id,
           notes: ex.tempo ? `tempo ${ex.tempo}` : null,
         })),
       },

@@ -261,6 +261,8 @@ export default function MyFitness() {
                 exercise: ex.exercises,
                 targetSets: ex.sets,
                 targetReps: ex.reps,
+                repScheme: ex.rep_scheme,
+                supersetGroupId: ex.superset_group_id,
                 notes: ex.tempo ? `tempo ${ex.tempo}` : null,
               })),
             };
@@ -337,6 +339,7 @@ export default function MyFitness() {
               exercise: ex.exercises,
               targetSets: ex.sets,
               targetReps: ex.reps,
+              repScheme: ex.rep_scheme,
               notes: ex.rest ? `rest ${ex.rest}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
             })),
           };
@@ -383,6 +386,8 @@ export default function MyFitness() {
           exercise: ex.exercises,
           targetSets: ex.sets,
           targetReps: ex.reps,
+          repScheme: ex.rep_scheme,
+          supersetGroupId: ex.superset_group_id,
           notes: ex.rest ? `rest ${ex.rest}` : ex.notes,
         })),
       });

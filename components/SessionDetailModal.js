@@ -7,6 +7,28 @@ import { SessionLogger } from "./SessionLogger";
 const CARD_BORDER = "#ece7e1";
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 };
 
+function repSchemeSummary(repScheme) {
+  if (!repScheme?.length) return null;
+  const unique = [...new Set(repScheme)];
+  return unique.length > 1 ? repScheme.join(", ") : null;
+}
+
+// Same first-occurrence-order grouping SessionLogger uses, for this read-only
+// future-week branch's own hand-rolled list.
+function groupBySuperset(exercises) {
+  const groups = [];
+  const indexByKey = new Map();
+  exercises.forEach((item) => {
+    const key = item.supersetGroupId ?? item.id;
+    if (!indexByKey.has(key)) {
+      indexByKey.set(key, groups.length);
+      groups.push([]);
+    }
+    groups[indexByKey.get(key)].push(item);
+  });
+  return groups;
+}
+
 // Popup for a single session on the member's full-block plan view (group's
 // plan-block.js and SPC's plan-spc-block.js). Three states:
 //  - completed: the real SessionLogger accordion, view + edit whatever was
@@ -136,16 +158,28 @@ export function SessionDetailModal({
                 </>
               ) : (
                 <View style={{ gap: 10 }}>
-                  {(exercises ?? []).map((ex) => (
+                  {groupBySuperset(exercises ?? []).map((group) => (
                     <View
-                      key={ex.id}
-                      className="flex-row items-center justify-between rounded-2xl bg-white px-4 py-4"
-                      style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}
+                      key={group[0].id}
+                      style={group.length > 1 ? { borderWidth: 1.5, borderColor: "#a46a57", borderStyle: "dashed", borderRadius: 18, padding: 6, gap: 10 } : undefined}
                     >
-                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#44403c" }}>{ex.exercise?.name}</Text>
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
-                        Target: {ex.targetSets ?? "–"} sets × {ex.targetReps ?? "–"}
-                      </Text>
+                      {group.length > 1 ? (
+                        <Text className="self-start rounded-full px-2.5 py-0.5" style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#b23a22", backgroundColor: "#fdece5" }}>
+                          ⚭ SUPERSET
+                        </Text>
+                      ) : null}
+                      {group.map((ex) => (
+                        <View
+                          key={ex.id}
+                          className="flex-row items-center justify-between rounded-2xl bg-white px-4 py-4"
+                          style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}
+                        >
+                          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#44403c" }}>{ex.exercise?.name}</Text>
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
+                            Target: {ex.targetSets ?? "–"} sets × {repSchemeSummary(ex.repScheme) ?? ex.targetReps ?? "–"}
+                          </Text>
+                        </View>
+                      ))}
                     </View>
                   ))}
                   {(exercises ?? []).length === 0 ? (
