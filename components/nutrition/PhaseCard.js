@@ -11,22 +11,24 @@ function CheckBadge() {
   );
 }
 
-// A tappable card once its phase is complete; a plain (non-interactive,
-// dimmed) card otherwise, so the coach can only tap into data that actually
-// exists yet.
+// Always tappable, dimmed only for visual "not done yet" affordance — the
+// destination pages (onboarding/tracking.js, questionnaire.js) are exactly
+// where a coach takes the actions that make a phase done in the first place
+// (assigning tracking dates, copying questionnaire questions from the
+// template), so gating the tap on `done` made those phases permanently
+// unreachable: no other screen in the app links to them.
 export function PhaseCard({ onPress, title, done, subtext, accent = "primary" }) {
-  const content = (
-    <View className="rounded-lg border border-stone-200 p-4" style={{ borderLeftWidth: 4, borderLeftColor: ACCENT[accent], opacity: done ? 1 : 0.6 }}>
-      <View className="mb-1.5 flex-row items-center justify-between gap-2">
-        <Text style={{ fontFamily: fonts.sansMedium }}>{title}</Text>
-        {done ? <CheckBadge /> : null}
+  return (
+    <Pressable onPress={onPress}>
+      <View className="rounded-lg border border-stone-200 p-4" style={{ borderLeftWidth: 4, borderLeftColor: ACCENT[accent], opacity: done ? 1 : 0.6 }}>
+        <View className="mb-1.5 flex-row items-center justify-between gap-2">
+          <Text style={{ fontFamily: fonts.sansMedium }}>{title}</Text>
+          {done ? <CheckBadge /> : null}
+        </View>
+        <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+          {subtext}
+        </Text>
       </View>
-      <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-        {subtext}
-      </Text>
-    </View>
+    </Pressable>
   );
-
-  if (!done) return content;
-  return <Pressable onPress={onPress}>{content}</Pressable>;
 }
