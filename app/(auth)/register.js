@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, Linking } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase/client";
+import { NUMERIC_DONE_ID } from "../../components/NumericInputAccessory";
 
 // Email -> SMS code (via GHL, using the account's stored ghl_contact_id —
 // see import-client) -> set password -> signed in. For members created
@@ -100,6 +101,7 @@ export default function Register() {
               value={code}
               onChangeText={setCode}
               keyboardType="number-pad"
+              inputAccessoryViewID={NUMERIC_DONE_ID}
               placeholder="6-digit code"
               maxLength={6}
               className="mb-4 rounded-lg border border-stone-300 px-4 py-3"

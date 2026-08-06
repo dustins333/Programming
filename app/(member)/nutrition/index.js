@@ -19,6 +19,7 @@ import { TargetField } from "../../../components/nutrition/TargetField";
 import { RatingSelect } from "../../../components/nutrition/RatingSelect";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
+import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 
 const AUTOSAVE_DELAY_MS = 900;
 const CANVAS = "#faf8f6";
@@ -426,6 +427,7 @@ export default function NutritionToday() {
               value={values.calories_override}
               onChangeText={(t) => update("calories_override", t)}
               keyboardType="numeric"
+              inputAccessoryViewID={NUMERIC_DONE_ID}
               placeholder="Leave blank to use calculated calories"
               className="rounded-lg border border-stone-300 px-4 py-3 text-base"
               style={{ fontFamily: fonts.sans }}

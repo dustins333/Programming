@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable } from "react-native";
 import { SessionDayPicker, resizeSessionDays } from "./SessionDayPicker";
 import { DEFAULT_SESSION_DAYS } from "../lib/programming/schedule";
+import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 
 const DEFAULTS = { name: "", blockLengthWeeks: "4", sessionsPerWeek: "3", sessionDays: DEFAULT_SESSION_DAYS };
 
@@ -84,6 +85,7 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
             value={form.blockLengthWeeks}
             onChangeText={(v) => setForm((f) => ({ ...f, blockLengthWeeks: v }))}
             keyboardType="numeric"
+            inputAccessoryViewID={NUMERIC_DONE_ID}
             className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: "Montserrat_400Regular" }}
           />
@@ -95,6 +97,7 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
             value={form.sessionsPerWeek}
             onChangeText={handleSessionsPerWeekChange}
             keyboardType="numeric"
+            inputAccessoryViewID={NUMERIC_DONE_ID}
             className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: "Montserrat_400Regular" }}
           />

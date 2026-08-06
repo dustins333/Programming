@@ -11,6 +11,7 @@ import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { supabase } from "../../../lib/supabase/client";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
+import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 
 function StatusBadge({ done }) {
   return (
@@ -184,6 +185,7 @@ function TrackingField({ label, value, onChangeText }) {
         value={value}
         onChangeText={onChangeText}
         keyboardType="numeric"
+        inputAccessoryViewID={NUMERIC_DONE_ID}
         className="rounded-lg border border-stone-300 px-3 py-2 text-base"
         style={{ fontFamily: fonts.sans }}
       />

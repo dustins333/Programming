@@ -6,6 +6,7 @@ import { formatDateMDY } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
 import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
 import { WeightCalculator } from "./WeightCalculator";
+import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -218,6 +219,7 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
                     onChangeText={(v) => updateRow(i, "reps", v)}
                     placeholder={item.repScheme?.[i] ?? item.targetReps ?? "reps"}
                     keyboardType="numeric"
+                    inputAccessoryViewID={NUMERIC_DONE_ID}
                     placeholderTextColor="#a8a29e"
                     className="flex-1 text-center"
                     style={{ fontFamily: fonts.sans, fontSize: 14, color: "#44403c", height: 44, borderWidth: 1, borderColor: INPUT_BORDER, borderRadius: 10 }}
@@ -228,6 +230,7 @@ function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle,
                       onChangeText={(v) => updateRow(i, "weight", v)}
                       placeholder="weight"
                       keyboardType="numeric"
+                      inputAccessoryViewID={NUMERIC_DONE_ID}
                       placeholderTextColor="#a8a29e"
                       className="text-center"
                       style={{

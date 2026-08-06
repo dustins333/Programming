@@ -16,6 +16,7 @@ import { fonts, colors } from "../../lib/theme";
 import { CoachShell } from "../../components/CoachShell";
 import { AddStaffModal } from "../../components/AddStaffModal";
 import { TemplateEditorButton } from "../../components/nutrition/TemplateEditorButton";
+import { NUMERIC_DONE_ID } from "../../components/NumericInputAccessory";
 
 const LABELS = {
   alert_lead_time_days: "Alert lead time (days before a block ends)",
@@ -373,6 +374,7 @@ export default function Settings() {
                 value={values[row.key] ?? ""}
                 onChangeText={(text) => setValues((v) => ({ ...v, [row.key]: text }))}
                 keyboardType="numeric"
+                inputAccessoryViewID={NUMERIC_DONE_ID}
                 className="rounded-lg border border-stone-300 px-4 py-3 text-base"
                 style={{ fontFamily: fonts.sans }}
               />

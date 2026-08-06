@@ -3,6 +3,7 @@ import { Modal, View, Text, TextInput, Pressable, ScrollView } from "react-nativ
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 import { SegmentedControl } from "./SegmentedControl";
+import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 
 const CARD_BORDER = "#ece7e1";
 
@@ -203,6 +204,7 @@ function PlateCalc({ onInsert }) {
           onChangeText={setSpecialtyWeight}
           placeholder="Bar weight"
           keyboardType="numeric"
+          inputAccessoryViewID={NUMERIC_DONE_ID}
           placeholderTextColor="#a8a29e"
           className="mt-2 text-center"
           style={{ fontFamily: fonts.sans, fontSize: 14, color: "#44403c", height: 44, borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 10 }}

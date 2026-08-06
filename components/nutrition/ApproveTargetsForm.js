@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { approveAndSetTargets } from "../../lib/nutrition/onboarding";
 import { fonts, colors } from "../../lib/theme";
+import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
 export function ApproveTargetsForm({ userId, coachId, baseline, onApproved }) {
   const [form, setForm] = useState({
@@ -109,6 +110,7 @@ function Field({ label, value, onChangeText }) {
         value={value}
         onChangeText={onChangeText}
         keyboardType="numeric"
+        inputAccessoryViewID={NUMERIC_DONE_ID}
         className="rounded border border-stone-300 px-3 py-2 text-sm"
         style={{ fontFamily: fonts.sans }}
       />
@@ -123,7 +125,14 @@ function MacroField({ label, value, onChangeText, pct }) {
         {label}
       </Text>
       <View className="flex-row items-center rounded border border-stone-300 px-3">
-        <TextInput value={value} onChangeText={onChangeText} keyboardType="numeric" className="flex-1 py-2 text-sm" style={{ fontFamily: fonts.sans }} />
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          keyboardType="numeric"
+          inputAccessoryViewID={NUMERIC_DONE_ID}
+          className="flex-1 py-2 text-sm"
+          style={{ fontFamily: fonts.sans }}
+        />
         <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
           {pct}
         </Text>

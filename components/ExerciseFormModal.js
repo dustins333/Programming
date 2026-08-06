@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "react-native";
 import { MUSCLE_GROUPS, MOVEMENT_PATTERNS } from "../lib/programming/exercises";
 import { fonts, colors } from "../lib/theme";
+import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
 
@@ -186,6 +187,7 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
                       value={form.defaultSets}
                       onChangeText={(defaultSets) => setForm((f) => ({ ...f, defaultSets }))}
                       keyboardType="numeric"
+                      inputAccessoryViewID={NUMERIC_DONE_ID}
                       className="rounded-lg border border-stone-300 bg-white px-3 py-2.5"
                       style={{ fontFamily: fonts.sans }}
                     />

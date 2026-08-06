@@ -16,6 +16,7 @@ import {
 import { ProtestStrike_400Regular } from "@expo-google-fonts/protest-strike";
 import { AuthProvider } from "../lib/auth/AuthProvider";
 import { PushRegistrar } from "../lib/notifications/PushRegistrar";
+import { NumericInputAccessory } from "../components/NumericInputAccessory";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -49,6 +50,7 @@ export default function RootLayout() {
         <AuthProvider>
           <PushRegistrar />
           <Slot />
+          <NumericInputAccessory />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

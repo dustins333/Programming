@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, Image, Modal, Alert, ActivityIndicato
 import { getPhotoSignedUrls, updatePhotoSubmission } from "../../lib/nutrition/photos";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
+import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
 const isWeb = Platform.OS === "web";
 const ANGLES = ["front", "side", "back"];
@@ -121,7 +122,14 @@ function DayEditor({ date, photos, onSaved }) {
         <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
           Weight (applies to all)
         </Text>
-        <TextInput value={weight} onChangeText={setWeight} keyboardType="numeric" className="rounded border border-stone-300 px-2 py-1.5 text-sm" style={{ fontFamily: fonts.sans }} />
+        <TextInput
+          value={weight}
+          onChangeText={setWeight}
+          keyboardType="numeric"
+          inputAccessoryViewID={NUMERIC_DONE_ID}
+          className="rounded border border-stone-300 px-2 py-1.5 text-sm"
+          style={{ fontFamily: fonts.sans }}
+        />
       </View>
 
       {!isValidSet ? (
