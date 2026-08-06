@@ -104,87 +104,89 @@ export function DateCalendarPicker({ visible, onClose, alreadyAssigned, onConfir
       <Pressable onPress={handleClose} className="flex-1 justify-end" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
         <Pressable
           onPress={(e) => e.stopPropagation()}
-          style={{ width: "100%", backgroundColor: "#faf8f6", borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 18, paddingHorizontal: 20, paddingBottom: 28 }}
+          style={{ maxHeight: "85%", width: "100%", backgroundColor: "#faf8f6", borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 18, paddingBottom: 20 }}
         >
-          <Text className="mb-4 text-lg" style={{ fontFamily: fonts.display, color: colors.primary }}>
-            Assign tracking dates
-          </Text>
-
-          <View className="mb-3 flex-row items-center justify-between">
-            <Pressable onPress={() => goMonth(-1)} hitSlop={10} className="px-2 py-1">
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.primaryOnWhite }}>‹</Text>
-            </Pressable>
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15 }}>
-              {MONTH_LABELS[viewMonth - 1]} {viewYear}
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20 }}>
+            <Text className="mb-4 text-lg" style={{ fontFamily: fonts.display, color: colors.primary }}>
+              Assign tracking dates
             </Text>
-            <Pressable onPress={() => goMonth(1)} hitSlop={10} className="px-2 py-1">
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.primaryOnWhite }}>›</Text>
-            </Pressable>
-          </View>
 
-          <View className="mb-1 flex-row">
-            {WEEKDAY_LABELS.map((label, i) => (
-              <View key={i} style={{ width: `${100 / 7}%` }} className="items-center py-1">
-                <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
-                  {label}
+            <View className="mb-3 flex-row items-center justify-between">
+              <Pressable onPress={() => goMonth(-1)} hitSlop={10} className="px-2 py-1">
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.primaryOnWhite }}>‹</Text>
+              </Pressable>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15 }}>
+                {MONTH_LABELS[viewMonth - 1]} {viewYear}
+              </Text>
+              <Pressable onPress={() => goMonth(1)} hitSlop={10} className="px-2 py-1">
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.primaryOnWhite }}>›</Text>
+              </Pressable>
+            </View>
+
+            <View className="mb-1 flex-row">
+              {WEEKDAY_LABELS.map((label, i) => (
+                <View key={i} style={{ width: `${100 / 7}%` }} className="items-center py-1">
+                  <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
+                    {label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View className="flex-row flex-wrap">
+              {cells.map((date, i) => {
+                if (!date) return <View key={i} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} />;
+
+                const isAssigned = alreadyAssigned.has(date);
+                const isSelected = selected.has(date);
+                const isToday = date === today;
+                const day = Number(date.slice(8, 10));
+
+                let bg = "transparent";
+                let textColor = "#292524";
+                let borderColor = "transparent";
+                if (isAssigned) {
+                  bg = "#dbe8cf";
+                  textColor = "#4d6142";
+                } else if (isSelected) {
+                  bg = colors.primary;
+                  textColor = "white";
+                } else if (isToday) {
+                  borderColor = colors.primary;
+                }
+
+                return (
+                  <View key={date} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} className="items-center justify-center p-0.5">
+                    <Pressable
+                      onPress={() => toggleDate(date)}
+                      disabled={isAssigned}
+                      className="items-center justify-center rounded-full"
+                      style={{ width: "82%", height: "82%", backgroundColor: bg, borderWidth: borderColor === "transparent" ? 0 : 1.5, borderColor }}
+                    >
+                      <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: textColor }}>{day}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+
+            <View className="mt-4 flex-row items-center gap-4">
+              <View className="flex-row items-center gap-1.5">
+                <View className="rounded-full" style={{ width: 12, height: 12, backgroundColor: "#dbe8cf" }} />
+                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                  Already assigned
                 </Text>
               </View>
-            ))}
-          </View>
-
-          <View className="flex-row flex-wrap">
-            {cells.map((date, i) => {
-              if (!date) return <View key={i} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} />;
-
-              const isAssigned = alreadyAssigned.has(date);
-              const isSelected = selected.has(date);
-              const isToday = date === today;
-              const day = Number(date.slice(8, 10));
-
-              let bg = "transparent";
-              let textColor = "#292524";
-              let borderColor = "transparent";
-              if (isAssigned) {
-                bg = "#dbe8cf";
-                textColor = "#4d6142";
-              } else if (isSelected) {
-                bg = colors.primary;
-                textColor = "white";
-              } else if (isToday) {
-                borderColor = colors.primary;
-              }
-
-              return (
-                <View key={date} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} className="items-center justify-center p-0.5">
-                  <Pressable
-                    onPress={() => toggleDate(date)}
-                    disabled={isAssigned}
-                    className="items-center justify-center rounded-full"
-                    style={{ width: "82%", height: "82%", backgroundColor: bg, borderWidth: borderColor === "transparent" ? 0 : 1.5, borderColor }}
-                  >
-                    <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: textColor }}>{day}</Text>
-                  </Pressable>
-                </View>
-              );
-            })}
-          </View>
-
-          <View className="mt-4 flex-row items-center gap-4">
-            <View className="flex-row items-center gap-1.5">
-              <View className="rounded-full" style={{ width: 12, height: 12, backgroundColor: "#dbe8cf" }} />
-              <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                Already assigned
-              </Text>
+              <View className="flex-row items-center gap-1.5">
+                <View className="rounded-full" style={{ width: 12, height: 12, backgroundColor: colors.primary }} />
+                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                  Selected
+                </Text>
+              </View>
             </View>
-            <View className="flex-row items-center gap-1.5">
-              <View className="rounded-full" style={{ width: 12, height: 12, backgroundColor: colors.primary }} />
-              <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                Selected
-              </Text>
-            </View>
-          </View>
+          </ScrollView>
 
-          <View className="mt-5 flex-row items-center justify-between">
+          <View className="mt-4 flex-row items-center justify-between" style={{ paddingHorizontal: 20 }}>
             <Pressable onPress={handleClose} hitSlop={8}>
               <Text style={{ fontFamily: fonts.sansMedium, color: "#78716c" }}>Cancel</Text>
             </Pressable>

@@ -52,8 +52,8 @@ export default function NutritionDashboard() {
 
   const filtered = useMemo(() => {
     if (!roster) return [];
-    if (!filter) return roster;
-    return roster.filter((c) => c.rosterStatus === filter);
+    const scoped = filter ? roster.filter((c) => c.rosterStatus === filter) : roster;
+    return [...scoped].sort((a, b) => a.name.localeCompare(b.name));
   }, [roster, filter]);
 
   const counts = useMemo(() => {

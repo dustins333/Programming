@@ -19,7 +19,7 @@ export default function ArchivedNutritionClients() {
 
   const load = useCallback(async () => {
     try {
-      setClients((await getNutritionRoster()).filter((c) => c.status === "archived"));
+      setClients((await getNutritionRoster()).filter((c) => c.status === "archived").sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
