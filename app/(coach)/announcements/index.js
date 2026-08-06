@@ -218,9 +218,19 @@ export default function Announcements() {
         // registered devices, functions not deployed) — that surfaces as a
         // normal error here rather than crashing the compose flow.
         try {
-          await pushAnnouncementNow(created.id);
+          const result = await pushAnnouncementNow(created.id);
+          if (result?.pushed === 0 && result?.audience > 0) {
+            Alert.alert(
+              "Announcement sent, but push didn't go out",
+              `${result.audience} people were in the audience, but 0 push notifications were delivered. Check registered devices.`
+            );
+          }
         } catch (pushErr) {
           console.error("Push send failed (announcement was still created):", pushErr);
+          Alert.alert(
+            "Announcement created, but push failed",
+            pushErr?.message ?? String(pushErr)
+          );
         }
       }
       resetForm();

@@ -49,7 +49,11 @@ export async function resolveAudienceUserIds(admin: SupabaseClient, announcement
     return (data ?? []).map((r: { id: string }) => r.id);
   }
 
-  const { data, error } = await admin.schema("core").from("users").select("id").eq("role", "member");
+  // "all" means everyone with a real account — members, coaches, and
+  // admins alike (coaches/admins can be in-audience for the in-app popup
+  // via matchesAudience's unconditional default-true, so push needs to
+  // match that, not just members).
+  const { data, error } = await admin.schema("core").from("users").select("id");
   if (error) throw error;
   return (data ?? []).map((r: { id: string }) => r.id);
 }
