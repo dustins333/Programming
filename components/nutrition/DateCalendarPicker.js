@@ -104,7 +104,17 @@ export function DateCalendarPicker({ visible, onClose, alreadyAssigned, onConfir
       <Pressable onPress={handleClose} className="flex-1 justify-end" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
         <Pressable
           onPress={(e) => e.stopPropagation()}
-          style={{ maxHeight: "85%", width: "100%", backgroundColor: "#faf8f6", borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 18, paddingBottom: 20 }}
+          style={{
+            maxHeight: "85%",
+            width: "100%",
+            maxWidth: 440,
+            alignSelf: "center",
+            backgroundColor: "#faf8f6",
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            paddingTop: 18,
+            paddingBottom: 20,
+          }}
         >
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20 }}>
             <Text className="mb-4 text-lg" style={{ fontFamily: fonts.display, color: colors.primary }}>
