@@ -68,7 +68,13 @@ Deno.serve(async (req) => {
   });
 
   if (created.error) {
-    const alreadyExists = /already registered|already exists|email_exists/i.test(created.error.message ?? "");
+    // Supabase's real duplicate-email error text is "A user with this email
+    // address has already been registered" — note "already been registered",
+    // not "already registered". A tighter regex here missed that phrasing
+    // entirely and 500'd instead of falling through to the existing-user
+    // lookup below, for every real client who already had a standalone-app
+    // account (i.e. almost everyone in the actual bulk-import case).
+    const alreadyExists = /already.*registered|already exists|email_exists/i.test(created.error.message ?? "");
     if (!alreadyExists) {
       return new Response(JSON.stringify({ error: created.error.message }), { status: 500 });
     }

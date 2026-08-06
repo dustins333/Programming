@@ -66,7 +66,9 @@ Deno.serve(async (req) => {
   });
 
   if (invite.error) {
-    const alreadyExists = /already registered|already exists|email_exists/i.test(invite.error.message ?? "");
+    // See import-client's identical fix: Supabase's real duplicate-email
+    // error text is "already been registered", not "already registered".
+    const alreadyExists = /already.*registered|already exists|email_exists/i.test(invite.error.message ?? "");
     if (!alreadyExists) {
       return new Response(JSON.stringify({ error: invite.error.message }), { status: 500 });
     }
