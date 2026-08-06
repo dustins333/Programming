@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
 import { getClient } from "../../../../../../lib/nutrition/clients";
@@ -18,7 +18,6 @@ export default function OnboardingTracking() {
   const [client, setClient] = useState(null);
   const [dates, setDates] = useState(null);
   const [logsByDate, setLogsByDate] = useState({});
-  const [pickerVisible, setPickerVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
@@ -40,16 +39,16 @@ export default function OnboardingTracking() {
     load();
   }, [load]);
 
-  // Bulk-assign from the calendar picker — sequential inserts (typical batch
-  // is a handful of dates, not worth a dedicated bulk-insert RPC).
-  const handleAssignDates = async (newDates) => {
-    for (const date of newDates) {
+  const handleAssignDate = async (date) => {
+    try {
       await addTrackingDate(userId, date);
+      await load();
+    } catch (err) {
+      Alert.alert("Failed to assign date", err.message ?? String(err));
     }
-    await load();
   };
 
-  const handleRemoveDate = async (dateId) => {
+  const handleUnassignDate = async (dateId) => {
     try {
       await removeTrackingDate(dateId);
       await load();
@@ -94,36 +93,30 @@ export default function OnboardingTracking() {
         </Text>
 
         <View className="mb-5 rounded-lg border border-stone-200 p-4">
-          <View className="mb-3 flex-row items-center justify-between">
-            <Text style={{ fontFamily: fonts.sansBold }}>Tracking dates</Text>
-            <Pressable onPress={() => setPickerVisible(true)} className="rounded px-3 py-1.5" style={{ backgroundColor: colors.primary }}>
-              <Text className="text-sm text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                + Assign dates
-              </Text>
-            </Pressable>
-          </View>
-          {dates.length === 0 ? (
-            <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-              No dates assigned yet.
-            </Text>
-          ) : (
-            dates.map((d) => {
-              const log = logsByDate[d.date];
-              return (
-                <View key={d.id} className="mb-1.5 flex-row items-center justify-between border-b border-stone-100 py-2">
-                  <Text style={{ fontFamily: fonts.sansMedium }}>{formatDateMDY(d.date)}</Text>
-                  <View className="flex-row items-center gap-3">
+          <Text className="mb-3" style={{ fontFamily: fonts.sansBold }}>
+            Tracking dates
+          </Text>
+          <Text className="mb-3 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+            Tap a date to assign it, tap again to remove it.
+          </Text>
+
+          <DateCalendarPicker assignedDates={dates} onAssign={handleAssignDate} onUnassign={handleUnassignDate} />
+
+          {dates.length > 0 ? (
+            <View className="mt-4">
+              {dates.map((d) => {
+                const log = logsByDate[d.date];
+                return (
+                  <View key={d.id} className="mb-1.5 flex-row items-center justify-between border-b border-stone-100 py-2">
+                    <Text style={{ fontFamily: fonts.sansMedium }}>{formatDateMDY(d.date)}</Text>
                     <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
                       {log ? `P${log.protein_g} C${log.carb_g} F${log.fat_g} Fiber${log.fiber_g}` : "Not logged yet"}
                     </Text>
-                    <Pressable onPress={() => handleRemoveDate(d.id)} hitSlop={8}>
-                      <Text style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>✕</Text>
-                    </Pressable>
                   </View>
-                </View>
-              );
-            })
-          )}
+                );
+              })}
+            </View>
+          ) : null}
         </View>
 
         <View className="rounded-lg border border-stone-200 p-4">
@@ -139,13 +132,6 @@ export default function OnboardingTracking() {
           </View>
         </View>
       </ScrollView>
-
-      <DateCalendarPicker
-        visible={pickerVisible}
-        onClose={() => setPickerVisible(false)}
-        alreadyAssigned={new Set(dates.map((d) => d.date))}
-        onConfirm={handleAssignDates}
-      />
     </CoachShell>
   );
 }

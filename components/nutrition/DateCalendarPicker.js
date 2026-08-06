@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Modal, View, Text, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { fonts, colors } from "../../lib/theme";
 import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
 
@@ -40,23 +40,25 @@ const MONTH_LABELS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-// Bottom-sheet multi-select month calendar — tap days to toggle, "Assign N
-// dates" bulk-adds them all at once. Replaces a plain YYYY-MM-DD text field
-// per direct ask for something that actually feels like picking dates off a
-// calendar. `alreadyAssigned` (a Set of date strings) renders those days as
-// a fixed, non-interactive "already assigned" state so a coach can't
-// double-add (objective_tracking_dates has a real unique(client_id, date)
-// constraint) — the calendar itself doubles as a visual record of what's
-// already on the books, no separate legend needed.
-export function DateCalendarPicker({ visible, onClose, alreadyAssigned, onConfirm }) {
+const WIDTH = 280;
+
+// Compact inline month calendar, no popup — sits directly on the page.
+// Tapping a plain date assigns it immediately (fills in a circle); tapping
+// an already-assigned date immediately unassigns it. No separate
+// select-then-confirm step, matching "click it, it's done, click again to
+// undo" feedback from an earlier Modal-based multi-select version that
+// felt oversized and had an unnecessary confirm button for something this
+// simple. Fixed small width so it reads like a normal date-picker widget
+// on any screen size, not a stretched panel.
+export function DateCalendarPicker({ assignedDates, onAssign, onUnassign }) {
   const today = todayInBoise();
   const [year, initialMonth] = today.split("-").map(Number);
   const [viewYear, setViewYear] = useState(year);
   const [viewMonth, setViewMonth] = useState(initialMonth);
-  const [selected, setSelected] = useState(() => new Set());
-  const [saving, setSaving] = useState(false);
+  const [pending, setPending] = useState(null); // date currently being (un)assigned — blocks double-tap
 
   const cells = useMemo(() => buildMonthGrid(viewYear, viewMonth), [viewYear, viewMonth]);
+  const assignedByDate = useMemo(() => new Map(assignedDates.map((d) => [d.date, d.id])), [assignedDates]);
 
   const goMonth = (delta) => {
     let m = viewMonth + delta;
@@ -72,147 +74,75 @@ export function DateCalendarPicker({ visible, onClose, alreadyAssigned, onConfir
     setViewYear(y);
   };
 
-  const toggleDate = (date) => {
-    if (alreadyAssigned.has(date)) return;
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(date)) next.delete(date);
-      else next.add(date);
-      return next;
-    });
-  };
-
-  const handleClose = () => {
-    setSelected(new Set());
-    onClose();
-  };
-
-  const handleConfirm = async () => {
-    if (selected.size === 0) return;
-    setSaving(true);
+  const handleTap = async (date) => {
+    if (pending) return;
+    setPending(date);
     try {
-      await onConfirm(Array.from(selected));
-      setSelected(new Set());
-      onClose();
+      const existingId = assignedByDate.get(date);
+      if (existingId) await onUnassign(existingId);
+      else await onAssign(date);
     } finally {
-      setSaving(false);
+      setPending(null);
     }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <Pressable onPress={handleClose} className="flex-1 justify-end" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={{
-            maxHeight: "85%",
-            width: "100%",
-            maxWidth: 440,
-            alignSelf: "center",
-            backgroundColor: "#faf8f6",
-            borderTopLeftRadius: 22,
-            borderTopRightRadius: 22,
-            paddingTop: 18,
-            paddingBottom: 20,
-          }}
-        >
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 20 }}>
-            <Text className="mb-4 text-lg" style={{ fontFamily: fonts.display, color: colors.primary }}>
-              Assign tracking dates
-            </Text>
-
-            <View className="mb-3 flex-row items-center justify-between">
-              <Pressable onPress={() => goMonth(-1)} hitSlop={10} className="px-2 py-1">
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.primaryOnWhite }}>‹</Text>
-              </Pressable>
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15 }}>
-                {MONTH_LABELS[viewMonth - 1]} {viewYear}
-              </Text>
-              <Pressable onPress={() => goMonth(1)} hitSlop={10} className="px-2 py-1">
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.primaryOnWhite }}>›</Text>
-              </Pressable>
-            </View>
-
-            <View className="mb-1 flex-row">
-              {WEEKDAY_LABELS.map((label, i) => (
-                <View key={i} style={{ width: `${100 / 7}%` }} className="items-center py-1">
-                  <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
-                    {label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            <View className="flex-row flex-wrap">
-              {cells.map((date, i) => {
-                if (!date) return <View key={i} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} />;
-
-                const isAssigned = alreadyAssigned.has(date);
-                const isSelected = selected.has(date);
-                const isToday = date === today;
-                const day = Number(date.slice(8, 10));
-
-                let bg = "transparent";
-                let textColor = "#292524";
-                let borderColor = "transparent";
-                if (isAssigned) {
-                  bg = "#dbe8cf";
-                  textColor = "#4d6142";
-                } else if (isSelected) {
-                  bg = colors.primary;
-                  textColor = "white";
-                } else if (isToday) {
-                  borderColor = colors.primary;
-                }
-
-                return (
-                  <View key={date} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} className="items-center justify-center p-0.5">
-                    <Pressable
-                      onPress={() => toggleDate(date)}
-                      disabled={isAssigned}
-                      className="items-center justify-center rounded-full"
-                      style={{ width: "82%", height: "82%", backgroundColor: bg, borderWidth: borderColor === "transparent" ? 0 : 1.5, borderColor }}
-                    >
-                      <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: textColor }}>{day}</Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-
-            <View className="mt-4 flex-row items-center gap-4">
-              <View className="flex-row items-center gap-1.5">
-                <View className="rounded-full" style={{ width: 12, height: 12, backgroundColor: "#dbe8cf" }} />
-                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                  Already assigned
-                </Text>
-              </View>
-              <View className="flex-row items-center gap-1.5">
-                <View className="rounded-full" style={{ width: 12, height: 12, backgroundColor: colors.primary }} />
-                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                  Selected
-                </Text>
-              </View>
-            </View>
-          </ScrollView>
-
-          <View className="mt-4 flex-row items-center justify-between" style={{ paddingHorizontal: 20 }}>
-            <Pressable onPress={handleClose} hitSlop={8}>
-              <Text style={{ fontFamily: fonts.sansMedium, color: "#78716c" }}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleConfirm}
-              disabled={selected.size === 0 || saving}
-              className="rounded-lg px-5 py-3"
-              style={{ backgroundColor: colors.primary, opacity: selected.size === 0 || saving ? 0.5 : 1 }}
-            >
-              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                {saving ? "Assigning…" : `Assign ${selected.size || ""} date${selected.size === 1 ? "" : "s"}`.trim()}
-              </Text>
-            </Pressable>
-          </View>
+    <View style={{ width: WIDTH }}>
+      <View className="mb-2 flex-row items-center justify-between">
+        <Pressable onPress={() => goMonth(-1)} hitSlop={10} className="px-2 py-1">
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: colors.primaryOnWhite }}>‹</Text>
         </Pressable>
-      </Pressable>
-    </Modal>
+        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5 }}>
+          {MONTH_LABELS[viewMonth - 1]} {viewYear}
+        </Text>
+        <Pressable onPress={() => goMonth(1)} hitSlop={10} className="px-2 py-1">
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: colors.primaryOnWhite }}>›</Text>
+        </Pressable>
+      </View>
+
+      <View className="flex-row">
+        {WEEKDAY_LABELS.map((label, i) => (
+          <View key={i} style={{ width: `${100 / 7}%` }} className="items-center py-0.5">
+            <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
+              {label}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <View className="flex-row flex-wrap">
+        {cells.map((date, i) => {
+          if (!date) return <View key={i} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} />;
+
+          const isAssigned = assignedByDate.has(date);
+          const isToday = date === today;
+          const isPending = pending === date;
+          const day = Number(date.slice(8, 10));
+
+          let bg = "transparent";
+          let textColor = "#292524";
+          let borderColor = "transparent";
+          if (isAssigned) {
+            bg = colors.primary;
+            textColor = "white";
+          } else if (isToday) {
+            borderColor = colors.primary;
+          }
+
+          return (
+            <View key={date} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} className="items-center justify-center">
+              <Pressable
+                onPress={() => handleTap(date)}
+                disabled={isPending}
+                className="items-center justify-center rounded-full"
+                style={{ width: "78%", height: "78%", backgroundColor: bg, borderWidth: borderColor === "transparent" ? 0 : 1.5, borderColor, opacity: isPending ? 0.5 : 1 }}
+              >
+                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: textColor }}>{day}</Text>
+              </Pressable>
+            </View>
+          );
+        })}
+      </View>
+    </View>
   );
 }
