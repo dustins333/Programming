@@ -3,9 +3,16 @@ import { View, Text, ScrollView, ActivityIndicator, Pressable, Alert } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
 import { getClient } from "../../../../../../lib/nutrition/clients";
-import { listQuestionnaireQuestions, copyQuestionnaireTemplateToClient } from "../../../../../../lib/nutrition/onboarding";
+import {
+  listQuestionnaireQuestions,
+  copyQuestionnaireTemplateToClient,
+  addQuestionnaireQuestion,
+  updateQuestionnaireQuestion,
+  deleteQuestionnaireQuestion,
+} from "../../../../../../lib/nutrition/onboarding";
 import { supabase } from "../../../../../../lib/supabase/client";
 import { HighlightableAnswer } from "../../../../../../components/nutrition/HighlightableAnswer";
+import { QuestionListEditor } from "../../../../../../components/nutrition/QuestionListEditor";
 import { CoachShell } from "../../../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../../../lib/formatDate";
 import { fonts, colors } from "../../../../../../lib/theme";
@@ -48,6 +55,31 @@ export default function OnboardingQuestionnaire() {
     } finally {
       setCopying(false);
     }
+  };
+
+  const nextPosition = () => (questions && questions.length > 0 ? Math.max(...questions.map((q) => q.position)) + 1 : 0);
+
+  const handleAddQuestion = async (text) => {
+    await addQuestionnaireQuestion(userId, text, nextPosition());
+    await load();
+  };
+
+  const handleUpdateQuestion = async (id, text) => {
+    await updateQuestionnaireQuestion(id, { question_text: text });
+    await load();
+  };
+
+  const handleDeleteQuestion = async (id) => {
+    await deleteQuestionnaireQuestion(id);
+    await load();
+  };
+
+  const handleMoveQuestion = async (a, b) => {
+    await Promise.all([
+      updateQuestionnaireQuestion(a.id, { position: b.position }),
+      updateQuestionnaireQuestion(b.id, { position: a.position }),
+    ]);
+    await load();
   };
 
   if (loadError) {
@@ -103,17 +135,30 @@ export default function OnboardingQuestionnaire() {
             <Text className="mb-3 text-stone-500" style={{ fontFamily: fonts.sans }}>
               No questions on file for this client.
             </Text>
-            <Pressable onPress={handleCopy} disabled={copying} className="self-start rounded px-3 py-1.5" style={{ backgroundColor: colors.primary }}>
+            <Pressable onPress={handleCopy} disabled={copying} className="mb-5 self-start rounded px-3 py-1.5" style={{ backgroundColor: colors.primary }}>
               <Text className="text-sm text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                 {copying ? "Copying…" : "Copy questions from template"}
               </Text>
             </Pressable>
           </View>
-        ) : (
-          <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
-            Not submitted yet.
-          </Text>
-        )}
+        ) : null}
+
+        {/* Editable regardless of whether questions were just copied or
+            already existed — not shown once the client has submitted, since
+            editing questions after real answers exist to them doesn't make
+            sense. This is what a coach uses to tailor a client's copied
+            template before Send to client makes it visible to them. */}
+        {!response ? (
+          <QuestionListEditor
+            title="Questions (editable per client)"
+            description="Pulled from the shared template — add, edit, reorder, or remove just for this client before sending."
+            questions={questions}
+            onAdd={handleAddQuestion}
+            onUpdate={handleUpdateQuestion}
+            onDelete={handleDeleteQuestion}
+            onMove={handleMoveQuestion}
+          />
+        ) : null}
       </ScrollView>
     </CoachShell>
   );

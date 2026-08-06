@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
 import { getClient } from "../../../../../../lib/nutrition/clients";
@@ -7,8 +7,8 @@ import { computeBaseline, addTrackingDate, removeTrackingDate } from "../../../.
 import { supabase } from "../../../../../../lib/supabase/client";
 import { BaselineSummary } from "../../../../../../components/nutrition/BaselineSummary";
 import { PrepNotes } from "../../../../../../components/nutrition/PrepNotes";
+import { DateCalendarPicker } from "../../../../../../components/nutrition/DateCalendarPicker";
 import { CoachShell } from "../../../../../../components/CoachShell";
-import { todayInBoise } from "../../../../../../lib/boiseDate";
 import { formatDateMDY } from "../../../../../../lib/formatDate";
 import { fonts, colors } from "../../../../../../lib/theme";
 
@@ -18,8 +18,7 @@ export default function OnboardingTracking() {
   const [client, setClient] = useState(null);
   const [dates, setDates] = useState(null);
   const [logsByDate, setLogsByDate] = useState({});
-  const [newDate, setNewDate] = useState(todayInBoise());
-  const [adding, setAdding] = useState(false);
+  const [pickerVisible, setPickerVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
@@ -41,17 +40,13 @@ export default function OnboardingTracking() {
     load();
   }, [load]);
 
-  const handleAddDate = async () => {
-    if (!newDate) return;
-    setAdding(true);
-    try {
-      await addTrackingDate(userId, newDate);
-      await load();
-    } catch (err) {
-      Alert.alert("Failed to assign date", err.message ?? String(err));
-    } finally {
-      setAdding(false);
+  // Bulk-assign from the calendar picker — sequential inserts (typical batch
+  // is a handful of dates, not worth a dedicated bulk-insert RPC).
+  const handleAssignDates = async (newDates) => {
+    for (const date of newDates) {
+      await addTrackingDate(userId, date);
     }
+    await load();
   };
 
   const handleRemoveDate = async (dateId) => {
@@ -99,11 +94,16 @@ export default function OnboardingTracking() {
         </Text>
 
         <View className="mb-5 rounded-lg border border-stone-200 p-4">
-          <Text className="mb-3" style={{ fontFamily: fonts.sansBold }}>
-            Tracking dates
-          </Text>
+          <View className="mb-3 flex-row items-center justify-between">
+            <Text style={{ fontFamily: fonts.sansBold }}>Tracking dates</Text>
+            <Pressable onPress={() => setPickerVisible(true)} className="rounded px-3 py-1.5" style={{ backgroundColor: colors.primary }}>
+              <Text className="text-sm text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                + Assign dates
+              </Text>
+            </Pressable>
+          </View>
           {dates.length === 0 ? (
-            <Text className="mb-3 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+            <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
               No dates assigned yet.
             </Text>
           ) : (
@@ -124,20 +124,6 @@ export default function OnboardingTracking() {
               );
             })
           )}
-          <View className="mt-3 flex-row gap-2">
-            <TextInput
-              value={newDate}
-              onChangeText={setNewDate}
-              placeholder="YYYY-MM-DD"
-              className="flex-1 rounded border border-stone-300 px-3 py-2 text-sm"
-              style={{ fontFamily: fonts.sans }}
-            />
-            <Pressable onPress={handleAddDate} disabled={adding} className="rounded px-3 py-2" style={{ backgroundColor: colors.primary }}>
-              <Text className="text-sm text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                {adding ? "Adding…" : "Assign date"}
-              </Text>
-            </Pressable>
-          </View>
         </View>
 
         <View className="rounded-lg border border-stone-200 p-4">
@@ -153,6 +139,13 @@ export default function OnboardingTracking() {
           </View>
         </View>
       </ScrollView>
+
+      <DateCalendarPicker
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        alreadyAssigned={new Set(dates.map((d) => d.date))}
+        onConfirm={handleAssignDates}
+      />
     </CoachShell>
   );
 }

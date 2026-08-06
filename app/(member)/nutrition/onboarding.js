@@ -5,6 +5,8 @@ import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { getOnboardingStatus, submitQuestionnaire, logObjectiveTrackingDay } from "../../../lib/nutrition/onboarding";
 import { getClient } from "../../../lib/nutrition/clients";
+import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
+import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { supabase } from "../../../lib/supabase/client";
 import { formatDateMDY } from "../../../lib/formatDate";
@@ -221,6 +223,7 @@ const TASKS = [
 export default function NutritionOnboarding() {
   const { profile } = useAuth();
   const insets = useSafeAreaInsets();
+  const access = useNutritionAccess(profile.id);
   const [status, setStatus] = useState(null);
   const [questions, setQuestions] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
@@ -247,6 +250,16 @@ export default function NutritionOnboarding() {
     await logObjectiveTrackingDay(profile.id, date, values);
     await load();
   };
+
+// Belt-and-suspenders: normal navigation to this screen only happens via
+  // NutritionAccessMessage's "Continue onboarding" button, which already
+  // only shows once status is "onboarding" (i.e. sent) — but a stale
+  // bookmark/deep link could still land here directly for a "pending"
+  // client, so this loads status/questions unconditionally and needs its
+  // own gate too rather than trusting the caller.
+  if (access.status !== "loading" && access.status !== "onboarding") {
+    return <NutritionAccessMessage status={access.status} error={access.error} />;
+  }
 
   if (loadError) {
     return (

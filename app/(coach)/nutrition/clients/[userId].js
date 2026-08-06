@@ -5,7 +5,7 @@ import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays } from "../../../../lib/boiseDate";
-import { getClient } from "../../../../lib/nutrition/clients";
+import { getClient, sendOnboardingToClient } from "../../../../lib/nutrition/clients";
 import { listTargets, deriveCalories } from "../../../../lib/nutrition/targets";
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
 import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsSince, listCheckinReopensSince } from "../../../../lib/nutrition/checkin";
@@ -35,7 +35,7 @@ import { PhotoUpload } from "../../../../components/nutrition/PhotoUpload";
 import { ClientSettingsModal } from "../../../../components/nutrition/ClientSettingsModal";
 import { CoachShell } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
-import { confirmBypassOnboarding } from "../../../../lib/confirmDialog";
+import { confirmBypassOnboarding, confirmSendToClient } from "../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
@@ -144,6 +144,7 @@ export default function NutritionClientDetail() {
   const [otLogs, setOtLogs] = useState([]);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [bypassing, setBypassing] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const selectedWeek = useMemo(() => {
     const { currentWeek } = computeWeekWindows(today);
@@ -232,6 +233,24 @@ export default function NutritionClientDetail() {
     }
   };
 
+  // Releases the questionnaire + tracking dates a coach has been setting up
+  // (see migration 0031) — before this, the client's own onboarding hub
+  // shows a "your coach is getting things ready" placeholder instead
+  // (lib/nutrition/useNutritionAccess.js's "pending" status).
+  const handleSendToClient = async () => {
+    const confirmed = await confirmSendToClient(client.name);
+    if (!confirmed) return;
+    setSending(true);
+    try {
+      await sendOnboardingToClient(userId);
+      await load();
+    } catch (err) {
+      Alert.alert("Failed to send to client", err.message ?? String(err));
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleCopyQuestions = async () => {
     setCopying(true);
     try {
@@ -313,9 +332,28 @@ export default function NutritionClientDetail() {
               <Ionicons name="settings-outline" size={19} color="#a8a29e" />
             </Pressable>
           </View>
-          <Text className="mb-6 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+          <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
             {client.email} · started {formatDateMDY(client.start_date)}
           </Text>
+
+          {client.onboarding_sent_at ? (
+            <View className="mb-5 rounded-lg border px-4 py-3" style={{ borderColor: "#ece7e1", backgroundColor: "#faf8f6" }}>
+              <Text style={{ fontFamily: fonts.sansMedium, color: "#78716c" }}>
+                Sent to client {formatDateMDY(client.onboarding_sent_at.slice(0, 10))} — she can see her questionnaire and tracking dates.
+              </Text>
+            </View>
+          ) : (
+            <View className="mb-5 flex-row items-center justify-between rounded-lg border px-4 py-3" style={{ borderColor: "#f0ddd2", backgroundColor: "#fdf6f2" }}>
+              <Text className="flex-1 pr-3" style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>
+                Not sent yet — she can't see her questionnaire or tracking dates until you send it.
+              </Text>
+              <Pressable onPress={handleSendToClient} disabled={sending} className="rounded-lg px-4 py-2.5" style={{ backgroundColor: colors.primary }}>
+                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                  {sending ? "Sending…" : "Send to client"}
+                </Text>
+              </Pressable>
+            </View>
+          )}
 
           <SectionCard title="Onboarding progress">
             <OnboardingStepper steps={steps} />

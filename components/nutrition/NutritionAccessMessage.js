@@ -18,6 +18,16 @@ export function NutritionAccessMessage({ status, error }) {
     );
   }
 
+  if (status === "pending") {
+    return (
+      <View className="flex-1 items-center justify-center bg-white px-8" style={{ paddingTop: insets.top }}>
+        <Text className="text-center text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Your coach is getting your nutrition program ready — check back soon.
+        </Text>
+      </View>
+    );
+  }
+
   if (status === "onboarding") {
     return (
       <View className="flex-1 items-center justify-center bg-white px-8" style={{ paddingTop: insets.top }}>

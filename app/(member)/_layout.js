@@ -31,7 +31,7 @@ export default function MemberLayout() {
   // toggled-off client shouldn't even see this tab exists" — briefly
   // hiding-then-showing on load reads better than the reverse.
   const { status: nutritionStatus } = useNutritionAccess(session?.user?.id);
-  const showNutritionTab = nutritionStatus === "active" || nutritionStatus === "onboarding";
+  const showNutritionTab = nutritionStatus === "active" || nutritionStatus === "onboarding" || nutritionStatus === "pending";
 
   if (!ready) {
     return (
