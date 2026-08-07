@@ -12,6 +12,12 @@ export function NewTargetForm({ userId, setBy, currentTarget, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
+  const protein = Number(form.protein_g) || 0;
+  const carb = Number(form.carb_g) || 0;
+  const fat = Number(form.fat_g) || 0;
+  const calories = 4 * protein + 4 * carb + 9 * fat;
+  const pct = (macroCalories) => (calories > 0 ? `${Math.round((macroCalories / calories) * 100)}%` : "—");
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -39,13 +45,16 @@ export function NewTargetForm({ userId, setBy, currentTarget, onSaved }) {
   return (
     <View>
       <View className="mb-2 flex-row gap-3">
-        <TargetField label="Protein (g)" styleKey="protein" pillLabel="now" flex current={currentTarget?.protein_g} value={form.protein_g} onChangeText={(t) => setForm((f) => ({ ...f, protein_g: t }))} />
-        <TargetField label="Carb (g)" styleKey="carb" pillLabel="now" flex current={currentTarget?.carb_g} value={form.carb_g} onChangeText={(t) => setForm((f) => ({ ...f, carb_g: t }))} />
+        <TargetField label="Protein (g)" styleKey="protein" pillLabel="now" flex current={currentTarget?.protein_g} value={form.protein_g} onChangeText={(t) => setForm((f) => ({ ...f, protein_g: t }))} pct={pct(4 * protein)} />
+        <TargetField label="Carb (g)" styleKey="carb" pillLabel="now" flex current={currentTarget?.carb_g} value={form.carb_g} onChangeText={(t) => setForm((f) => ({ ...f, carb_g: t }))} pct={pct(4 * carb)} />
       </View>
       <View className="mb-2 flex-row gap-3">
-        <TargetField label="Fat (g)" styleKey="fat" pillLabel="now" flex current={currentTarget?.fat_g} value={form.fat_g} onChangeText={(t) => setForm((f) => ({ ...f, fat_g: t }))} />
+        <TargetField label="Fat (g)" styleKey="fat" pillLabel="now" flex current={currentTarget?.fat_g} value={form.fat_g} onChangeText={(t) => setForm((f) => ({ ...f, fat_g: t }))} pct={pct(9 * fat)} />
         <TargetField label="Fiber (g)" styleKey="fiber" pillLabel="now" flex current={currentTarget?.fiber_g} value={form.fiber_g} onChangeText={(t) => setForm((f) => ({ ...f, fiber_g: t }))} />
       </View>
+      <Text className="mb-3 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+        Calories (derived): <Text style={{ fontFamily: fonts.sansMedium }}>{calories.toFixed(0)}</Text>
+      </Text>
       <View className="mb-2 flex-row gap-3">
         <TargetField label="Step goal" styleKey="steps" pillLabel="now" flex current={currentTarget?.step_goal} value={form.step_goal} onChangeText={(t) => setForm((f) => ({ ...f, step_goal: t }))} />
         <TargetField label="Sleep goal (hrs)" styleKey="sleep" pillLabel="now" flex current={currentTarget?.sleep_hours_goal} value={form.sleep_hours_goal} onChangeText={(t) => setForm((f) => ({ ...f, sleep_hours_goal: t }))} />

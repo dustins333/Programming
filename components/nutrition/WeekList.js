@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView, Modal } from "react-native";
 import { colorForTarget, colorForStepsTarget } from "../../lib/nutrition/weekCycle";
 import { addDays } from "../../lib/boiseDate";
 import { formatDateMD } from "../../lib/formatDate";
-import { fonts } from "../../lib/theme";
+import { fonts, colors } from "../../lib/theme";
 
 // Maps a metric column to the target row's matching field — steps is the
 // only one-directional column (at/above goal is always green, below is
@@ -51,6 +51,44 @@ function dayLabel(dateStr) {
 
 function colorForColumn(key, actual, target) {
   return key === "steps" ? colorForStepsTarget(actual, target) : colorForTarget(actual, target);
+}
+
+// Notes are single-line/truncated in the table itself — some clients write a
+// lot in there — but tapping one opens a popup with the full text rather
+// than defaulting to always showing it in full (which would blow out every
+// row's height). Non-interactive (no underline, no press) when there's
+// nothing to expand.
+function NoteCell({ note }) {
+  const [open, setOpen] = useState(false);
+  const hasNote = Boolean(note);
+  return (
+    <>
+      <Pressable disabled={!hasNote} onPress={() => setOpen(true)} style={{ width: NOTE_COL_WIDTH }}>
+        <Text
+          maxFontSizeMultiplier={TABLE_MAX_SCALE}
+          numberOfLines={1}
+          style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", textDecorationLine: hasNote ? "underline" : "none" }}
+        >
+          {note || "—"}
+        </Text>
+      </Pressable>
+      {hasNote ? (
+        <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+          <Pressable onPress={() => setOpen(false)} className="flex-1 items-center justify-center px-8" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+            <Pressable onPress={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-white p-4">
+              <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+                Note
+              </Text>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: "#44403c" }}>{note}</Text>
+              <Pressable onPress={() => setOpen(false)} className="mt-4 self-end" hitSlop={8}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Close</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      ) : null}
+    </>
+  );
 }
 
 // A single table (not one card per week) keeps every week's columns aligned
@@ -154,9 +192,7 @@ export function WeekList({ weeks }) {
                     {fmt(row.log?.[c.key])}
                   </Text>
                 ))}
-                <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
-                  {row.log?.client_note || "—"}
-                </Text>
+                <NoteCell note={row.log?.client_note} />
               </View>
             )
           )}
@@ -217,9 +253,7 @@ export function WeekDayTable({ week }) {
                     </Text>
                   );
                 })}
-                <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
-                  {log?.client_note || "—"}
-                </Text>
+                <NoteCell note={log?.client_note} />
               </View>
             );
           })}

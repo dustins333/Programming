@@ -13,7 +13,11 @@ export function RatingSelect({ label, value, onChangeText, flex }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <View className={flex ? "mb-2 flex-1" : "mb-2"}>
+    // justify-end: matches TargetField's own fix — keeps this field's input
+    // level with sibling TargetFields in the same flex-row (e.g. Steps/
+    // Hunger/Energy) when one of them wraps its label to a second line at a
+    // larger Dynamic Type size.
+    <View className={flex ? "mb-2 flex-1 justify-end" : "mb-2 justify-end"}>
       <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
         {label}
       </Text>
