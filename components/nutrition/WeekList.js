@@ -123,13 +123,17 @@ export function WeekList({ weeks }) {
   // frozen label column and the horizontally-scrolling metrics table below
   // — the two need to iterate in lockstep (same rows, same order) so a
   // week's collapse/expand state can't desync between the two sides.
+  // Row keys are prefixed by type — a week's start date is also its first
+  // expanded day's date, so a bare date string collides between the "week"
+  // summary row and that day's own row (React's "two children with the same
+  // key" warning, reproducible on every expand, not a data fluke).
   const rows = [];
   shown.forEach((week) => {
-    rows.push({ type: "week", key: week.start, week, isOpen: expanded.has(week.start) });
+    rows.push({ type: "week", key: `week-${week.start}`, week, isOpen: expanded.has(week.start) });
     if (expanded.has(week.start)) {
       const logByDate = Object.fromEntries(week.summary.days.map((d) => [d.date, d]));
       for (let d = week.start; d <= week.end; d = addDays(d, 1)) {
-        rows.push({ type: "day", key: d, date: d, log: logByDate[d] ?? null });
+        rows.push({ type: "day", key: `day-${d}`, date: d, log: logByDate[d] ?? null });
       }
     }
   });
