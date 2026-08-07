@@ -537,6 +537,9 @@ export default function MemberHome() {
         <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={HITSLOP}>
           <Ionicons name="settings-outline" size={22} color="#78716c" />
         </Pressable>
+        <Pressable onPress={() => router.push("/(member)/messages")} hitSlop={HITSLOP}>
+          <Ionicons name="chatbubble-outline" size={21} color="#78716c" />
+        </Pressable>
         <Text className="flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
           Hi, {profile?.name}
         </Text>

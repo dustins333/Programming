@@ -115,6 +115,10 @@ export default function MemberLayout() {
           keeps the tab bar at 4 items. */}
       <Tabs.Screen name="settings" options={{ href: null }} />
 
+      {/* Reached via the chat-bubble icon on My Week's header, same
+          not-its-own-tab reasoning as settings above. */}
+      <Tabs.Screen name="messages" options={{ href: null }} />
+
       {/* Nested screens inside the nutrition/history folders have no nested
           _layout of their own, so expo-router flattens them as siblings —
           without these, each one leaks into the tab bar as its own item. */}

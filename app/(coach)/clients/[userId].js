@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Platform 
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase, core } from "../../../lib/supabase/client";
-import { getUser, listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../../lib/programming/clients";
+import { getUser, listCoaches, listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../../lib/programming/clients";
 import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { getCurrentBlock } from "../../../lib/programming/memberPlan";
 import { currentWeekNumber } from "../../../lib/programming/schedule";
@@ -14,11 +14,14 @@ import { listTemplates } from "../../../lib/programming/templates";
 import { listOneOffWorkoutsForUser, createOneOffFromTemplate, deleteOneOffWorkout } from "../../../lib/programming/oneOffWorkouts";
 import { listCompletedOneOffWorkoutIds } from "../../../lib/programming/sessionCompletions";
 import { listRecentSessionsForUser } from "../../../lib/programming/coachLogs";
+import { listMessages, sendStaffMessage } from "../../../lib/programming/messages";
+import { sendPush } from "../../../lib/notifications/sendPush";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { AssignOneOffModal } from "../../../components/AssignOneOffModal";
 import { RecentSessionsCard } from "../../../components/RecentSessionsCard";
+import { MessageThread } from "../../../components/MessageThread";
 import { CoachShell } from "../../../components/CoachShell";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { confirmRemoveOneOff, confirmArchiveNutritionClient } from "../../../lib/confirmDialog";
@@ -150,6 +153,9 @@ export default function ClientProfile() {
   const [completedOneOffIds, setCompletedOneOffIds] = useState(new Set());
   const [templates, setTemplates] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
+  const [messages, setMessages] = useState(null);
+  const [messagesError, setMessagesError] = useState(null);
+  const [coaches, setCoaches] = useState([]);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [lastSignInAt, setLastSignInAt] = useState(undefined);
@@ -210,6 +216,22 @@ export default function ClientProfile() {
         setRecentSessions(await listRecentSessionsForUser(userId));
       } catch {
         setRecentSessions([]);
+      }
+
+      try {
+        setCoaches(await listCoaches());
+      } catch {
+        setCoaches([]);
+      }
+
+      // Isolated the same way — migration 0032 might not be run yet on a
+      // given environment, and a client with a broken thread shouldn't
+      // block the rest of the profile from loading.
+      try {
+        setMessagesError(null);
+        setMessages(await listMessages(userId));
+      } catch (err) {
+        setMessagesError(err.message ?? String(err));
       }
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -333,6 +355,36 @@ export default function ClientProfile() {
       toastError("Failed to remove one-off workout", err);
     }
   };
+
+  const loadMessages = useCallback(async () => {
+    try {
+      setMessagesError(null);
+      setMessages(await listMessages(userId));
+    } catch (err) {
+      setMessagesError(err.message ?? String(err));
+    }
+  }, [userId]);
+
+  const handleSendMessage = async (body) => {
+    await sendStaffMessage(userId, profile.id, body);
+    await loadMessages();
+    // Fire-and-report, not fire-and-forget — matches the announcement
+    // send's own pattern (see announcements/index.js's handleSend): the
+    // message itself is already posted either way, a failed push here
+    // shouldn't look like the send itself failed. Gated on the member's
+    // own notify_coach_messages preference (0020), same as the scanning
+    // Edge Functions check it for their own reminder types — this is just
+    // a real-time send instead of a cron scan, so the check happens here.
+    if (member?.notify_coach_messages !== false) {
+      try {
+        await sendPush({ userId, title: "Message from your coach", body });
+      } catch (err) {
+        console.error("Push send failed (message was still posted):", err);
+      }
+    }
+  };
+
+  const coachNameById = new Map(coaches.map((c) => [c.id, c.name]));
 
   if (loadError) {
     return (
@@ -580,6 +632,20 @@ export default function ClientProfile() {
 
         <SettingsCard icon="stats-chart-outline" title="Recent sessions">
           <RecentSessionsCard userId={userId} sessions={recentSessions} />
+        </SettingsCard>
+
+        <SettingsCard icon="chatbubble-outline" title="Messages">
+          <MessageThread
+            messages={messages}
+            loadError={messagesError}
+            onRetry={loadMessages}
+            isOwnMessage={(m) => m.sender_role === "staff"}
+            labelFor={(m) =>
+              m.sender_role === "member" ? member.name : m.sender_id === profile.id ? "You" : coachNameById.get(m.sender_id) ?? "Coach"
+            }
+            placeholder={`Message ${member.name}…`}
+            onSend={handleSendMessage}
+          />
         </SettingsCard>
 
         <AssignOneOffModal
