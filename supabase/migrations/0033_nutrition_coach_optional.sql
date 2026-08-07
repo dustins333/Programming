@@ -1,0 +1,16 @@
+-- Touches the SHARED public.* schema (the standalone Nutrition Tracker
+-- app's own tables), not programming/core — same caution as every other
+-- nutrition migration in this codebase.
+--
+-- public.clients.coach_id used to be not-null, and Kova's own
+-- createOrReactivateClient defaulted it to whichever coach flipped the
+-- Nutrition switch on for a client. Per direct product decision, a new
+-- nutrition client now starts genuinely unassigned — the coach is picked
+-- explicitly via a dropdown on the Objective Tracking onboarding step (or
+-- later from Client Settings), not implied by who happened to enroll them.
+--
+-- Backward-compatible: loosening a not-null constraint never invalidates an
+-- existing row, and the standalone app is unaffected — it keeps setting a
+-- real coach_id on its own inserts exactly as it always has, this only
+-- makes the column optional for callers that choose to leave it null.
+alter table public.clients alter column coach_id drop not null;

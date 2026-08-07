@@ -8,6 +8,7 @@ import { todayInBoise, addDays } from "../../lib/boiseDate";
 import { SegmentedControl } from "../SegmentedControl";
 import { QuestionListEditor } from "./QuestionListEditor";
 import { CheckinWeekTimeline } from "./CheckinWeekTimeline";
+import { CoachAssignmentField } from "./CoachAssignmentField";
 import { fonts, colors } from "../../lib/theme";
 
 // Collapsed-by-default section — click the header to expand, matching the
@@ -55,11 +56,12 @@ const FREQUENCIES = [
 // than a separate page. "Starting the week of" maps to the DB column
 // photo_frequency_started_at even though the field is labeled differently
 // in the UI — same naming split the original app uses.
-export function ClientSettingsModal({ visible, userId, coachId, client, checkins = [], reopens = [], photos = [], today, onClose, onSaved }) {
+export function ClientSettingsModal({ visible, userId, coachId, coaches = [], client, checkins = [], reopens = [], photos = [], today, onClose, onSaved }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [startDate, setStartDate] = useState("");
   const [status, setStatus] = useState("active");
+  const [assignedCoachId, setAssignedCoachId] = useState(null);
   const [frequency, setFrequency] = useState("off");
   const [frequencyStart, setFrequencyStart] = useState("");
   const [saving, setSaving] = useState(false);
@@ -80,6 +82,7 @@ export function ClientSettingsModal({ visible, userId, coachId, client, checkins
     setPhone(client.phone ?? "");
     setStartDate(client.start_date ?? "");
     setStatus(client.status ?? "active");
+    setAssignedCoachId(client.coach_id ?? null);
     setFrequency(client.photo_frequency ?? "off");
     setFrequencyStart(client.photo_frequency_started_at ?? "");
     loadQuestions();
@@ -94,6 +97,7 @@ export function ClientSettingsModal({ visible, userId, coachId, client, checkins
         phone: phone.trim() || null,
         start_date: startDate,
         status,
+        coach_id: assignedCoachId,
         photo_frequency: freqValue,
         photo_frequency_started_at: freqValue ? frequencyStart : null,
       });
@@ -169,6 +173,10 @@ export function ClientSettingsModal({ visible, userId, coachId, client, checkins
             </Text>
             <View className="mb-4">
               <SegmentedControl segments={STATUS_OPTIONS} activeKey={status} onSelect={setStatus} />
+            </View>
+
+            <View className="mb-4">
+              <CoachAssignmentField value={assignedCoachId} coaches={coaches} onChange={setAssignedCoachId} />
             </View>
 
             <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>

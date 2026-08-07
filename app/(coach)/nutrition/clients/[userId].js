@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays } from "../../../../lib/boiseDate";
 import { getClient, sendOnboardingToClient } from "../../../../lib/nutrition/clients";
+import { listCoaches } from "../../../../lib/programming/clients";
 import { listTargets, deriveCalories } from "../../../../lib/nutrition/targets";
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
 import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsSince, listCheckinReopensSince } from "../../../../lib/nutrition/checkin";
@@ -127,6 +128,7 @@ export default function NutritionClientDetail() {
 
   const [tab, setTab] = useState("dashboard");
   const [client, setClient] = useState(null);
+  const [coaches, setCoaches] = useState([]);
   const [targets, setTargets] = useState(null);
   const [logs, setLogs] = useState(null);
   const [focusItems, setFocusItems] = useState([]);
@@ -156,8 +158,9 @@ export default function NutritionClientDetail() {
 
   const load = useCallback(async () => {
     try {
-      const [clientRow, targetRows, logRows, focusRows, checkinRow, onboardingStatus, photoRows, checkinRows, otLogRows] = await Promise.all([
+      const [clientRow, coachRows, targetRows, logRows, focusRows, checkinRow, onboardingStatus, photoRows, checkinRows, otLogRows] = await Promise.all([
         getClient(userId),
+        listCoaches(),
         listTargets(userId),
         listLogs(userId, { limit: 400 }),
         listFocusItems(userId),
@@ -168,6 +171,7 @@ export default function NutritionClientDetail() {
         listObjectiveTrackingLogs(userId),
       ]);
       setClient(clientRow);
+      setCoaches(coachRows);
       setTargets(targetRows);
       setLogs(logRows);
       setFocusItems(focusRows);
@@ -448,6 +452,7 @@ export default function NutritionClientDetail() {
           visible={settingsVisible}
           userId={userId}
           coachId={profile.id}
+          coaches={coaches}
           client={client}
           checkins={checkins}
           reopens={checkinReopens}
@@ -758,6 +763,7 @@ export default function NutritionClientDetail() {
         visible={settingsVisible}
         userId={userId}
         coachId={profile.id}
+        coaches={coaches}
         client={client}
         checkins={checkins}
         reopens={checkinReopens}

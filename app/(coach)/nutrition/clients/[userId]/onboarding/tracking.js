@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
-import { getClient } from "../../../../../../lib/nutrition/clients";
+import { getClient, updateClient } from "../../../../../../lib/nutrition/clients";
 import { computeBaseline, addTrackingDate, removeTrackingDate } from "../../../../../../lib/nutrition/onboarding";
+import { listCoaches } from "../../../../../../lib/programming/clients";
 import { supabase } from "../../../../../../lib/supabase/client";
 import { BaselineSummary } from "../../../../../../components/nutrition/BaselineSummary";
 import { PrepNotes } from "../../../../../../components/nutrition/PrepNotes";
 import { DateCalendarPicker } from "../../../../../../components/nutrition/DateCalendarPicker";
+import { CoachAssignmentField } from "../../../../../../components/nutrition/CoachAssignmentField";
 import { CoachShell } from "../../../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../../../lib/formatDate";
 import { fonts, colors } from "../../../../../../lib/theme";
@@ -17,18 +19,21 @@ export default function OnboardingTracking() {
   const { userId } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const [client, setClient] = useState(null);
+  const [coaches, setCoaches] = useState([]);
   const [dates, setDates] = useState(null);
   const [logsByDate, setLogsByDate] = useState({});
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [clientRow, { data: dateRows }, { data: logRows }] = await Promise.all([
+      const [clientRow, coachRows, { data: dateRows }, { data: logRows }] = await Promise.all([
         getClient(userId),
+        listCoaches(),
         supabase.from("objective_tracking_dates").select("id, date").eq("client_id", userId).order("date"),
         supabase.from("objective_tracking_logs").select("date, protein_g, carb_g, fat_g, fiber_g").eq("client_id", userId),
       ]);
       setClient(clientRow);
+      setCoaches(coachRows);
       setDates(dateRows ?? []);
       setLogsByDate(Object.fromEntries((logRows ?? []).map((l) => [l.date, l])));
     } catch (err) {
@@ -55,6 +60,15 @@ export default function OnboardingTracking() {
       await load();
     } catch (err) {
       toastError("Failed to remove date", err);
+    }
+  };
+
+  const handleCoachChange = async (coachId) => {
+    try {
+      await updateClient(userId, { coach_id: coachId });
+      await load();
+    } catch (err) {
+      toastError("Failed to assign coach", err);
     }
   };
 
@@ -96,6 +110,10 @@ export default function OnboardingTracking() {
         <Text className="mb-6 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
           Objective Tracking
         </Text>
+
+        <View className="mb-5 rounded-lg border border-stone-200 p-4">
+          <CoachAssignmentField value={client.coach_id} coaches={coaches} onChange={handleCoachChange} />
+        </View>
 
         <View className="mb-5 rounded-lg border border-stone-200 p-4">
           <Text className="mb-3" style={{ fontFamily: fonts.sansBold }}>

@@ -127,7 +127,7 @@ function SnapshotPanel({ blockRows, flags }) {
                   <Text style={{ fontFamily: fonts.sansBold, color: "#b23a22", fontSize: 10.5 }}>Missed session</Text>
                 </View>
                 <Text className="flex-1 text-stone-600" style={{ fontFamily: fonts.sans, fontSize: 12.5 }}>
-                  No log for Session {flag.sessionNumber} ({flag.programName}) · this week
+                  No log for Session {flag.sessionNumber} ({flag.programName}) · {flag.period ?? "this week"}
                 </Text>
               </View>
             ))}
@@ -304,7 +304,6 @@ export default function ClientProfile() {
         // row and lands in onboarding. See lib/nutrition/clients.js.
         await createOrReactivateClient({
           userId,
-          coachId: profile.id,
           name: member.name,
           email: member.email,
           phone: member.phone,
