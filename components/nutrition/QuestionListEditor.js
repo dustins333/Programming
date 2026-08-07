@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable } from "react-native";
 import { fonts, colors } from "../../lib/theme";
 import { toastError } from "../../lib/toast";
 import { confirmRemoveQuestion } from "../../lib/confirmDialog";
+import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
 // Shared add/rename/reorder/delete list editor for question templates and
 // per-client question sets (checkin template, questionnaire template,
@@ -101,6 +102,7 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
                   onChangeText={setEditText}
                   autoFocus
                   multiline
+                  inputAccessoryViewID={NUMERIC_DONE_ID}
                   className="mb-2 rounded border border-stone-300 px-2.5 py-2 text-sm"
                   style={{ fontFamily: fonts.sans }}
                 />

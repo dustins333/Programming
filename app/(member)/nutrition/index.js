@@ -462,6 +462,7 @@ export default function NutritionToday() {
             value={values.client_note}
             onChangeText={(t) => update("client_note", t)}
             multiline
+            inputAccessoryViewID={NUMERIC_DONE_ID}
             className="mb-2 min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
             style={{ fontFamily: fonts.sans }}
           />

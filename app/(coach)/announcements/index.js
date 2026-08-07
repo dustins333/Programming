@@ -16,6 +16,7 @@ import { toastError, toastSuccess } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 
 const isWeb = Platform.OS === "web";
 
@@ -297,6 +298,7 @@ export default function Announcements() {
             onChangeText={setMessage}
             placeholder="What do you want to tell them?"
             multiline
+            inputAccessoryViewID={NUMERIC_DONE_ID}
             numberOfLines={4}
             className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
             style={{ fontFamily: fonts.sans, minHeight: 90, textAlignVertical: "top" }}

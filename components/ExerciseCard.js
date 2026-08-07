@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, Linking, Keyboard, Platform } from "react-native";
+import { View, Text, TextInput, Pressable, Linking, Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getLastLoggedSession, getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { formatDateMDY } from "../lib/formatDate";
@@ -7,6 +7,7 @@ import { fonts, colors } from "../lib/theme";
 import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
 import { WeightCalculator } from "./WeightCalculator";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
+import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -70,20 +71,16 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
   // single exercise's content is usually short enough to already be visible
   // once the keyboard opens, but a superset's two stacked full cards often
   // aren't — the second (bottom) exercise's fields can end up hidden behind
-  // the keyboard with nothing to bring them into view automatically. Native
-  // only: ScrollView.scrollResponderScrollNativeHandleToKeyboard relies on
-  // Keyboard's real keyboardWillShow event to know the keyboard's on-screen
-  // position, which the browser never fires — on web this would either no-op
-  // or scroll based on a wrong/stale position, so it's deliberately skipped
-  // there rather than risk introducing a bad jump on the PWA.
+  // the keyboard with nothing to bring them into view automatically.
+  // useScrollToKeyboard (lib/scrollToKeyboard.js) handles both the "keyboard
+  // already up, just switching fields" case (immediate call) and the "very
+  // first focus of the screen, keyboard frame not known yet" race (retried
+  // once keyboardDidShow actually fires) — see that file for why both are
+  // needed. Native only, same reasoning as before.
   const repsRefs = useRef([]);
   const weightRefs = useRef([]);
   const notesRef = useRef(null);
-
-  const scrollFieldIntoView = (ref) => {
-    if (Platform.OS === "web" || !scrollViewRef?.current || !ref) return;
-    scrollViewRef.current.scrollResponderScrollNativeHandleToKeyboard(ref, 24, true);
-  };
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef);
 
   const loadOnFirstExpand = async () => {
     if (loaded.current) return;
@@ -341,6 +338,7 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
             onChangeText={setNotes}
             onFocus={() => scrollFieldIntoView(notesRef.current)}
             multiline
+            inputAccessoryViewID={NUMERIC_DONE_ID}
             placeholder="How did it feel? Anything to remember for next time?"
             placeholderTextColor="#a8a29e"
             className="mb-2.5"

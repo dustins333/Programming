@@ -298,7 +298,7 @@ export default function CoachMessagesInbox() {
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>‹ All conversations</Text>
         </Pressable>
       ) : null}
-      <View className={isWeb ? undefined : "px-5"}>
+      <View style={{ flex: 1, paddingHorizontal: isWeb ? 0 : 20 }}>
         <Text className="mb-3" style={{ fontFamily: fonts.sansBold, fontSize: 16 }}>
           {selectedMember?.name ?? "…"}
         </Text>
@@ -312,7 +312,7 @@ export default function CoachMessagesInbox() {
           }
           placeholder={selectedMember ? `Message ${selectedMember.name}…` : "Message…"}
           onSend={handleSend}
-          maxHeight={isWeb ? 560 : 460}
+          fill
         />
       </View>
     </View>

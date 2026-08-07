@@ -99,6 +99,7 @@ function QuestionnairePanel({ questions, response, onSubmitted }) {
               value={values[q.id]}
               onChangeText={(t) => setValues((v) => ({ ...v, [q.id]: t }))}
               multiline
+              inputAccessoryViewID={NUMERIC_DONE_ID}
               className="min-h-[70px] rounded-lg border border-stone-300 px-4 py-3 text-base"
               style={{ fontFamily: fonts.sans }}
             />

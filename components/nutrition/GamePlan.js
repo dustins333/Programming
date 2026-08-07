@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable } from "react-native";
 import { toastError } from "../../lib/toast";
 import { updateGamePlan } from "../../lib/nutrition/coachClient";
 import { fonts, colors } from "../../lib/theme";
+import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
 const MIN_HEIGHT = 100;
 
@@ -32,6 +33,7 @@ export function GamePlan({ userId, initialGamePlan }) {
         onChangeText={setText}
         onContentSizeChange={(e) => setHeight(Math.max(MIN_HEIGHT, e.nativeEvent.contentSize.height))}
         multiline
+        inputAccessoryViewID={NUMERIC_DONE_ID}
         placeholder="Freeform notes, visible to the client…"
         className="mb-2 rounded border border-stone-300 px-3 py-2 text-sm"
         style={{ fontFamily: fonts.sans, textAlignVertical: "top", height }}

@@ -306,6 +306,7 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               value={form.cues}
               onChangeText={(cues) => setForm((f) => ({ ...f, cues }))}
               multiline
+              inputAccessoryViewID={NUMERIC_DONE_ID}
               numberOfLines={3}
               className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: "Montserrat_400Regular", textAlignVertical: "top" }}

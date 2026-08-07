@@ -25,6 +25,7 @@ import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus"
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
 import { CoachShell } from "../../../components/CoachShell";
+import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 
 const ROW_LABEL_WIDTH = 130;
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
@@ -455,6 +456,7 @@ export default function SpcClientDetail() {
             value={notesDraft}
             onChangeText={setNotesDraft}
             multiline
+            inputAccessoryViewID={NUMERIC_DONE_ID}
             numberOfLines={5}
             placeholder="Goals, injury notes, preferences, hold/pause reasons…"
             className="mb-3 min-h-28 rounded-lg border border-stone-300 px-4 py-3"

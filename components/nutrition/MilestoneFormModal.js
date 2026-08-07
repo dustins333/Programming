@@ -5,6 +5,7 @@ import { confirmDeleteMilestone } from "../../lib/confirmDialog";
 import { toastError } from "../../lib/toast";
 import { MilestoneCompleteCheckbox } from "./MilestoneCompleteCheckbox";
 import { fonts, colors } from "../../lib/theme";
+import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
 const EMPTY = { title: "", details: "", emoji: "" };
 const DETAILS_MIN_HEIGHT = 90;
@@ -106,6 +107,7 @@ export function MilestoneFormModal({ visible, milestone, userId, createdBy, onCl
             onChangeText={(v) => setForm((f) => ({ ...f, details: v }))}
             onContentSizeChange={(e) => setDetailsHeight(Math.max(DETAILS_MIN_HEIGHT, e.nativeEvent.contentSize.height))}
             multiline
+            inputAccessoryViewID={NUMERIC_DONE_ID}
             placeholder="Supporting details, visible to the client…"
             className="mb-5 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: fonts.sans, textAlignVertical: "top", height: detailsHeight }}

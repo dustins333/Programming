@@ -15,6 +15,7 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
+import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 
 // Matches My Week/My Fitness/My History's shared canvas — the 4 nutrition
 // screens were left on plain white, which read as inconsistent with the
@@ -86,6 +87,7 @@ function SkipReasonModal({ visible, onClose, onSubmit }) {
             onChangeText={setText}
             multiline
             autoFocus
+            inputAccessoryViewID={NUMERIC_DONE_ID}
             placeholder="e.g. traveling this week, will catch up next week"
             className="mb-4 min-h-[80px] rounded-lg border border-stone-300 px-3 py-2.5 text-sm"
             style={{ fontFamily: fonts.sans }}
@@ -445,6 +447,7 @@ export default function WeeklyCheckin() {
               value={answers[q.id] || ""}
               onChangeText={(t) => setAnswers((a) => ({ ...a, [q.id]: t }))}
               multiline
+              inputAccessoryViewID={NUMERIC_DONE_ID}
               className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
               style={{ fontFamily: fonts.sans }}
             />
@@ -503,6 +506,7 @@ export default function WeeklyCheckin() {
                   value={reopenAnswers[q.id] || ""}
                   onChangeText={(t) => setReopenAnswers((a) => ({ ...a, [q.id]: t }))}
                   multiline
+                  inputAccessoryViewID={NUMERIC_DONE_ID}
                   className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
                   style={{ fontFamily: fonts.sans }}
                 />

@@ -4,9 +4,15 @@ import { fonts, colors } from "../lib/theme";
 // iOS's numeric/number-pad/decimal-pad keyboards render with no Return/Done
 // key at all — the only built-in way to dismiss them is tapping outside the
 // input, which is easy to miss in a dense form (see SessionLogger's per-set
-// reps/weight grid). This mounts one shared "Done" bar above the keyboard;
-// every numeric TextInput opts in via inputAccessoryViewID={NUMERIC_DONE_ID}.
-// Android's numeric IME already has its own dismiss affordance, so this is
+// reps/weight grid). Multiline text fields have the same problem for a
+// different reason: their Return key inserts a newline instead of
+// submitting/dismissing (RN's own default `blurOnSubmit=false` for
+// multiline), so a coach note or a check-in answer has no built-in dismiss
+// either — unlike a plain single-line text field, which already blurs on
+// Return via RN's default `blurOnSubmit=true`. This mounts one shared
+// "Done" bar above the keyboard for both cases; any numeric or multiline
+// TextInput opts in via inputAccessoryViewID={NUMERIC_DONE_ID}. Android's
+// IME already has its own dismiss affordance for both cases, so this is
 // iOS-only — renders nothing elsewhere.
 export const NUMERIC_DONE_ID = "numeric-done-accessory";
 

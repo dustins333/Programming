@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Platform } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -158,6 +158,11 @@ export default function ClientProfile() {
   const [coaches, setCoaches] = useState([]);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  // Handed to the Messages card so its compose box can scroll itself above
+  // the keyboard on focus — this page is one long ScrollView of cards, and
+  // KeyboardAvoidingView's own padding alone doesn't bring an
+  // already-scrolled-past card back into view. See MessageThread.js.
+  const scrollViewRef = useRef(null);
   const [lastSignInAt, setLastSignInAt] = useState(undefined);
   const [resending, setResending] = useState(false);
 
@@ -428,7 +433,7 @@ export default function ClientProfile() {
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 900 }}>
+      <ScrollView ref={scrollViewRef} className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 900 }}>
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/clients"))}
           style={{ marginBottom: 18 }}
@@ -644,6 +649,7 @@ export default function ClientProfile() {
             }
             placeholder={`Message ${member.name}…`}
             onSend={handleSendMessage}
+            scrollViewRef={scrollViewRef}
           />
         </SettingsCard>
 

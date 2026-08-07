@@ -66,7 +66,7 @@ export default function Messages() {
         labelFor={(m) => (m.sender_role === "member" ? "You" : "Coach")}
         placeholder="Message your coach…"
         onSend={handleSend}
-        maxHeight={560}
+        fill
       />
     </View>
   );

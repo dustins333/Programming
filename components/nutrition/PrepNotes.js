@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable } from "react-native";
 import { toastError } from "../../lib/toast";
 import { updatePrepNotes } from "../../lib/nutrition/onboarding";
 import { fonts, colors } from "../../lib/theme";
+import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
 export function PrepNotes({ userId, initialNotes }) {
   const [notes, setNotes] = useState(initialNotes ?? "");
@@ -28,6 +29,7 @@ export function PrepNotes({ userId, initialNotes }) {
         value={notes}
         onChangeText={setNotes}
         multiline
+        inputAccessoryViewID={NUMERIC_DONE_ID}
         placeholder="Tracking mistakes noticed, foods to flag, talking points for the first check-in call…"
         className="mb-2 min-h-[90px] rounded border border-stone-300 px-3 py-2 text-sm"
         style={{ fontFamily: fonts.sans, textAlignVertical: "top" }}
