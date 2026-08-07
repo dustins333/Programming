@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ExerciseCard } from "./ExerciseCard";
@@ -49,6 +49,12 @@ export function SessionFocusModal({
   const canGoNext = focusIndex < groups.length - 1;
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState(null);
+  // Handed down to each ExerciseCard so a focused reps/weight/notes field
+  // can scroll itself above the keyboard — see ExerciseCard's own comment
+  // for why this is needed at all (a single exercise's content is usually
+  // short enough to already be visible, a superset's two stacked cards
+  // often aren't).
+  const scrollViewRef = useRef(null);
 
   useEffect(() => {
     if (visible) setFinalizeError(null);
@@ -130,7 +136,7 @@ export function SessionFocusModal({
             </View>
           ) : null}
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView ref={scrollViewRef} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {groups.map((group, i) => (
               <View key={group[0].id} style={{ display: i === focusIndex ? "flex" : "none" }}>
                 {group.length > 1 ? (
@@ -153,6 +159,7 @@ export function SessionFocusModal({
                         item={item}
                         hideVideo={hideVideo}
                         forceExpanded
+                        scrollViewRef={scrollViewRef}
                       />
                     ))}
                   </View>
@@ -165,6 +172,7 @@ export function SessionFocusModal({
                     item={group[0]}
                     hideVideo={hideVideo}
                     forceExpanded
+                    scrollViewRef={scrollViewRef}
                   />
                 )}
               </View>

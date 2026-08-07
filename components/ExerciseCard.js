@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, Linking, Keyboard } from "react-native";
+import { View, Text, TextInput, Pressable, Linking, Keyboard, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getLastLoggedSession, getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { formatDateMDY } from "../lib/formatDate";
@@ -37,7 +37,7 @@ export function targetLineFor(item) {
 // SessionFocusModal's focus layout (forceExpanded keeps it permanently
 // populated, no header tap needed — see SessionFocusModal.js for why every
 // group's card has to mount immediately either way, not lazily).
-export function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle, hideVideo, forceExpanded }) {
+export function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle, hideVideo, forceExpanded, scrollViewRef }) {
   const targetSets = getTargetSets(item);
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
@@ -64,6 +64,26 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
   // saved today, which would otherwise immediately re-trigger the autosave
   // effect — this skips exactly that one load-triggered run, not any real edit.
   const skipAutosaveRef = useRef(true);
+  // Per-row reps/weight refs (keyed by index via callback refs, since rows
+  // is a dynamic-length array — hooks can't be created in a loop) plus one
+  // for notes, so a focused field can scroll itself above the keyboard. A
+  // single exercise's content is usually short enough to already be visible
+  // once the keyboard opens, but a superset's two stacked full cards often
+  // aren't — the second (bottom) exercise's fields can end up hidden behind
+  // the keyboard with nothing to bring them into view automatically. Native
+  // only: ScrollView.scrollResponderScrollNativeHandleToKeyboard relies on
+  // Keyboard's real keyboardWillShow event to know the keyboard's on-screen
+  // position, which the browser never fires — on web this would either no-op
+  // or scroll based on a wrong/stale position, so it's deliberately skipped
+  // there rather than risk introducing a bad jump on the PWA.
+  const repsRefs = useRef([]);
+  const weightRefs = useRef([]);
+  const notesRef = useRef(null);
+
+  const scrollFieldIntoView = (ref) => {
+    if (Platform.OS === "web" || !scrollViewRef?.current || !ref) return;
+    scrollViewRef.current.scrollResponderScrollNativeHandleToKeyboard(ref, 24, true);
+  };
 
   const loadOnFirstExpand = async () => {
     if (loaded.current) return;
@@ -246,8 +266,12 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
                 <View className="flex-row items-center gap-2.5">
                   <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#78716c", width: 46 }}>Set {i + 1}</Text>
                   <TextInput
+                    ref={(el) => {
+                      repsRefs.current[i] = el;
+                    }}
                     value={row.reps}
                     onChangeText={(v) => updateRow(i, "reps", v)}
+                    onFocus={() => scrollFieldIntoView(repsRefs.current[i])}
                     placeholder={item.repScheme?.[i] ?? item.targetReps ?? "reps"}
                     keyboardType="numeric"
                     inputAccessoryViewID={NUMERIC_DONE_ID}
@@ -257,8 +281,12 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
                   />
                   <View className="flex-1" style={{ position: "relative" }}>
                     <TextInput
+                      ref={(el) => {
+                        weightRefs.current[i] = el;
+                      }}
                       value={row.weight}
                       onChangeText={(v) => updateRow(i, "weight", v)}
+                      onFocus={() => scrollFieldIntoView(weightRefs.current[i])}
                       placeholder="weight"
                       keyboardType="decimal-pad"
                       inputAccessoryViewID={NUMERIC_DONE_ID}
@@ -308,8 +336,10 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
 
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#78716c", marginBottom: 6 }}>Notes</Text>
           <TextInput
+            ref={notesRef}
             value={notes}
             onChangeText={setNotes}
+            onFocus={() => scrollFieldIntoView(notesRef.current)}
             multiline
             placeholder="How did it feel? Anything to remember for next time?"
             placeholderTextColor="#a8a29e"
