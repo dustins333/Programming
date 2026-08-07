@@ -6,6 +6,7 @@
 // after this returns success. Deploy with:
 //   supabase functions deploy verify-registration-code --no-verify-jwt
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const MAX_ATTEMPTS = 5;
 
@@ -15,19 +16,33 @@ async function hashCode(code: string) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
   const { email, code, password } = await req.json().catch(() => ({}));
   if (!email || !code || !password) {
-    return new Response(JSON.stringify({ error: "email, code, and password are required" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "email, code, and password are required" }), {
+      status: 400,
+      headers: jsonHeaders,
+    });
   }
   if (String(password).length < 8) {
-    return new Response(JSON.stringify({ error: "Password must be at least 8 characters" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "Password must be at least 8 characters" }), {
+      status: 400,
+      headers: jsonHeaders,
+    });
   }
 
-  const invalidResponse = new Response(JSON.stringify({ error: "Invalid or expired code" }), { status: 400 });
+  const invalidResponse = new Response(JSON.stringify({ error: "Invalid or expired code" }), {
+    status: 400,
+    headers: jsonHeaders,
+  });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -66,16 +81,16 @@ Deno.serve(async (req) => {
     .update({ consumed_at: new Date().toISOString() })
     .eq("id", pending.id);
   if (consumeError) {
-    return new Response(JSON.stringify({ error: consumeError.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: consumeError.message }), { status: 500, headers: jsonHeaders });
   }
 
   const { error: passwordError } = await adminClient.auth.admin.updateUserById(user.id, { password });
   if (passwordError) {
-    return new Response(JSON.stringify({ error: passwordError.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: passwordError.message }), { status: 500, headers: jsonHeaders });
   }
 
   return new Response(JSON.stringify({ verified: true }), {
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders,
   });
 });

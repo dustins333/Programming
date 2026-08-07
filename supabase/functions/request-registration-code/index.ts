@@ -10,6 +10,7 @@
 // reset-password.js already relies on behaving this way. Deploy with:
 //   supabase functions deploy request-registration-code --no-verify-jwt
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const CODE_TTL_MINUTES = 10;
 const RESEND_COOLDOWN_SECONDS = 45;
@@ -27,18 +28,24 @@ function generateCode() {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
   }
 
   const { email } = await req.json().catch(() => ({}));
   const genericResponse = new Response(JSON.stringify({ sent: true }), {
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
   if (!email || typeof email !== "string") {
-    return new Response(JSON.stringify({ error: "email is required" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "email is required" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -51,6 +58,11 @@ Deno.serve(async (req) => {
     .select("id, ghl_contact_id")
     .ilike("email", email)
     .maybeSingle();
+
+  // Diagnostic only — never logs the code itself, just enough to tell
+  // "wrong email typed" apart from "right email, GHL send failed" without
+  // needing to re-trigger a real text. See CLAUDE.md/chat, 2026-08-06.
+  console.log(`request-registration-code: email="${email}" matched=${Boolean(user)} hasGhlContact=${Boolean(user?.ghl_contact_id)}`);
 
   // No account, or no GHL contact to text — same generic response either
   // way, no code sent, nothing to leak.
