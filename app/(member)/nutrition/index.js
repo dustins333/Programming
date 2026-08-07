@@ -124,6 +124,7 @@ export default function NutritionToday() {
   const [values, setValues] = useState(EMPTY_VALUES);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [saveState, setSaveState] = useState("idle");
   const [finalizedAt, setFinalizedAt] = useState(null);
   const [finalizeError, setFinalizeError] = useState(null);
@@ -186,6 +187,7 @@ export default function NutritionToday() {
   useEffect(() => {
     if (access.status !== "active") return;
     setReady(false);
+    setLoadError(null);
     (async () => {
       try {
         const [targetRow, log] = await Promise.all([
@@ -201,7 +203,7 @@ export default function NutritionToday() {
         setLoadError(err.message ?? String(err));
       }
     })();
-  }, [access.status, profile.id, selectedDate]);
+  }, [access.status, profile.id, selectedDate, retryKey]);
 
   useEffect(() => {
     if (!ready) return;
@@ -245,16 +247,6 @@ export default function NutritionToday() {
 
   if (access.status !== "active") {
     return <NutritionAccessMessage status={access.status} error={access.error} />;
-  }
-
-  if (loadError) {
-    return (
-      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-          Something went wrong loading your nutrition data: {loadError}
-        </Text>
-      </View>
-    );
   }
 
   // Calculated live from whatever's currently typed in the macro fields, not
@@ -307,7 +299,16 @@ export default function NutritionToday() {
         </View>
       </View>
 
-      {!ready ? (
+      {loadError ? (
+        <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
+          <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong loading your nutrition data: {loadError}
+          </Text>
+          <Pressable onPress={() => setRetryKey((k) => k + 1)} hitSlop={8}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : !ready ? (
         <NutritionAccessMessage status="loading" />
       ) : (
         <ScrollView

@@ -75,9 +75,13 @@ export default function BlockHistory() {
         </Text>
 
         {loadError ? (
-          <Text className="text-red-600" style={{ fontFamily: fonts.sans }}>
+          <><Text className="text-red-600" style={{ fontFamily: fonts.sans }}>
             {loadError}
           </Text>
+        <Pressable onPress={load} style={{ marginTop: 12, alignSelf: "center" }}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+        </Pressable>
+      </>
         ) : !blocks ? (
           <ActivityIndicator color={colors.primary} />
         ) : (

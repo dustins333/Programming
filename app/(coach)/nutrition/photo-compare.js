@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Platform, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, Platform, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { listClients } from "../../../lib/nutrition/clients";
@@ -33,13 +33,19 @@ export default function NutritionPhotoCompare() {
   const [slotDates, setSlotDates] = useState([null, null, null]);
   const [urls, setUrls] = useState({});
 
-  useEffect(() => {
+  const loadClients = useCallback(() => {
+    setLoadError(null);
     listClients()
       .then((rows) => {
         setClients(rows);
         if (rows.length > 0) setSelectedId(rows[0].id);
       })
       .catch((err) => setLoadError(err.message ?? String(err)));
+  }, []);
+
+  useEffect(() => {
+    loadClients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadPhotos = useCallback(async (userId) => {
@@ -90,9 +96,12 @@ export default function NutritionPhotoCompare() {
     return (
       <CoachShell>
         <View className="flex-1 items-center justify-center bg-white px-6">
-          <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+          <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
             {loadError}
           </Text>
+          <Pressable onPress={() => (clients.length === 0 ? loadClients() : loadPhotos(selectedId))}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
         </View>
       </CoachShell>
     );

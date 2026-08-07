@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
@@ -27,6 +27,7 @@ export default function NutritionWeekly() {
   const [logs, setLogs] = useState(null);
   const [targetsByWeekEnd, setTargetsByWeekEnd] = useState({});
   const [loadError, setLoadError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   const weeks = useMemo(() => {
     return enumerateRecentWeeks(currentCalendarWeek(today), addDays, WEEKS_SHOWN);
@@ -34,6 +35,7 @@ export default function NutritionWeekly() {
 
   useEffect(() => {
     if (access.status !== "active") return;
+    setLoadError(null);
     (async () => {
       try {
         const [logRows, targets] = await Promise.all([
@@ -51,7 +53,7 @@ export default function NutritionWeekly() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [access.status, profile.id]);
+  }, [access.status, profile.id, retryKey]);
 
   if (access.status !== "active") {
     return <NutritionAccessMessage status={access.status} error={access.error} />;
@@ -59,10 +61,28 @@ export default function NutritionWeekly() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-          Something went wrong loading your weekly averages: {loadError}
-        </Text>
+      <View className="flex-1" style={{ backgroundColor: CANVAS }}>
+        <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24 }}>
+          <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+            Nutrition
+          </Text>
+          <SegmentedControl
+            segments={NUTRITION_TABS}
+            activeKey="weekly"
+            onSelect={(key) => {
+              const seg = NUTRITION_TABS.find((s) => s.key === key);
+              if (seg && seg.key !== "weekly") router.push(seg.href);
+            }}
+          />
+        </View>
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong loading your weekly averages: {loadError}
+          </Text>
+          <Pressable onPress={() => setRetryKey((k) => k + 1)} hitSlop={8}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }

@@ -147,9 +147,13 @@ export default function CoachHome() {
   if (loadError) {
     return (
       <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+        <><Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
           Something went wrong loading your dashboard: {loadError}
         </Text>
+        <Pressable onPress={load} style={{ marginTop: 12, alignSelf: "center" }}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+        </Pressable>
+      </>
       </View>
     );
   }

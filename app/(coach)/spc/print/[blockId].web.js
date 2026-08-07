@@ -56,7 +56,14 @@ export default function SpcSessionPrintView() {
   }, [load]);
 
   if (loadError) {
-    return <div style={{ padding: 24, fontFamily: "sans-serif", color: "#b91c1c" }}>Something went wrong: {loadError}</div>;
+    return (
+      <div style={{ padding: 24, fontFamily: "sans-serif" }}>
+        <div style={{ color: "#b91c1c", marginBottom: 12 }}>Something went wrong: {loadError}</div>
+        <button onClick={load} style={{ fontFamily: "sans-serif", cursor: "pointer" }}>
+          Retry
+        </button>
+      </div>
+    );
   }
 
   if (!block || !member || !weeks) {

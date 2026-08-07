@@ -253,10 +253,28 @@ export default function WeeklyCheckin() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-          Something went wrong loading your check-in: {loadError}
-        </Text>
+      <View className="flex-1" style={{ backgroundColor: CANVAS }}>
+        <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24 }}>
+          <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+            Nutrition
+          </Text>
+          <SegmentedControl
+            segments={NUTRITION_TABS}
+            activeKey="checkin"
+            onSelect={(key) => {
+              const seg = NUTRITION_TABS.find((s) => s.key === key);
+              if (seg && seg.key !== "checkin") router.push(seg.href);
+            }}
+          />
+        </View>
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong loading your check-in: {loadError}
+          </Text>
+          <Pressable onPress={load} hitSlop={8}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }

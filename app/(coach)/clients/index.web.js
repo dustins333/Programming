@@ -227,9 +227,13 @@ export default function ClientsWeb() {
         </View>
 
         {loadError ? (
-          <Text className="text-red-600" style={{ fontFamily: fonts.sans }}>
+          <><Text className="text-red-600" style={{ fontFamily: fonts.sans }}>
             {loadError}
           </Text>
+        <Pressable onPress={load} style={{ marginTop: 12, alignSelf: "center" }}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+        </Pressable>
+      </>
         ) : !state ? (
           <ActivityIndicator color={colors.primary} />
         ) : (

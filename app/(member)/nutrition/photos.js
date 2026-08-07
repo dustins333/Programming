@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
@@ -24,6 +24,7 @@ export default function NutritionPhotos() {
 
   const load = useCallback(async () => {
     try {
+      setLoadError(null);
       setPhotos(await listAllPhotos(profile.id));
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -40,10 +41,28 @@ export default function NutritionPhotos() {
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-          Something went wrong loading your photos: {loadError}
-        </Text>
+      <View className="flex-1" style={{ backgroundColor: CANVAS }}>
+        <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24 }}>
+          <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+            Nutrition
+          </Text>
+          <SegmentedControl
+            segments={NUTRITION_TABS}
+            activeKey="photos"
+            onSelect={(key) => {
+              const seg = NUTRITION_TABS.find((s) => s.key === key);
+              if (seg && seg.key !== "photos") router.push(seg.href);
+            }}
+          />
+        </View>
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong loading your photos: {loadError}
+          </Text>
+          <Pressable onPress={load} hitSlop={8}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
