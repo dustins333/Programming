@@ -1,8 +1,9 @@
-import { Modal, View, Text, Pressable, ScrollView } from "react-native";
+import { useEffect, useState } from "react";
+import { Modal, View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ExerciseCard } from "./ExerciseCard";
 import { TimerControl } from "./TimerControl";
-import { fonts } from "../lib/theme";
+import { fonts, colors } from "../lib/theme";
 
 // The "focus card" view for My Fitness's logging page — one exercise (or
 // superset pair) takes over the screen at a time, left/right arrows move to
@@ -19,6 +20,15 @@ import { fonts } from "../lib/theme";
 // timer cancelled by its own unmount-cleanup: mounting/unmounting per
 // navigation would silently drop whatever was just typed the instant the
 // arrow is tapped.
+//
+// On the last exercise/superset (canGoNext false), a Finalize button renders
+// right in the card so a member doesn't have to close the sheet and hunt for
+// the one below the index list — tapping it finalizes and closes the sheet
+// back to the overview in one action. `onFinalize`/`isCompleted` are the
+// same props SessionLogger already threads to its own Finalize button, so no
+// new plumbing is needed from callers. Errors render inline (not
+// Alert.alert, which is a no-op on the web PWA build members can also use)
+// rather than failing silently.
 export function SessionFocusModal({
   visible,
   groups,
@@ -32,12 +42,34 @@ export function SessionFocusModal({
   timer,
   onToggleTimer,
   onResetTimer,
+  onFinalize,
+  isCompleted,
 }) {
   const canGoPrev = focusIndex > 0;
   const canGoNext = focusIndex < groups.length - 1;
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalizeError, setFinalizeError] = useState(null);
+
+  useEffect(() => {
+    if (visible) setFinalizeError(null);
+  }, [visible]);
+
+  const handleFinalize = async () => {
+    setFinalizing(true);
+    setFinalizeError(null);
+    try {
+      await onFinalize();
+      onClose();
+    } catch (err) {
+      setFinalizeError(err.message ?? String(err));
+    } finally {
+      setFinalizing(false);
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
       <Pressable onPress={onClose} className="flex-1 justify-end px-0" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
         <Pressable
           onPress={(e) => e.stopPropagation?.()}
@@ -98,7 +130,7 @@ export function SessionFocusModal({
             </View>
           ) : null}
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {groups.map((group, i) => (
               <View key={group[0].id} style={{ display: i === focusIndex ? "flex" : "none" }}>
                 {group.length > 1 ? (
@@ -137,9 +169,38 @@ export function SessionFocusModal({
                 )}
               </View>
             ))}
+
+            {!canGoNext && onFinalize ? (
+              <View className="mt-3">
+                {finalizeError ? (
+                  <Text className="mb-2 text-center" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#b23a22" }}>
+                    Couldn't save — {finalizeError}
+                  </Text>
+                ) : null}
+                <Pressable
+                  onPress={handleFinalize}
+                  disabled={finalizing}
+                  className="items-center justify-center disabled:opacity-50"
+                  style={{
+                    height: 52,
+                    borderRadius: 12,
+                    backgroundColor: isCompleted ? "#4d6142" : colors.primary,
+                    shadowColor: isCompleted ? "#4d6142" : colors.primary,
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 16,
+                  }}
+                >
+                  <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
+                    {finalizing ? "Saving…" : isCompleted ? "✓ Finalized — tap to update" : "Finalize workout"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </ScrollView>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

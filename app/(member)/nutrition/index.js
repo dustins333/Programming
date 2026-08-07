@@ -309,7 +309,12 @@ export default function NutritionToday() {
       {!ready ? (
         <NutritionAccessMessage status="loading" />
       ) : (
-        <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8">
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="px-6 pb-8"
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
           <TodayCardSlider
             slides={[
               ...(focusItems.length > 0

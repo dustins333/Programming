@@ -260,7 +260,7 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
                       value={row.weight}
                       onChangeText={(v) => updateRow(i, "weight", v)}
                       placeholder="weight"
-                      keyboardType="numeric"
+                      keyboardType="decimal-pad"
                       inputAccessoryViewID={NUMERIC_DONE_ID}
                       placeholderTextColor="#a8a29e"
                       className="text-center"

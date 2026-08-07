@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { Modal, View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 import { SessionLogger } from "./SessionLogger";
@@ -71,6 +71,7 @@ export function SessionDetailModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
       <Pressable onPress={onClose} className="flex-1 justify-end px-0" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
         {/* Swallows the tap so pressing inside the sheet doesn't bubble up
             to the backdrop's onClose — on web a Pressable's onClick is a
@@ -113,7 +114,7 @@ export function SessionDetailModal({
               <ActivityIndicator color={colors.primary} />
             </View>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {warmups?.length > 0 ? (
                 <Text className="mb-3 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
                   Warm-up: {warmups.join(", ")}
@@ -193,6 +194,7 @@ export function SessionDetailModal({
           )}
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

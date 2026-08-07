@@ -109,7 +109,7 @@ function Field({ label, value, onChangeText }) {
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        keyboardType="numeric"
+        keyboardType="decimal-pad"
         inputAccessoryViewID={NUMERIC_DONE_ID}
         className="rounded border border-stone-300 px-3 py-2 text-sm"
         style={{ fontFamily: fonts.sans }}
@@ -128,7 +128,7 @@ function MacroField({ label, value, onChangeText, pct }) {
         <TextInput
           value={value}
           onChangeText={onChangeText}
-          keyboardType="numeric"
+          keyboardType="decimal-pad"
           inputAccessoryViewID={NUMERIC_DONE_ID}
           className="flex-1 py-2 text-sm"
           style={{ fontFamily: fonts.sans }}

@@ -564,7 +564,13 @@ export default function MyFitness() {
     {activeFinalize && (
       <TimerBar insetsTop={insets.top} timer={timer} onToggle={handleToggleTimer} onReset={handleResetTimer} />
     )}
-    <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: activeFinalize ? 16 : insets.top + 6 }}>
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="px-6 pb-8"
+      contentContainerStyle={{ paddingTop: activeFinalize ? 16 : insets.top + 6 }}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         My Fitness
       </Text>

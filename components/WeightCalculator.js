@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { Modal, View, Text, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 import { SegmentedControl } from "./SegmentedControl";
@@ -203,7 +203,7 @@ function PlateCalc({ onInsert }) {
           value={specialtyWeight}
           onChangeText={setSpecialtyWeight}
           placeholder="Bar weight"
-          keyboardType="numeric"
+          keyboardType="decimal-pad"
           inputAccessoryViewID={NUMERIC_DONE_ID}
           placeholderTextColor="#a8a29e"
           className="mt-2 text-center"
@@ -261,6 +261,7 @@ export function WeightCalculator({ visible, onClose, onInsert }) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
       <Pressable onPress={onClose} className="flex-1 justify-end" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
         <Pressable
           onPress={(e) => e.stopPropagation?.()}
@@ -282,9 +283,10 @@ export function WeightCalculator({ visible, onClose, onInsert }) {
             onSelect={setMode}
           />
 
-          <ScrollView showsVerticalScrollIndicator={false}>{mode === "standard" ? <StandardCalc onInsert={handleInsert} /> : <PlateCalc onInsert={handleInsert} />}</ScrollView>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">{mode === "standard" ? <StandardCalc onInsert={handleInsert} /> : <PlateCalc onInsert={handleInsert} />}</ScrollView>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

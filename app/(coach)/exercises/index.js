@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, FlatList, ActivityIndicator, Alert, Linking } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, Linking } from "react-native";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import {
   listExercises,
@@ -73,7 +73,7 @@ export default function Exercises() {
 
   return (
     <CoachShell>
-      <View className="flex-1" style={{ backgroundColor: "#faf8f6", padding: 40 }}>
+      <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ padding: 40 }}>
         <View className="mb-5 flex-row items-center justify-between" style={{ maxWidth: 900 }}>
           <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 24 }}>Exercise Library</Text>
           <Pressable
@@ -150,16 +150,14 @@ export default function Exercises() {
           <ActivityIndicator color={colors.primary} />
         ) : (
           <View className="rounded-2xl border bg-white" style={[{ borderColor: "#ece7e1", maxWidth: 900, overflow: "hidden" }, CARD_SHADOW]}>
-            <FlatList
-              data={filtered}
-              keyExtractor={(item) => item.id}
-              ListEmptyComponent={
-                <Text className="p-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
-                  No {typeFilter === "lift" ? "lift" : "warm-up"} exercises yet.
-                </Text>
-              }
-              renderItem={({ item, index }) => (
+            {filtered.length === 0 ? (
+              <Text className="p-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
+                No {typeFilter === "lift" ? "lift" : "warm-up"} exercises yet.
+              </Text>
+            ) : (
+              filtered.map((item, index) => (
                 <View
+                  key={item.id}
                   className="flex-row items-center justify-between px-[18px] py-3.5"
                   style={index < filtered.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#ece7e1" } : undefined}
                 >
@@ -216,8 +214,8 @@ export default function Exercises() {
                     </Pressable>
                   </View>
                 </View>
-              )}
-            />
+              ))
+            )}
           </View>
         )}
 
@@ -229,7 +227,7 @@ export default function Exercises() {
           onClose={() => setModalVisible(false)}
           onSubmit={handleSubmit}
         />
-      </View>
+      </ScrollView>
     </CoachShell>
   );
 }

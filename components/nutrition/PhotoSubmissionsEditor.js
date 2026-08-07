@@ -125,7 +125,7 @@ function DayEditor({ date, photos, onSaved }) {
         <TextInput
           value={weight}
           onChangeText={setWeight}
-          keyboardType="numeric"
+          keyboardType="decimal-pad"
           inputAccessoryViewID={NUMERIC_DONE_ID}
           className="rounded border border-stone-300 px-2 py-1.5 text-sm"
           style={{ fontFamily: fonts.sans }}

@@ -179,6 +179,8 @@ export function SessionLogger({
           timer={timer}
           onToggleTimer={onToggleTimer}
           onResetTimer={onResetTimer}
+          onFinalize={onFinalize}
+          isCompleted={isCompleted}
         />
 
         {!hideFinalizeButton && (

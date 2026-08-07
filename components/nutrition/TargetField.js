@@ -31,7 +31,7 @@ export function TargetField({ label, styleKey, current, pillLabel = "target", un
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        keyboardType="numeric"
+        keyboardType="decimal-pad"
         inputAccessoryViewID={NUMERIC_DONE_ID}
         className="rounded-lg border border-stone-300 px-4 py-3 text-base"
         style={{ fontFamily: fonts.sans }}

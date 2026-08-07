@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, TextInput, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { listMembers, listAssignments, linkMemberByAuthId } from "../../../lib/programming/clients";
@@ -204,7 +204,7 @@ export default function ClientsWeb() {
 
   return (
     <CoachShell>
-      <View className="flex-1" style={{ backgroundColor: "#faf8f6", padding: 40 }}>
+      <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ padding: 40 }}>
         <View className="mb-5 flex-row items-start justify-between">
           <View>
             <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 26 }}>Clients</Text>
@@ -349,7 +349,7 @@ export default function ClientsWeb() {
         )}
 
         <LinkMemberModal visible={modalVisible} onClose={() => setModalVisible(false)} onSubmit={handleLink} />
-      </View>
+      </ScrollView>
     </CoachShell>
   );
 }
