@@ -19,6 +19,7 @@ import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES, STATUS_ORDER } from "../../../lib/programming/spcStatus";
 import { formatDateMDY } from "../../../lib/formatDate";
+import { toastError } from "../../../lib/toast";
 
 const SORT_OPTIONS = [
   { value: "blockEnds", label: "Sort: Block ends" },
@@ -336,7 +337,7 @@ export default function SpcDashboardWeb() {
       await setSpcStatus(userId, toStatus);
       await load();
     } catch (err) {
-      setLoadError(err.message ?? String(err));
+      toastError("Couldn't update status", err);
     }
   };
 

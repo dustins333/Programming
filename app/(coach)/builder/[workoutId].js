@@ -23,23 +23,42 @@ export default function WorkoutBuilderNative() {
   const [warmups, setWarmups] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [siblingPatterns, setSiblingPatterns] = useState([]);
+  const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
-    const w = await getWorkout(workoutId);
-    setWorkout(w);
-    const [warmupRows, exerciseRows, siblings] = await Promise.all([
-      listWarmups(workoutId),
-      listWorkoutExercises(workoutId),
-      getSiblingPatterns(w.group_blocks.id, w.week_number, workoutId),
-    ]);
-    setWarmups(warmupRows);
-    setExercises(exerciseRows);
-    setSiblingPatterns(siblings);
+    try {
+      setLoadError(null);
+      const w = await getWorkout(workoutId);
+      setWorkout(w);
+      const [warmupRows, exerciseRows, siblings] = await Promise.all([
+        listWarmups(workoutId),
+        listWorkoutExercises(workoutId),
+        getSiblingPatterns(w.group_blocks.id, w.week_number, workoutId),
+      ]);
+      setWarmups(warmupRows);
+      setExercises(exerciseRows);
+      setSiblingPatterns(siblings);
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
   }, [workoutId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  if (loadError) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white px-6">
+        <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+          Couldn't load this workout: {loadError}
+        </Text>
+        <Pressable onPress={load}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (!workout) {
     return (

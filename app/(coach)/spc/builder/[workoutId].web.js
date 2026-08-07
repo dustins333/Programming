@@ -33,6 +33,7 @@ import { ExercisePickerModal } from "../../../../components/ExercisePickerModal"
 import { CommentThread } from "../../../../components/CommentThread";
 import { PatternTally } from "../../../../components/PatternTally";
 import { fonts, colors } from "../../../../lib/theme";
+import { toastError } from "../../../../lib/toast";
 
 // Click-to-insert only — no drag-from-library. Used to be a dnd-kit
 // draggable row with the "expand variations" chevron nested inside it —
@@ -214,6 +215,7 @@ export default function SpcWorkoutBuilderWeb() {
   const router = useRouter();
 
   const [workout, setWorkout] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [member, setMember] = useState(null);
   const [warmups, setWarmups] = useState([]);
   const [exercises, setExercises] = useState([]);
@@ -247,20 +249,25 @@ export default function SpcWorkoutBuilderWeb() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const load = useCallback(async () => {
-    const w = await getSpcWorkout(workoutId);
-    setWorkout(w);
-    const [memberRow, warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
-      getUser(w.spc_blocks.spc_client_id),
-      listSpcWarmups(workoutId),
-      listSpcWorkoutExercises(workoutId),
-      listExercises(),
-      getSpcSiblingPatterns(w.spc_blocks.id, w.week_number, workoutId),
-    ]);
-    setMember(memberRow);
-    setWarmups(warmupRows);
-    setExercises(exerciseRows);
-    setLibrary(libraryRows);
-    setSiblingPatterns(siblings);
+    try {
+      setLoadError(null);
+      const w = await getSpcWorkout(workoutId);
+      setWorkout(w);
+      const [memberRow, warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
+        getUser(w.spc_blocks.spc_client_id),
+        listSpcWarmups(workoutId),
+        listSpcWorkoutExercises(workoutId),
+        listExercises(),
+        getSpcSiblingPatterns(w.spc_blocks.id, w.week_number, workoutId),
+      ]);
+      setMember(memberRow);
+      setWarmups(warmupRows);
+      setExercises(exerciseRows);
+      setLibrary(libraryRows);
+      setSiblingPatterns(siblings);
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
   }, [workoutId]);
 
   useEffect(() => {
@@ -289,30 +296,43 @@ export default function SpcWorkoutBuilderWeb() {
   }, [filteredLibrary]);
 
   const handleInsertExercise = async (exercise) => {
-    const created = await addSpcWorkoutExercise({
-      workoutId,
-      exerciseId: exercise.id,
-      position: exercises.length + 1,
-      userId: workout.spc_blocks.spc_client_id,
-    });
-    setExercises((prev) => [...prev, created]);
+    try {
+      const created = await addSpcWorkoutExercise({
+        workoutId,
+        exerciseId: exercise.id,
+        position: exercises.length + 1,
+        userId: workout.spc_blocks.spc_client_id,
+      });
+      setExercises((prev) => [...prev, created]);
+    } catch (err) {
+      toastError("Couldn't add exercise", err);
+    }
   };
 
   const handleExerciseChange = (id, fields) => {
     setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...fields } : e)));
-    updateSpcWorkoutExercise(id, fields);
+    updateSpcWorkoutExercise(id, fields).catch((err) => toastError("Couldn't save change", err));
   };
 
   const handleRemoveExercise = async (id) => {
+    const removed = exercises.find((e) => e.id === id);
+    const removedIndex = exercises.findIndex((e) => e.id === id);
     setExercises((prev) => prev.filter((e) => e.id !== id));
-    await removeSpcWorkoutExercise(id);
+    try {
+      await removeSpcWorkoutExercise(id);
+    } catch (err) {
+      toastError("Couldn't remove exercise", err);
+      if (removed) setExercises((prev) => [...prev.slice(0, removedIndex), removed, ...prev.slice(removedIndex)]);
+    }
   };
 
   const handleLinkSuperset = (itemId, nextItemId) => {
     const groupId = crypto.randomUUID();
     setExercises((prev) => prev.map((e) => (e.id === itemId || e.id === nextItemId ? { ...e, superset_group_id: groupId } : e)));
-    updateSpcWorkoutExercise(itemId, { superset_group_id: groupId });
-    updateSpcWorkoutExercise(nextItemId, { superset_group_id: groupId });
+    Promise.all([
+      updateSpcWorkoutExercise(itemId, { superset_group_id: groupId }),
+      updateSpcWorkoutExercise(nextItemId, { superset_group_id: groupId }),
+    ]).catch((err) => toastError("Couldn't link superset", err));
   };
 
   const handleUnlinkSuperset = (item) => {
@@ -320,13 +340,20 @@ export default function SpcWorkoutBuilderWeb() {
     setExercises((prev) =>
       prev.map((e) => (e.id === item.id || e.id === partner?.id ? { ...e, superset_group_id: null } : e))
     );
-    updateSpcWorkoutExercise(item.id, { superset_group_id: null });
-    if (partner) updateSpcWorkoutExercise(partner.id, { superset_group_id: null });
+    Promise.all([
+      updateSpcWorkoutExercise(item.id, { superset_group_id: null }),
+      partner ? updateSpcWorkoutExercise(partner.id, { superset_group_id: null }) : Promise.resolve(),
+    ]).catch((err) => toastError("Couldn't unlink superset", err));
   };
 
   const handleNewExerciseCreated = async (form) => {
-    const created = await createExercise({ ...form, createdBy: profile.id });
-    setLibrary((prev) => [...prev, created]);
+    try {
+      const created = await createExercise({ ...form, createdBy: profile.id });
+      setLibrary((prev) => [...prev, created]);
+    } catch (err) {
+      toastError("Failed to save exercise", err);
+      throw err;
+    }
   };
 
   // Only reordering already-placed exercises uses drag now (SortableContext
@@ -340,29 +367,42 @@ export default function SpcWorkoutBuilderWeb() {
       if (oldIndex === -1 || newIndex === -1) return;
       const reordered = arrayMove(exercises, oldIndex, newIndex);
       setExercises(reordered);
-      reorderSpcWorkoutExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 })));
+      reorderSpcWorkoutExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 }))).catch((err) =>
+        toastError("Couldn't save reorder", err)
+      );
     }
   };
 
   const handleAddWarmup = async (exercise) => {
-    const created = await addSpcWarmup({
-      workoutId,
-      exerciseId: exercise.id,
-      position: warmups.length + 1,
-      sets: exercise.default_sets != null ? String(exercise.default_sets) : undefined,
-      reps: exercise.default_reps || undefined,
-    });
-    setWarmups((prev) => [...prev, created]);
+    try {
+      const created = await addSpcWarmup({
+        workoutId,
+        exerciseId: exercise.id,
+        position: warmups.length + 1,
+        sets: exercise.default_sets != null ? String(exercise.default_sets) : undefined,
+        reps: exercise.default_reps || undefined,
+      });
+      setWarmups((prev) => [...prev, created]);
+    } catch (err) {
+      toastError("Couldn't add warm-up", err);
+    }
   };
 
   const handleWarmupChange = (id, fields) => {
     setWarmups((prev) => prev.map((w) => (w.id === id ? { ...w, ...fields } : w)));
-    updateSpcWarmup(id, fields);
+    updateSpcWarmup(id, fields).catch((err) => toastError("Couldn't save change", err));
   };
 
   const handleRemoveWarmup = async (id) => {
+    const removed = warmups.find((w) => w.id === id);
+    const removedIndex = warmups.findIndex((w) => w.id === id);
     setWarmups((prev) => prev.filter((w) => w.id !== id));
-    await removeSpcWarmup(id);
+    try {
+      await removeSpcWarmup(id);
+    } catch (err) {
+      toastError("Couldn't remove warm-up", err);
+      if (removed) setWarmups((prev) => [...prev.slice(0, removedIndex), removed, ...prev.slice(removedIndex)]);
+    }
   };
 
   const handleTogglePublish = async () => {
@@ -371,6 +411,8 @@ export default function SpcWorkoutBuilderWeb() {
       const next = workout.status === "published" ? "draft" : "published";
       await setSpcWorkoutStatus(workoutId, next);
       setWorkout((w) => ({ ...w, status: next }));
+    } catch (err) {
+      toastError("Couldn't publish", err);
     } finally {
       setPublishing(false);
     }
@@ -378,8 +420,21 @@ export default function SpcWorkoutBuilderWeb() {
 
   const handleTitleChange = (title) => {
     setWorkout((w) => ({ ...w, title }));
-    setSpcWorkoutTitle(workoutId, title);
+    setSpcWorkoutTitle(workoutId, title).catch((err) => toastError("Couldn't save title", err));
   };
+
+  if (loadError) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white px-6">
+        <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+          Couldn't load this workout: {loadError}
+        </Text>
+        <Pressable onPress={load}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5140" }}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (!workout || !member) {
     return (

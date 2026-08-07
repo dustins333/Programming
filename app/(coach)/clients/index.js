@@ -35,9 +35,15 @@ export default function Clients() {
   const [members, setMembers] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [search, setSearch] = useState("");
+  const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
-    setMembers(await listMembers());
+    try {
+      setLoadError(null);
+      setMembers(await listMembers());
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
   }, []);
 
   useEffect(() => {
@@ -90,7 +96,16 @@ export default function Clients() {
           style={{ fontFamily: fonts.sans, maxWidth: 360 }}
         />
 
-        {!members ? (
+        {loadError ? (
+          <View className="items-start mt-4">
+            <Text className="mb-2 text-red-600" style={{ fontFamily: fonts.sans }}>
+              Couldn't load clients: {loadError}
+            </Text>
+            <Pressable onPress={load}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : !members ? (
           <ActivityIndicator color={colors.primary} />
         ) : (
           <FlatList

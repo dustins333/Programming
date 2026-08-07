@@ -28,11 +28,17 @@ export default function SpcClientHistory() {
   const [printBlockId, setPrintBlockId] = useState(null);
   const [printSessions, setPrintSessions] = useState([]);
   const [printLoading, setPrintLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
-    const [memberRow, blockRows] = await Promise.all([getUser(userId), listBlocksForSpcClient(userId)]);
-    setMember(memberRow);
-    setBlocks(labelBlocks(blockRows).sort((a, b) => (a.block_start_date < b.block_start_date ? 1 : -1)));
+    try {
+      setLoadError(null);
+      const [memberRow, blockRows] = await Promise.all([getUser(userId), listBlocksForSpcClient(userId)]);
+      setMember(memberRow);
+      setBlocks(labelBlocks(blockRows).sort((a, b) => (a.block_start_date < b.block_start_date ? 1 : -1)));
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -89,7 +95,16 @@ export default function SpcClientHistory() {
           Every block for this client — past, current, and upcoming.
         </Text>
 
-        {!blocks ? (
+        {loadError ? (
+          <View className="items-start">
+            <Text className="mb-2 text-red-600" style={{ fontFamily: fonts.sans }}>
+              Couldn't load history: {loadError}
+            </Text>
+            <Pressable onPress={load}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : !blocks ? (
           <ActivityIndicator color={colors.primary} />
         ) : (
           <FlatList

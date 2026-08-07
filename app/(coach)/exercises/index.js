@@ -23,10 +23,16 @@ export default function Exercises() {
   const [muscleFilter, setMuscleFilter] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
-    const data = await listExercises();
-    setExercises(data);
+    try {
+      setLoadError(null);
+      const data = await listExercises();
+      setExercises(data);
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
   }, []);
 
   useEffect(() => {
@@ -147,7 +153,16 @@ export default function Exercises() {
           </View>
         )}
 
-        {!exercises ? (
+        {loadError ? (
+          <View className="items-start">
+            <Text className="mb-2 text-red-600" style={{ fontFamily: fonts.sans }}>
+              Couldn't load exercises: {loadError}
+            </Text>
+            <Pressable onPress={load}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : !exercises ? (
           <ActivityIndicator color={colors.primary} />
         ) : (
           <View className="rounded-2xl border bg-white" style={[{ borderColor: "#ece7e1", maxWidth: 900, overflow: "hidden" }, CARD_SHADOW]}>

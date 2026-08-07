@@ -27,6 +27,7 @@ import {
 import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
 import { fonts, colors } from "../../../../lib/theme";
+import { toastError } from "../../../../lib/toast";
 
 const CATEGORY_LABELS = { away: "Away programming", trial: "Trial session" };
 
@@ -279,33 +280,60 @@ export default function TemplateBuilderWeb() {
   }, [filteredLibrary]);
 
   const handleInsertExercise = async (exercise) => {
-    const created = await addTemplateExercise({ templateId, exerciseId: exercise.id, position: exercises.length + 1 });
-    setExercises((prev) => [...prev, created]);
+    try {
+      const created = await addTemplateExercise({ templateId, exerciseId: exercise.id, position: exercises.length + 1 });
+      setExercises((prev) => [...prev, created]);
+    } catch (err) {
+      toastError("Couldn't add exercise", err);
+    }
   };
 
   const handleExerciseChange = (id, fields) => {
     setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...fields } : e)));
-    updateTemplateExercise(id, fields);
+    updateTemplateExercise(id, fields).catch((err) => toastError("Couldn't save change", err));
   };
 
   const handleRemoveExercise = async (id) => {
+    const removed = exercises.find((e) => e.id === id);
+    const removedIndex = exercises.findIndex((e) => e.id === id);
     setExercises((prev) => prev.filter((e) => e.id !== id));
-    await removeTemplateExercise(id);
+    try {
+      await removeTemplateExercise(id);
+    } catch (err) {
+      toastError("Couldn't remove exercise", err);
+      if (removed) setExercises((prev) => [...prev.slice(0, removedIndex), removed, ...prev.slice(removedIndex)]);
+    }
   };
 
   const handleAddWarmup = async (exercise) => {
-    const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: warmups.length + 1 });
-    setWarmups((prev) => [...prev, created]);
+    try {
+      const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: warmups.length + 1 });
+      setWarmups((prev) => [...prev, created]);
+    } catch (err) {
+      toastError("Couldn't add warm-up", err);
+    }
   };
 
   const handleRemoveWarmup = async (id) => {
+    const removed = warmups.find((w) => w.id === id);
+    const removedIndex = warmups.findIndex((w) => w.id === id);
     setWarmups((prev) => prev.filter((w) => w.id !== id));
-    await removeTemplateWarmup(id);
+    try {
+      await removeTemplateWarmup(id);
+    } catch (err) {
+      toastError("Couldn't remove warm-up", err);
+      if (removed) setWarmups((prev) => [...prev.slice(0, removedIndex), removed, ...prev.slice(removedIndex)]);
+    }
   };
 
   const handleNewExerciseCreated = async (form) => {
-    const created = await createExercise({ ...form, createdBy: profile.id });
-    setLibrary((prev) => [...prev, created]);
+    try {
+      const created = await createExercise({ ...form, createdBy: profile.id });
+      setLibrary((prev) => [...prev, created]);
+    } catch (err) {
+      toastError("Failed to save exercise", err);
+      throw err;
+    }
   };
 
   // Only reordering already-placed exercises uses drag now (SortableContext
@@ -319,16 +347,21 @@ export default function TemplateBuilderWeb() {
       if (oldIndex === -1 || newIndex === -1) return;
       const reordered = arrayMove(exercises, oldIndex, newIndex);
       setExercises(reordered);
-      reorderTemplateExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 })));
+      reorderTemplateExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 }))).catch((err) =>
+        toastError("Couldn't save reorder", err)
+      );
     }
   };
 
   if (loadError) {
     return (
       <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+        <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
           Something went wrong: {loadError}
         </Text>
+        <Pressable onPress={load}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5140" }}>Retry</Text>
+        </Pressable>
       </View>
     );
   }

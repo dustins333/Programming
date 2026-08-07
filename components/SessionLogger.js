@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { getLoggedSetsForDate } from "../lib/programming/memberPlan";
 import { fonts, colors } from "../lib/theme";
+import { toastError } from "../lib/toast";
 import { ExerciseCard, targetLineFor } from "./ExerciseCard";
 import { SessionFocusModal } from "./SessionFocusModal";
 
@@ -115,6 +116,8 @@ export function SessionLogger({
     setFinalizing(true);
     try {
       await onFinalize();
+    } catch (err) {
+      toastError("Couldn't save", err);
     } finally {
       setFinalizing(false);
     }

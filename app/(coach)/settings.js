@@ -100,6 +100,7 @@ export default function Settings() {
   const [addStaffRole, setAddStaffRole] = useState("coach");
   const [checkinQuestions, setCheckinQuestions] = useState([]);
   const [questionnaireQuestions, setQuestionnaireQuestions] = useState([]);
+  const [loadError, setLoadError] = useState(null);
 
   const loadCoaches = useCallback(async () => {
     try {
@@ -121,21 +122,26 @@ export default function Settings() {
   }, []);
 
   const load = useCallback(async () => {
-    const rows = await getSettings();
-    setSettings(rows);
-    setValues(Object.fromEntries(rows.map((r) => [r.key, String(r.value)])));
+    try {
+      setLoadError(null);
+      const rows = await getSettings();
+      setSettings(rows);
+      setValues(Object.fromEntries(rows.map((r) => [r.key, String(r.value)])));
 
-    const notifRows = await Promise.all(
-      NOTIFICATION_TOGGLES.map((t) => getSetting(t.key, true))
-    );
-    setNotifValues(Object.fromEntries(NOTIFICATION_TOGGLES.map((t, i) => [t.key, notifRows[i]])));
+      const notifRows = await Promise.all(
+        NOTIFICATION_TOGGLES.map((t) => getSetting(t.key, true))
+      );
+      setNotifValues(Object.fromEntries(NOTIFICATION_TOGGLES.map((t, i) => [t.key, notifRows[i]])));
 
-    // Independent of the settings/notifications loads above — a failure
-    // here (or an as-yet-unrun migration) shouldn't take down the rest of
-    // the page, same reasoning as every other isolated-load pattern in
-    // this app.
-    await loadCoaches();
-    await loadTemplates();
+      // Independent of the settings/notifications loads above — a failure
+      // here (or an as-yet-unrun migration) shouldn't take down the rest of
+      // the page, same reasoning as every other isolated-load pattern in
+      // this app.
+      await loadCoaches();
+      await loadTemplates();
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
   }, [loadCoaches, loadTemplates]);
 
   const nextPosition = (list) => (list.length > 0 ? Math.max(...list.map((q) => q.position)) + 1 : 1);
@@ -259,6 +265,21 @@ export default function Settings() {
       setSendingPush(false);
     }
   };
+
+  if (loadError) {
+    return (
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white px-6">
+          <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Couldn't load settings: {loadError}
+          </Text>
+          <Pressable onPress={load}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
+        </View>
+      </CoachShell>
+    );
+  }
 
   if (!settings) {
     return (

@@ -24,6 +24,7 @@ import { retryOnce } from "../../lib/retry";
 import { SessionLogger } from "../../components/SessionLogger";
 import { TimerControl } from "../../components/TimerControl";
 import { fonts, colors } from "../../lib/theme";
+import { toastError } from "../../lib/toast";
 
 // Design tokens from design_handoff_visual_pass_v4/README.md.
 const CANVAS = "#faf8f6";
@@ -223,6 +224,8 @@ export default function MyFitness() {
   const [spc, setSpc] = useState(null);
   const [spcDetail, setSpcDetail] = useState(null); // { sessionNumber, title, exercises } for whichever session is selected
   const [spcDetailLoading, setSpcDetailLoading] = useState(false);
+  const [spcDetailError, setSpcDetailError] = useState(null);
+  const [spcDetailRetryKey, setSpcDetailRetryKey] = useState(0);
   const [oneOffs, setOneOffs] = useState([]);
   const [selectedProgramOverride, setSelectedProgramOverride] = useState(null);
   const [footerFinalizing, setFooterFinalizing] = useState(false);
@@ -432,29 +435,36 @@ export default function MyFitness() {
     if (!session) return;
     let cancelled = false;
     setSpcDetailLoading(true);
+    setSpcDetailError(null);
     (async () => {
-      const exerciseRows = await listSpcWorkoutExercises(session.workout.id);
-      if (cancelled) return;
-      setSpcDetail({
-        sessionNumber: session.sessionNumber,
-        title: session.workout.title || null,
-        exercises: exerciseRows.map((ex) => ({
-          id: ex.id,
-          exercise: ex.exercises,
-          targetSets: ex.sets,
-          targetReps: ex.reps,
-          repScheme: ex.rep_scheme,
-          supersetGroupId: ex.superset_group_id,
-          notes: ex.rest ? `rest ${ex.rest}` : ex.notes,
-        })),
-      });
-      setSpcDetailLoading(false);
+      try {
+        const exerciseRows = await listSpcWorkoutExercises(session.workout.id);
+        if (cancelled) return;
+        setSpcDetail({
+          sessionNumber: session.sessionNumber,
+          title: session.workout.title || null,
+          exercises: exerciseRows.map((ex) => ({
+            id: ex.id,
+            exercise: ex.exercises,
+            targetSets: ex.sets,
+            targetReps: ex.reps,
+            repScheme: ex.rep_scheme,
+            supersetGroupId: ex.superset_group_id,
+            notes: ex.rest ? `rest ${ex.rest}` : ex.notes,
+          })),
+        });
+      } catch (err) {
+        if (cancelled) return;
+        setSpcDetailError(err.message ?? String(err));
+      } finally {
+        if (!cancelled) setSpcDetailLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spc?.selectedSessionNumber, spc?.status]);
+  }, [spc?.selectedSessionNumber, spc?.status, spcDetailRetryKey]);
 
   // A fresh navigation (e.g. My Week's per-tile arrow) should always win
   // over whatever tab was manually selected on an earlier visit. This
@@ -544,6 +554,8 @@ export default function MyFitness() {
     setFooterFinalizing(true);
     try {
       await activeFinalize.onFinalize();
+    } catch (err) {
+      toastError("Couldn't save", err);
     } finally {
       setFooterFinalizing(false);
     }
@@ -705,7 +717,16 @@ export default function MyFitness() {
                 />
               )}
 
-              {spcDetailLoading || !spcDetail ? (
+              {spcDetailError ? (
+                <View className="items-center py-4">
+                  <Text className="mb-2 text-center" style={{ fontFamily: fonts.sans, fontSize: 13, color: "#b23a22" }}>
+                    Couldn't load this session: {spcDetailError}
+                  </Text>
+                  <Pressable onPress={() => setSpcDetailRetryKey((k) => k + 1)} hitSlop={8}>
+                    <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : spcDetailLoading || !spcDetail ? (
                 <ActivityIndicator color={colors.primary} />
               ) : (
                 <>
