@@ -7,6 +7,7 @@ import {
   createExercise,
   updateExercise,
   setExerciseActive,
+  getExerciseUsageCount,
   MUSCLE_GROUPS,
 } from "../../../lib/programming/exercises";
 import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
@@ -24,14 +25,16 @@ export default function Exercises() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("lift");
   const [muscleFilter, setMuscleFilter] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [archivingId, setArchivingId] = useState(null);
 
   const load = useCallback(async () => {
     try {
       setLoadError(null);
-      const data = await listExercises();
+      const data = await listExercises({ includeArchived: true });
       setExercises(data);
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -56,12 +59,13 @@ export default function Exercises() {
   const filtered = useMemo(() => {
     if (!exercises) return [];
     return exercises.filter((ex) => {
+      if (showArchived ? ex.is_active : !ex.is_active) return false;
       if ((ex.type ?? "lift") !== typeFilter) return false;
       if (typeFilter === "lift" && muscleFilter && !ex.muscle_group?.includes(muscleFilter)) return false;
       if (search && !ex.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [exercises, search, typeFilter, muscleFilter]);
+  }, [exercises, search, typeFilter, muscleFilter, showArchived]);
 
   const handleSubmit = async (form) => {
     try {
@@ -78,13 +82,35 @@ export default function Exercises() {
   };
 
   const handleArchive = async (exercise) => {
-    const proceed = await confirmArchiveExercise(exercise.name);
+    setArchivingId(exercise.id);
+    let usageNote;
+    try {
+      const count = await getExerciseUsageCount(exercise.id);
+      if (count > 0) {
+        usageNote = `It's currently used in ${count} place${count === 1 ? "" : "s"} across your programming (sessions, warm-ups, and/or templates) — archiving will blank its name out of any live session that still references it.`;
+      }
+    } catch {
+      // Usage count is a courtesy, not a gate — if it fails to load, fall
+      // back to the plain confirm rather than blocking the archive entirely.
+    } finally {
+      setArchivingId(null);
+    }
+    const proceed = await confirmArchiveExercise(exercise.name, usageNote);
     if (!proceed) return;
     try {
       await setExerciseActive(exercise.id, false);
       await load();
     } catch (err) {
       toastError("Failed to archive", err);
+    }
+  };
+
+  const handleUnarchive = async (exercise) => {
+    try {
+      await setExerciseActive(exercise.id, true);
+      await load();
+    } catch (err) {
+      toastError("Failed to un-archive", err);
     }
   };
 
@@ -123,25 +149,37 @@ export default function Exercises() {
           style={{ fontFamily: fonts.sans, fontSize: 13, height: 40, maxWidth: 900 }}
         />
 
-        <View className="mb-3.5 flex-row overflow-hidden self-start rounded-full" style={{ borderWidth: 1, borderColor: colors.primary }}>
-          {[
-            { key: "lift", label: "Lifts" },
-            { key: "warmup", label: "Warm-ups" },
-          ].map((opt) => {
-            const active = typeFilter === opt.key;
-            return (
-              <Pressable
-                key={opt.key}
-                onPress={() => setTypeFilter(opt.key)}
-                className="px-5 py-2.5"
-                style={{ backgroundColor: active ? colors.primary : "transparent" }}
-              >
-                <Text style={{ fontFamily: active ? fonts.sansBold : fonts.sansSemiBold, color: active ? "white" : colors.primaryOnWhite, fontSize: 13 }}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View className="mb-3.5 flex-row items-center gap-3">
+          <View className="flex-row overflow-hidden self-start rounded-full" style={{ borderWidth: 1, borderColor: colors.primary }}>
+            {[
+              { key: "lift", label: "Lifts" },
+              { key: "warmup", label: "Warm-ups" },
+            ].map((opt) => {
+              const active = typeFilter === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => setTypeFilter(opt.key)}
+                  className="px-5 py-2.5"
+                  style={{ backgroundColor: active ? colors.primary : "transparent" }}
+                >
+                  <Text style={{ fontFamily: active ? fonts.sansBold : fonts.sansSemiBold, color: active ? "white" : colors.primaryOnWhite, fontSize: 13 }}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Pressable
+            onPress={() => setShowArchived((v) => !v)}
+            className="rounded-full px-4 py-2"
+            style={{ backgroundColor: showArchived ? "#f1efed" : "transparent", borderWidth: 1, borderColor: showArchived ? "#d9d4cd" : "transparent" }}
+          >
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: showArchived ? "#57534e" : "#a8a29e", fontSize: 12.5 }}>
+              {showArchived ? "Showing archived" : "Show archived"}
+            </Text>
+          </Pressable>
         </View>
 
         {typeFilter === "lift" && (
@@ -186,7 +224,9 @@ export default function Exercises() {
           <View className="rounded-2xl border bg-white" style={[{ borderColor: "#ece7e1", maxWidth: 900, overflow: "hidden" }, CARD_SHADOW]}>
             {filtered.length === 0 ? (
               <Text className="p-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
-                No {typeFilter === "lift" ? "lift" : "warm-up"} exercises yet.
+                {showArchived
+                  ? `No archived ${typeFilter === "lift" ? "lift" : "warm-up"} exercises.`
+                  : `No ${typeFilter === "lift" ? "lift" : "warm-up"} exercises yet.`}
               </Text>
             ) : (
               filtered.map((item, index) => (
@@ -195,29 +235,37 @@ export default function Exercises() {
                   className="flex-row items-center justify-between px-[18px] py-3.5"
                   style={index < filtered.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#ece7e1" } : undefined}
                 >
-                  <View className="flex-1 flex-row items-center gap-2.5" style={{ minWidth: 0 }}>
-                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }} className="text-stone-700">
-                      {item.name}
-                    </Text>
-                    {item.type === "warmup" ? (
-                      <View className="rounded-full px-2.5 py-[3px]" style={{ backgroundColor: "#fdf6ee" }}>
-                        <Text style={{ fontFamily: fonts.sansBold, color: "#8a5a2e", fontSize: 10.5 }}>warm-up</Text>
-                      </View>
-                    ) : (
-                      <View>
+                  <View className="flex-1" style={{ minWidth: 0 }}>
+                    <View className="flex-row items-center gap-2.5">
+                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }} className="text-stone-700">
+                        {item.name}
+                      </Text>
+                      {item.type === "warmup" ? (
+                        <View className="rounded-full px-2.5 py-[3px]" style={{ backgroundColor: "#fdf6ee" }}>
+                          <Text style={{ fontFamily: fonts.sansBold, color: "#8a5a2e", fontSize: 10.5 }}>warm-up</Text>
+                        </View>
+                      ) : (
                         <Text className="text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 12 }}>
                           {item.muscle_group?.map((mg) => mg.replace("_", " ")).join(", ")}
                           {item.movement_pattern?.length
                             ? ` · ${item.movement_pattern.map((mp) => mp.replace("_", " ")).join(", ")}`
                             : ""}
                         </Text>
-                        {item.parent_exercise_id ? (
-                          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-                            ↳ variation of {parentNameById.get(item.parent_exercise_id) ?? "…"}
-                          </Text>
-                        ) : null}
-                      </View>
-                    )}
+                      )}
+                    </View>
+                    {item.type !== "warmup" && item.parent_exercise_id ? (
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+                        ↳ variation of {parentNameById.get(item.parent_exercise_id) ?? "…"}
+                      </Text>
+                    ) : null}
+                    {item.cues ? (
+                      <Text
+                        style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 2, fontStyle: "italic" }}
+                        numberOfLines={2}
+                      >
+                        {item.cues}
+                      </Text>
+                    ) : null}
                   </View>
                   <View className="flex-row items-center gap-4" style={{ flexShrink: 0 }}>
                     {item.video_url ? (
@@ -239,13 +287,26 @@ export default function Exercises() {
                     >
                       <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 12.5 }}>Edit</Text>
                     </Pressable>
-                    <Pressable
-                      onPress={() => handleArchive(item)}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      accessibilityLabel={`Archive ${item.name}`}
-                    >
-                      <Text style={{ fontFamily: fonts.sansSemiBold, color: "#a8a29e", fontSize: 12.5 }}>Archive</Text>
-                    </Pressable>
+                    {showArchived ? (
+                      <Pressable
+                        onPress={() => handleUnarchive(item)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        accessibilityLabel={`Un-archive ${item.name}`}
+                      >
+                        <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 12.5 }}>Un-archive</Text>
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        onPress={() => handleArchive(item)}
+                        disabled={archivingId === item.id}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        accessibilityLabel={`Archive ${item.name}`}
+                      >
+                        <Text style={{ fontFamily: fonts.sansSemiBold, color: "#a8a29e", fontSize: 12.5 }}>
+                          {archivingId === item.id ? "Checking…" : "Archive"}
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
                 </View>
               ))

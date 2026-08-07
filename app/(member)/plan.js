@@ -186,7 +186,14 @@ function WarmupCard({ warmups }) {
               className="flex-row items-center justify-between py-2.5"
               style={i < warmups.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f2eee9" } : undefined}
             >
-              <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>{w.exercises?.name ?? w.label}</Text>
+              <View className="flex-1 pr-2">
+                <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>{w.exercises?.name ?? w.label}</Text>
+                {w.notes ? (
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", fontStyle: "italic", marginTop: 1 }}>
+                    {w.notes}
+                  </Text>
+                ) : null}
+              </View>
               {detail ? <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e" }}>{detail}</Text> : null}
             </View>
           );
