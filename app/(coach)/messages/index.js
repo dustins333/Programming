@@ -1,9 +1,9 @@
-import { useCallback, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Modal, Platform } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
-import { getUser, listCoaches } from "../../../lib/programming/clients";
+import { getUser, listCoaches, listMembers } from "../../../lib/programming/clients";
 import {
   listThreadSummaries,
   listMessages,
@@ -80,12 +80,85 @@ function ThreadRow({ item, active, onSelect, onToggleRead }) {
   );
 }
 
+// Picks any client to start a new thread with — the main inbox list only
+// ever shows clients who already have message history (listThreadSummaries
+// groups existing rows), so this is the only way to message someone for the
+// first time. Own search box, separate from the inbox's own search bar,
+// since this one searches every client, not just ones already in the list.
+function NewMessageModal({ visible, members, onClose, onPick }) {
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter((m) => m.name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q));
+  }, [members, search]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable onPress={onClose} className="flex-1 items-center justify-center px-6" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
+        <Pressable
+          onPress={(e) => e.stopPropagation?.()}
+          className="w-full rounded-2xl bg-white"
+          style={{ maxWidth: 420, maxHeight: "75%" }}
+        >
+          <View className="px-5 pb-3 pt-5">
+            <Text className="mb-3" style={{ fontFamily: fonts.sansBold, fontSize: 16 }}>
+              New message
+            </Text>
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search clients by name or email…"
+              autoFocus={isWeb}
+              className="rounded-lg border border-stone-300 px-3.5 py-2.5"
+              style={{ fontFamily: fonts.sans, fontSize: 13.5 }}
+            />
+          </View>
+          <ScrollView style={{ maxHeight: 360 }}>
+            {filtered.length === 0 ? (
+              <Text className="px-5 pb-5 text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
+                No clients match.
+              </Text>
+            ) : (
+              filtered.map((m) => (
+                <Pressable
+                  key={m.id}
+                  onPress={() => onPick(m.id)}
+                  className="flex-row items-center gap-3 px-5 py-3"
+                  style={{ borderTopWidth: 1, borderTopColor: "#f1efed" }}
+                >
+                  <Avatar name={m.name} />
+                  <View className="flex-1" style={{ minWidth: 0 }}>
+                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }} className="text-stone-700" numberOfLines={1}>
+                      {m.name}
+                    </Text>
+                    <Text className="text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 12 }} numberOfLines={1}>
+                      {m.email}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
+          <Pressable onPress={onClose} className="items-center border-t border-stone-100 py-3.5">
+            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13.5, color: "#78716c" }}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function CoachMessagesInbox() {
   const { profile } = useAuth();
   const router = useRouter();
   const [summaries, setSummaries] = useState(null);
   const [summariesError, setSummariesError] = useState(null);
   const [coaches, setCoaches] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [search, setSearch] = useState("");
+  const [composerVisible, setComposerVisible] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
   const [messages, setMessages] = useState(null);
@@ -94,9 +167,10 @@ export default function CoachMessagesInbox() {
   const loadSummaries = useCallback(async () => {
     try {
       setSummariesError(null);
-      const [summaryRows, coachRows] = await Promise.all([listThreadSummaries(), listCoaches()]);
+      const [summaryRows, coachRows, memberRows] = await Promise.all([listThreadSummaries(), listCoaches(), listMembers()]);
       setSummaries(summaryRows);
       setCoaches(coachRows);
+      setMembers(memberRows);
     } catch (err) {
       setSummariesError(err.message ?? String(err));
     }
@@ -131,6 +205,11 @@ export default function CoachMessagesInbox() {
     loadThread(userId);
   };
 
+  const handlePickNewMessage = (userId) => {
+    setComposerVisible(false);
+    selectThread(userId);
+  };
+
   const handleToggleRead = async (item) => {
     try {
       if (item.unread) {
@@ -162,8 +241,23 @@ export default function CoachMessagesInbox() {
 
   const coachNameById = new Map(coaches.map((c) => [c.id, c.name]));
 
+  // Search filters the already-sorted (newest-activity-first) summaries
+  // client-side — a plain .filter() preserves listThreadSummaries' own
+  // ordering rather than re-sorting, so search never reshuffles the list.
+  const q = search.trim().toLowerCase();
+  const visibleSummaries = !summaries ? summaries : q ? summaries.filter((s) => s.clientName?.toLowerCase().includes(q)) : summaries;
+
   const listPane = (
     <View style={isWeb ? { width: 340, borderRightWidth: 1, borderRightColor: "#ece7e1" } : { flex: 1 }}>
+      <View className="px-[14px] pb-3 pt-3" style={{ borderBottomWidth: 1, borderBottomColor: "#ece7e1" }}>
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search conversations…"
+          className="rounded-lg border border-stone-300 px-3 py-2"
+          style={{ fontFamily: fonts.sans, fontSize: 13 }}
+        />
+      </View>
       {summariesError ? (
         <View className="items-start p-6">
           <Text className="mb-2 text-red-600" style={{ fontFamily: fonts.sans }}>
@@ -173,17 +267,17 @@ export default function CoachMessagesInbox() {
             <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
           </Pressable>
         </View>
-      ) : !summaries ? (
+      ) : !visibleSummaries ? (
         <View className="items-center justify-center p-10">
           <ActivityIndicator color={colors.primary} />
         </View>
-      ) : summaries.length === 0 ? (
+      ) : visibleSummaries.length === 0 ? (
         <Text className="p-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
-          No client conversations yet.
+          {summaries.length === 0 ? "No client conversations yet." : "No conversations match your search."}
         </Text>
       ) : (
         <ScrollView>
-          {summaries.map((item) => (
+          {visibleSummaries.map((item) => (
             <ThreadRow
               key={item.userId}
               item={item}
@@ -233,14 +327,31 @@ export default function CoachMessagesInbox() {
   return (
     <CoachShell>
       <View style={{ flex: 1, backgroundColor: "#faf8f6" }}>
-        <View className="px-6 pb-2 pt-6">
+        <View className="flex-row items-center justify-between px-6 pb-2 pt-6">
           <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 26 }}>Messages</Text>
+          <Pressable
+            onPress={() => setComposerVisible(true)}
+            className="flex-row items-center gap-1.5 rounded-lg px-3.5 py-2"
+            style={{ backgroundColor: colors.primary }}
+          >
+            <Ionicons name="add" size={16} color="white" />
+            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
+              New message
+            </Text>
+          </Pressable>
         </View>
         <View style={[{ flex: 1, flexDirection: "row", backgroundColor: "white", margin: isWeb ? 24 : 0, borderRadius: isWeb ? 16 : 0, overflow: "hidden" }, isWeb ? CARD_SHADOW : null, isWeb ? { borderWidth: 1, borderColor: "#ece7e1" } : null]}>
           {isWeb || !selectedUserId ? listPane : null}
           {threadPane}
         </View>
       </View>
+
+      <NewMessageModal
+        visible={composerVisible}
+        members={members}
+        onClose={() => setComposerVisible(false)}
+        onPick={handlePickNewMessage}
+      />
     </CoachShell>
   );
 }
