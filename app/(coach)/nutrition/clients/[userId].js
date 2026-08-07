@@ -324,9 +324,12 @@ export default function NutritionClientDetail() {
     return (
       <CoachShell>
         <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8" contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 900 }}>
-          <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
-            ‹ Back to Nutrition
-          </Link>
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/nutrition"))}
+            style={{ marginBottom: 12 }}
+          >
+            <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+          </Pressable>
           <View className="mb-1 flex-row items-center gap-3">
             <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
               {client.name}
@@ -496,9 +499,12 @@ export default function NutritionClientDetail() {
   return (
     <CoachShell>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8" contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 1000 }}>
-        <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
-          ‹ Back to Nutrition
-        </Link>
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/nutrition"))}
+          style={{ marginBottom: 12 }}
+        >
+          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+        </Pressable>
         <View className="mb-1 flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
             <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>

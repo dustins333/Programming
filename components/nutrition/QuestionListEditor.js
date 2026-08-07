@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { fonts, colors } from "../../lib/theme";
 import { toastError } from "../../lib/toast";
+import { confirmRemoveQuestion } from "../../lib/confirmDialog";
 
 // Shared add/rename/reorder/delete list editor for question templates and
 // per-client question sets (checkin template, questionnaire template,
@@ -38,7 +39,9 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id, text) => {
+    const proceed = await confirmRemoveQuestion(text);
+    if (!proceed) return;
     try {
       await onDelete(id);
     } catch (err) {
@@ -132,7 +135,7 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
                     Edit
                   </Text>
                 </Pressable>
-                <Pressable onPress={() => handleDelete(q.id)} hitSlop={8}>
+                <Pressable onPress={() => handleDelete(q.id, q.question_text)} hitSlop={8}>
                   <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
                     Remove
                   </Text>

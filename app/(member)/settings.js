@@ -265,7 +265,7 @@ export default function MemberSettings() {
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-5 pb-8" contentContainerStyle={{ paddingTop: insets.top + 12 }}>
-      <Pressable onPress={() => router.back()} className="mb-3 self-start">
+      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)"))} className="mb-3 self-start">
         <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
       </Pressable>
       <Text className="mb-5 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>

@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Switch } from "react-native";
-import { Redirect, Link } from "expo-router";
+import { useState, useCallback } from "react";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Switch, Platform } from "react-native";
+import { Redirect, Link, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { getSettings, getSetting, updateSetting } from "../../lib/settings";
 import { sendPush } from "../../lib/notifications/sendPush";
@@ -87,6 +87,7 @@ const NOTIFICATION_TOGGLES = [
 
 export default function Settings() {
   const { profile } = useAuth();
+  const router = useRouter();
   const [tab, setTab] = useState("team");
   const [settings, setSettings] = useState(null);
   const [values, setValues] = useState({});
@@ -182,9 +183,14 @@ export default function Settings() {
     await loadTemplates();
   };
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Tab root, kept mounted across tab switches on native — refetch on
+  // every focus so a permission toggle or invite made a moment ago shows
+  // up without leaving and force-quitting the app.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   if (profile && profile.role !== "admin") {
     return <Redirect href="/(coach)" />;
@@ -294,6 +300,14 @@ export default function Settings() {
   return (
     <CoachShell>
     <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
+      {Platform.OS !== "web" ? (
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/more"))}
+          className="mb-4 self-start"
+        >
+          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+        </Pressable>
+      ) : null}
       <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Settings
       </Text>

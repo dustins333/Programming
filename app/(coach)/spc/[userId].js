@@ -383,9 +383,12 @@ export default function SpcClientDetail() {
   return (
     <CoachShell>
       <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 960 }}>
-        <Link href="/(coach)/spc" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, marginBottom: 18, fontSize: 13 }}>
-          ‹ Back to SPC
-        </Link>
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/spc"))}
+          style={{ marginBottom: 18 }}
+        >
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>‹ Back</Text>
+        </Pressable>
 
         <View className="mb-6 flex-row items-center gap-3.5">
           <View className="items-center justify-center rounded-full" style={{ width: 52, height: 52, backgroundColor: "#fdf6f2" }}>

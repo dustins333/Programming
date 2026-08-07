@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, TextInput, FlatList, ActivityIndicator } from "react-native";
 import { toastError } from "../../../lib/toast";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { listMembers, linkMemberByAuthId } from "../../../lib/programming/clients";
+import { linkMemberByAuthId } from "../../../lib/programming/clients";
+import { loadClientsRoster } from "../../../lib/programming/clientsRoster";
 import { LinkMemberModal } from "../../../components/LinkMemberModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
@@ -32,23 +33,39 @@ function Avatar({ name }) {
 
 export default function Clients() {
   const router = useRouter();
-  const [members, setMembers] = useState(null);
+  const params = useLocalSearchParams();
+  const [state, setState] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [search, setSearch] = useState("");
+  const [programFilter, setProgramFilter] = useState(typeof params.program === "string" ? params.program : "");
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
     try {
       setLoadError(null);
-      setMembers(await listMembers());
+      setState(await loadClientsRoster());
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
   }, []);
 
+  // Native's Tabs navigator keeps this list mounted across tab switches —
+  // useFocusEffect re-fetches on every focus so a program toggle made on a
+  // client's detail page shows up here without a manual pull-to-refresh.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  // Same "apply once on arrival, don't fight a manual clear" rule as the
+  // web version — a dashboard tile's `?program=` deep link previously did
+  // nothing at all here since this screen never read the param.
   useEffect(() => {
-    load();
-  }, [load]);
+    if (typeof params.program === "string") {
+      setProgramFilter(params.program);
+    }
+  }, [params.program]);
 
   const handleLink = async (form) => {
     try {
@@ -60,12 +77,23 @@ export default function Clients() {
     }
   };
 
+  const programLabel = useMemo(() => {
+    if (!programFilter || !state) return null;
+    if (programFilter === "unassigned") return "Unassigned";
+    if (programFilter === "spc") return "SPC";
+    if (programFilter === "nutrition") return "Nutrition";
+    return state.programs.find((p) => p.id === programFilter)?.name ?? programFilter;
+  }, [programFilter, state]);
+
   const filteredMembers = useMemo(() => {
-    if (!members) return [];
-    if (!search.trim()) return members;
+    if (!state) return [];
+    let rows = state.rows;
     const q = search.trim().toLowerCase();
-    return members.filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
-  }, [members, search]);
+    if (q) rows = rows.filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
+    if (programFilter === "unassigned") rows = rows.filter((m) => m.unassigned);
+    else if (programFilter) rows = rows.filter((m) => m.programKeys.has(programFilter));
+    return rows;
+  }, [state, search, programFilter]);
 
   return (
     <CoachShell>
@@ -75,9 +103,9 @@ export default function Clients() {
             <Text className="text-2xl" style={{ fontFamily: "ProtestStrike_400Regular", color: "#a46a57" }}>
               Clients
             </Text>
-            {members ? (
+            {state ? (
               <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                {filteredMembers.length} of {members.length}
+                {filteredMembers.length} of {state.rows.length}
               </Text>
             ) : null}
           </View>
@@ -96,6 +124,19 @@ export default function Clients() {
           style={{ fontFamily: fonts.sans, maxWidth: 360 }}
         />
 
+        {programLabel ? (
+          <View className="mb-2 flex-row items-center gap-2">
+            <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Filtered: {programLabel}
+            </Text>
+            <Pressable onPress={() => setProgramFilter("")} hitSlop={8}>
+              <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
+                Clear filter
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {loadError ? (
           <View className="items-start mt-4">
             <Text className="mb-2 text-red-600" style={{ fontFamily: fonts.sans }}>
@@ -105,7 +146,7 @@ export default function Clients() {
               <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
             </Pressable>
           </View>
-        ) : !members ? (
+        ) : !state ? (
           <ActivityIndicator color={colors.primary} />
         ) : (
           <FlatList
@@ -113,7 +154,7 @@ export default function Clients() {
             keyExtractor={(item) => item.id}
             ListEmptyComponent={
               <Text className="mt-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
-                {members.length === 0 ? "No members linked yet." : "No clients match your search."}
+                {state.rows.length === 0 ? "No members linked yet." : "No clients match your filters."}
               </Text>
             }
             renderItem={({ item }) => (

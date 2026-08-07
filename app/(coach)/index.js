@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { View, Text, Image, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
 import { getCoachDashboardStats, computeAttentionItems, filterDismissedItems } from "../../lib/programming/coachDashboard";
@@ -140,9 +140,17 @@ export default function CoachHome() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Native's Tabs navigator keeps this dashboard mounted across tab
+  // switches — a plain mount-only effect would only ever fetch once per
+  // session, so stat counts and "needs attention" rows would go stale the
+  // moment anything changed elsewhere in the app. useFocusEffect re-runs
+  // load() every time this tab is focused (a no-op extra fetch on web,
+  // where <Slot/> remounts on navigation anyway).
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   if (loadError) {
     return (

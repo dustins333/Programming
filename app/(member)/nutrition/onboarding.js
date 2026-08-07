@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { getOnboardingStatus, submitQuestionnaire, logObjectiveTrackingDay } from "../../../lib/nutrition/onboarding";
@@ -224,6 +225,7 @@ const TASKS = [
 
 export default function NutritionOnboarding() {
   const { profile } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const access = useNutritionAccess(profile.id);
   const [status, setStatus] = useState(null);
@@ -308,6 +310,12 @@ export default function NutritionOnboarding() {
 
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 20 }}>
+      <Pressable
+        onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)/nutrition"))}
+        className="mb-4 self-start"
+      >
+        <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+      </Pressable>
       <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Welcome, {profile.name}.
       </Text>

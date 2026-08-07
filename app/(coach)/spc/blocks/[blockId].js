@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
-import { Link, useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import {
   getSpcBlock,
@@ -85,7 +85,7 @@ export default function SpcBlockDetail() {
     setDeleting(true);
     try {
       await deleteSpcBlock(blockId);
-      router.back();
+      router.canGoBack() ? router.back() : router.push(`/(coach)/spc/${block.spc_client_id}`);
     } catch (err) {
       toastError("Failed to delete block", err);
       setDeleting(false);
@@ -129,12 +129,12 @@ export default function SpcBlockDetail() {
   return (
     <CoachShell>
       <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32 }}>
-        <Link
-          href={`/(coach)/spc/${block.spc_client_id}`}
-          style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.push(`/(coach)/spc/${block.spc_client_id}`))}
+          style={{ marginBottom: 12 }}
         >
-          ‹ Back to client
-        </Link>
+          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+        </Pressable>
 
         <View className="mb-4 flex-row items-start justify-between">
           <View>

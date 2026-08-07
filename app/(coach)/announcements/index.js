@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform, Modal } from "react-native";
-import { Redirect } from "expo-router";
+import { Redirect, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listGroupPrograms } from "../../../lib/programming/blocks";
@@ -142,6 +142,7 @@ function NativePickerField({ options, value, onChange, placeholder }) {
 
 export default function Announcements() {
   const { profile } = useAuth();
+  const router = useRouter();
   const [groupPrograms, setGroupPrograms] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -169,9 +170,13 @@ export default function Announcements() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Tab root, kept mounted across tab switches on native — refetch on
+  // every focus so the History list reflects an announcement just sent.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   if (profile && profile.role !== "admin") {
     return <Redirect href="/(coach)" />;
@@ -257,6 +262,14 @@ export default function Announcements() {
   return (
     <CoachShell>
       <ScrollView className="flex-1 bg-white px-8 py-8">
+        {Platform.OS !== "web" ? (
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/more"))}
+            className="mb-4 self-start"
+          >
+            <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+          </Pressable>
+        ) : null}
         <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
           Announcements
         </Text>

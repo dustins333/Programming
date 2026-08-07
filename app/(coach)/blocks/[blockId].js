@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { toastError } from "../../../lib/toast";
-import { Link, useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getBlock, listWorkoutsForBlock, deleteBlock } from "../../../lib/programming/blocks";
 import { listWorkoutExercisesForWorkouts } from "../../../lib/programming/workouts";
@@ -16,9 +16,10 @@ import { fonts, colors } from "../../../lib/theme";
 const DISPLAY_NAME = { "Better With Age": "BWA" };
 
 // One block's full week x session grid — every week the block actually
-// spans, not the main page's rolling 6-week-relative-to-today window. Reused
-// both from the main grid's "Block N ›" link and from History's row click,
-// so a block looks identical no matter how a coach got here.
+// spans, not the main page's rolling 6-week-relative-to-today window. The
+// main grid's own tiles open the builder directly now (see blocks/index.js's
+// header comment) — this page is History-only, reached from a retired
+// block's row click.
 export default function BlockDetail() {
   const { blockId } = useLocalSearchParams();
   const { profile } = useAuth();
@@ -52,7 +53,7 @@ export default function BlockDetail() {
     setDeleting(true);
     try {
       await deleteBlock(blockId);
-      router.back();
+      router.canGoBack() ? router.back() : router.push(`/(coach)/blocks/history?program=${block.group_program_id}`);
     } catch (err) {
       toastError("Failed to delete block", err);
       setDeleting(false);
@@ -96,9 +97,16 @@ export default function BlockDetail() {
   return (
     <CoachShell>
       <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32 }}>
-        <Link href="/(coach)/blocks" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
-          ‹ Back to Group Programs
-        </Link>
+        <Pressable
+          onPress={() =>
+            router.canGoBack()
+              ? router.back()
+              : router.push(`/(coach)/blocks/history?program=${block.group_program_id}`)
+          }
+          style={{ marginBottom: 12 }}
+        >
+          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+        </Pressable>
 
         <View className="mb-6 flex-row items-start justify-between">
           <View>

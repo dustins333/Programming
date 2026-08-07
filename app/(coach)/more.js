@@ -1,17 +1,17 @@
 import { View, Text, Pressable } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
+import { CoachShell } from "../../components/CoachShell";
 import { fonts, colors } from "../../lib/theme";
 
 export default function More() {
   const router = useRouter();
   const { profile, signOut } = useAuth();
-  const insets = useSafeAreaInsets();
   const isAdmin = profile?.role === "admin";
 
   return (
-    <View className="flex-1 bg-white px-6 py-8" style={{ paddingTop: insets.top + 20 }}>
+    <CoachShell>
+    <View className="flex-1 bg-white px-6 py-8">
       <Text className="mb-6 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         More
       </Text>
@@ -85,5 +85,6 @@ export default function More() {
         </Text>
       </Pressable>
     </View>
+    </CoachShell>
   );
 }

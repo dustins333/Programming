@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
-import { Link } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { Link, useFocusEffect } from "expo-router";
 import { getSpcRoster, checkAndAutoDraft } from "../../../lib/programming/spcDashboard";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { CoachShell } from "../../../components/CoachShell";
@@ -23,9 +23,14 @@ export default function SpcDashboard() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // SPC tab's root screen — stays mounted on native while a coach drills
+  // into a client and back (see spc/_layout.js's Stack comment), so this
+  // needs to refetch on every focus, not just once at mount.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const coaches = useMemo(() => {
     if (!roster) return [];
@@ -84,11 +89,9 @@ export default function SpcDashboard() {
           <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
             SPC
           </Text>
-          {Platform.OS === "web" && (
-            <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-              Templates →
-            </Link>
-          )}
+          <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+            Templates →
+          </Link>
         </View>
 
         {roster.length === 0 && (

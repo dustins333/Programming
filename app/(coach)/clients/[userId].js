@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Platform } from "react-native";
-import { Link, useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase, core } from "../../../lib/supabase/client";
 import { getUser, listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../../lib/programming/clients";
@@ -19,6 +19,7 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { AssignOneOffModal } from "../../../components/AssignOneOffModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { toastError, toastSuccess } from "../../../lib/toast";
+import { confirmRemoveOneOff, confirmArchiveNutritionClient } from "../../../lib/confirmDialog";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { fonts, colors } from "../../../lib/theme";
@@ -260,6 +261,8 @@ export default function ClientProfile() {
         // active roster tagged "Paused". The Client Settings modal still
         // offers a real Paused option for a finer-grained "temporarily off"
         // case that doesn't archive them.
+        const proceed = await confirmArchiveNutritionClient(member.name);
+        if (!proceed) return;
         await setNutritionStatus(userId, "archived");
       } else {
         // Existing public.clients row (a real standalone-app client) just
@@ -309,6 +312,8 @@ export default function ClientProfile() {
   };
 
   const handleDeleteOneOff = async (oneOff) => {
+    const proceed = await confirmRemoveOneOff(oneOff.title);
+    if (!proceed) return;
     try {
       await deleteOneOffWorkout(oneOff.id);
       await load();
@@ -361,9 +366,12 @@ export default function ClientProfile() {
   return (
     <CoachShell>
       <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 900 }}>
-        <Link href="/(coach)/clients" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, marginBottom: 18, fontSize: 13 }}>
-          ‹ Back to clients
-        </Link>
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/clients"))}
+          style={{ marginBottom: 18 }}
+        >
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>‹ Back</Text>
+        </Pressable>
 
         <View className="mb-6 flex-row items-center gap-3.5">
           <View

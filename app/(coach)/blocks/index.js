@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { listGroupPrograms, createGroupProgram, updateGroupProgram, createBlock, listWorkoutsForBlock, listBlocksForProgram, addDays } from "../../../lib/programming/blocks";
 import { listWorkoutExercisesForWorkouts, copyWorkoutContent } from "../../../lib/programming/workouts";
 import { currentWeekNumber } from "../../../lib/programming/schedule";
@@ -88,9 +88,16 @@ export default function Blocks() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // This is the "blocks" tab's root screen (see blocks/_layout.js's Stack
+  // comment) — it stays mounted on native as the coach drills into a
+  // builder and back, so a mount-only effect would only ever load this
+  // grid once per session. useFocusEffect refetches every time this screen
+  // regains focus.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   // Defaults to whichever program a ?program= deep link named (e.g. a
   // client detail page's "View current block ›" link), falling back to the
@@ -215,9 +222,10 @@ export default function Blocks() {
           <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 24 }}>Group Programs</Text>
           <View className="flex-row gap-2.5">
             <Pressable
-              onPress={() => router.push(`/(coach)/blocks/history?program=${selectedProgramId}`)}
+              onPress={() => selectedProgramId && router.push(`/(coach)/blocks/history?program=${selectedProgramId}`)}
+              disabled={!selectedProgramId}
               className="rounded-lg border px-4 py-2.5"
-              style={{ borderColor: "#d9d4cd" }}
+              style={{ borderColor: "#d9d4cd", opacity: selectedProgramId ? 1 : 0.5 }}
             >
               <Text className="text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
                 History

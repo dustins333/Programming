@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Linking, Platform } from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import {
   listExercises,
@@ -12,11 +13,13 @@ import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 import { toastError } from "../../../lib/toast";
+import { confirmArchiveExercise } from "../../../lib/confirmDialog";
 
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
 
 export default function Exercises() {
   const { profile } = useAuth();
+  const router = useRouter();
   const [exercises, setExercises] = useState(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("lift");
@@ -35,9 +38,14 @@ export default function Exercises() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Tab root, kept mounted across tab switches on native — refetch on
+  // every focus so an edit made a moment ago (e.g. from the form modal on
+  // this same screen reloading, or a future cross-screen edit) is current.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const parentNameById = useMemo(() => {
     const map = new Map();
@@ -70,6 +78,8 @@ export default function Exercises() {
   };
 
   const handleArchive = async (exercise) => {
+    const proceed = await confirmArchiveExercise(exercise.name);
+    if (!proceed) return;
     try {
       await setExerciseActive(exercise.id, false);
       await load();
@@ -81,6 +91,14 @@ export default function Exercises() {
   return (
     <CoachShell>
       <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ padding: 40 }}>
+        {Platform.OS !== "web" ? (
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/more"))}
+            className="mb-4 self-start"
+          >
+            <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+          </Pressable>
+        ) : null}
         <View className="mb-5 flex-row items-center justify-between" style={{ maxWidth: 900 }}>
           <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 24 }}>Exercise Library</Text>
           <Pressable

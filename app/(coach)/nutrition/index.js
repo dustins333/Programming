@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Link } from "expo-router";
+import { Link, useFocusEffect } from "expo-router";
 import { getNutritionRoster } from "../../../lib/nutrition/dashboard";
 import { STATUS_META, STATUS_ORDER } from "../../../lib/nutrition/rosterStatus";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -46,9 +46,14 @@ export default function NutritionDashboard() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Tab root, kept mounted across tab switches on native — refetch on
+  // every focus so a client's roster status reflects work just done on
+  // their detail page.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const filtered = useMemo(() => {
     if (!roster) return [];

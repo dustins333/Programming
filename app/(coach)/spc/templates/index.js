@@ -6,6 +6,7 @@ import { listTemplates, createTemplate, deleteTemplate } from "../../../../lib/p
 import { CoachShell } from "../../../../components/CoachShell";
 import { fonts, colors } from "../../../../lib/theme";
 import { toastError } from "../../../../lib/toast";
+import { confirmDeleteTemplate } from "../../../../lib/confirmDialog";
 
 const CATEGORY_LABELS = { away: "Away programming", trial: "Trial sessions" };
 
@@ -91,6 +92,8 @@ export default function TemplatesIndex() {
   };
 
   const handleDelete = async (template) => {
+    const proceed = await confirmDeleteTemplate(template.name);
+    if (!proceed) return;
     try {
       await deleteTemplate(template.id);
       await load();

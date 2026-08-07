@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, FlatList, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, FlatList, ActivityIndicator, Platform } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { getUser } from "../../../../lib/programming/clients";
@@ -119,7 +119,7 @@ export default function SpcClientHistory() {
               const today = todayInBoise();
               const status = getBlockStatus(item, today);
               const isFuture = item.block_start_date > today;
-              const canPrint = status.key !== "past";
+              const canPrint = status.key !== "past" && Platform.OS === "web";
               return (
                 <View className="flex-row items-center justify-between border-b border-stone-100 py-3.5">
                   <Pressable onPress={() => router.push(`/(coach)/spc/blocks/${item.id}`)} className="flex-1 flex-row items-center gap-2.5">
