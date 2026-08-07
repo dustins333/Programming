@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, Image, Modal, Alert, ActivityIndicator, Platform } from "react-native";
-import { getPhotoSignedUrls, updatePhotoSubmission } from "../../lib/nutrition/photos";
+import { View, Text, TextInput, Pressable, Image, Modal, ActivityIndicator, Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { getPhotoSignedUrls, updatePhotoSubmission, deletePhoto } from "../../lib/nutrition/photos";
+import { confirmDeletePhoto } from "../../lib/confirmDialog";
+import { toastError } from "../../lib/toast";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
@@ -58,11 +61,12 @@ function AngleDropdown({ value, onChange }) {
   );
 }
 
-function DayEditor({ date, photos, onSaved }) {
+function DayEditor({ date, photos, onSaved, onDataChanged }) {
   const [rows, setRows] = useState(photos.map((p) => ({ ...p })));
   const [urls, setUrls] = useState({});
   const [weight, setWeight] = useState(String(photos.find((p) => p.weight != null)?.weight ?? ""));
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -74,6 +78,28 @@ function DayEditor({ date, photos, onSaved }) {
 
   const setAngle = (id, angle) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, angle } : r)));
+  };
+
+  // Coach-only, real DB delete (not just removed from this list) — the
+  // usual reason this is needed is a duplicate/mistagged upload (e.g. 2
+  // fronts + 1 side + 1 back), trimmed back down to a valid 3-photo set.
+  // Doesn't auto-close the modal like Save does — a delete alone may still
+  // leave angles needing reassignment — but does refresh the parent's data
+  // in the background so photosByDate stays correct even if the coach
+  // closes without ever hitting Save.
+  const handleDelete = async (row) => {
+    const confirmed = await confirmDeletePhoto();
+    if (!confirmed) return;
+    setDeletingId(row.id);
+    try {
+      await deletePhoto(row);
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
+      if (onDataChanged) await onDataChanged();
+    } catch (err) {
+      toastError("Failed to delete photo", err);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   // Requiring exactly one of each angle (not just "no duplicates") — a day
@@ -110,6 +136,14 @@ function DayEditor({ date, photos, onSaved }) {
           <View key={r.id} className="flex-1">
             <View className="items-center justify-center overflow-hidden rounded-lg bg-stone-100" style={{ aspectRatio: 3 / 4 }}>
               {urls[r.id] ? <Image source={{ uri: urls[r.id] }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : <ActivityIndicator color={colors.primary} />}
+              <Pressable
+                onPress={() => handleDelete(r)}
+                disabled={deletingId === r.id}
+                className="items-center justify-center rounded-full"
+                style={{ position: "absolute", top: 5, right: 5, width: 22, height: 22, backgroundColor: "rgba(0,0,0,0.55)" }}
+              >
+                {deletingId === r.id ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="trash-outline" size={13} color="white" />}
+              </Pressable>
             </View>
             <View className="mt-1.5">
               <AngleDropdown value={r.angle} onChange={(a) => setAngle(r.id, a)} />
@@ -204,6 +238,7 @@ export function PhotoSubmissionsEditor({ photosByDate, onSaved }) {
                 if (onSaved) await onSaved();
                 setOpen(false);
               }}
+              onDataChanged={onSaved}
             />
           </Pressable>
         </Pressable>

@@ -53,7 +53,7 @@ function SourceModal({ visible, onPick, onClose }) {
   );
 }
 
-function AngleBox({ angle, label, selected, uploading, onPicked }) {
+function AngleBox({ angle, label, selected, uploading, onPicked, onCleared }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const handlePick = async (source) => {
@@ -71,7 +71,17 @@ function AngleBox({ angle, label, selected, uploading, onPicked }) {
         style={{ aspectRatio: 3 / 4 }}
       >
         {selected ? (
-          <Image source={{ uri: selected.uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+          <>
+            <Image source={{ uri: selected.uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+            <Pressable
+              onPress={() => onCleared(angle)}
+              disabled={uploading}
+              className="items-center justify-center rounded-full"
+              style={{ position: "absolute", top: 6, right: 6, width: 24, height: 24, backgroundColor: "rgba(0,0,0,0.55)" }}
+            >
+              <Ionicons name="close" size={15} color="white" />
+            </Pressable>
+          </>
         ) : (
           <>
             <Image source={POSE_IMAGES[angle]} resizeMode="contain" style={{ width: "100%", height: "100%" }} />
@@ -110,6 +120,14 @@ export function PhotoUpload({ userId, onUploaded, allowDatePick = false }) {
 
   const handlePicked = (angle, picked) => {
     setSelected((s) => ({ ...s, [angle]: picked }));
+  };
+
+  const handleCleared = (angle) => {
+    setSelected((s) => {
+      const next = { ...s };
+      delete next[angle];
+      return next;
+    });
   };
 
   const handleUpload = async () => {
@@ -159,7 +177,7 @@ export function PhotoUpload({ userId, onUploaded, allowDatePick = false }) {
       ) : null}
       <View className="flex-row gap-3">
         {ANGLES.map((a) => (
-          <AngleBox key={a.key} angle={a.key} label={a.label} selected={selected[a.key]} uploading={uploading} onPicked={handlePicked} />
+          <AngleBox key={a.key} angle={a.key} label={a.label} selected={selected[a.key]} uploading={uploading} onPicked={handlePicked} onCleared={handleCleared} />
         ))}
       </View>
       <Pressable
