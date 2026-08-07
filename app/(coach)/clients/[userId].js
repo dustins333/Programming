@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Alert, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Platform } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase, core } from "../../../lib/supabase/client";
@@ -18,6 +18,7 @@ import { StatusBadge } from "../../../components/StatusBadge";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { AssignOneOffModal } from "../../../components/AssignOneOffModal";
 import { CoachShell } from "../../../components/CoachShell";
+import { toastError, toastSuccess } from "../../../lib/toast";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { fonts, colors } from "../../../lib/theme";
@@ -219,7 +220,7 @@ export default function ClientProfile() {
       }
       await load();
     } catch (err) {
-      Alert.alert("Failed to update group program", err.message ?? String(err));
+      toastError("Failed to update group program", err);
     }
   };
 
@@ -228,7 +229,7 @@ export default function ClientProfile() {
       await setMembershipSessionsPerWeek(userId, groupProgramId, sessionsPerWeek);
       await load();
     } catch (err) {
-      Alert.alert("Failed to update session frequency", err.message ?? String(err));
+      toastError("Failed to update session frequency", err);
     }
   };
 
@@ -244,7 +245,7 @@ export default function ClientProfile() {
       }
       await load();
     } catch (err) {
-      Alert.alert("Failed to update SPC status", err.message ?? String(err));
+      toastError("Failed to update SPC status", err);
     }
   };
 
@@ -274,7 +275,7 @@ export default function ClientProfile() {
       }
       await load();
     } catch (err) {
-      Alert.alert("Failed to update nutrition status", err.message ?? String(err));
+      toastError("Failed to update nutrition status", err);
     }
   };
 
@@ -290,9 +291,9 @@ export default function ClientProfile() {
         redirectTo: "https://app.kovastrength.com/set-password",
       });
       if (error) throw error;
-      Alert.alert("Sent", `A sign-in link was sent to ${member.email}.`);
+      toastSuccess(`A sign-in link was sent to ${member.email}.`);
     } catch (err) {
-      Alert.alert("Failed to send", err.message ?? String(err));
+      toastError("Failed to send", err);
     } finally {
       setResending(false);
     }
@@ -303,7 +304,7 @@ export default function ClientProfile() {
       await createOneOffFromTemplate({ userId, templateId: template.id, templateName: template.name, assignedBy: profile.id });
       await load();
     } catch (err) {
-      Alert.alert("Failed to assign one-off workout", err.message ?? String(err));
+      toastError("Failed to assign one-off workout", err);
     }
   };
 
@@ -312,7 +313,7 @@ export default function ClientProfile() {
       await deleteOneOffWorkout(oneOff.id);
       await load();
     } catch (err) {
-      Alert.alert("Failed to remove one-off workout", err.message ?? String(err));
+      toastError("Failed to remove one-off workout", err);
     }
   };
 

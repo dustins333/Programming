@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
 import { getClient } from "../../../../../../lib/nutrition/clients";
@@ -11,6 +11,7 @@ import { DateCalendarPicker } from "../../../../../../components/nutrition/DateC
 import { CoachShell } from "../../../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../../../lib/formatDate";
 import { fonts, colors } from "../../../../../../lib/theme";
+import { toastError } from "../../../../../../lib/toast";
 
 export default function OnboardingTracking() {
   const { userId } = useLocalSearchParams();
@@ -44,7 +45,7 @@ export default function OnboardingTracking() {
       await addTrackingDate(userId, date);
       await load();
     } catch (err) {
-      Alert.alert("Failed to assign date", err.message ?? String(err));
+      toastError("Failed to assign date", err);
     }
   };
 
@@ -53,7 +54,7 @@ export default function OnboardingTracking() {
       await removeTrackingDate(dateId);
       await load();
     } catch (err) {
-      Alert.alert("Failed to remove date", err.message ?? String(err));
+      toastError("Failed to remove date", err);
     }
   };
 

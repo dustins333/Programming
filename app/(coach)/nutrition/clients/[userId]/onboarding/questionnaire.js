@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, Pressable, Alert } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Pressable } from "react-native";
+import { toastError } from "../../../../../../lib/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
 import { getClient } from "../../../../../../lib/nutrition/clients";
@@ -51,7 +52,7 @@ export default function OnboardingQuestionnaire() {
       await copyQuestionnaireTemplateToClient(userId);
       await load();
     } catch (err) {
-      Alert.alert("Failed to copy questions", err.message ?? String(err));
+      toastError("Failed to copy questions", err);
     } finally {
       setCopying(false);
     }

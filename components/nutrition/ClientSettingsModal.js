@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView, Alert } from "react-native";
+import { Modal, View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { toastError } from "../../lib/toast";
 import { Ionicons } from "@expo/vector-icons";
 import { updateClient } from "../../lib/nutrition/clients";
 import { getClientQuestions, addClientQuestion, updateClientQuestion, deleteClientQuestion } from "../../lib/nutrition/checkin";
@@ -99,7 +100,7 @@ export function ClientSettingsModal({ visible, userId, coachId, client, checkins
       await onSaved();
       onClose();
     } catch (err) {
-      Alert.alert("Failed to save", err.message ?? String(err));
+      toastError("Failed to save", err);
     } finally {
       setSaving(false);
     }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, Alert } from "react-native";
+import { Modal, View, Text, TextInput, Pressable } from "react-native";
 import { SegmentedControl } from "./SegmentedControl";
 import { fonts, colors } from "../lib/theme";
 import { listMembers } from "../lib/programming/clients";
@@ -64,8 +64,10 @@ export function AddStaffModal({ visible, initialRole, onClose, onSubmit }) {
     try {
       await onSubmit({ name: name.trim(), email: email.trim(), role });
       onClose();
-    } catch (err) {
-      Alert.alert("Couldn't add", err.message ?? String(err));
+    } catch {
+      // onSubmit (settings.js's handleAddStaff) already reports the error
+      // via toast and re-throws just to keep this modal open — nothing
+      // more to show here.
     } finally {
       setSaving(false);
     }

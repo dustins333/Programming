@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Switch, Alert } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Switch } from "react-native";
 import { Redirect, Link } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { getSettings, getSetting, updateSetting } from "../../lib/settings";
@@ -13,6 +13,7 @@ import {
   deleteQuestionnaireTemplateQuestion,
 } from "../../lib/nutrition/onboarding";
 import { fonts, colors } from "../../lib/theme";
+import { toastError, toastSuccess } from "../../lib/toast";
 import { CoachShell } from "../../components/CoachShell";
 import { AddStaffModal } from "../../components/AddStaffModal";
 import { TemplateEditorButton } from "../../components/nutrition/TemplateEditorButton";
@@ -196,8 +197,9 @@ export default function Settings() {
         })
       );
       await load();
+      toastSuccess("Saved.");
     } catch (err) {
-      Alert.alert("Failed to save", err.message ?? String(err));
+      toastError("Failed to save", err);
     } finally {
       setSavingKey(null);
     }
@@ -211,7 +213,7 @@ export default function Settings() {
       await updateSetting(key, value);
     } catch (err) {
       setNotifValues((v) => ({ ...v, [key]: previous }));
-      Alert.alert("Failed to save", err.message ?? String(err));
+      toastError("Failed to save", err);
     } finally {
       setSavingNotifKey(null);
     }
@@ -229,24 +231,30 @@ export default function Settings() {
       });
     } catch (err) {
       setCoaches((cs) => cs.map((c) => (c.id === coach.id ? { ...c, [field]: !value } : c)));
-      Alert.alert("Failed to save", err.message ?? String(err));
+      toastError("Failed to save", err);
     } finally {
       setSavingPermKey(null);
     }
   };
 
   const handleAddStaff = async ({ name, email, role }) => {
-    await inviteStaffMember({ name, email, role });
-    await loadCoaches();
+    try {
+      await inviteStaffMember({ name, email, role });
+      await loadCoaches();
+      toastSuccess(`Invited ${name}.`);
+    } catch (err) {
+      toastError("Failed to add staff", err);
+      throw err;
+    }
   };
 
   const handleSendTestPush = async () => {
     setSendingPush(true);
     try {
       const result = await sendPush({ userId: profile.id, title: "Kova Strength", body: "Push notifications are wired up." });
-      Alert.alert("Sent", JSON.stringify(result));
+      toastSuccess(`Sent: ${JSON.stringify(result)}`);
     } catch (err) {
-      Alert.alert("Failed to send", err.message ?? String(err));
+      toastError("Failed to send", err);
     } finally {
       setSendingPush(false);
     }

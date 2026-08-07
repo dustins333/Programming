@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import {
@@ -14,6 +14,7 @@ import { listSpcWorkoutExercisesForWorkouts, copyLastBlockContent } from "../../
 import { todayInBoise } from "../../../../lib/boiseDate";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { confirmDelete } from "../../../../lib/confirmDialog";
+import { toastError, toastSuccess } from "../../../../lib/toast";
 import { getBlockStatus } from "../../../../lib/programming/blockStatus";
 import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
@@ -69,10 +70,10 @@ export default function SpcBlockDetail() {
     try {
       await copyLastBlockContent(priorBlock.id, block.id);
       setCopied(true);
-      Alert.alert("Copied", "Last block's warm-ups and exercises were copied in week-by-week — adjust anything that needs to change.");
+      toastSuccess("Last block's warm-ups and exercises were copied week-by-week — adjust anything that needs to change.");
       await load();
     } catch (err) {
-      Alert.alert("Failed to copy last block", err.message ?? String(err));
+      toastError("Failed to copy last block", err);
     } finally {
       setCopying(false);
     }
@@ -86,7 +87,7 @@ export default function SpcBlockDetail() {
       await deleteSpcBlock(blockId);
       router.back();
     } catch (err) {
-      Alert.alert("Failed to delete block", err.message ?? String(err));
+      toastError("Failed to delete block", err);
       setDeleting(false);
     }
   };

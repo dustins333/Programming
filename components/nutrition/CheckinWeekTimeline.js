@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Pressable, Alert } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { computeWeekWindows, enumerateUpcomingWeeks, deriveCheckinStatus } from "../../lib/nutrition/weekCycle";
 import { enumerateRecentWeeks } from "./WeekList";
 import { isPhotoRequirementWeek, hasAllAngles, requirePhotosNextCheckin, clearPhotosNextCheckin } from "../../lib/nutrition/photos";
@@ -7,6 +7,7 @@ import { reopenCheckin } from "../../lib/nutrition/checkin";
 import { addDays, formatDateTimeInBoise } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
+import { toastError } from "../../lib/toast";
 
 const PAST_WEEKS = 6;
 const UPCOMING_WEEKS = 3;
@@ -46,7 +47,7 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coa
       else await requirePhotosNextCheckin(userId, week.start);
       await onChanged();
     } catch (err) {
-      Alert.alert("Failed to update", err.message ?? String(err));
+      toastError("Failed to update", err);
     } finally {
       setBusy(false);
     }
@@ -58,7 +59,7 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coa
       await reopenCheckin(userId, week.start, coachId, today);
       await onChanged();
     } catch (err) {
-      Alert.alert("Failed to reopen check-in", err.message ?? String(err));
+      toastError("Failed to reopen check-in", err);
     } finally {
       setBusy(false);
     }

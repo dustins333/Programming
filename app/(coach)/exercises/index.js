@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, Linking } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import {
   listExercises,
@@ -11,6 +11,7 @@ import {
 import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
+import { toastError } from "../../../lib/toast";
 
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
 
@@ -57,7 +58,7 @@ export default function Exercises() {
       }
       await load();
     } catch (err) {
-      Alert.alert("Failed to save exercise", err.message ?? String(err));
+      toastError("Failed to save exercise", err);
       throw err;
     }
   };
@@ -67,7 +68,7 @@ export default function Exercises() {
       await setExerciseActive(exercise.id, false);
       await load();
     } catch (err) {
-      Alert.alert("Failed to archive", err.message ?? String(err));
+      toastError("Failed to archive", err);
     }
   };
 

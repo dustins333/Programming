@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { toastError } from "../../../lib/toast";
 import { Link, useRouter } from "expo-router";
 import { getNutritionRoster } from "../../../lib/nutrition/dashboard";
 import { setClientStatus } from "../../../lib/nutrition/clients";
@@ -35,7 +36,7 @@ export default function ArchivedNutritionClients() {
       await setClientStatus(client.userId, "active");
       await load();
     } catch (err) {
-      Alert.alert("Failed to reactivate", err.message ?? String(err));
+      toastError("Failed to reactivate", err);
     } finally {
       setReactivatingId(null);
     }

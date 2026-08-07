@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, Switch, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, Switch, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase/client";
 import { getClient, getCoachRow } from "../../lib/nutrition/clients";
 import { updateOwnNotificationPrefs } from "../../lib/notifications/memberPrefs";
 import { fonts, colors } from "../../lib/theme";
+import { toastError, toastSuccess } from "../../lib/toast";
 
 const CANVAS = "#faf8f6";
 
@@ -225,14 +226,14 @@ export default function MemberSettings() {
   const handleChangeEmail = async (email) => {
     const { error } = await supabase.auth.updateUser({ email });
     if (error) throw error;
-    Alert.alert("Check your email", "Confirm the change from the link we just sent.");
+    toastSuccess("Check your email to confirm the change.");
   };
 
   const handleChangePassword = async (password) => {
     if (password.length < 8) throw new Error("Password must be at least 8 characters.");
     const { error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
-    Alert.alert("Password updated");
+    toastSuccess("Password updated.");
   };
 
   const handleToggleNotif = async (key, value) => {
@@ -243,7 +244,7 @@ export default function MemberSettings() {
       await updateOwnNotificationPrefs(next);
     } catch (err) {
       setNotifValues(previous);
-      Alert.alert("Failed to save", err.message ?? String(err));
+      toastError("Failed to save", err);
     }
   };
 

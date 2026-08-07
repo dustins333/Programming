@@ -18,6 +18,7 @@ import { AuthProvider } from "../lib/auth/AuthProvider";
 import { PushRegistrar } from "../lib/notifications/PushRegistrar";
 import { NumericInputAccessory } from "../components/NumericInputAccessory";
 import { ViewportZoomReset } from "../components/ViewportZoomReset";
+import { ToastHost } from "../components/ToastHost";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -53,6 +54,7 @@ export default function RootLayout() {
           <ViewportZoomReset />
           <Slot />
           <NumericInputAccessory />
+          <ToastHost />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

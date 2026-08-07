@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { View, Text, TextInput, Pressable } from "react-native";
 import { addFocusItem, editFocusItem, toggleFocusItem, deleteFocusItem } from "../../lib/nutrition/coachClient";
 import { fonts, colors } from "../../lib/theme";
+import { toastError } from "../../lib/toast";
 
 function FocusItemRow({ item, onChanged }) {
   const [editing, setEditing] = useState(false);
@@ -14,7 +15,7 @@ function FocusItemRow({ item, onChanged }) {
       await toggleFocusItem(item.id, !item.done);
       await onChanged();
     } catch (err) {
-      Alert.alert("Failed to update", err.message ?? String(err));
+      toastError("Failed to update", err);
     } finally {
       setBusy(false);
     }
@@ -33,7 +34,7 @@ function FocusItemRow({ item, onChanged }) {
       setEditing(false);
       await onChanged();
     } catch (err) {
-      Alert.alert("Failed to save", err.message ?? String(err));
+      toastError("Failed to save", err);
     } finally {
       setBusy(false);
     }
@@ -45,7 +46,7 @@ function FocusItemRow({ item, onChanged }) {
       await deleteFocusItem(item.id);
       await onChanged();
     } catch (err) {
-      Alert.alert("Failed to remove", err.message ?? String(err));
+      toastError("Failed to remove", err);
     } finally {
       setBusy(false);
     }
@@ -103,7 +104,7 @@ export function FocusChecklist({ userId, items, onChanged }) {
       setNewText("");
       await onChanged();
     } catch (err) {
-      Alert.alert("Failed to add focus item", err.message ?? String(err));
+      toastError("Failed to add focus item", err);
     } finally {
       setAdding(false);
     }

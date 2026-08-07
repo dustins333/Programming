@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, Platform, Modal } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform, Modal } from "react-native";
 import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
@@ -12,6 +12,7 @@ import {
 } from "../../../lib/programming/announcements";
 import { formatDateTimeInBoise } from "../../../lib/boiseDate";
 import { confirmDeleteAnnouncement } from "../../../lib/confirmDialog";
+import { toastError, toastSuccess } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { SegmentedControl } from "../../../components/SegmentedControl";
@@ -195,11 +196,11 @@ export default function Announcements() {
 
   const handleSend = async () => {
     if (!title.trim() || !message.trim()) {
-      Alert.alert("Missing info", "Title and message are both required.");
+      toastError("Title and message are both required");
       return;
     }
     if (audience === "group_program" && !targetGroupProgramId) {
-      Alert.alert("Missing info", "Pick a group program to target.");
+      toastError("Pick a group program to target");
       return;
     }
 
@@ -220,23 +221,23 @@ export default function Announcements() {
         try {
           const result = await pushAnnouncementNow(created.id);
           if (result?.pushed === 0 && result?.audience > 0) {
-            Alert.alert(
-              "Announcement sent, but push didn't go out",
-              `${result.audience} people were in the audience, but 0 push notifications were delivered. Check registered devices.`
+            toastError(
+              `Announcement sent, but push didn't go out — ${result.audience} people were in the audience, 0 delivered. Check registered devices.`
             );
+          } else {
+            toastSuccess("Announcement sent.");
           }
         } catch (pushErr) {
           console.error("Push send failed (announcement was still created):", pushErr);
-          Alert.alert(
-            "Announcement created, but push failed",
-            pushErr?.message ?? String(pushErr)
-          );
+          toastError("Announcement created, but push failed", pushErr);
         }
+      } else {
+        toastSuccess("Announcement scheduled.");
       }
       resetForm();
       await load();
     } catch (err) {
-      Alert.alert("Failed to send", err.message ?? String(err));
+      toastError("Failed to send", err);
     } finally {
       setSubmitting(false);
     }
@@ -249,7 +250,7 @@ export default function Announcements() {
       await deleteAnnouncement(id);
       await load();
     } catch (err) {
-      Alert.alert("Failed to delete", err.message ?? String(err));
+      toastError("Failed to delete", err);
     }
   };
 

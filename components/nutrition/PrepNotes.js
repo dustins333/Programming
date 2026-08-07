@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { View, Text, TextInput, Pressable } from "react-native";
+import { toastError } from "../../lib/toast";
 import { updatePrepNotes } from "../../lib/nutrition/onboarding";
 import { fonts, colors } from "../../lib/theme";
 
@@ -15,7 +16,7 @@ export function PrepNotes({ userId, initialNotes }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     } catch (err) {
-      Alert.alert("Failed to save notes", err.message ?? String(err));
+      toastError("Failed to save notes", err);
     } finally {
       setBusy(false);
     }

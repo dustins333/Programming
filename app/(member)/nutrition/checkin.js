@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, Modal, Alert } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -228,7 +228,6 @@ export default function WeeklyCheckin() {
       setReopen(null);
     } catch (err) {
       setReopenSubmitError(err.message ?? String(err));
-      Alert.alert("Failed to submit", err.message ?? String(err));
     } finally {
       setReopenSubmitting(false);
     }
@@ -243,7 +242,6 @@ export default function WeeklyCheckin() {
       setResponse(saved);
     } catch (err) {
       setSubmitError(err.message ?? String(err));
-      Alert.alert("Failed to submit", err.message ?? String(err));
     } finally {
       setSubmitting(false);
     }

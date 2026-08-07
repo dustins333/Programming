@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -36,6 +36,7 @@ import { ClientSettingsModal } from "../../../../components/nutrition/ClientSett
 import { CoachShell } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { confirmBypassOnboarding, confirmSendToClient } from "../../../../lib/confirmDialog";
+import { toastError, toastSuccess } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
@@ -206,7 +207,7 @@ export default function NutritionClientDetail() {
       await finalizeCheckin(userId, selectedWeek.start);
       await load();
     } catch (err) {
-      Alert.alert("Failed to finalize check-in", err.message ?? String(err));
+      toastError("Failed to finalize check-in", err);
     } finally {
       setFinalizing(false);
     }
@@ -228,7 +229,7 @@ export default function NutritionClientDetail() {
       await bypassOnboarding(userId);
       router.replace(`/(coach)/nutrition/clients/${userId}/onboarding/approve`);
     } catch (err) {
-      Alert.alert("Failed to skip onboarding", err.message ?? String(err));
+      toastError("Failed to skip onboarding", err);
       setBypassing(false);
     }
   };
@@ -245,7 +246,7 @@ export default function NutritionClientDetail() {
       await sendOnboardingToClient(userId);
       await load();
     } catch (err) {
-      Alert.alert("Failed to send to client", err.message ?? String(err));
+      toastError("Failed to send to client", err);
     } finally {
       setSending(false);
     }
@@ -255,9 +256,10 @@ export default function NutritionClientDetail() {
     setCopying(true);
     try {
       await copyTemplateToClient(userId);
-      Alert.alert("Done", "Check-in questions copied from the template.");
+      await load();
+      toastSuccess("Check-in questions copied from the template.");
     } catch (err) {
-      Alert.alert("Failed to copy questions", err.message ?? String(err));
+      toastError("Failed to copy questions", err);
     } finally {
       setCopying(false);
     }
@@ -265,12 +267,14 @@ export default function NutritionClientDetail() {
 
   const handleChangeHighlights = async (answerIndex, ranges) => {
     if (!checkin) return;
-    const nextHighlights = { ...(checkin.highlights ?? {}), [answerIndex]: ranges };
+    const previousHighlights = checkin.highlights;
+    const nextHighlights = { ...(previousHighlights ?? {}), [answerIndex]: ranges };
     setCheckin({ ...checkin, highlights: nextHighlights });
     try {
       await setCheckinHighlights(checkin.id, nextHighlights);
     } catch (err) {
-      Alert.alert("Failed to save highlight", err.message ?? String(err));
+      setCheckin((c) => (c ? { ...c, highlights: previousHighlights } : c));
+      toastError("Failed to save highlight", err);
     }
   };
 

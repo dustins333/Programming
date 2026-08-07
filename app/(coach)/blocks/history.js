@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, FlatList, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, FlatList, ActivityIndicator } from "react-native";
+import { toastError } from "../../../lib/toast";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listBlocks, listGroupPrograms, deleteBlock } from "../../../lib/programming/blocks";
@@ -51,7 +52,7 @@ export default function BlockHistory() {
       await deleteBlock(block.id);
       await load();
     } catch (err) {
-      Alert.alert("Failed to delete block", err.message ?? String(err));
+      toastError("Failed to delete block", err);
     } finally {
       setDeletingId(null);
     }

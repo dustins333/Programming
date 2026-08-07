@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listTemplates, createTemplate, deleteTemplate } from "../../../../lib/programming/templates";
 import { CoachShell } from "../../../../components/CoachShell";
 import { fonts, colors } from "../../../../lib/theme";
+import { toastError } from "../../../../lib/toast";
 
 const CATEGORY_LABELS = { away: "Away programming", trial: "Trial sessions" };
 
@@ -85,7 +86,7 @@ export default function TemplatesIndex() {
       const created = await createTemplate({ name, category, createdBy: profile.id });
       router.push(`/(coach)/spc/templates/${created.id}`);
     } catch (err) {
-      Alert.alert("Failed to create template", err.message ?? String(err));
+      toastError("Failed to create template", err);
     }
   };
 
@@ -94,7 +95,7 @@ export default function TemplatesIndex() {
       await deleteTemplate(template.id);
       await load();
     } catch (err) {
-      Alert.alert("Failed to delete template", err.message ?? String(err));
+      toastError("Failed to delete template", err);
     }
   };
 

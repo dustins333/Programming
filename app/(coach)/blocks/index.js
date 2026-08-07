@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { listGroupPrograms, createGroupProgram, updateGroupProgram, createBlock, listWorkoutsForBlock, listBlocksForProgram, addDays } from "../../../lib/programming/blocks";
 import { listWorkoutExercisesForWorkouts, copyWorkoutContent } from "../../../lib/programming/workouts";
@@ -8,6 +8,7 @@ import { WEEK_OFFSETS, groupRows } from "../../../lib/programming/gridRows";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
 import { confirmOverwrite } from "../../../lib/confirmDialog";
+import { toastError } from "../../../lib/toast";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { NewBlockModal } from "../../../components/NewBlockModal";
 import { NewGroupProgramModal } from "../../../components/NewGroupProgramModal";
@@ -121,7 +122,7 @@ export default function Blocks() {
       await createBlock({ groupProgramId, startDate, createdBy: profile.id });
       await load();
     } catch (err) {
-      Alert.alert("Failed to create block", err.message ?? String(err));
+      toastError("Failed to create block", err);
       throw err;
     }
   };
@@ -132,7 +133,7 @@ export default function Blocks() {
       await load();
       setSelectedProgramId(program.id);
     } catch (err) {
-      Alert.alert("Failed to create group program", err.message ?? String(err));
+      toastError("Failed to create group program", err);
       throw err;
     }
   };
@@ -147,7 +148,7 @@ export default function Blocks() {
       });
       await load();
     } catch (err) {
-      Alert.alert("Failed to update group program", err.message ?? String(err));
+      toastError("Failed to update group program", err);
       throw err;
     }
   };
@@ -165,7 +166,7 @@ export default function Blocks() {
       await createBlock({ groupProgramId: program.id, startDate, createdBy: profile.id });
       await load();
     } catch (err) {
-      Alert.alert("Failed to start new block", err.message ?? String(err));
+      toastError("Failed to start new block", err);
     } finally {
       setStartingProgramId(null);
     }
@@ -199,7 +200,7 @@ export default function Blocks() {
       await load();
       cancelCopy();
     } catch (err) {
-      Alert.alert("Failed to copy session", err.message ?? String(err));
+      toastError("Failed to copy session", err);
     } finally {
       setCopyBusy(false);
     }

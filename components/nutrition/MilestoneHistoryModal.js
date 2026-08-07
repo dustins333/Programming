@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { toastError } from "../../lib/toast";
 import { listAllMilestones, completeMilestone, reopenMilestone, MILESTONE_COLORS } from "../../lib/nutrition/milestones";
 import { formatDateTimeInBoise } from "../../lib/boiseDate";
 import { MilestoneCompleteCheckbox } from "./MilestoneCompleteCheckbox";
@@ -20,7 +21,7 @@ function MilestoneRow({ milestone, userId, onToggled }) {
       }
       await onToggled();
     } catch (err) {
-      Alert.alert(isActive ? "Failed to close out milestone" : "Failed to reopen milestone", err.message ?? String(err));
+      toastError(isActive ? "Failed to close out milestone" : "Failed to reopen milestone", err);
     } finally {
       setBusy(false);
     }

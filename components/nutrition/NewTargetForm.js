@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { View, Text, TextInput, Pressable } from "react-native";
+import { toastError } from "../../lib/toast";
 import { createTarget } from "../../lib/nutrition/targets";
 import { todayInBoise } from "../../lib/boiseDate";
 import { TargetField } from "./TargetField";
@@ -29,7 +30,7 @@ export function NewTargetForm({ userId, setBy, currentTarget, onSaved }) {
       setForm(EMPTY_FORM);
       await onSaved();
     } catch (err) {
-      Alert.alert("Failed to save target", err.message ?? String(err));
+      toastError("Failed to save target", err);
     } finally {
       setSaving(false);
     }

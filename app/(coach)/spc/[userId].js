@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
+import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getUser, listCoaches } from "../../../lib/programming/clients";
@@ -19,6 +19,7 @@ import { getSetting } from "../../../lib/settings";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
 import { confirmOverwrite } from "../../../lib/confirmDialog";
+import { toastError } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { SegmentedControl } from "../../../components/SegmentedControl";
@@ -225,7 +226,7 @@ export default function SpcClientDetail() {
       await setSpcStatus(userId, status);
       await load();
     } catch (err) {
-      Alert.alert("Failed to update status", err.message ?? String(err));
+      toastError("Failed to update status", err);
     }
   };
 
@@ -234,7 +235,7 @@ export default function SpcClientDetail() {
       await updateSpcClient(userId, { assigned_coach_id: coachId });
       await load();
     } catch (err) {
-      Alert.alert("Failed to reassign coach", err.message ?? String(err));
+      toastError("Failed to reassign coach", err);
     }
   };
 
@@ -243,7 +244,7 @@ export default function SpcClientDetail() {
       await updateSpcClient(userId, { sessions_per_week: n });
       await load();
     } catch (err) {
-      Alert.alert("Failed to update sessions/week", err.message ?? String(err));
+      toastError("Failed to update sessions/week", err);
     }
   };
 
@@ -253,7 +254,7 @@ export default function SpcClientDetail() {
       await updateSpcClient(userId, { notes_goals_feedback: notesDraft });
       await load();
     } catch (err) {
-      Alert.alert("Failed to save notes", err.message ?? String(err));
+      toastError("Failed to save notes", err);
     } finally {
       setSavingNotes(false);
     }
@@ -280,7 +281,7 @@ export default function SpcClientDetail() {
       }
       await load();
     } catch (err) {
-      Alert.alert("Failed to create block", err.message ?? String(err));
+      toastError("Failed to create block", err);
       throw err;
     }
   };
@@ -307,7 +308,7 @@ export default function SpcClientDetail() {
       });
       await load();
     } catch (err) {
-      Alert.alert("Failed to start new block", err.message ?? String(err));
+      toastError("Failed to start new block", err);
     } finally {
       setStartingGap(false);
     }
@@ -341,7 +342,7 @@ export default function SpcClientDetail() {
       await load();
       cancelCopy();
     } catch (err) {
-      Alert.alert("Failed to copy session", err.message ?? String(err));
+      toastError("Failed to copy session", err);
     } finally {
       setCopyBusy(false);
     }

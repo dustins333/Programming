@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, Image, TextInput, Pressable, ScrollView, Alert } from "react-native";
+import { View, Text, Image, TextInput, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +19,7 @@ import { TargetField } from "../../../components/nutrition/TargetField";
 import { RatingSelect } from "../../../components/nutrition/RatingSelect";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
+import { toastError } from "../../../lib/toast";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 
 const AUTOSAVE_DELAY_MS = 900;
@@ -84,7 +85,7 @@ function FocusRow({ item, onChanged }) {
       await toggleFocusItem(item.id, !item.done);
       await onChanged();
     } catch (err) {
-      Alert.alert("Failed to update", err.message ?? String(err));
+      toastError("Failed to update", err);
     } finally {
       setBusy(false);
     }
@@ -236,7 +237,7 @@ export default function NutritionToday() {
         setFinalizedAt(result.data.finalized_at);
       }
     } catch (err) {
-      Alert.alert("Failed to finalize", err.message ?? String(err));
+      setFinalizeError(err.message ?? String(err));
     } finally {
       setFinalizing(false);
     }

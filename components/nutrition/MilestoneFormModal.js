@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, Alert } from "react-native";
+import { Modal, View, Text, TextInput, Pressable } from "react-native";
 import { createMilestone, updateMilestone, completeMilestone, deleteMilestone } from "../../lib/nutrition/milestones";
 import { confirmDeleteMilestone } from "../../lib/confirmDialog";
+import { toastError } from "../../lib/toast";
 import { MilestoneCompleteCheckbox } from "./MilestoneCompleteCheckbox";
 import { fonts, colors } from "../../lib/theme";
 
@@ -43,7 +44,7 @@ export function MilestoneFormModal({ visible, milestone, userId, createdBy, onCl
       await onChanged();
       onClose();
     } catch (err) {
-      Alert.alert("Failed to save milestone", err.message ?? String(err));
+      toastError("Failed to save milestone", err);
     } finally {
       setSaving(false);
     }
@@ -56,7 +57,7 @@ export function MilestoneFormModal({ visible, milestone, userId, createdBy, onCl
       await onChanged();
       onClose();
     } catch (err) {
-      Alert.alert("Failed to close out milestone", err.message ?? String(err));
+      toastError("Failed to close out milestone", err);
       setBusy(false);
     }
   };
@@ -70,7 +71,7 @@ export function MilestoneFormModal({ visible, milestone, userId, createdBy, onCl
       await onChanged();
       onClose();
     } catch (err) {
-      Alert.alert("Failed to delete milestone", err.message ?? String(err));
+      toastError("Failed to delete milestone", err);
     } finally {
       setBusy(false);
     }

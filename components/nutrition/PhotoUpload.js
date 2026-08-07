@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, Image, Pressable, Modal, Alert, ActivityIndicator, TextInput, Platform } from "react-native";
+import { View, Text, Image, Pressable, Modal, ActivityIndicator, TextInput, Platform } from "react-native";
+import { toastError } from "../../lib/toast";
 import { Ionicons } from "@expo/vector-icons";
 import { pickPhoto } from "../../lib/nutrition/imagePicker";
 import { uploadPhoto } from "../../lib/nutrition/photos";
@@ -123,7 +124,7 @@ export function PhotoUpload({ userId, onUploaded, allowDatePick = false }) {
       setSelected({});
       await onUploaded();
     } catch (err) {
-      Alert.alert("Failed to upload", err.message ?? String(err));
+      toastError("Failed to upload", err);
     } finally {
       setUploading(false);
     }

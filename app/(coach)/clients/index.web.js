@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
+import { toastError } from "../../../lib/toast";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { listMembers, listAssignments, linkMemberByAuthId } from "../../../lib/programming/clients";
@@ -166,7 +167,7 @@ export default function ClientsWeb() {
       await linkMemberByAuthId(form);
       await load();
     } catch (err) {
-      Alert.alert("Failed to link account", err.message ?? String(err));
+      toastError("Failed to link account", err);
       throw err;
     }
   };

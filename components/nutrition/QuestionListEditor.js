@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { View, Text, TextInput, Pressable } from "react-native";
 import { fonts, colors } from "../../lib/theme";
+import { toastError } from "../../lib/toast";
 
 // Shared add/rename/reorder/delete list editor for question templates and
 // per-client question sets (checkin template, questionnaire template,
@@ -18,7 +19,7 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
       await onAdd(newText.trim());
       setNewText("");
     } catch (err) {
-      Alert.alert("Failed to add question", err.message ?? String(err));
+      toastError("Failed to add question", err);
     }
   };
 
@@ -33,7 +34,7 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
       await onUpdate(editingId, editText.trim());
       setEditingId(null);
     } catch (err) {
-      Alert.alert("Failed to save question", err.message ?? String(err));
+      toastError("Failed to save question", err);
     }
   };
 
@@ -41,7 +42,7 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
     try {
       await onDelete(id);
     } catch (err) {
-      Alert.alert("Failed to remove question", err.message ?? String(err));
+      toastError("Failed to remove question", err);
     }
   };
 
@@ -51,7 +52,7 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
     try {
       await onMove(questions[index], questions[targetIndex]);
     } catch (err) {
-      Alert.alert("Failed to reorder", err.message ?? String(err));
+      toastError("Failed to reorder", err);
     }
   };
 

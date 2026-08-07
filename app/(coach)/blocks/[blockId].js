@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
+import { toastError } from "../../../lib/toast";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getBlock, listWorkoutsForBlock, deleteBlock } from "../../../lib/programming/blocks";
@@ -53,7 +54,7 @@ export default function BlockDetail() {
       await deleteBlock(blockId);
       router.back();
     } catch (err) {
-      Alert.alert("Failed to delete block", err.message ?? String(err));
+      toastError("Failed to delete block", err);
       setDeleting(false);
     }
   };

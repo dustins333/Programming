@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, FlatList, ActivityIndicator, Alert } from "react-native";
+import { View, Text, Pressable, FlatList, ActivityIndicator } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { getUser } from "../../../../lib/programming/clients";
@@ -7,6 +7,7 @@ import { listBlocksForSpcClient, labelBlocks, deleteSpcBlock, listSpcWorkoutsFor
 import { todayInBoise } from "../../../../lib/boiseDate";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { confirmDelete } from "../../../../lib/confirmDialog";
+import { toastError } from "../../../../lib/toast";
 import { getBlockStatus } from "../../../../lib/programming/blockStatus";
 import { CoachShell } from "../../../../components/CoachShell";
 import { PrintSessionPickerModal } from "../../../../components/PrintSessionPickerModal";
@@ -48,7 +49,7 @@ export default function SpcClientHistory() {
       await deleteSpcBlock(block.id);
       await load();
     } catch (err) {
-      Alert.alert("Failed to delete block", err.message ?? String(err));
+      toastError("Failed to delete block", err);
     } finally {
       setDeletingId(null);
     }
@@ -62,7 +63,7 @@ export default function SpcClientHistory() {
       const sessionNumbers = [...new Set(workouts.map((w) => w.session_number))].sort((a, b) => a - b);
       setPrintSessions(sessionNumbers);
     } catch (err) {
-      Alert.alert("Failed to load sessions", err.message ?? String(err));
+      toastError("Failed to load sessions", err);
       setPrintBlockId(null);
     } finally {
       setPrintLoading(false);
