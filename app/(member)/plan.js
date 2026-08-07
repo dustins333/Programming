@@ -22,6 +22,7 @@ import {
 } from "../../lib/programming/sessionCompletions";
 import { retryOnce } from "../../lib/retry";
 import { SessionLogger } from "../../components/SessionLogger";
+import { TimerControl } from "../../components/TimerControl";
 import { fonts, colors } from "../../lib/theme";
 
 // Design tokens from design_handoff_visual_pass_v4/README.md.
@@ -194,6 +195,23 @@ function WarmupCard({ warmups }) {
   );
 }
 
+// A manual stopwatch pinned above the scroll content, not tied to "the
+// workout session" — a member might use it to time one lift, then reset and
+// use it again to time their rest before the next set. Mirrors the docked
+// Finalize footer's sibling-View pattern (pinned to the top instead of the
+// bottom) rather than CSS position:sticky, since that has known cross-
+// behavior quirks between native and Expo Web.
+function TimerBar({ insetsTop, timer, onToggle, onReset }) {
+  return (
+    <View
+      className="items-center"
+      style={{ paddingTop: insetsTop + 10, paddingBottom: 10, paddingHorizontal: 20, backgroundColor: CANVAS, borderBottomWidth: 1, borderBottomColor: CARD_BORDER }}
+    >
+      <TimerControl timer={timer} onToggle={onToggle} onReset={onReset} />
+    </View>
+  );
+}
+
 export default function MyFitness() {
   const { profile } = useAuth();
   const router = useRouter();
@@ -208,6 +226,7 @@ export default function MyFitness() {
   const [oneOffs, setOneOffs] = useState([]);
   const [selectedProgramOverride, setSelectedProgramOverride] = useState(null);
   const [footerFinalizing, setFooterFinalizing] = useState(false);
+  const [timer, setTimer] = useState({ elapsedMs: 0, running: false, startedAt: null });
 
   // Same staleness guard as My Week's load() — useFocusEffect below re-runs
   // load() on every focus, and without this an older in-flight call can
@@ -510,6 +529,16 @@ export default function MyFitness() {
     };
   }
 
+  const handleToggleTimer = () => {
+    setTimer((t) =>
+      t.running
+        ? { elapsedMs: t.elapsedMs + (Date.now() - t.startedAt), running: false, startedAt: null }
+        : { ...t, running: true, startedAt: Date.now() }
+    );
+  };
+
+  const handleResetTimer = () => setTimer({ elapsedMs: 0, running: false, startedAt: null });
+
   const handleFooterFinalize = async () => {
     if (!activeFinalize) return;
     setFooterFinalizing(true);
@@ -532,7 +561,10 @@ export default function MyFitness() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: CANVAS }}>
-    <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
+    {activeFinalize && (
+      <TimerBar insetsTop={insets.top} timer={timer} onToggle={handleToggleTimer} onReset={handleResetTimer} />
+    )}
+    <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: activeFinalize ? 16 : insets.top + 6 }}>
       <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         My Fitness
       </Text>
@@ -616,6 +648,10 @@ export default function MyFitness() {
                   isCompleted={groupEntry.completed}
                   onFinalize={() => handleFinalizeGroup(groupEntry)}
                   hideFinalizeButton={activeFinalize?.key === groupEntry.groupProgramId}
+                  layout="focus"
+                  timer={activeFinalize?.key === groupEntry.groupProgramId ? timer : undefined}
+                  onToggleTimer={handleToggleTimer}
+                  onResetTimer={handleResetTimer}
                 />
               </FitnessCard>
             )}
@@ -683,6 +719,10 @@ export default function MyFitness() {
                     isCompleted={spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false}
                     onFinalize={handleFinalizeSpc}
                     hideFinalizeButton={activeFinalize?.key === "spc"}
+                    layout="focus"
+                    timer={activeFinalize?.key === "spc" ? timer : undefined}
+                    onToggleTimer={handleToggleTimer}
+                    onResetTimer={handleResetTimer}
                   />
                 </>
               )}
@@ -702,6 +742,7 @@ export default function MyFitness() {
               exercises={exercises}
               isCompleted={false}
               onFinalize={() => handleFinalizeOneOff(workout.id)}
+              layout="focus"
             />
           </FitnessCard>
         ))}

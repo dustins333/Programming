@@ -45,8 +45,13 @@ import { fonts, colors } from "../../../../lib/theme";
 function LibraryExercise({ exercise, onInsertClick, hasChildren, expanded, onToggleExpand, indented }) {
   return (
     <View className="mb-1.5 flex-row items-center rounded-lg border border-stone-200 px-3 py-2" style={{ marginLeft: indented ? 14 : 0 }}>
-      <Pressable onPress={() => onInsertClick(exercise)} className="flex-1 active:opacity-70">
+      <Pressable onPress={() => onInsertClick(exercise)} className="flex-1 flex-row items-center gap-1.5 active:opacity-70">
         <Text style={{ fontFamily: fonts.sansMedium }}>{exercise.name}</Text>
+        {exercise.type === "warmup" ? (
+          <View className="rounded-full px-2 py-[2px]" style={{ backgroundColor: "#fdf6ee" }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5a2e", fontSize: 9.5 }}>warm-up</Text>
+          </View>
+        ) : null}
       </Pressable>
       {hasChildren ? (
         <Pressable
@@ -217,6 +222,7 @@ export default function SpcWorkoutBuilderWeb() {
   const [search, setSearch] = useState("");
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
+  const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState(() => new Set(["warmups"]));
   const [expandedParents, setExpandedParents] = useState(() => new Set());
@@ -603,6 +609,14 @@ export default function SpcWorkoutBuilderWeb() {
                 ))
               )}
             </SortableContext>
+            <Pressable
+              onPress={() => setExercisePickerVisible(true)}
+              className="mt-2.5 rounded-lg border border-primary px-3 py-2.5"
+            >
+              <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
+                + Insert exercise
+              </Text>
+            </Pressable>
           </View>
 
           <View className="mb-6">
@@ -626,6 +640,13 @@ export default function SpcWorkoutBuilderWeb() {
         library={library.filter((e) => e.type === "warmup")}
         onClose={() => setWarmupPickerVisible(false)}
         onPick={handleAddWarmup}
+      />
+
+      <ExercisePickerModal
+        visible={exercisePickerVisible}
+        library={library.filter((e) => e.type !== "warmup")}
+        onClose={() => setExercisePickerVisible(false)}
+        onPick={handleInsertExercise}
       />
     </DndContext>
   );

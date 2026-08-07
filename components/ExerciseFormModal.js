@@ -3,6 +3,7 @@ import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "r
 import { MUSCLE_GROUPS, MOVEMENT_PATTERNS } from "../lib/programming/exercises";
 import { fonts, colors } from "../lib/theme";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
+import { findLikelyDuplicates } from "../lib/stringSimilarity";
 
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
 
@@ -106,6 +107,10 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
   const isWarmup = form.type === "warmup";
   const videoUrlLooksOff = form.videoUrl && !LOOKS_LIKE_VIDEO_LINK.test(form.videoUrl);
   const noMuscleGroupSelected = !isWarmup && form.muscleGroups.length === 0;
+  const likelyDuplicates = findLikelyDuplicates(form.name, allExercises, {
+    type: form.type,
+    excludeId: initialExercise?.id,
+  });
 
   // Only parent-less lift exercises can be picked as a parent — caps
   // nesting at one level — and an exercise can't be parented to itself.
@@ -169,9 +174,20 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
             <TextInput
               value={form.name}
               onChangeText={(name) => setForm((f) => ({ ...f, name }))}
-              className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
+              className="rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: "Montserrat_400Regular" }}
             />
+            {likelyDuplicates.length > 0 ? (
+              <Text className="mb-4 mt-1 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+                Possibly the same as:{" "}
+                {likelyDuplicates
+                  .slice(0, 2)
+                  .map((m) => m.exercise.name)
+                  .join(", ")}
+              </Text>
+            ) : (
+              <View className="mb-4" />
+            )}
 
             {isWarmup ? (
               <View className="mb-4 rounded-lg p-3.5" style={{ backgroundColor: "#faf8f6", borderWidth: 1, borderColor: "#ece7e1" }}>

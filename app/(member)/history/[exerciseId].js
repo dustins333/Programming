@@ -18,11 +18,13 @@ function groupByDate(logs) {
   const byDate = new Map();
   for (const row of logs) {
     if (!byDate.has(row.date_performed)) {
-      const group = { date: row.date_performed, sets: [] };
+      const group = { date: row.date_performed, sets: [], notes: null };
       byDate.set(row.date_performed, group);
       groups.push(group);
     }
-    byDate.get(row.date_performed).sets.push(row);
+    const group = byDate.get(row.date_performed);
+    group.sets.push(row);
+    if (!group.notes && row.notes) group.notes = row.notes;
   }
   return groups;
 }
@@ -79,6 +81,11 @@ export default function ExerciseHistory() {
                 Set {s.set_number}: {s.reps ?? "–"} reps{s.weight ? ` @ ${s.weight}` : ""}
               </Text>
             ))}
+            {group.notes ? (
+              <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e", marginTop: 6, fontStyle: "italic" }}>
+                {group.notes}
+              </Text>
+            ) : null}
           </View>
         )}
       />

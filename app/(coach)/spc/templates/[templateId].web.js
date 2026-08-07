@@ -46,7 +46,14 @@ function LibraryExercise({ exercise, onInsertClick, hasChildren, expanded, onTog
     >
       <Pressable onPress={() => onInsertClick(exercise)} className="flex-1 flex-row items-center active:opacity-70">
         <View className="flex-1">
-          <Text style={{ fontFamily: fonts.sansMedium }}>{exercise.name}</Text>
+          <View className="flex-row items-center gap-1.5">
+            <Text style={{ fontFamily: fonts.sansMedium }}>{exercise.name}</Text>
+            {exercise.type === "warmup" ? (
+              <View className="rounded-full px-2 py-[2px]" style={{ backgroundColor: "#fdf6ee" }}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5a2e", fontSize: 9.5 }}>warm-up</Text>
+              </View>
+            ) : null}
+          </View>
           {exercise.movement_pattern?.length ? (
             <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
               {exercise.movement_pattern.map((p) => p.replace("_", " ")).join(", ")}
@@ -200,6 +207,7 @@ export default function TemplateBuilderWeb() {
   const [search, setSearch] = useState("");
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
+  const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [collapsedSections, setCollapsedSections] = useState(() => new Set(["warmups"]));
   const [expandedParents, setExpandedParents] = useState(() => new Set());
@@ -485,6 +493,14 @@ export default function TemplateBuilderWeb() {
                 ))
               )}
             </SortableContext>
+            <Pressable
+              onPress={() => setExercisePickerVisible(true)}
+              className="mt-2.5 rounded-lg border border-primary px-3 py-2.5"
+            >
+              <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
+                + Insert exercise
+              </Text>
+            </Pressable>
           </View>
         </ScrollView>
       </View>
@@ -502,6 +518,13 @@ export default function TemplateBuilderWeb() {
         library={library.filter((e) => e.type === "warmup")}
         onClose={() => setWarmupPickerVisible(false)}
         onPick={handleAddWarmup}
+      />
+
+      <ExercisePickerModal
+        visible={exercisePickerVisible}
+        library={library.filter((e) => e.type !== "warmup")}
+        onClose={() => setExercisePickerVisible(false)}
+        onPick={handleInsertExercise}
       />
     </DndContext>
   );
