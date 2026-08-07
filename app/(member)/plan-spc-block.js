@@ -5,7 +5,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
-import { getSpcClient } from "../../lib/programming/spcClients";
+import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listPublishedSpcWorkoutsForBlock } from "../../lib/programming/spcBlocks";
 import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
 import { listSpcCompletionDetailsForWorkouts, finalizeSpcSession } from "../../lib/programming/sessionCompletions";
@@ -55,7 +55,7 @@ export default function PlanSpcBlock() {
       // no obvious way to recover short of leaving and coming back.
       const result = await retryOnce(async () => {
         const spcClient = await getSpcClient(profile.id);
-        if (!spcClient) return { status: "unassigned" };
+        if (!isSpcActive(spcClient)) return { status: "unassigned" };
 
         const today = todayInBoise();
         const block = await getCurrentSpcBlock(profile.id, today);
@@ -107,6 +107,9 @@ export default function PlanSpcBlock() {
   // Logging a missed past session — see plan-block.js's
   // handleFinalizeMissedSession for the full reasoning (same pattern here).
   const handleFinalizeMissedSession = async (workout, logDate) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
+      throw new Error("Enter the date as YYYY-MM-DD.");
+    }
     const completedAt = new Date(`${logDate}T12:00:00`).toISOString();
     await finalizeSpcSession(profile.id, workout.id, workout.week_number, completedAt);
     setState((prev) => {
@@ -139,7 +142,7 @@ export default function PlanSpcBlock() {
         targetReps: ex.reps,
         repScheme: ex.rep_scheme,
         supersetGroupId: ex.superset_group_id,
-        notes: ex.rest ? `rest ${ex.rest}` : ex.notes,
+        notes: ex.rest ? `rest ${ex.rest}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
       }))
     : [];
 

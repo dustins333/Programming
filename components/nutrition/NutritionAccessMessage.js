@@ -6,7 +6,7 @@ import { fonts, colors } from "../../lib/theme";
 // Shown by all 4 member nutrition screens in place of their normal content
 // whenever the member isn't in the "active, past onboarding" state — see
 // lib/nutrition/useNutritionAccess.js.
-export function NutritionAccessMessage({ status, error }) {
+export function NutritionAccessMessage({ status, error, onRetry }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -48,9 +48,14 @@ export function NutritionAccessMessage({ status, error }) {
 
   return (
     <View className="flex-1 items-center justify-center bg-white px-8" style={{ paddingTop: insets.top }}>
-      <Text className="text-center text-stone-500" style={{ fontFamily: fonts.sans }}>
+      <Text className="mb-3 text-center text-stone-500" style={{ fontFamily: fonts.sans }}>
         {body}
       </Text>
+      {status === "error" && onRetry ? (
+        <Pressable onPress={onRetry} hitSlop={8}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
@@ -19,6 +19,7 @@ export default function NutritionPhotos() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const access = useNutritionAccess(profile.id);
+  useFocusEffect(useCallback(() => access.refetch(), [access.refetch]));
   const [photos, setPhotos] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
@@ -36,7 +37,7 @@ export default function NutritionPhotos() {
   }, [access.status, load]);
 
   if (access.status !== "active") {
-    return <NutritionAccessMessage status={access.status} error={access.error} />;
+    return <NutritionAccessMessage status={access.status} error={access.error} onRetry={access.refetch} />;
   }
 
   if (loadError) {

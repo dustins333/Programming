@@ -376,7 +376,14 @@ export default function MemberHome() {
       if (!isStale()) setSpc(spcResult.status === "inactive" ? null : spcResult);
     } catch (err) {
       console.error("My Week: failed to load SPC", err);
-      if (!isStale()) setSpc(null);
+      // A genuine fetch failure is not the same as "not enrolled" — setting
+      // spc to null here made a failed SPC fetch indistinguishable from a
+      // client who was never on SPC at all, which fed straight into the
+      // "You're not assigned to a program yet" message below even for an
+      // SPC-only member. An error-status object still fails every ready/
+      // no_block/not_published render check below (so nothing SPC-shaped
+      // renders), but `!spc` is now false, so the false claim is suppressed.
+      if (!isStale()) setSpc({ status: "error", message: err.message ?? String(err) });
     }
 
     // Monday-Sunday of the current week, regardless of which day "today"
@@ -420,6 +427,13 @@ export default function MemberHome() {
             workoutId: w.id,
             label: w.title,
             completed: w.completed,
+            // listWeekOneOffWorkoutsForUser already filters to status:
+            // "published" — every row here is real and tappable, unlike a
+            // group/SPC session slot which can legitimately be an
+            // unpublished placeholder. SessionBubble gates its press
+            // handler and opacity on this; leaving it unset made every
+            // Extras bubble permanently greyed-out and unpressable.
+            published: true,
           }))
         );
       }
@@ -532,7 +546,7 @@ export default function MemberHome() {
         {formatToday()}
       </Text>
 
-      {groups.length === 0 && !spc && (
+      {groups.length === 0 && !spc && oneOffs.length === 0 && (
         <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
           You're not assigned to a program yet — check with your coach.
         </Text>

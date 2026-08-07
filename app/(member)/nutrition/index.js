@@ -156,6 +156,12 @@ export default function NutritionToday() {
     }
   };
 
+  // useNutritionAccess itself only fetches on mount otherwise — a coach
+  // turning nutrition on, approving targets, or sending onboarding while
+  // this tab is already open (Tabs keep screens mounted) wouldn't be
+  // picked up until the app restarted.
+  useFocusEffect(useCallback(() => access.refetch(), [access.refetch]));
+
   // useFocusEffect (not a mount-only useEffect) so returning to this tab —
   // from Weekly/Check-in/Photos, or backgrounding and re-foregrounding the
   // app — re-checks for anything the coach changed elsewhere, e.g. a newly
@@ -246,7 +252,7 @@ export default function NutritionToday() {
   };
 
   if (access.status !== "active") {
-    return <NutritionAccessMessage status={access.status} error={access.error} />;
+    return <NutritionAccessMessage status={access.status} error={access.error} onRetry={access.refetch} />;
   }
 
   // Calculated live from whatever's currently typed in the macro fields, not

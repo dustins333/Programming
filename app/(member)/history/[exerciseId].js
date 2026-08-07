@@ -35,10 +35,16 @@ export default function ExerciseHistory() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [logs, setLogs] = useState(null);
+  const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
-    const data = await listLogsForExercise(profile.id, exerciseId);
-    setLogs(data);
+    try {
+      setLoadError(null);
+      const data = await listLogsForExercise(profile.id, exerciseId);
+      setLogs(data);
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
   }, [profile.id, exerciseId]);
 
   useEffect(() => {
@@ -47,23 +53,31 @@ export default function ExerciseHistory() {
 
   const groups = useMemo(() => (logs ? groupByDate(logs) : []), [logs]);
 
-  if (!logs) {
-    return (
-      <View className="flex-1 items-center justify-center" style={{ backgroundColor: CANVAS }}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <View className="flex-1 px-6 pb-8" style={{ backgroundColor: CANVAS, paddingTop: insets.top + 6 }}>
       <Pressable onPress={() => router.push("/(member)/history")} className="mb-3 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>‹ My History</Text>
       </Pressable>
-      <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        {logs[0]?.exercises?.name ?? "History"}
-      </Text>
-      <FlatList
+
+      {loadError ? (
+        <View className="flex-1 items-center justify-center">
+          <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Couldn't load history: {loadError}
+          </Text>
+          <Pressable onPress={load} hitSlop={8}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : !logs ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : (
+        <>
+          <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+            {logs[0]?.exercises?.name ?? "History"}
+          </Text>
+          <FlatList
         data={groups}
         keyExtractor={(group) => group.date}
         ListEmptyComponent={
@@ -88,7 +102,9 @@ export default function ExerciseHistory() {
             ) : null}
           </View>
         )}
-      />
+          />
+        </>
+      )}
     </View>
   );
 }

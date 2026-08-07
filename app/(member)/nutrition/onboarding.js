@@ -260,7 +260,7 @@ export default function NutritionOnboarding() {
   // client, so this loads status/questions unconditionally and needs its
   // own gate too rather than trusting the caller.
   if (access.status !== "loading" && access.status !== "onboarding") {
-    return <NutritionAccessMessage status={access.status} error={access.error} />;
+    return <NutritionAccessMessage status={access.status} error={access.error} onRetry={access.refetch} />;
   }
 
   if (loadError) {

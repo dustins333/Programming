@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays } from "../../../lib/boiseDate";
@@ -117,6 +117,7 @@ export default function WeeklyCheckin() {
   const today = todayInBoise();
   const { currentWeek } = computeWeekWindows(today);
   const access = useNutritionAccess(profile.id);
+  useFocusEffect(useCallback(() => access.refetch(), [access.refetch]));
 
   const [questions, setQuestions] = useState(null);
   const [response, setResponse] = useState(null);
@@ -248,7 +249,7 @@ export default function WeeklyCheckin() {
   };
 
   if (access.status !== "active") {
-    return <NutritionAccessMessage status={access.status} error={access.error} />;
+    return <NutritionAccessMessage status={access.status} error={access.error} onRetry={access.refetch} />;
   }
 
   if (loadError) {

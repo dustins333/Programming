@@ -42,7 +42,13 @@ export default function MemberLayout() {
   // toggled-off client shouldn't even see this tab exists" — briefly
   // hiding-then-showing on load reads better than the reverse.
   const { status: nutritionStatus } = useNutritionAccess(session?.user?.id);
-  const showNutritionTab = nutritionStatus === "active" || nutritionStatus === "onboarding" || nutritionStatus === "pending";
+  // "error" is included here too — a transient fetch failure at mount used
+  // to be indistinguishable from "not enrolled," silently hiding the whole
+  // tab for a member who genuinely has nutrition on. Better to show the
+  // tab and let the screen itself render a real error + Retry (see
+  // NutritionAccessMessage) than to hide it entirely on a network blip.
+  const showNutritionTab =
+    nutritionStatus === "active" || nutritionStatus === "onboarding" || nutritionStatus === "pending" || nutritionStatus === "error";
 
   if (!ready) {
     return (

@@ -221,6 +221,7 @@ export default function MyFitness() {
   const [groups, setGroups] = useState([]); // one entry per group program membership
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [hasSpc, setHasSpc] = useState(false);
+  const [spcLoadError, setSpcLoadError] = useState(null);
   const [spc, setSpc] = useState(null);
   const [spcDetail, setSpcDetail] = useState(null); // { sessionNumber, title, exercises } for whichever session is selected
   const [spcDetailLoading, setSpcDetailLoading] = useState(false);
@@ -236,6 +237,9 @@ export default function MyFitness() {
   // resolve after a newer one and clobber good state with stale/incomplete
   // data, reading as sessions/titles randomly disappearing.
   const requestIdRef = useRef(0);
+  // Tracks the last params.program value actually applied to
+  // selectedProgramOverride — see the effect below for why this is needed.
+  const appliedProgramParamRef = useRef(undefined);
 
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -323,7 +327,7 @@ export default function MyFitness() {
                 targetReps: ex.reps,
                 repScheme: ex.rep_scheme,
                 supersetGroupId: ex.superset_group_id,
-                notes: ex.tempo ? `tempo ${ex.tempo}` : null,
+                notes: ex.tempo ? `tempo ${ex.tempo}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
               })),
             };
           } catch (err) {
@@ -373,12 +377,17 @@ export default function MyFitness() {
       if (!isStale()) {
         setHasSpc(spcResult.active);
         setSpc(spcResult.active ? spcResult.spc : null);
+        setSpcLoadError(null);
       }
     } catch (err) {
       console.error("My Fitness: failed to load SPC", err);
       if (!isStale()) {
         setHasSpc(false);
         setSpc(null);
+        // Distinct from "genuinely not on SPC" — see the guard below, which
+        // used to show "You're not assigned to a program yet" to an
+        // SPC-only member whose SPC fetch simply failed.
+        setSpcLoadError(err.message ?? String(err));
       }
     }
 
@@ -450,7 +459,7 @@ export default function MyFitness() {
             targetReps: ex.reps,
             repScheme: ex.rep_scheme,
             supersetGroupId: ex.superset_group_id,
-            notes: ex.rest ? `rest ${ex.rest}` : ex.notes,
+            notes: ex.rest ? `rest ${ex.rest}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
           })),
         });
       } catch (err) {
@@ -474,11 +483,22 @@ export default function MyFitness() {
   // would appear to do nothing — it'd land on the tab, but show whatever
   // was already open. Waits for groups to finish loading so a
   // group-program-id param can actually be validated against them.
+  //
+  // Guarded by appliedProgramParamRef so this only fires once per distinct
+  // param value, not every time groupsLoading flips — useFocusEffect's
+  // load() toggles groupsLoading true/false on every single focus (same
+  // params.program each time), and without this guard that re-triggered
+  // this effect on every visit and silently reverted a manual tab switch
+  // back to whatever the very first navigation's param said.
   useEffect(() => {
     if (groupsLoading) return;
+    if (appliedProgramParamRef.current === params.program) return;
     const groupIds = groups.map((g) => g.groupProgramId);
     const isValidParam = groupIds.includes(params.program) || params.program === "spc" || params.program === "extras";
-    if (isValidParam) setSelectedProgramOverride(params.program);
+    if (isValidParam) {
+      appliedProgramParamRef.current = params.program;
+      setSelectedProgramOverride(params.program);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.program, groupsLoading]);
 
@@ -560,6 +580,19 @@ export default function MyFitness() {
       setFooterFinalizing(false);
     }
   };
+
+  if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && spcLoadError) {
+    return (
+      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
+        <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+          Couldn't load your SPC program: {spcLoadError}
+        </Text>
+        <Pressable onPress={load} hitSlop={8}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (groups.length === 0 && !hasSpc && oneOffs.length === 0) {
     return (

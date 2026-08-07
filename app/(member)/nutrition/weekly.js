@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays } from "../../../lib/boiseDate";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
@@ -23,6 +23,7 @@ export default function NutritionWeekly() {
   const insets = useSafeAreaInsets();
   const today = todayInBoise();
   const access = useNutritionAccess(profile.id);
+  useFocusEffect(useCallback(() => access.refetch(), [access.refetch]));
 
   const [logs, setLogs] = useState(null);
   const [targetsByWeekEnd, setTargetsByWeekEnd] = useState({});
@@ -56,7 +57,7 @@ export default function NutritionWeekly() {
   }, [access.status, profile.id, retryKey]);
 
   if (access.status !== "active") {
-    return <NutritionAccessMessage status={access.status} error={access.error} />;
+    return <NutritionAccessMessage status={access.status} error={access.error} onRetry={access.refetch} />;
   }
 
   if (loadError) {

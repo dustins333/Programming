@@ -82,7 +82,7 @@ export default function PlanBlock() {
       console.error("Plan block: failed to load", err);
       setState({ status: "error", message: err.message ?? String(err) });
     }
-  }, [profile.id]);
+  }, [profile.id, programId]);
 
   // load() only refetches on focus, not just mount — expo-router's Stack
   // can keep this screen mounted when you navigate back to it (same class
@@ -116,7 +116,7 @@ export default function PlanBlock() {
           targetReps: ex.reps,
           repScheme: ex.rep_scheme,
           supersetGroupId: ex.superset_group_id,
-          notes: ex.tempo ? `tempo ${ex.tempo}` : null,
+          notes: ex.tempo ? `tempo ${ex.tempo}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
         })),
       },
     }));
@@ -133,6 +133,14 @@ export default function PlanBlock() {
   // is derived from that map, so it flips straight into the "view/edit
   // what you logged" mode once this resolves, no extra plumbing needed.
   const handleFinalizeMissedSession = async (workout, logDate) => {
+    // logDate is free-typed (SessionDetailModal's "When did you do this?"
+    // field) — an invalid or incomplete value here used to throw a bare
+    // RangeError out of .toISOString(), which SessionLogger's finalize
+    // handler now surfaces as a toast, but "RangeError: Invalid time
+    // value" isn't a useful message for a member to act on.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
+      throw new Error("Enter the date as YYYY-MM-DD.");
+    }
     const completedAt = new Date(`${logDate}T12:00:00`).toISOString();
     await finalizeGroupSession(profile.id, workout.id, completedAt);
     setState((prev) => {
