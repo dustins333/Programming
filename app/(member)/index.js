@@ -83,16 +83,17 @@ function SessionBubble({ label, description, completed, published, onPress, capt
         opacity: weekDone ? 0.55 : published ? 1 : 0.5,
       }}
     >
-      <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c", textAlign: "center" }}>
+      <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c", textAlign: "center" }}>
         {label}
       </Text>
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 2 }}>
-        <Text numberOfLines={2} style={{ fontFamily: fonts.sans, fontStyle: "italic", fontSize: 10.5, color: DESC_COLOR, textAlign: "center" }}>
+        <Text numberOfLines={2} maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontStyle: "italic", fontSize: 10.5, color: DESC_COLOR, textAlign: "center" }}>
           {description || ""}
         </Text>
       </View>
       <Text
         numberOfLines={1}
+        maxFontSizeMultiplier={1.15}
         style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.6, color: "#8a5140", textAlign: "center", textTransform: "uppercase" }}
       >
         {caption || ""}

@@ -39,7 +39,7 @@ export default function More() {
         className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
       >
         <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
-          My Training
+          Member View
         </Text>
         <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
           Log your own workouts &amp; nutrition

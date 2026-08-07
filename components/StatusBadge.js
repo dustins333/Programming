@@ -10,6 +10,8 @@ export function StatusBadge({ tone, label }) {
   const { bg, text } = statusColors[tone] ?? statusColors.paused;
   return (
     <Text
+      numberOfLines={1}
+      maxFontSizeMultiplier={1.2}
       style={{
         fontFamily: fonts.sansSemiBold,
         backgroundColor: bg,

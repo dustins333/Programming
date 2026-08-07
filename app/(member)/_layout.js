@@ -17,9 +17,20 @@ function TabIcon(name) {
 // Active label is 700-weight, inactive is 500 — react-navigation's
 // tabBarLabelStyle is static and can't vary by focus state on its own, so
 // this renders the label itself and swaps fontFamily off the `focused` arg.
+// Pinned to no scaling, matching the coach tab bar's built-in label
+// renderer (react-navigation's own Text, which doesn't scale with Dynamic
+// Type) — this hand-rolled label has no such protection by default, and at
+// even a capped scale the 5-across labels ("My Nutrition", "My History")
+// truncate and inflate the whole tab bar's height.
 function TabLabel(title) {
   return ({ focused, color }) => (
-    <Text style={{ fontFamily: focused ? fonts.sansBold : fonts.sansMedium, fontSize: 11, color }}>{title}</Text>
+    <Text
+      numberOfLines={1}
+      maxFontSizeMultiplier={1}
+      style={{ fontFamily: focused ? fonts.sansBold : fonts.sansMedium, fontSize: 11, color }}
+    >
+      {title}
+    </Text>
   );
 }
 

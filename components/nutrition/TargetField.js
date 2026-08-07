@@ -13,13 +13,15 @@ export function TargetField({ label, styleKey, current, pillLabel = "target", un
   const s = MACRO_STYLES[styleKey];
   return (
     <View className={flex ? "mb-2 flex-1" : "mb-2"}>
-      <View className="mb-1 flex-row items-center gap-1.5">
-        <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+      <View className="mb-1 flex-row flex-wrap items-center gap-1.5">
+        <Text maxFontSizeMultiplier={1.3} className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
           {label}
         </Text>
         {current !== null && current !== undefined ? (
           <View className="rounded-full px-1.5 py-0.5" style={{ backgroundColor: s.bg }}>
-            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 10.5, color: s.text }}>
+            {/* A supplementary badge, not primary content — pinned to (near-)no
+                scale rather than growing with the label and overlapping it. */}
+            <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ fontFamily: fonts.sansMedium, fontSize: 10.5, color: s.text }}>
               {pillLabel}: {current}
               {unit}
             </Text>

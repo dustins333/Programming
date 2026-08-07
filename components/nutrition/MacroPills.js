@@ -20,8 +20,8 @@ function Pill({ styleKey, label, value, unit }) {
   const s = MACRO_STYLES[styleKey];
   return (
     <View className="flex-row items-center gap-1 rounded-full px-2.5 py-1" style={{ backgroundColor: s.bg }}>
-      <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: s.text }}>{label}</Text>
-      <Text style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: s.text }}>
+      <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: s.text }}>{label}</Text>
+      <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: s.text }}>
         {value}
         {unit}
       </Text>

@@ -16,7 +16,11 @@ export function SegmentedControl({ segments, activeKey, onSelect }) {
             className="flex-1 items-center rounded-lg py-2.5"
             style={active ? { backgroundColor: "white", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2 } : undefined}
           >
-            <Text style={{ fontFamily: fonts.sansMedium, color: active ? "#8a5140" : "#78716c", fontSize: 13 }}>
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.15}
+              style={{ fontFamily: fonts.sansMedium, color: active ? "#8a5140" : "#78716c", fontSize: 13 }}
+            >
               {seg.label}
             </Text>
           </Pressable>

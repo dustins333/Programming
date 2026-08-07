@@ -29,6 +29,11 @@ const METRIC_COLUMNS = [
 const WEEK_COL_WIDTH = 120;
 const NOTE_COL_WIDTH = 140;
 const COLOR = { green: "#059669", red: "#dc2626" };
+// This table's columns are fixed-width and mirrors the standalone app's
+// pixel layout by design (see the class comment above) — there's no room
+// for Dynamic Type's default ~1.3x app-wide scale here, so every cell caps
+// much tighter and truncates rather than wrapping into a neighboring column.
+const TABLE_MAX_SCALE = 1.1;
 
 function fmt(v) {
   return v === null || v === undefined ? "—" : String(Math.round(v * 10) / 10);
@@ -97,17 +102,21 @@ export function WeekList({ weeks }) {
           horizontally, so it's always clear which row you're looking at. */}
       <View style={{ width: WEEK_COL_WIDTH }}>
         <View className="border-b border-stone-200 pb-2">
-          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Week</Text>
+          <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Week</Text>
         </View>
         {rows.map((row) =>
           row.type === "week" ? (
             <Pressable key={row.key} onPress={() => toggle(row.week.start)} className="flex-row items-center border-b border-stone-200 py-2">
-              <Text style={{ color: "#a8a29e", fontSize: 11, width: 14 }}>{row.isOpen ? "▾" : "▸"}</Text>
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>{weekRangeLabel(row.week.start, row.week.end)}</Text>
+              <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} style={{ color: "#a8a29e", fontSize: 11, width: 14 }}>{row.isOpen ? "▾" : "▸"}</Text>
+              <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, flexShrink: 1 }}>
+                {weekRangeLabel(row.week.start, row.week.end)}
+              </Text>
             </Pressable>
           ) : (
             <View key={row.key} className="border-b border-stone-100 py-1.5" style={{ backgroundColor: "#faf8f6" }}>
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", paddingLeft: 14 }}>{dayLabel(row.date)}</Text>
+              <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", paddingLeft: 14 }}>
+                {dayLabel(row.date)}
+              </Text>
             </View>
           )
         )}
@@ -117,11 +126,11 @@ export function WeekList({ weeks }) {
         <View style={{ width: metricsWidth }}>
           <View className="flex-row border-b border-stone-200 pb-2">
             {METRIC_COLUMNS.map((c) => (
-              <Text key={c.key} style={{ width: c.width, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>
+              <Text key={c.key} maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: c.width, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>
                 {c.label}
               </Text>
             ))}
-            <Text style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Note</Text>
+            <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Note</Text>
           </View>
 
           {rows.map((row) =>
@@ -131,7 +140,7 @@ export function WeekList({ weeks }) {
                   const target = c.targetKey ? row.week.target?.[c.targetKey] : null;
                   const color = colorForColumn(c.key, row.week.summary.averages[c.key], target);
                   return (
-                    <Text key={c.key} style={{ width: c.width, fontFamily: fonts.sansSemiBold, fontSize: 13, color: color ? COLOR[color] : "#44403c" }}>
+                    <Text key={c.key} maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: c.width, fontFamily: fonts.sansSemiBold, fontSize: 13, color: color ? COLOR[color] : "#44403c" }}>
                       {fmt(row.week.summary.averages[c.key])}
                     </Text>
                   );
@@ -141,11 +150,11 @@ export function WeekList({ weeks }) {
             ) : (
               <View key={row.key} className="flex-row items-center border-b border-stone-100 py-1.5" style={{ backgroundColor: "#faf8f6" }}>
                 {METRIC_COLUMNS.map((c) => (
-                  <Text key={c.key} style={{ width: c.width, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
+                  <Text key={c.key} maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: c.width, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
                     {fmt(row.log?.[c.key])}
                   </Text>
                 ))}
-                <Text numberOfLines={1} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
+                <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
                   {row.log?.client_note || "—"}
                 </Text>
               </View>
@@ -176,11 +185,11 @@ export function WeekDayTable({ week }) {
     <View className="flex-row">
       <View style={{ width: WEEK_COL_WIDTH }}>
         <View className="border-b border-stone-200 pb-2">
-          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Day</Text>
+          <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Day</Text>
         </View>
         {allDates.map((date) => (
           <View key={date} className="border-b border-stone-100 py-1.5">
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5 }}>{dayLabel(date)}</Text>
+            <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5 }}>{dayLabel(date)}</Text>
           </View>
         ))}
       </View>
@@ -189,11 +198,11 @@ export function WeekDayTable({ week }) {
         <View style={{ width: metricsWidth }}>
           <View className="flex-row border-b border-stone-200 pb-2">
             {METRIC_COLUMNS.map((c) => (
-              <Text key={c.key} style={{ width: c.width, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>
+              <Text key={c.key} maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: c.width, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>
                 {c.label}
               </Text>
             ))}
-            <Text style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Note</Text>
+            <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Note</Text>
           </View>
           {allDates.map((date) => {
             const log = logByDate[date] ?? null;
@@ -203,12 +212,12 @@ export function WeekDayTable({ week }) {
                   const target = c.targetKey ? week.target?.[c.targetKey] : null;
                   const color = colorForColumn(c.key, log?.[c.key], target);
                   return (
-                    <Text key={c.key} style={{ width: c.width, fontFamily: fonts.sans, fontSize: 12.5, color: color ? COLOR[color] : "#57534e" }}>
+                    <Text key={c.key} maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: c.width, fontFamily: fonts.sans, fontSize: 12.5, color: color ? COLOR[color] : "#57534e" }}>
                       {fmt(log?.[c.key])}
                     </Text>
                   );
                 })}
-                <Text numberOfLines={1} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
+                <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
                   {log?.client_note || "—"}
                 </Text>
               </View>

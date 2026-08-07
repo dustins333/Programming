@@ -5,5 +5,6 @@ module.exports = function (api) {
       ["babel-preset-expo", { jsxImportSource: "nativewind" }],
       "nativewind/babel",
     ],
+    plugins: [["./babel/maxFontSizeMultiplierPlugin", { max: 1.3 }]],
   };
 };
