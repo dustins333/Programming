@@ -4,6 +4,25 @@ import { router } from "expo-router";
 import { supabase } from "../../lib/supabase/client";
 import { NUMERIC_DONE_ID } from "../../components/NumericInputAccessory";
 
+// On a non-2xx response, supabase-js's functions.invoke() returns
+// { data: null, error: FunctionsHttpError } — it does NOT parse the JSON
+// body into `data`. Both Edge Functions here return a real, useful message
+// (e.g. "Invalid or expired code") in a 400 body, but reading only
+// error.message gives the generic "Edge Function returned a non-2xx status
+// code" for every single failure. error.context is the raw Response for a
+// FunctionsHttpError — this reads the actual body back out.
+async function extractFunctionErrorMessage(error) {
+  if (error?.context && typeof error.context.json === "function") {
+    try {
+      const body = await error.context.json();
+      if (body?.error) return body.error;
+    } catch {
+      // context wasn't JSON, or was already consumed — fall through
+    }
+  }
+  return error?.message ?? String(error);
+}
+
 // Email -> SMS code (via GHL, using the account's stored ghl_contact_id —
 // see import-client) -> set password -> signed in. For members created
 // ahead of time by the GHL "won" webhook, who've never opened the app or
@@ -24,7 +43,7 @@ export default function Register() {
     const { error } = await supabase.functions.invoke("request-registration-code", { body: { email } });
     setLoading(false);
     if (error) {
-      setErrorMessage(error.message);
+      setErrorMessage(await extractFunctionErrorMessage(error));
       return;
     }
     setStep("code");
@@ -36,9 +55,14 @@ export default function Register() {
     const { data, error } = await supabase.functions.invoke("verify-registration-code", {
       body: { email, code, password },
     });
-    if (error || data?.error) {
+    if (error) {
       setLoading(false);
-      setErrorMessage(data?.error ?? error.message);
+      setErrorMessage(await extractFunctionErrorMessage(error));
+      return;
+    }
+    if (data?.error) {
+      setLoading(false);
+      setErrorMessage(data.error);
       return;
     }
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
