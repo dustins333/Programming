@@ -1,17 +1,22 @@
-// Shared by send-push (one user, caller-triggered) and scan-spc-alerts (many
-// users, cron-triggered) — both just need "look up a user's tokens, hit
-// Expo's push API." Kept here instead of duplicated so the two functions
-// can't drift on the actual send mechanics.
+// Shared by send-push (one user, caller-triggered), scan-spc-alerts (many
+// users, cron-triggered), and (via announcementAudience.ts) every
+// announcement/reminder scan — all just need "notify this user everywhere
+// they're reachable." Kept here instead of duplicated so callers can't
+// drift on the actual send mechanics. As of 2026-08-07 this also delivers
+// to PWA sessions via Web Push (webPush.ts) alongside the native Expo push
+// below — one call site, two delivery mechanisms, so no caller needed
+// updating to pick up web push.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { sendWebPushToUser } from "./webPush.ts";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
-export async function sendPushToUser(
+async function sendExpoPushToUser(
   adminClient: SupabaseClient,
   userId: string,
   title: string,
   body: string,
-  data: Record<string, unknown> = {}
+  data: Record<string, unknown>
 ) {
   const { data: tokens, error: tokensError } = await adminClient
     .schema("core")
@@ -20,7 +25,7 @@ export async function sendPushToUser(
     .eq("user_id", userId);
 
   if (tokensError) throw tokensError;
-  if (!tokens || tokens.length === 0) return { sent: 0 };
+  if (!tokens || tokens.length === 0) return { sent: 0, expoResult: null };
 
   const messages = tokens.map((t) => ({
     to: t.expo_push_token,
@@ -37,4 +42,22 @@ export async function sendPushToUser(
   const expoResult = await expoResponse.json();
 
   return { sent: messages.length, expoResult };
+}
+
+export async function sendPushToUser(
+  adminClient: SupabaseClient,
+  userId: string,
+  title: string,
+  body: string,
+  data: Record<string, unknown> = {}
+) {
+  const [expo, web] = await Promise.all([
+    sendExpoPushToUser(adminClient, userId, title, body, data),
+    sendWebPushToUser(adminClient, userId, title, body, data).catch((err) => {
+      console.error(`web push failed for user ${userId}:`, err instanceof Error ? err.message : err);
+      return { sent: 0 };
+    }),
+  ]);
+
+  return { sent: expo.sent + web.sent, expoResult: expo.expoResult };
 }

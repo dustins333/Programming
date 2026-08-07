@@ -20,6 +20,7 @@ import { NumericInputAccessory } from "../components/NumericInputAccessory";
 import { ViewportZoomReset } from "../components/ViewportZoomReset";
 import { ToastHost } from "../components/ToastHost";
 import { AppUpdateChecker } from "../components/AppUpdateChecker";
+import { WebPushBanner } from "../components/WebPushBanner";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -52,6 +53,7 @@ export default function RootLayout() {
         <StatusBar style="dark" />
         <AuthProvider>
           <PushRegistrar />
+          <WebPushBanner />
           <ViewportZoomReset />
           <AppUpdateChecker />
           <Slot />
