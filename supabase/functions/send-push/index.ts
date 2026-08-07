@@ -7,15 +7,21 @@
 // below, not left to the client.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sendPushToUser } from "../_shared/expoPush.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: jsonHeaders });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -33,12 +39,12 @@ Deno.serve(async (req) => {
     error: callerError,
   } = await callerClient.auth.getUser();
   if (callerError || !caller) {
-    return new Response(JSON.stringify({ error: "Invalid or expired session" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Invalid or expired session" }), { status: 401, headers: jsonHeaders });
   }
 
   const { userId, title, body, data } = await req.json();
   if (!userId || !title || !body) {
-    return new Response(JSON.stringify({ error: "userId, title, and body are required" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "userId, title, and body are required" }), { status: 400, headers: jsonHeaders });
   }
 
   if (userId !== caller.id) {
@@ -50,7 +56,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!callerProfile || !["admin", "coach"].includes(callerProfile.role)) {
-      return new Response(JSON.stringify({ error: "Not allowed to notify other users" }), { status: 403 });
+      return new Response(JSON.stringify({ error: "Not allowed to notify other users" }), { status: 403, headers: jsonHeaders });
     }
   }
 
@@ -58,14 +64,14 @@ Deno.serve(async (req) => {
   try {
     result = await sendPushToUser(adminClient, userId, title, body, data ?? {});
   } catch (err) {
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), { status: 500 });
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), { status: 500, headers: jsonHeaders });
   }
   if (result.sent === 0) {
-    return new Response(JSON.stringify({ sent: 0, message: "No registered devices for this user" }), { status: 200 });
+    return new Response(JSON.stringify({ sent: 0, message: "No registered devices for this user" }), { status: 200, headers: jsonHeaders });
   }
 
   return new Response(JSON.stringify(result), {
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders,
   });
 });

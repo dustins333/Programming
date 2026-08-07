@@ -9,15 +9,21 @@
 // test2@kovastrength.com account CLAUDE.md documents). Deploy with:
 //   supabase functions deploy ensure-nutrition-coach --no-verify-jwt=false
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: jsonHeaders });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -33,7 +39,7 @@ Deno.serve(async (req) => {
     error: callerError,
   } = await callerClient.auth.getUser();
   if (callerError || !caller) {
-    return new Response(JSON.stringify({ error: "Invalid or expired session" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Invalid or expired session" }), { status: 401, headers: jsonHeaders });
   }
 
   const { data: profile, error: profileError } = await adminClient
@@ -44,7 +50,7 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (profileError) {
-    return new Response(JSON.stringify({ error: profileError.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: profileError.message }), { status: 500, headers: jsonHeaders });
   }
   if (!profile || !["coach", "admin"].includes(profile.role)) {
     // Not staff — nothing to provision, and not an error worth surfacing to
@@ -52,7 +58,7 @@ Deno.serve(async (req) => {
     // members, who should just no-op here).
     return new Response(JSON.stringify({ provisioned: false }), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders,
     });
   }
 
@@ -61,11 +67,11 @@ Deno.serve(async (req) => {
     .upsert({ id: caller.id, name: profile.name, email: profile.email }, { onConflict: "id" });
 
   if (upsertError) {
-    return new Response(JSON.stringify({ error: upsertError.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: upsertError.message }), { status: 500, headers: jsonHeaders });
   }
 
   return new Response(JSON.stringify({ provisioned: true }), {
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders,
   });
 });

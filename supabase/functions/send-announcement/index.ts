@@ -9,15 +9,21 @@
 // client regardless of RLS.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sendAnnouncementPush } from "../_shared/announcementAudience.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: jsonHeaders });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -33,7 +39,7 @@ Deno.serve(async (req) => {
     error: callerError,
   } = await callerClient.auth.getUser();
   if (callerError || !caller) {
-    return new Response(JSON.stringify({ error: "Invalid or expired session" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Invalid or expired session" }), { status: 401, headers: jsonHeaders });
   }
 
   const { data: callerProfile } = await adminClient
@@ -43,12 +49,12 @@ Deno.serve(async (req) => {
     .eq("id", caller.id)
     .maybeSingle();
   if (callerProfile?.role !== "admin") {
-    return new Response(JSON.stringify({ error: "Admin only" }), { status: 403 });
+    return new Response(JSON.stringify({ error: "Admin only" }), { status: 403, headers: jsonHeaders });
   }
 
   const { announcementId } = await req.json();
   if (!announcementId) {
-    return new Response(JSON.stringify({ error: "announcementId is required" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "announcementId is required" }), { status: 400, headers: jsonHeaders });
   }
 
   const { data: announcement, error: fetchError } = await adminClient
@@ -58,21 +64,21 @@ Deno.serve(async (req) => {
     .eq("id", announcementId)
     .maybeSingle();
   if (fetchError) {
-    return new Response(JSON.stringify({ error: fetchError.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: fetchError.message }), { status: 500, headers: jsonHeaders });
   }
   if (!announcement) {
-    return new Response(JSON.stringify({ error: "Announcement not found" }), { status: 404 });
+    return new Response(JSON.stringify({ error: "Announcement not found" }), { status: 404, headers: jsonHeaders });
   }
 
   let result;
   try {
     result = await sendAnnouncementPush(adminClient, announcement);
   } catch (err) {
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), { status: 500 });
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), { status: 500, headers: jsonHeaders });
   }
 
   return new Response(JSON.stringify(result), {
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders,
   });
 });

@@ -9,15 +9,21 @@
 // insert policy would let this through anyway, but the auth-user-creation
 // half has no RLS equivalent at all, so the check has to live here).
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: jsonHeaders });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -33,7 +39,7 @@ Deno.serve(async (req) => {
     error: callerError,
   } = await callerClient.auth.getUser();
   if (callerError || !caller) {
-    return new Response(JSON.stringify({ error: "Invalid or expired session" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Invalid or expired session" }), { status: 401, headers: jsonHeaders });
   }
 
   const { data: callerProfile } = await adminClient
@@ -44,14 +50,14 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (!callerProfile || callerProfile.role !== "admin") {
-    return new Response(JSON.stringify({ error: "Only an admin can add staff accounts" }), { status: 403 });
+    return new Response(JSON.stringify({ error: "Only an admin can add staff accounts" }), { status: 403, headers: jsonHeaders });
   }
 
   const { name, email, role } = await req.json();
   if (!name || !email || !["coach", "admin"].includes(role)) {
     return new Response(
       JSON.stringify({ error: "name, email, and role ('coach' or 'admin') are required" }),
-      { status: 400 }
+      { status: 400, headers: jsonHeaders }
     );
   }
 
@@ -70,15 +76,15 @@ Deno.serve(async (req) => {
     // error text is "already been registered", not "already registered".
     const alreadyExists = /already.*registered|already exists|email_exists/i.test(invite.error.message ?? "");
     if (!alreadyExists) {
-      return new Response(JSON.stringify({ error: invite.error.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: invite.error.message }), { status: 500, headers: jsonHeaders });
     }
     const { data: existing, error: listError } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
     if (listError) {
-      return new Response(JSON.stringify({ error: listError.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: listError.message }), { status: 500, headers: jsonHeaders });
     }
     const match = existing.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
     if (!match) {
-      return new Response(JSON.stringify({ error: "Email already registered but the matching account couldn't be found" }), { status: 500 });
+      return new Response(JSON.stringify({ error: "Email already registered but the matching account couldn't be found" }), { status: 500, headers: jsonHeaders });
     }
     authUserId = match.id;
   } else {
@@ -98,7 +104,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (upsertError) {
-    return new Response(JSON.stringify({ error: upsertError.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: upsertError.message }), { status: 500, headers: jsonHeaders });
   }
 
   // Also keep public.coaches in sync — that's the table the standalone
@@ -112,12 +118,12 @@ Deno.serve(async (req) => {
       .from("coaches")
       .upsert({ id: authUserId, name, email }, { onConflict: "id" });
     if (coachUpsertError) {
-      return new Response(JSON.stringify({ error: coachUpsertError.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: coachUpsertError.message }), { status: 500, headers: jsonHeaders });
     }
   }
 
   return new Response(JSON.stringify({ profile }), {
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders,
   });
 });
