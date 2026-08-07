@@ -13,6 +13,7 @@ import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programmin
 import { listSpcWorkoutExercises, listSpcWarmups } from "../../lib/programming/spcWorkouts";
 import { listGroupCompletionsForWorkouts, getCompletedSpcWorkoutIdsForWeek } from "../../lib/programming/sessionCompletions";
 import { listWeekOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
+import { hasUnreadMessages } from "../../lib/programming/messages";
 import { listLogsForDateRange } from "../../lib/nutrition/dailyLog";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { retryOnce } from "../../lib/retry";
@@ -242,6 +243,7 @@ export default function MemberHome() {
   const [spc, setSpc] = useState(null); // null = not enrolled
   const [nutrition, setNutrition] = useState(null);
   const [oneOffs, setOneOffs] = useState([]);
+  const [hasUnread, setHasUnread] = useState(false);
   const [preview, setPreview] = useState(null); // { visible, loading, title, subtitle, warmups, exercises }
 
   // Tabs stay mounted, and useFocusEffect below re-runs load() on every
@@ -441,6 +443,17 @@ export default function MemberHome() {
       console.error("My Week: failed to load one-offs", err);
       if (!isStale()) setOneOffs([]);
     }
+
+    // Own isolated fetch, same "one domain's failure shouldn't hide
+    // another" pattern as everything else in this load() — just a small red
+    // dot on the header's chat-bubble icon, not worth surfacing an error for.
+    try {
+      const unread = await retryOnce(() => hasUnreadMessages(profile.id));
+      if (!isStale()) setHasUnread(unread);
+    } catch (err) {
+      console.error("My Week: failed to check unread messages", err);
+      if (!isStale()) setHasUnread(false);
+    }
   }, [profile.id]);
 
   // Refetch on every focus, not just first mount — Tabs keep this screen
@@ -537,8 +550,23 @@ export default function MemberHome() {
         <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={HITSLOP}>
           <Ionicons name="settings-outline" size={22} color="#78716c" />
         </Pressable>
-        <Pressable onPress={() => router.push("/(member)/messages")} hitSlop={HITSLOP}>
+        <Pressable onPress={() => router.push("/(member)/messages")} hitSlop={HITSLOP} style={{ position: "relative" }}>
           <Ionicons name="chatbubble-outline" size={21} color="#78716c" />
+          {hasUnread ? (
+            <View
+              style={{
+                position: "absolute",
+                top: -1,
+                right: -1,
+                width: 9,
+                height: 9,
+                borderRadius: 5,
+                backgroundColor: "#b23a22",
+                borderWidth: 1.5,
+                borderColor: CANVAS,
+              }}
+            />
+          ) : null}
         </Pressable>
         <Text className="flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
           Hi, {profile?.name}

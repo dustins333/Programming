@@ -8,6 +8,7 @@ import { colors, fonts } from "../lib/theme";
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", href: "/(coach)", icon: "home" },
   { key: "clients", label: "Clients", href: "/(coach)/clients", icon: "people" },
+  { key: "messages", label: "Messages", href: "/(coach)/messages", icon: "chatbubbles" },
   { key: "blocks", label: "Group Programs", href: "/(coach)/blocks", icon: "barbell" },
   { key: "spc", label: "SPC", href: "/(coach)/spc", icon: "clipboard", permission: "can_view_spc" },
   { key: "nutrition", label: "Nutrition", href: "/(coach)/nutrition", icon: "restaurant", permission: "can_view_nutrition" },

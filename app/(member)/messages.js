@@ -3,7 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
-import { listMessages, sendMemberMessage } from "../../lib/programming/messages";
+import { listMessages, sendMemberMessage, markThreadReadByMember } from "../../lib/programming/messages";
 import { MessageThread } from "../../components/MessageThread";
 import { fonts, colors } from "../../lib/theme";
 
@@ -32,6 +32,12 @@ export default function Messages() {
   useFocusEffect(
     useCallback(() => {
       load();
+      // Opening this screen is what clears the unread flag — standard
+      // chat-app behavior, no explicit "mark read" button needed here (that's
+      // only asked for on the coach's inbox, where a thread can be marked
+      // read without opening it). Fire-and-forget: a failure here shouldn't
+      // block the thread itself from loading.
+      markThreadReadByMember().catch((err) => console.error("Failed to mark thread read:", err));
     }, [load])
   );
 
