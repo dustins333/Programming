@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Platform } from "react-native";
-import { Link, useRouter, useLocalSearchParams } from "expo-router";
+import { Link, useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getUser, listCoaches } from "../../../lib/programming/clients";
 import { getSpcClient, updateSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
@@ -212,9 +212,15 @@ export default function SpcClientDetail() {
     }
   }, [userId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // This screen stays mounted in the stack while the coach drills into a
+  // session's builder and back — a mount-only effect would leave the grid's
+  // tiles stale after an edit. useFocusEffect refetches every time this
+  // screen regains focus, same fix as blocks/index.js.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const cancelCopy = useCallback(() => {
     setCopySource(null);

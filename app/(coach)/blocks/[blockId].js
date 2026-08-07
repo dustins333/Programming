@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { toastError } from "../../../lib/toast";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getBlock, listWorkoutsForBlock, deleteBlock } from "../../../lib/programming/blocks";
 import { listWorkoutExercisesForWorkouts } from "../../../lib/programming/workouts";
@@ -41,9 +41,14 @@ export default function BlockDetail() {
     }
   }, [blockId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Stays mounted in the stack while the coach drills into a session's
+  // builder and back — a mount-only effect would leave the grid's tiles
+  // stale after an edit. useFocusEffect refetches on every refocus.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const handleDelete = async () => {
     const proceed = await confirmDelete(

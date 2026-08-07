@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import {
   getSpcBlock,
@@ -61,9 +61,14 @@ export default function SpcBlockDetail() {
     }
   }, [blockId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Stays mounted in the stack while the coach drills into a session's
+  // builder and back — a mount-only effect would leave the grid's tiles
+  // stale after an edit. useFocusEffect refetches on every refocus.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const handleCopyLastBlock = async () => {
     setCopying(true);
