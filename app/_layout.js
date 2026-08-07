@@ -17,6 +17,7 @@ import { ProtestStrike_400Regular } from "@expo-google-fonts/protest-strike";
 import { AuthProvider } from "../lib/auth/AuthProvider";
 import { PushRegistrar } from "../lib/notifications/PushRegistrar";
 import { NumericInputAccessory } from "../components/NumericInputAccessory";
+import { ViewportZoomReset } from "../components/ViewportZoomReset";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -49,6 +50,7 @@ export default function RootLayout() {
         <StatusBar style="dark" />
         <AuthProvider>
           <PushRegistrar />
+          <ViewportZoomReset />
           <Slot />
           <NumericInputAccessory />
         </AuthProvider>
