@@ -13,10 +13,12 @@ import { getClient as getNutritionClient, createOrReactivateClient, setClientSta
 import { listTemplates } from "../../../lib/programming/templates";
 import { listOneOffWorkoutsForUser, createOneOffFromTemplate, deleteOneOffWorkout } from "../../../lib/programming/oneOffWorkouts";
 import { listCompletedOneOffWorkoutIds } from "../../../lib/programming/sessionCompletions";
+import { listRecentSessionsForUser } from "../../../lib/programming/coachLogs";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { AssignOneOffModal } from "../../../components/AssignOneOffModal";
+import { RecentSessionsCard } from "../../../components/RecentSessionsCard";
 import { CoachShell } from "../../../components/CoachShell";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { confirmRemoveOneOff, confirmArchiveNutritionClient } from "../../../lib/confirmDialog";
@@ -147,6 +149,7 @@ export default function ClientProfile() {
   const [oneOffs, setOneOffs] = useState([]);
   const [completedOneOffIds, setCompletedOneOffIds] = useState(new Set());
   const [templates, setTemplates] = useState([]);
+  const [recentSessions, setRecentSessions] = useState([]);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [lastSignInAt, setLastSignInAt] = useState(undefined);
@@ -198,6 +201,15 @@ export default function ClientProfile() {
         setMissedFlags(flagsByUser.get(userId) ?? []);
       } catch {
         setMissedFlags([]);
+      }
+
+      // Own try/catch, same isolation as flags above — a client with no
+      // finalized sessions yet (or a transient failure) shouldn't take
+      // down the rest of the profile.
+      try {
+        setRecentSessions(await listRecentSessionsForUser(userId));
+      } catch {
+        setRecentSessions([]);
       }
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -564,6 +576,10 @@ export default function ClientProfile() {
               + Assign one-off
             </Text>
           </Pressable>
+        </SettingsCard>
+
+        <SettingsCard icon="stats-chart-outline" title="Recent sessions">
+          <RecentSessionsCard userId={userId} sessions={recentSessions} />
         </SettingsCard>
 
         <AssignOneOffModal

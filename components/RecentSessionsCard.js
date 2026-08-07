@@ -1,0 +1,121 @@
+import { useState } from "react";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { listLogsForDate } from "../lib/programming/memberPlan";
+import { formatDateMDY } from "../lib/formatDate";
+import { fonts, colors } from "../lib/theme";
+
+// Groups one date's flat set rows by exercise, same shape
+// history/[exerciseId].js's groupByDate uses for the member's own read of
+// this data, just keyed by exercise instead of by date since a single
+// session spans several exercises.
+function groupByExercise(logs) {
+  const groups = [];
+  const byExercise = new Map();
+  for (const row of logs) {
+    if (!byExercise.has(row.exercise_id)) {
+      const group = { exerciseId: row.exercise_id, name: row.exercises?.name ?? "Exercise", sets: [], notes: null };
+      byExercise.set(row.exercise_id, group);
+      groups.push(group);
+    }
+    const group = byExercise.get(row.exercise_id);
+    group.sets.push(row);
+    if (!group.notes && row.notes) group.notes = row.notes;
+  }
+  return groups;
+}
+
+function SessionRow({ userId, session }) {
+  const [open, setOpen] = useState(false);
+  const [logs, setLogs] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+
+  const handleToggle = async () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (logs) return;
+    try {
+      setLogs(await listLogsForDate(userId, session.date));
+    } catch (err) {
+      setLoadError(err.message ?? String(err));
+    }
+  };
+
+  const groups = logs ? groupByExercise(logs) : [];
+
+  return (
+    <View className="border-b border-stone-100 py-3">
+      <Pressable onPress={handleToggle} className="flex-row items-center justify-between">
+        <View className="flex-1 pr-3">
+          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13.5 }} className="text-stone-700">
+            {session.label}
+          </Text>
+          <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+            {formatDateMDY(session.date)}
+          </Text>
+        </View>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={16} color="#a8a29e" />
+      </Pressable>
+
+      {open ? (
+        <View className="mt-2.5 pl-1">
+          {loadError ? (
+            <Text className="text-xs text-red-600" style={{ fontFamily: fonts.sans }}>
+              Couldn't load this session: {loadError}
+            </Text>
+          ) : !logs ? (
+            <ActivityIndicator color={colors.primary} size="small" style={{ alignSelf: "flex-start" }} />
+          ) : groups.length === 0 ? (
+            <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+              Nothing logged for this session.
+            </Text>
+          ) : (
+            groups.map((g) => (
+              <View key={g.exerciseId} className="mb-2.5">
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }} className="text-stone-700">
+                  {g.name}
+                </Text>
+                {g.sets.map((s) => (
+                  <Text key={s.id} style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", marginTop: 1 }}>
+                    Set {s.set_number}: {s.reps ?? "–"} reps{s.weight ? ` @ ${s.weight}` : ""}
+                  </Text>
+                ))}
+                {g.notes ? (
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", marginTop: 2, fontStyle: "italic" }}>
+                    {g.notes}
+                  </Text>
+                ) : null}
+              </View>
+            ))
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// Recent finalized sessions for one client, each expanding into per-set
+// reps/weight and the member's own notes — first real "does anyone see
+// what a client actually logged" view on the coach side (previously only
+// aggregate completion checkmarks/flags existed, never the numbers). No
+// migration needed: "staff can read session completions" (0007) and
+// "staff manage logs" (0004) already permit this.
+export function RecentSessionsCard({ userId, sessions }) {
+  if (sessions.length === 0) {
+    return (
+      <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
+        No finalized sessions yet.
+      </Text>
+    );
+  }
+  return (
+    <View>
+      {sessions.map((session) => (
+        <SessionRow key={session.id} userId={userId} session={session} />
+      ))}
+    </View>
+  );
+}
