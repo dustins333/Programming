@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../lib/nutrition/useNutritionAccess";
 import { AnnouncementChecker } from "../../lib/notifications/AnnouncementChecker";
+import { FloatingMessageBubble } from "../../components/FloatingMessageBubble";
 import { colors, fonts } from "../../lib/theme";
 
 // 21px line icons regardless of whatever size the navigator would
@@ -128,6 +129,11 @@ export default function MemberLayout() {
       <Tabs.Screen name="nutrition/onboarding" options={{ href: null }} />
       <Tabs.Screen name="history/[exerciseId]" options={{ href: null }} />
       </Tabs>
+      {/* Rendered after <Tabs>, not before — paints on top of the tab bar
+          (later JSX = later paint = on top for overlapping siblings). See
+          FloatingMessageBubble.js's own header comment for why this can't
+          be wrapped in a <Modal>. */}
+      <FloatingMessageBubble />
     </>
   );
 }

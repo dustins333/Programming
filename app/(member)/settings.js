@@ -6,6 +6,7 @@ import { useAuth } from "../../lib/auth/AuthProvider";
 import { supabase } from "../../lib/supabase/client";
 import { getClient, getCoachRow } from "../../lib/nutrition/clients";
 import { updateOwnNotificationPrefs } from "../../lib/notifications/memberPrefs";
+import { useShowMessageBubble, setShowMessageBubble } from "../../lib/messageBubblePref";
 import { fonts, colors } from "../../lib/theme";
 import { toastError, toastSuccess } from "../../lib/toast";
 
@@ -195,6 +196,7 @@ export default function MemberSettings() {
   const [notifValues, setNotifValues] = useState(null);
   const [coachName, setCoachName] = useState(undefined); // undefined = loading, null = no nutrition client row
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const showMessageBubble = useShowMessageBubble();
 
   useEffect(() => {
     if (!profile) return;
@@ -312,6 +314,17 @@ export default function MemberSettings() {
           description="New comments from your coach."
           value={notifValues.coachMessages}
           onValueChange={(v) => handleToggleNotif("coachMessages", v)}
+          last
+        />
+      </Card>
+
+      <Card>
+        <CardTitle>Messaging</CardTitle>
+        <ToggleRow
+          label="Show message bubble"
+          description="A floating button to message your coach, always on screen. Turning this off doesn't remove messaging — you can still reach it from the chat icon on My Week."
+          value={showMessageBubble}
+          onValueChange={setShowMessageBubble}
           last
         />
       </Card>

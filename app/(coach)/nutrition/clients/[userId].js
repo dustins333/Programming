@@ -34,6 +34,7 @@ import { PhotoCompare } from "../../../../components/nutrition/PhotoCompare";
 import { PhotoSubmissionsEditor } from "../../../../components/nutrition/PhotoSubmissionsEditor";
 import { PhotoUpload } from "../../../../components/nutrition/PhotoUpload";
 import { ClientSettingsModal } from "../../../../components/nutrition/ClientSettingsModal";
+import { CoachMessageBubble } from "../../../../components/CoachMessageBubble";
 import { CoachShell } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { confirmBypassOnboarding, confirmSendToClient } from "../../../../lib/confirmDialog";
@@ -772,6 +773,7 @@ export default function NutritionClientDetail() {
         onClose={() => setSettingsVisible(false)}
         onSaved={load}
       />
+      <CoachMessageBubble userId={userId} clientName={client.name} />
     </CoachShell>
   );
 }

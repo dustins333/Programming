@@ -22,6 +22,7 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { AssignOneOffModal } from "../../../components/AssignOneOffModal";
 import { RecentSessionsCard } from "../../../components/RecentSessionsCard";
 import { MessageThread } from "../../../components/MessageThread";
+import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CoachShell } from "../../../components/CoachShell";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { confirmRemoveOneOff, confirmArchiveNutritionClient } from "../../../lib/confirmDialog";
@@ -671,6 +672,7 @@ export default function ClientProfile() {
           onPick={handleAssignOneOff}
         />
       </ScrollView>
+      <CoachMessageBubble userId={userId} clientName={member.name} />
     </CoachShell>
   );
 }

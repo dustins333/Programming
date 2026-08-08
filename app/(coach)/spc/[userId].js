@@ -24,6 +24,7 @@ import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
+import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CoachShell } from "../../../components/CoachShell";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
@@ -650,6 +651,7 @@ export default function SpcClientDetail() {
           onSubmit={handleCreateBlockChoice}
         />
       </ScrollView>
+      <CoachMessageBubble userId={userId} clientName={member.name} />
     </CoachShell>
   );
 }

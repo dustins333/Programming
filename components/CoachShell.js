@@ -76,7 +76,7 @@ function NavList({ profile, pathname, onNavigate, onSignOut }) {
             explicit ask) — this jumps into the same member tab experience
             any client uses, reading this account's own program data. The
             member layout's staff-only "Coaching" tab is the way back. */}
-        <NavRow active={false} icon="body" label="My Training" onPress={() => onNavigate("/(member)")} />
+        <NavRow active={false} icon="body" label="Member View" onPress={() => onNavigate("/(member)")} />
 
         {isAdmin ? (
           <NavRow active={isActive(pathname, "/(coach)/announcements")} icon="megaphone" label="Announcements" onPress={() => onNavigate("/(coach)/announcements")} />
