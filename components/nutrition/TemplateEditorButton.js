@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, Modal, ScrollView } from "react-native";
 import { QuestionListEditor } from "./QuestionListEditor";
+import { KeyboardDoneButton } from "../KeyboardDoneButton";
 import { fonts, colors } from "../../lib/theme";
 
 // A question template (weekly check-in / onboarding questionnaire) collapsed
@@ -44,6 +45,7 @@ export function TemplateEditorButton({ label, description, questions, onAdd, onU
             </View>
           </View>
         </View>
+        <KeyboardDoneButton />
       </Modal>
     </>
   );

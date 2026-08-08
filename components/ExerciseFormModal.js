@@ -3,6 +3,7 @@ import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "r
 import { MUSCLE_GROUPS, MOVEMENT_PATTERNS } from "../lib/programming/exercises";
 import { fonts, colors } from "../lib/theme";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
+import { KeyboardDoneButton } from "./KeyboardDoneButton";
 import { findLikelyDuplicates } from "../lib/stringSimilarity";
 
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
@@ -348,6 +349,7 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
           </ScrollView>
         </View>
       </View>
+      <KeyboardDoneButton />
     </Modal>
   );
 }

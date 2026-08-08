@@ -6,6 +6,7 @@ import { toastError } from "../../lib/toast";
 import { MilestoneCompleteCheckbox } from "./MilestoneCompleteCheckbox";
 import { fonts, colors } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
+import { KeyboardDoneButton } from "../KeyboardDoneButton";
 
 const EMPTY = { title: "", details: "", emoji: "" };
 const DETAILS_MIN_HEIGHT = 90;
@@ -163,6 +164,7 @@ export function MilestoneFormModal({ visible, milestone, userId, createdBy, onCl
           </View>
         </View>
       </View>
+      <KeyboardDoneButton />
     </Modal>
   );
 }

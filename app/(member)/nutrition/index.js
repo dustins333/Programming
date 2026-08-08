@@ -21,6 +21,7 @@ import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
 import { toastError } from "../../../lib/toast";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
+import { useScrollToKeyboard } from "../../../lib/scrollToKeyboard";
 
 const AUTOSAVE_DELAY_MS = 900;
 const CANVAS = "#faf8f6";
@@ -111,6 +112,22 @@ export default function NutritionToday() {
   const insets = useSafeAreaInsets();
   const today = todayInBoise();
   const access = useNutritionAccess(profile.id);
+  // automaticallyAdjustKeyboardInsets (previously on the ScrollView below)
+  // uses iOS's own native keyboard-tracking to reveal a focused field —
+  // accurate for the real keyboard, but confirmed on a real device that
+  // it's blind to KeyboardDoneButton's floating bar sitting on top of it
+  // (app/_layout.js): it scrolls the field flush against the real
+  // keyboard's edge with zero awareness that the bar then covers it right
+  // back up. Extra bottom padding doesn't fix this — the native behavior
+  // decides where to scroll based only on the real keyboard frame, not on
+  // how much scrollable content exists below it. Switched to the same
+  // manual measure-and-scroll approach already proven for supersets (see
+  // lib/scrollToKeyboard.js) instead.
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
+  const caloriesRef = useRef(null);
+  const notesRef = useRef(null);
 
   const [dateOffset, setDateOffset] = useState(0);
   const selectedDate = addDays(today, -dateOffset);
@@ -318,10 +335,14 @@ export default function NutritionToday() {
         <NutritionAccessMessage status="loading" />
       ) : (
         <ScrollView
+          ref={scrollViewRef}
           className="flex-1"
           contentContainerClassName="px-6 pb-8"
           keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
+          onScroll={(e) => {
+            scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
         >
           <TodayCardSlider
             slides={[
@@ -412,21 +433,21 @@ export default function NutritionToday() {
           </Text>
 
           <DailyLogCard color="#eef1e7" title="Log these first thing when you wake up">
-            <TargetField label="Weight" styleKey="weight" current={target?.weight_target} value={values.weight} onChangeText={(t) => update("weight", t)} />
+            <TargetField label="Weight" styleKey="weight" current={target?.weight_target} value={values.weight} onChangeText={(t) => update("weight", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             <View className="flex-row gap-3">
-              <TargetField label="Sleep (hrs)" styleKey="sleep" current={target?.sleep_hours_goal} flex value={values.sleep_hours} onChangeText={(t) => update("sleep_hours", t)} />
+              <TargetField label="Sleep (hrs)" styleKey="sleep" current={target?.sleep_hours_goal} flex value={values.sleep_hours} onChangeText={(t) => update("sleep_hours", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
               <RatingSelect label="Sleep quality (1-5)" flex value={values.sleep_quality} onChangeText={(t) => update("sleep_quality", t)} />
             </View>
           </DailyLogCard>
 
           <DailyLogCard color="#fdf6f2" title="Macros">
             <View className="flex-row gap-3">
-              <TargetField label="Protein (g)" styleKey="protein" current={target?.protein_g} flex value={values.protein_g} onChangeText={(t) => update("protein_g", t)} />
-              <TargetField label="Carb (g)" styleKey="carb" current={target?.carb_g} flex value={values.carb_g} onChangeText={(t) => update("carb_g", t)} />
+              <TargetField label="Protein (g)" styleKey="protein" current={target?.protein_g} flex value={values.protein_g} onChangeText={(t) => update("protein_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <TargetField label="Carb (g)" styleKey="carb" current={target?.carb_g} flex value={values.carb_g} onChangeText={(t) => update("carb_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             </View>
             <View className="mb-3 flex-row gap-3">
-              <TargetField label="Fat (g)" styleKey="fat" current={target?.fat_g} flex value={values.fat_g} onChangeText={(t) => update("fat_g", t)} />
-              <TargetField label="Fiber (g)" styleKey="fiber" current={target?.fiber_g} flex value={values.fiber_g} onChangeText={(t) => update("fiber_g", t)} />
+              <TargetField label="Fat (g)" styleKey="fat" current={target?.fat_g} flex value={values.fat_g} onChangeText={(t) => update("fat_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <TargetField label="Fiber (g)" styleKey="fiber" current={target?.fiber_g} flex value={values.fiber_g} onChangeText={(t) => update("fiber_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             </View>
 
             <Text className="mb-1" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
@@ -437,8 +458,10 @@ export default function NutritionToday() {
               Calories from Cronometer (optional)
             </Text>
             <TextInput
+              ref={caloriesRef}
               value={values.calories_override}
               onChangeText={(t) => update("calories_override", t)}
+              onFocus={() => scrollFieldIntoView(caloriesRef.current)}
               keyboardType="numeric"
               inputAccessoryViewID={NUMERIC_DONE_ID}
               placeholder="Leave blank to use calculated calories"
@@ -449,7 +472,7 @@ export default function NutritionToday() {
 
           <DailyLogCard color="#f4ede3" title="Activity">
             <View className="flex-row gap-3">
-              <TargetField label="Steps" styleKey="steps" current={target?.step_goal} flex value={values.steps} onChangeText={(t) => update("steps", t)} />
+              <TargetField label="Steps" styleKey="steps" current={target?.step_goal} flex value={values.steps} onChangeText={(t) => update("steps", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
               <RatingSelect label="Hunger (1-5)" flex value={values.hunger} onChangeText={(t) => update("hunger", t)} />
               <RatingSelect label="Energy (1-5)" flex value={values.energy} onChangeText={(t) => update("energy", t)} />
             </View>
@@ -459,8 +482,10 @@ export default function NutritionToday() {
             Notes
           </Text>
           <TextInput
+            ref={notesRef}
             value={values.client_note}
             onChangeText={(t) => update("client_note", t)}
+            onFocus={() => scrollFieldIntoView(notesRef.current)}
             multiline
             inputAccessoryViewID={NUMERIC_DONE_ID}
             className="mb-2 min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"

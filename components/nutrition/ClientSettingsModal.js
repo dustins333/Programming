@@ -7,6 +7,7 @@ import { getClientQuestions, addClientQuestion, updateClientQuestion, deleteClie
 import { todayInBoise, addDays } from "../../lib/boiseDate";
 import { SegmentedControl } from "../SegmentedControl";
 import { QuestionListEditor } from "./QuestionListEditor";
+import { KeyboardDoneButton } from "../KeyboardDoneButton";
 import { CheckinWeekTimeline } from "./CheckinWeekTimeline";
 import { CoachAssignmentField } from "./CoachAssignmentField";
 import { fonts, colors } from "../../lib/theme";
@@ -263,6 +264,7 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
           </View>
         </View>
       </View>
+      <KeyboardDoneButton />
     </Modal>
   );
 }

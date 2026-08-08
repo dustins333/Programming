@@ -17,6 +17,7 @@ import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
+import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
 const isWeb = Platform.OS === "web";
 
@@ -150,6 +151,11 @@ export default function Announcements() {
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  // KeyboardDoneButton floats above the keyboard on iOS (app/_layout.js) —
+  // extra bottom padding when it's showing keeps it from covering the
+  // Message field. See lib/scrollToKeyboard.js.
+  const keyboardHeight = useKeyboardHeight();
+  const extraKeyboardPadding = keyboardHeight > 0 ? DONE_BAR_HEIGHT : 0;
   const [audience, setAudience] = useState("all");
   const [targetGroupProgramId, setTargetGroupProgramId] = useState(null);
   const [timing, setTiming] = useState("now");
@@ -262,7 +268,7 @@ export default function Announcements() {
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1 bg-white px-8 py-8">
+      <ScrollView className="flex-1 bg-white px-8 pt-8" contentContainerStyle={{ paddingBottom: 32 + extraKeyboardPadding }}>
         {Platform.OS !== "web" ? (
           <Pressable
             onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/more"))}

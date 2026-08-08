@@ -3,6 +3,7 @@ import { Modal, View, Text, TextInput, Pressable } from "react-native";
 import { SessionDayPicker, resizeSessionDays } from "./SessionDayPicker";
 import { DEFAULT_SESSION_DAYS } from "../lib/programming/schedule";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
+import { KeyboardDoneButton } from "./KeyboardDoneButton";
 
 const DEFAULTS = { name: "", blockLengthWeeks: "4", sessionsPerWeek: "3", sessionDays: DEFAULT_SESSION_DAYS };
 
@@ -129,6 +130,7 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
           </View>
         </View>
       </View>
+      <KeyboardDoneButton />
     </Modal>
   );
 }

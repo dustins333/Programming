@@ -18,7 +18,14 @@ export function ZoomableImage({ uri, onClose }) {
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
 
+  // Called from inside .onEnd() gesture worklets below, which run on the UI
+  // thread — a plain JS function can't be called synchronously from there
+  // ("[Worklets] Tried to synchronously call a Remote Function"). Since
+  // this only touches shared values (no React state, nothing JS-thread-only),
+  // marking it a worklet directly is correct here, not runOnJS — that would
+  // just bounce back to the JS thread for no reason.
   const reset = () => {
+    "worklet";
     scale.value = withTiming(1);
     translateX.value = withTiming(0);
     translateY.value = withTiming(0);

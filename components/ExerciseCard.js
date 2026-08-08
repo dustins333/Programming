@@ -38,7 +38,7 @@ export function targetLineFor(item) {
 // SessionFocusModal's focus layout (forceExpanded keeps it permanently
 // populated, no header tap needed — see SessionFocusModal.js for why every
 // group's card has to mount immediately either way, not lazily).
-export function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle, hideVideo, forceExpanded, scrollViewRef }) {
+export function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle, hideVideo, forceExpanded, scrollViewRef, scrollOffsetRef }) {
   const targetSets = getTargetSets(item);
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
@@ -65,22 +65,27 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
   // saved today, which would otherwise immediately re-trigger the autosave
   // effect — this skips exactly that one load-triggered run, not any real edit.
   const skipAutosaveRef = useRef(true);
-  // Per-row reps/weight refs (keyed by index via callback refs, since rows
-  // is a dynamic-length array — hooks can't be created in a loop) plus one
-  // for notes, so a focused field can scroll itself above the keyboard. A
-  // single exercise's content is usually short enough to already be visible
-  // once the keyboard opens, but a superset's two stacked full cards often
-  // aren't — the second (bottom) exercise's fields can end up hidden behind
-  // the keyboard with nothing to bring them into view automatically.
-  // useScrollToKeyboard (lib/scrollToKeyboard.js) handles both the "keyboard
-  // already up, just switching fields" case (immediate call) and the "very
-  // first focus of the screen, keyboard frame not known yet" race (retried
-  // once keyboardDidShow actually fires) — see that file for why both are
-  // needed. Native only, same reasoning as before.
-  const repsRefs = useRef([]);
-  const weightRefs = useRef([]);
-  const notesRef = useRef(null);
-  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef);
+  // A single exercise's content is usually short enough to already be
+  // visible once the keyboard opens, but a superset's two stacked full
+  // cards often aren't — the second (bottom) exercise's fields can end up
+  // hidden behind the keyboard with nothing to bring them into view
+  // automatically. useScrollToKeyboard (lib/scrollToKeyboard.js) handles
+  // both the "keyboard already up, just switching fields" case (immediate
+  // call) and the "very first focus of the screen, keyboard frame not
+  // known yet" race (retried once keyboardDidShow actually fires) — see
+  // that file for why both are needed. Native only, same reasoning as
+  // before.
+  //
+  // The scroll target on focus is this whole card, not the specific field
+  // tapped — scrolling to just the field left the rest of the card (Notes,
+  // any sets below it) still hidden behind the keyboard, per direct
+  // feedback. If the card's taller than the space available above the
+  // keyboard it'll scroll as far as it can and simply not fit the top of
+  // the card on screen at the same time, which is the correct tradeoff
+  // here — the fields still being edited (further down the card) are what
+  // need to stay reachable, not the card's own heading.
+  const cardRef = useRef(null);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
 
   const loadOnFirstExpand = async () => {
     if (loaded.current) return;
@@ -168,6 +173,7 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
 
   return (
     <View
+      ref={cardRef}
       className="mb-2.5 rounded-2xl bg-white px-4"
       style={
         isExpanded
@@ -263,12 +269,9 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
                 <View className="flex-row items-center gap-2.5">
                   <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#78716c", width: 46 }}>Set {i + 1}</Text>
                   <TextInput
-                    ref={(el) => {
-                      repsRefs.current[i] = el;
-                    }}
                     value={row.reps}
                     onChangeText={(v) => updateRow(i, "reps", v)}
-                    onFocus={() => scrollFieldIntoView(repsRefs.current[i])}
+                    onFocus={() => scrollFieldIntoView(cardRef.current)}
                     placeholder={item.repScheme?.[i] ?? item.targetReps ?? "reps"}
                     keyboardType="numeric"
                     inputAccessoryViewID={NUMERIC_DONE_ID}
@@ -278,12 +281,9 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
                   />
                   <View className="flex-1" style={{ position: "relative" }}>
                     <TextInput
-                      ref={(el) => {
-                        weightRefs.current[i] = el;
-                      }}
                       value={row.weight}
                       onChangeText={(v) => updateRow(i, "weight", v)}
-                      onFocus={() => scrollFieldIntoView(weightRefs.current[i])}
+                      onFocus={() => scrollFieldIntoView(cardRef.current)}
                       placeholder="weight"
                       keyboardType="decimal-pad"
                       inputAccessoryViewID={NUMERIC_DONE_ID}
@@ -333,10 +333,9 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
 
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#78716c", marginBottom: 6 }}>Notes</Text>
           <TextInput
-            ref={notesRef}
             value={notes}
             onChangeText={setNotes}
-            onFocus={() => scrollFieldIntoView(notesRef.current)}
+            onFocus={() => scrollFieldIntoView(cardRef.current)}
             multiline
             inputAccessoryViewID={NUMERIC_DONE_ID}
             placeholder="How did it feel? Anything to remember for next time?"

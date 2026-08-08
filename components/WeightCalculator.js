@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 import { SegmentedControl } from "./SegmentedControl";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
+import { KeyboardDoneButton } from "./KeyboardDoneButton";
 
 const CARD_BORDER = "#ece7e1";
 
@@ -287,6 +288,7 @@ export function WeightCalculator({ visible, onClose, onInsert }) {
         </Pressable>
       </Pressable>
       </KeyboardAvoidingView>
+      <KeyboardDoneButton />
     </Modal>
   );
 }

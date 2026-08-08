@@ -327,6 +327,15 @@ export default function CoachMessagesInbox() {
   return (
     <CoachShell>
       <View style={{ flex: 1, backgroundColor: "#faf8f6" }}>
+        {!isWeb && !selectedUserId ? (
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/more"))}
+            className="px-6 pt-6"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+          </Pressable>
+        ) : null}
         <View className="flex-row items-center justify-between px-6 pb-2 pt-6">
           <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 26 }}>Messages</Text>
           <Pressable

@@ -18,6 +18,7 @@ import { CoachShell } from "../../components/CoachShell";
 import { AddStaffModal } from "../../components/AddStaffModal";
 import { TemplateEditorButton } from "../../components/nutrition/TemplateEditorButton";
 import { NUMERIC_DONE_ID } from "../../components/NumericInputAccessory";
+import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../lib/scrollToKeyboard";
 
 const LABELS = {
   alert_lead_time_days: "Alert lead time (days before a block ends)",
@@ -94,6 +95,11 @@ export default function Settings() {
   const [savingKey, setSavingKey] = useState(null);
   const [sendingPush, setSendingPush] = useState(false);
   const [notifValues, setNotifValues] = useState({});
+  // KeyboardDoneButton floats above the keyboard on iOS (app/_layout.js) —
+  // extra bottom padding when it's showing keeps it from covering whatever
+  // field is focused. See lib/scrollToKeyboard.js.
+  const keyboardHeight = useKeyboardHeight();
+  const extraKeyboardPadding = keyboardHeight > 0 ? DONE_BAR_HEIGHT : 0;
   const [savingNotifKey, setSavingNotifKey] = useState(null);
   const [coaches, setCoaches] = useState([]);
   const [savingPermKey, setSavingPermKey] = useState(null);
@@ -299,7 +305,7 @@ export default function Settings() {
 
   return (
     <CoachShell>
-    <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
+    <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 32 + extraKeyboardPadding, maxWidth: 640 }}>
       {Platform.OS !== "web" ? (
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/more"))}

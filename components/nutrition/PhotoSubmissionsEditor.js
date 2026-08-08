@@ -7,6 +7,7 @@ import { toastError } from "../../lib/toast";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
+import { KeyboardDoneButton } from "../KeyboardDoneButton";
 
 const isWeb = Platform.OS === "web";
 const ANGLES = ["front", "side", "back"];
@@ -242,6 +243,7 @@ export function PhotoSubmissionsEditor({ photosByDate, onSaved }) {
             />
           </Pressable>
         </Pressable>
+        <KeyboardDoneButton />
       </Modal>
     </>
   );

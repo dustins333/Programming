@@ -1,16 +1,25 @@
+import { useRef } from "react";
 import { View, Text, TextInput } from "react-native";
 import { MACRO_STYLES } from "./MacroPills";
 import { fonts } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
+import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
 
 // A labeled numeric input with the client's current target value shown as a
 // small colored pill next to the label — shared by the coach's "set new
 // target" form and the member's daily-log form, so both read the same
 // target-vs-what-you're-entering context. `current` is the target value (a
 // number) or null/undefined to hide the pill; `styleKey` picks the color
-// from MacroPills' shared palette.
-export function TargetField({ label, styleKey, current, pillLabel = "target", unit = "", value, onChangeText, flex, pct }) {
+// from MacroPills' shared palette. `scrollViewRef`/`scrollOffsetRef` are
+// optional — when the caller's screen relies on manual scroll-to-keyboard
+// (lib/scrollToKeyboard.js) instead of automaticallyAdjustKeyboardInsets
+// (which can't account for KeyboardDoneButton's floating bar — confirmed
+// on a real device it was leaving fields half-hidden behind it), passing
+// them wires this field into that same mechanism.
+export function TargetField({ label, styleKey, current, pillLabel = "target", unit = "", value, onChangeText, flex, pct, scrollViewRef, scrollOffsetRef }) {
   const s = MACRO_STYLES[styleKey];
+  const fieldRef = useRef(null);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
   return (
     // justify-end: when a sibling field in the same flex-row wraps its label
     // to a second line (e.g. a long target pill at a larger Dynamic Type
@@ -19,7 +28,7 @@ export function TargetField({ label, styleKey, current, pillLabel = "target", un
     // just leaves blank space below its own input instead of matching the
     // taller field's input position. Pushing each field's content to the
     // bottom keeps every input in the row level regardless of label wrap.
-    <View className={flex ? "mb-2 flex-1 justify-end" : "mb-2 justify-end"}>
+    <View ref={fieldRef} className={flex ? "mb-2 flex-1 justify-end" : "mb-2 justify-end"}>
       <View className="mb-1 flex-row flex-wrap items-center gap-1.5">
         <Text maxFontSizeMultiplier={1.3} className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
           {label}
@@ -39,6 +48,7 @@ export function TargetField({ label, styleKey, current, pillLabel = "target", un
         <TextInput
           value={value}
           onChangeText={onChangeText}
+          onFocus={() => scrollFieldIntoView(fieldRef.current)}
           keyboardType="decimal-pad"
           inputAccessoryViewID={NUMERIC_DONE_ID}
           className="flex-1 py-3 text-base"

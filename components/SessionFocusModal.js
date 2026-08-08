@@ -3,6 +3,7 @@ import { Modal, View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platfor
 import { Ionicons } from "@expo/vector-icons";
 import { ExerciseCard } from "./ExerciseCard";
 import { TimerControl } from "./TimerControl";
+import { KeyboardDoneButton } from "./KeyboardDoneButton";
 import { fonts, colors } from "../lib/theme";
 
 // The "focus card" view for My Fitness's logging page — one exercise (or
@@ -53,8 +54,12 @@ export function SessionFocusModal({
   // can scroll itself above the keyboard — see ExerciseCard's own comment
   // for why this is needed at all (a single exercise's content is usually
   // short enough to already be visible, a superset's two stacked cards
-  // often aren't).
+  // often aren't). scrollOffsetRef is tracked once here (see
+  // lib/scrollToKeyboard.js for why — RN has no synchronous way to read a
+  // ScrollView's current offset) and shared by every ExerciseCard instance,
+  // since they all scroll the same single ScrollView.
   const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
 
   useEffect(() => {
     if (visible) setFinalizeError(null);
@@ -136,7 +141,15 @@ export function SessionFocusModal({
             </View>
           ) : null}
 
-          <ScrollView ref={scrollViewRef} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            ref={scrollViewRef}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onScroll={(e) => {
+              scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
+          >
             {groups.map((group, i) => (
               <View key={group[0].id} style={{ display: i === focusIndex ? "flex" : "none" }}>
                 {group.length > 1 ? (
@@ -160,6 +173,7 @@ export function SessionFocusModal({
                         hideVideo={hideVideo}
                         forceExpanded
                         scrollViewRef={scrollViewRef}
+                        scrollOffsetRef={scrollOffsetRef}
                       />
                     ))}
                   </View>
@@ -173,6 +187,7 @@ export function SessionFocusModal({
                     hideVideo={hideVideo}
                     forceExpanded
                     scrollViewRef={scrollViewRef}
+                    scrollOffsetRef={scrollOffsetRef}
                   />
                 )}
               </View>
@@ -209,6 +224,7 @@ export function SessionFocusModal({
         </Pressable>
       </Pressable>
       </KeyboardAvoidingView>
+      <KeyboardDoneButton />
     </Modal>
   );
 }

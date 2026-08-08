@@ -16,6 +16,7 @@ import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
+import { KeyboardDoneButton } from "../../../components/KeyboardDoneButton";
 
 // Matches My Week/My Fitness/My History's shared canvas — the 4 nutrition
 // screens were left on plain white, which read as inconsistent with the
@@ -61,6 +62,7 @@ function PopupModal({ visible, title, onClose, children }) {
           <ScrollView contentContainerStyle={{ padding: 20 }}>{children}</ScrollView>
         </View>
       </View>
+      <KeyboardDoneButton />
     </Modal>
   );
 }
@@ -108,6 +110,7 @@ function SkipReasonModal({ visible, onClose, onSubmit }) {
           </View>
         </Pressable>
       </Pressable>
+      <KeyboardDoneButton />
     </Modal>
   );
 }

@@ -26,6 +26,7 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
+import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
 const ROW_LABEL_WIDTH = 130;
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
@@ -158,6 +159,11 @@ export default function SpcClientDetail() {
   const [coaches, setCoaches] = useState([]);
   const [blocks, setBlocks] = useState([]);
   const [latestBlockPreview, setLatestBlockPreview] = useState([]);
+  // KeyboardDoneButton floats above the keyboard on iOS (app/_layout.js) —
+  // extra bottom padding when it's showing keeps it from covering the
+  // Notes field. See lib/scrollToKeyboard.js.
+  const keyboardHeight = useKeyboardHeight();
+  const extraKeyboardPadding = keyboardHeight > 0 ? DONE_BAR_HEIGHT : 0;
   const [gridRows, setGridRows] = useState(null);
   const [exercisesByWorkout, setExercisesByWorkout] = useState({});
   const [notesDraft, setNotesDraft] = useState("");
@@ -389,7 +395,7 @@ export default function SpcClientDetail() {
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 960 }}>
+      <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 32 + extraKeyboardPadding, maxWidth: 960 }}>
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/spc"))}
           style={{ marginBottom: 18 }}

@@ -159,10 +159,11 @@ export default function ClientProfile() {
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
   // Handed to the Messages card so its compose box can scroll itself above
-  // the keyboard on focus — this page is one long ScrollView of cards, and
-  // KeyboardAvoidingView's own padding alone doesn't bring an
-  // already-scrolled-past card back into view. See MessageThread.js.
+  // the keyboard on focus — this page is one long ScrollView of cards.
+  // scrollOffsetRef is tracked here since RN has no synchronous way to read
+  // a ScrollView's current offset. See lib/scrollToKeyboard.js.
   const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
   const [lastSignInAt, setLastSignInAt] = useState(undefined);
   const [resending, setResending] = useState(false);
 
@@ -433,7 +434,16 @@ export default function ClientProfile() {
 
   return (
     <CoachShell>
-      <ScrollView ref={scrollViewRef} className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 900 }}>
+      <ScrollView
+        ref={scrollViewRef}
+        className="flex-1"
+        style={{ backgroundColor: "#faf8f6" }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 900 }}
+        onScroll={(e) => {
+          scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+      >
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/clients"))}
           style={{ marginBottom: 18 }}
@@ -650,6 +660,7 @@ export default function ClientProfile() {
             placeholder={`Message ${member.name}…`}
             onSend={handleSendMessage}
             scrollViewRef={scrollViewRef}
+            scrollOffsetRef={scrollOffsetRef}
           />
         </SettingsCard>
 

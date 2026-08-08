@@ -4,7 +4,7 @@ import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bo
 import { formatDateTimeInBoise } from "../lib/boiseDate";
 import { fonts, colors } from "../lib/theme";
 import { toastError } from "../lib/toast";
-import { useScrollToKeyboard, useKeyboardHeight } from "../lib/scrollToKeyboard";
+import { useScrollToKeyboard, useKeyboardHeight, DONE_BAR_HEIGHT } from "../lib/scrollToKeyboard";
 
 // Shared by the coach's per-client Messages card (clients/[userId].js), the
 // coach's Messages inbox thread pane, and the member's Messages screen —
@@ -47,11 +47,12 @@ export function MessageThread({
   maxHeight = 360,
   fill = false,
   scrollViewRef,
+  scrollOffsetRef,
 }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const composeRef = useRef(null);
-  const scrollComposeIntoView = useScrollToKeyboard(scrollViewRef);
+  const scrollComposeIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
   const keyboardHeight = useKeyboardHeight();
   // The tab bar's own space is always reserved in the layout — the
   // keyboard just visually covers it, RN never resizes the screen
@@ -66,7 +67,12 @@ export function MessageThread({
   // at all, where the fallback of 0 is exactly correct (no tab bar to
   // account for there).
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
-  const bottomPadding = Math.max(0, keyboardHeight - tabBarHeight);
+  // KeyboardDoneButton floats above the real keyboard whenever one's open
+  // (mounted at the app root) — it's invisible to this calculation unless
+  // added explicitly, same reasoning as lib/scrollToKeyboard.js's own use
+  // of DONE_BAR_HEIGHT.
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+  const bottomPadding = Math.max(0, occludedHeight - tabBarHeight);
 
   const handleSend = async () => {
     const text = draft.trim();

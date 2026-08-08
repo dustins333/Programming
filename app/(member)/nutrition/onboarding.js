@@ -13,6 +13,7 @@ import { supabase } from "../../../lib/supabase/client";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
+import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
 function StatusBadge({ done }) {
   return (
@@ -233,6 +234,11 @@ export default function NutritionOnboarding() {
   const [questions, setQuestions] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  // KeyboardDoneButton floats above the keyboard on iOS (app/_layout.js) —
+  // extra bottom padding when it's showing keeps it from covering the
+  // questionnaire answer field. See lib/scrollToKeyboard.js.
+  const keyboardHeight = useKeyboardHeight();
+  const extraKeyboardPadding = keyboardHeight > 0 ? DONE_BAR_HEIGHT : 0;
 
   const load = useCallback(async () => {
     try {
@@ -286,7 +292,7 @@ export default function NutritionOnboarding() {
 
   if (activeTask) {
     return (
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 20 }}>
+      <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6" contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: 32 + extraKeyboardPadding }}>
         <Pressable onPress={() => setActiveTask(null)} className="mb-4 self-start">
           <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
         </Pressable>
@@ -310,7 +316,7 @@ export default function NutritionOnboarding() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 20 }}>
+    <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6" contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: 32 + extraKeyboardPadding }}>
       <Pressable
         onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)/nutrition"))}
         className="mb-4 self-start"
