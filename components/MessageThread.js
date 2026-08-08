@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { useContext, useRef, useState } from "react";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { formatDateTimeInBoise } from "../lib/boiseDate";
 import { fonts, colors } from "../lib/theme";
 import { toastError } from "../lib/toast";
-import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
+import { useScrollToKeyboard, useKeyboardHeight } from "../lib/scrollToKeyboard";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 
 // Shared by the coach's per-client Messages card (clients/[userId].js), the
@@ -14,22 +15,28 @@ import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 // messages right-aligned with a tinted background for a quick visual
 // "that one's mine" cue.
 //
-// Two layout modes, since this renders inside two very different contexts:
+// Two layout modes, since this renders inside two very different contexts.
+// Both use useKeyboardHeight() (lib/scrollToKeyboard.js) instead of
+// KeyboardAvoidingView — confirmed on a real device that KeyboardAvoidingView's
+// automatic "padding" behavior breaks once nested a few levels deep inside a
+// Tabs-navigator screen (header, back link, name text all above it): the
+// compose box vanished into a large dead gap above the keyboard instead of
+// sitting right above it. Manually tracking the keyboard's real height and
+// applying it as explicit padding sidesteps that unreliable measurement.
 // - `fill` (the member's dedicated Messages screen, the coach inbox's
 //   thread pane): this component owns the whole remaining screen height.
 //   The message list is flex:1 and the compose row is a fixed sibling
-//   directly below it, both inside a flex:1 KeyboardAvoidingView — the
-//   standard chat-app pattern where opening the keyboard shrinks the list
-//   and the compose row is already pinned right above it, no manual scroll
-//   needed at all.
+//   directly below it — the standard chat-app pattern where opening the
+//   keyboard shrinks the list and the compose row is already pinned right
+//   above it, no manual scroll needed at all.
 // - default/embedded (the coach's per-client Messages card on
 //   clients/[userId].js, one card among many on a long page): the message
 //   list stays a fixed maxHeight and the whole thing sits inside the page's
-//   own ScrollView. KeyboardAvoidingView's padding alone doesn't bring an
+//   own ScrollView. The keyboard-height padding alone doesn't bring an
 //   already-scrolled-past compose box back into view here — a `scrollViewRef`
 //   pointed at that ancestor ScrollView lets the compose box scroll itself
 //   into view above the keyboard on focus, same technique ExerciseCard uses
-//   for superset logging (see lib/scrollToKeyboard.js).
+//   for superset logging.
 export function MessageThread({
   messages,
   loadError,
@@ -46,6 +53,21 @@ export function MessageThread({
   const [sending, setSending] = useState(false);
   const composeRef = useRef(null);
   const scrollComposeIntoView = useScrollToKeyboard(scrollViewRef);
+  const keyboardHeight = useKeyboardHeight();
+  // The tab bar's own space is always reserved in the layout — the
+  // keyboard just visually covers it, RN never resizes the screen
+  // container for it — so padding by the raw keyboard height double-counts
+  // that already-reserved space, leaving a dead gap between the compose
+  // box and the keyboard exactly the tab bar's height tall (confirmed on a
+  // real device). Subtracting it back out closes that gap. Read the
+  // context directly with a fallback rather than the public
+  // useBottomTabBarHeight() hook, which throws outside a Tabs navigator —
+  // this same component also renders on the coach's web layout
+  // (app/(coach)/_layout.web.js), which uses a plain <Slot/> with no Tabs
+  // at all, where the fallback of 0 is exactly correct (no tab bar to
+  // account for there).
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const bottomPadding = Math.max(0, keyboardHeight - tabBarHeight);
 
   const handleSend = async () => {
     const text = draft.trim();
@@ -62,7 +84,7 @@ export function MessageThread({
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={fill ? { flex: 1 } : undefined}>
+    <View style={fill ? { flex: 1, paddingBottom: bottomPadding } : { paddingBottom: bottomPadding }}>
       <View className="rounded-2xl border bg-white" style={fill ? { flex: 1, borderColor: "#ece7e1" } : { borderColor: "#ece7e1" }}>
         <ScrollView
           style={fill ? { flex: 1 } : { maxHeight }}
@@ -128,6 +150,6 @@ export function MessageThread({
           </Pressable>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
