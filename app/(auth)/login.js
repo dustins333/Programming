@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -17,8 +17,10 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const passwordRef = useRef(null);
 
   const handleSignIn = async () => {
+    if (!email || !password) return;
     setErrorMessage(null);
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -53,6 +55,9 @@ export default function Login() {
           autoComplete="email"
           keyboardType="email-address"
           textContentType="emailAddress"
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
           className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
           style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
         />
@@ -61,12 +66,15 @@ export default function Login() {
           Password
         </Text>
         <TextInput
+          ref={passwordRef}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
           autoCapitalize="none"
           autoComplete="password"
           textContentType="password"
+          returnKeyType="go"
+          onSubmitEditing={handleSignIn}
           className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
           style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
         />

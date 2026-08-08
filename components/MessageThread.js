@@ -5,7 +5,6 @@ import { formatDateTimeInBoise } from "../lib/boiseDate";
 import { fonts, colors } from "../lib/theme";
 import { toastError } from "../lib/toast";
 import { useScrollToKeyboard, useKeyboardHeight } from "../lib/scrollToKeyboard";
-import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 
 // Shared by the coach's per-client Messages card (clients/[userId].js), the
 // coach's Messages inbox thread pane, and the member's Messages screen —
@@ -132,11 +131,11 @@ export function MessageThread({
             value={draft}
             onChangeText={setDraft}
             onFocus={() => scrollComposeIntoView(composeRef.current)}
+            onSubmitEditing={handleSend}
             placeholder={placeholder}
-            multiline
-            inputAccessoryViewID={NUMERIC_DONE_ID}
+            returnKeyType="send"
             className="flex-1 rounded-lg border border-stone-300 px-3 py-2"
-            style={{ fontFamily: fonts.sans, fontSize: 13.5, maxHeight: 90 }}
+            style={{ fontFamily: fonts.sans, fontSize: 13.5 }}
           />
           <Pressable
             onPress={handleSend}
