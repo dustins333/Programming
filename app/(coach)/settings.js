@@ -378,6 +378,7 @@ export default function Settings() {
         canViewSpc: field === "can_view_spc" ? value : undefined,
         canViewNutrition: field === "can_view_nutrition" ? value : undefined,
         canViewExerciseLibrary: field === "can_view_exercise_library" ? value : undefined,
+        canLogOpsHours: field === "can_log_ops_hours" ? value : undefined,
       });
     } catch (err) {
       setCoaches((cs) => cs.map((c) => (c.id === coach.id ? { ...c, [field]: !value } : c)));
@@ -515,16 +516,17 @@ export default function Settings() {
               ) : (
                 <View className="mt-2 gap-2.5">
                   {[
-                    { field: "can_view_spc", label: "SPC" },
-                    { field: "can_view_nutrition", label: "Nutrition" },
-                    { field: "can_view_exercise_library", label: "Exercise Library" },
-                  ].map(({ field, label }) => (
+                    { field: "can_view_spc", label: "SPC", defaultValue: true },
+                    { field: "can_view_nutrition", label: "Nutrition", defaultValue: true },
+                    { field: "can_view_exercise_library", label: "Exercise Library", defaultValue: true },
+                    { field: "can_log_ops_hours", label: "Ops Hours", defaultValue: false },
+                  ].map(({ field, label, defaultValue }) => (
                     <View key={field} className="flex-row items-center justify-between">
                       <Text className="text-sm text-stone-600" style={{ fontFamily: fonts.sans }}>
                         {label}
                       </Text>
                       <Switch
-                        value={coach[field] ?? true}
+                        value={coach[field] ?? defaultValue}
                         onValueChange={(v) => handleTogglePermission(coach, field, v)}
                         disabled={savingPermKey === `${coach.id}:${field}`}
                         trackColor={{ false: "#e7e5e4", true: "#4d6142" }}

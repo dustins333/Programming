@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { formatMoney } from "../../lib/payroll/calc";
-import { formatDateMD } from "../../lib/formatDate";
+import { entriesForCategory, formatMoney } from "../../lib/payroll/calc";
+import { formatDateMD, formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
+import { PayrollBottomSheet } from "./PayrollBottomSheet";
 
 const isWeb = Platform.OS === "web";
 
@@ -60,15 +62,30 @@ const ROWS = [
 ];
 
 // Mirrors the real Glide Payroll Report screen's category-by-category
-// layout (amount + a count/hours side by side per row).
-export function CategoryBreakdown({ totals }) {
+// layout (amount + a count/hours side by side per row). `entries`/
+// `rateMaps` are optional — when provided, every row becomes tappable and
+// opens a popup listing every individual date/entry that summed to that
+// row's total ("tap Group, see every date and quantity that period").
+// Reused as-is by the admin per-coach drill-down popup (D6), which just
+// passes that one coach's own entries instead of the viewer's own.
+export function CategoryBreakdown({ totals, entries, rateMaps }) {
+  const [openCategoryKey, setOpenCategoryKey] = useState(null);
+  const drillable = Boolean(entries && rateMaps);
+  const openRow = ROWS.find((r) => r.key === openCategoryKey);
+  const drillItems = openRow && drillable ? entriesForCategory(entries, openRow.key, rateMaps) : [];
+
   return (
     <View className="max-w-md rounded-2xl border border-stone-200 p-5">
       {ROWS.map((row) => {
         const amount = totals[row.amountKey] || 0;
         if (!amount && (!row.countKey || !totals[row.countKey])) return null;
+        const RowWrapper = drillable ? Pressable : View;
         return (
-          <View key={row.key} className="mb-3 flex-row items-center justify-between">
+          <RowWrapper
+            key={row.key}
+            className="mb-3 flex-row items-center justify-between"
+            {...(drillable ? { onPress: () => setOpenCategoryKey(row.key) } : {})}
+          >
             <View>
               <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
                 {row.label}
@@ -79,8 +96,11 @@ export function CategoryBreakdown({ totals }) {
                 </Text>
               ) : null}
             </View>
-            <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{formatMoney(amount)}</Text>
-          </View>
+            <View className="flex-row items-center gap-1.5">
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{formatMoney(amount)}</Text>
+              {drillable ? <Ionicons name="chevron-forward" size={14} color="#d6d3d1" /> : null}
+            </View>
+          </RowWrapper>
         );
       })}
       <View className="mt-2 flex-row items-center justify-between border-t border-stone-200 pt-3">
@@ -89,6 +109,32 @@ export function CategoryBreakdown({ totals }) {
           {formatMoney(totals.total)}
         </Text>
       </View>
+
+      {drillable ? (
+        <PayrollBottomSheet visible={Boolean(openCategoryKey)} onClose={() => setOpenCategoryKey(null)} title={openRow?.label || ""}>
+          {drillItems.length === 0 ? (
+            <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Nothing logged for this period.
+            </Text>
+          ) : (
+            drillItems.map((item, i) => (
+              <View
+                key={`${item.date}-${i}`}
+                className="mb-2 flex-row items-center justify-between rounded-xl bg-white px-4 py-3"
+                style={{ borderWidth: 1, borderColor: "#ece7e1" }}
+              >
+                <View>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>{formatDateMDY(item.date)}</Text>
+                  <Text className="mt-0.5 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                    {item.quantityLabel}
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>{formatMoney(item.amount)}</Text>
+              </View>
+            ))
+          )}
+        </PayrollBottomSheet>
+      ) : null}
     </View>
   );
 }

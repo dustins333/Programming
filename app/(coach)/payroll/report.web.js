@@ -1,62 +1,44 @@
-import { useState, useCallback } from "react";
-import { View, Text, ScrollView, ActivityIndicator } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useState, useEffect } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { useOwnReport } from "../../../lib/payroll/useOwnReport";
-import { listEntriesForPeriodAllStaff } from "../../../lib/payroll/entries";
-import { computeTotalsByStaff, formatMoney } from "../../../lib/payroll/calc";
+import { computePeriodEnd, isPeriodClosed } from "../../../lib/payroll/periods";
+import { getOwnFinalization, isLocked as isFinalizationLocked } from "../../../lib/payroll/finalizations";
 import { fonts, colors } from "../../../lib/theme";
-import { toastError } from "../../../lib/toast";
 import { CoachShell } from "../../../components/CoachShell";
 import { PayrollTabBar } from "../../../components/PayrollTabBar";
 import { PeriodPicker, CategoryBreakdown } from "../../../components/payroll/PayrollReportPieces";
+import { FinalizeModal } from "../../../components/payroll/FinalizeModal";
 
-// Mirrors the real Glide all-employee grid (screenshot): Employee | Group |
-// Admin | Ops | SPC | SSesh | Programs | Welcome | Other | Custom | Total.
-const GRID_COLUMNS = [
-  { key: "groupAmount", label: "Group" },
-  { key: "adminAmount", label: "Admin" },
-  { key: "opsAmount", label: "Ops" },
-  { key: "spcAmount", label: "SPC" },
-  { key: "strategyAmount", label: "SSesh" },
-  { key: "programsAmount", label: "Programs" },
-  { key: "welcomeAmount", label: "Welcome" },
-  { key: "otherAmount", label: "Other" },
-  { key: "customAmount", label: "Custom" },
-];
-
+// Own-pay report only — no admin all-employee section here anymore. Admin
+// View has its own dedicated Report tab (admin/report.web.js) so an
+// admin's personal pay never mixes with the staff-wide report on the same
+// page, per explicit ask.
 export default function PayrollReportWeb() {
   const { profile } = useAuth();
-  const isAdmin = profile?.role === "admin";
   const report = useOwnReport(profile?.id);
 
-  const [allStaffTotals, setAllStaffTotals] = useState([]);
-  const [loadingAll, setLoadingAll] = useState(false);
+  const [finalization, setFinalization] = useState(null);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
 
-  const loadAllStaff = useCallback(async () => {
-    if (!isAdmin || !report.selectedPeriod) return;
-    setLoadingAll(true);
-    try {
-      const entries = await listEntriesForPeriodAllStaff(report.selectedPeriod);
-      setAllStaffTotals(computeTotalsByStaff(entries, report.rateMaps).sort((a, b) => (a.staffName || "").localeCompare(b.staffName || "")));
-    } catch (err) {
-      toastError("Failed to load all-employee totals", err);
-    } finally {
-      setLoadingAll(false);
-    }
-  }, [isAdmin, report.selectedPeriod, report.rateMaps]);
+  useEffect(() => {
+    if (!profile?.id || !report.selectedPeriod) return;
+    let cancelled = false;
+    getOwnFinalization(profile.id, report.selectedPeriod).then((f) => {
+      if (!cancelled) setFinalization(f);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, report.selectedPeriod]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadAllStaff();
-    }, [loadAllStaff])
-  );
-
-  const grandTotal = allStaffTotals.reduce((sum, s) => sum + s.totals.total, 0);
+  const currentPeriodRow = report.periodOptions.find((p) => p.start_date === report.selectedPeriod);
+  const closed = isPeriodClosed(currentPeriodRow);
+  const locked = isFinalizationLocked(finalization) || closed;
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1 bg-white px-8 pt-8" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ backgroundColor: colors.canvas }} className="flex-1 px-8 pt-8" contentContainerStyle={{ paddingBottom: 40 }}>
         <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
           Payroll
         </Text>
@@ -68,56 +50,45 @@ export default function PayrollReportWeb() {
         {report.periodOptions.length > 0 && report.selectedPeriod ? (
           <PeriodPicker options={report.periodOptions} selected={report.selectedPeriod} onChange={report.changePeriod} />
         ) : null}
-        {report.loading ? <ActivityIndicator color={colors.primary} /> : <CategoryBreakdown totals={report.totals} />}
-
-        {isAdmin ? (
-          <View className="mt-10">
-            <Text className="mb-1 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-              All employees
-            </Text>
-            <Text className="mb-4" style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
-              Total payroll: {formatMoney(grandTotal)}
-            </Text>
-
-            {loadingAll ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : allStaffTotals.length === 0 ? (
-              <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                Nobody has logged anything for this period yet.
-              </Text>
+        {report.loading ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : (
+          <>
+            <CategoryBreakdown totals={report.totals} entries={report.entries} rateMaps={report.rateMaps} />
+            {!locked ? (
+              <Pressable
+                onPress={() => setFinalizeOpen(true)}
+                disabled={report.entries.length === 0}
+                className="mt-4 max-w-md items-center rounded-lg px-5 py-3"
+                style={{ backgroundColor: colors.primary, opacity: report.entries.length === 0 ? 0.5 : 1 }}
+              >
+                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                  Finalize
+                </Text>
+              </Pressable>
             ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator style={{ borderWidth: 1, borderColor: "#e7e5e4", borderRadius: 12 }}>
-                <View>
-                  <View className="flex-row border-b border-stone-200 bg-stone-50 px-3 py-2.5">
-                    <Text style={{ width: 160, fontFamily: fonts.sansSemiBold, color: "#78716c", fontSize: 12 }}>Employee</Text>
-                    {GRID_COLUMNS.map((c) => (
-                      <Text key={c.key} style={{ width: 100, fontFamily: fonts.sansSemiBold, color: "#78716c", fontSize: 12 }}>
-                        {c.label}
-                      </Text>
-                    ))}
-                    <Text style={{ width: 100, fontFamily: fonts.sansSemiBold, color: "#78716c", fontSize: 12 }}>Total</Text>
-                  </View>
-                  {allStaffTotals.map((s) => (
-                    <View key={s.key} className="flex-row border-b border-stone-100 px-3 py-2.5">
-                      <Text style={{ width: 160, fontFamily: fonts.sansMedium, color: "#44403c", fontSize: 13 }} numberOfLines={1}>
-                        {s.staffName}
-                      </Text>
-                      {GRID_COLUMNS.map((c) => (
-                        <Text key={c.key} style={{ width: 100, fontFamily: fonts.sans, color: "#57534e", fontSize: 13 }}>
-                          {formatMoney(s.totals[c.key] || 0)}
-                        </Text>
-                      ))}
-                      <Text style={{ width: 100, fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>
-                        {formatMoney(s.totals.total)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </ScrollView>
+              <Text className="mt-4 max-w-md text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                {closed ? "This pay period is closed." : "You've finalized this period."}
+              </Text>
             )}
-          </View>
-        ) : null}
+          </>
+        )}
       </ScrollView>
+
+      <FinalizeModal
+        visible={finalizeOpen}
+        onClose={() => setFinalizeOpen(false)}
+        onFinalized={async () => {
+          const f = await getOwnFinalization(profile.id, report.selectedPeriod);
+          setFinalization(f);
+          await report.changePeriod(report.selectedPeriod);
+        }}
+        profile={profile}
+        periodStart={report.selectedPeriod}
+        periodEnd={report.selectedPeriod ? computePeriodEnd(report.selectedPeriod) : null}
+        entries={report.entries}
+        rateMaps={report.rateMaps}
+      />
     </CoachShell>
   );
 }

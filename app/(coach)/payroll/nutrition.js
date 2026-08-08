@@ -17,8 +17,6 @@ import { CoachShell } from "../../../components/CoachShell";
 import { PayrollTabBar } from "../../../components/PayrollTabBar";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 
-const isWeb = Platform.OS === "web";
-
 export default function PayrollNutrition() {
   const { profile } = useAuth();
   const router = useRouter();
@@ -27,9 +25,8 @@ export default function PayrollNutrition() {
   const [clients, setClients] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedClientId, setSelectedClientId] = useState("");
-  const [billingDay, setBillingDay] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [newDayByClient, setNewDayByClient] = useState({});
+  const [addingClientId, setAddingClientId] = useState(null);
   const [editingDay, setEditingDay] = useState({});
 
   const load = useCallback(async () => {
@@ -58,28 +55,26 @@ export default function PayrollNutrition() {
   const assignedClientIds = new Set(assignments.map((a) => a.client_id));
   const unassignedClients = clients.filter((c) => !assignedClientIds.has(c.id));
 
-  const handleAdd = async () => {
-    const day = Number(billingDay);
-    if (!selectedClientId) {
-      toastError("Pick a client");
-      return;
-    }
+  const handleCheckClient = async (client) => {
+    const day = Number(newDayByClient[client.id]);
     if (!Number.isFinite(day) || day < 1 || day > 31) {
       toastError("Billing day must be between 1 and 31");
       return;
     }
-    const client = clients.find((c) => c.id === selectedClientId);
-    setSubmitting(true);
+    setAddingClientId(client.id);
     try {
       await addNutritionAssignment(profile.id, client, day);
       toastSuccess(`${client.name} added`);
-      setSelectedClientId("");
-      setBillingDay("");
+      setNewDayByClient((prev) => {
+        const next = { ...prev };
+        delete next[client.id];
+        return next;
+      });
       await load();
     } catch (err) {
       toastError("Failed to add", err);
     } finally {
-      setSubmitting(false);
+      setAddingClientId(null);
     }
   };
 
@@ -116,9 +111,9 @@ export default function PayrollNutrition() {
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1 bg-white px-8 pt-8" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ backgroundColor: colors.canvas }} className="flex-1 px-8 pt-8" contentContainerStyle={{ paddingBottom: 40 }}>
         {Platform.OS !== "web" ? (
-          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/payroll"))} className="mb-4 self-start">
+          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/payroll/entries"))} className="mb-4 self-start">
             <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
           </Pressable>
         ) : null}
@@ -137,63 +132,45 @@ export default function PayrollNutrition() {
         ) : (
           <>
             {unassignedClients.length > 0 ? (
-              <View className="mb-8 max-w-xl rounded-2xl border border-stone-200 p-5">
-                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                  Client
+              <View className="mb-8 max-w-xl">
+                <Text className="mb-3 text-sm text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
+                  Needs a billing day
                 </Text>
-                {isWeb ? (
-                  <select
-                    value={selectedClientId}
-                    onChange={(e) => setSelectedClientId(e.target.value)}
-                    style={{ fontFamily: fonts.sans, fontSize: 14, padding: "8px 10px", borderRadius: 8, border: "1px solid #d6d3d1", marginBottom: 12 }}
-                  >
-                    <option value="">Select a client…</option>
-                    {unassignedClients.map((c) => (
-                      <option key={c.id} value={c.id}>
+                {unassignedClients.map((c) => {
+                  const day = newDayByClient[c.id] ?? "";
+                  const validDay = Number.isFinite(Number(day)) && Number(day) >= 1 && Number(day) <= 31;
+                  return (
+                    <View
+                      key={c.id}
+                      className="mb-2 flex-row items-center justify-between rounded-xl bg-white px-4 py-3"
+                      style={{ borderWidth: 1, borderColor: "#ece7e1" }}
+                    >
+                      <Text className="flex-1 pr-3" style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
                         {c.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <View className="mb-3 flex-row flex-wrap gap-2">
-                    {unassignedClients.map((c) => {
-                      const active = c.id === selectedClientId;
-                      return (
-                        <Pressable
-                          key={c.id}
-                          onPress={() => setSelectedClientId(c.id)}
-                          className="rounded-full border px-3 py-2"
-                          style={{ borderColor: active ? colors.primary : "#d6d3d1", backgroundColor: active ? "#fdf6f2" : "white" }}
-                        >
-                          <Text style={{ fontFamily: fonts.sansMedium, color: active ? colors.primaryOnWhite : "#57534e", fontSize: 13 }}>{c.name}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                )}
-
-                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                  Billing day of month
-                </Text>
-                <TextInput
-                  value={billingDay}
-                  onChangeText={setBillingDay}
-                  placeholder="e.g. 11"
-                  keyboardType="decimal-pad"
-                  inputAccessoryViewID={NUMERIC_DONE_ID}
-                  className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
-                  style={{ fontFamily: fonts.sans, maxWidth: 120 }}
-                />
-                <Pressable
-                  onPress={handleAdd}
-                  disabled={submitting}
-                  className="items-center self-start rounded-lg px-5 py-3"
-                  style={{ backgroundColor: colors.primary, opacity: submitting ? 0.6 : 1 }}
-                >
-                  <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                    {submitting ? "Adding…" : "Add client"}
-                  </Text>
-                </Pressable>
+                      </Text>
+                      <TextInput
+                        value={day}
+                        onChangeText={(v) => setNewDayByClient((prev) => ({ ...prev, [c.id]: v }))}
+                        placeholder="Day"
+                        keyboardType="decimal-pad"
+                        inputAccessoryViewID={NUMERIC_DONE_ID}
+                        className="mr-3 rounded-lg border border-stone-300 px-2.5 py-1.5"
+                        style={{ fontFamily: fonts.sans, width: 56, textAlign: "center" }}
+                      />
+                      <Pressable
+                        onPress={() => validDay && handleCheckClient(c)}
+                        disabled={!validDay || addingClientId === c.id}
+                        hitSlop={8}
+                      >
+                        <Ionicons
+                          name={addingClientId === c.id ? "hourglass-outline" : "checkbox-outline"}
+                          size={22}
+                          color={validDay ? colors.primary : "#d6d3d1"}
+                        />
+                      </Pressable>
+                    </View>
+                  );
+                })}
               </View>
             ) : null}
 

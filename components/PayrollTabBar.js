@@ -8,12 +8,14 @@ import { fonts, colors } from "../lib/theme";
 // settings.js/nutrition's client-detail TabBar, just navigating between
 // real routes instead of local state. CoachShell only ever shows one
 // "Payroll" nav entry; this is what makes the sub-screens feel connected.
+// Pay Periods no longer lives here — Admin View is a separate mode
+// entirely (see app/(coach)/payroll/index.js's mode picker and
+// AdminPayrollTabBar), not a 5th tab mixed into the staff experience.
 const ALL_TABS = [
-  { key: "entries", label: "My Entries", href: "/(coach)/payroll" },
+  { key: "entries", label: "My Entries", href: "/(coach)/payroll/entries" },
   { key: "requests", label: "Requests", href: "/(coach)/payroll/requests" },
   { key: "nutrition", label: "1:1 Nutrition", href: "/(coach)/payroll/nutrition", permission: "can_view_nutrition" },
   { key: "report", label: "Report", href: "/(coach)/payroll/report" },
-  { key: "periods", label: "Pay Periods", href: "/(coach)/payroll/periods", adminOnly: true },
 ];
 
 function stripGroups(href) {
