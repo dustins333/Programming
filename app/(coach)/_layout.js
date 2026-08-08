@@ -57,6 +57,7 @@ export default function CoachLayout() {
       {/* Routable but not shown as their own tab — reached via Programs/More. */}
       <Tabs.Screen name="blocks" options={{ href: null }} />
       <Tabs.Screen name="messages" options={{ href: null }} />
+      <Tabs.Screen name="payroll" options={{ href: null }} />
       <Tabs.Screen name="spc" options={{ href: null }} />
       <Tabs.Screen name="builder" options={{ href: null }} />
       <Tabs.Screen name="exercises" options={{ href: null }} />

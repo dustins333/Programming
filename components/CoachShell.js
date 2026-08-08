@@ -11,6 +11,11 @@ const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", href: "/(coach)", icon: "home" },
   { key: "clients", label: "Clients", href: "/(coach)/clients", icon: "people" },
   { key: "messages", label: "Messages", href: "/(coach)/messages", icon: "chatbubbles" },
+  // No permission gate — every coach logs their own hours, unlike the
+  // optional SPC/Nutrition/Exercise Library modules below. The entry form
+  // itself still filters which categories it shows per coach (SPC/Programs
+  // gated on can_view_spc, Ops Hours on can_log_ops_hours).
+  { key: "payroll", label: "Payroll", href: "/(coach)/payroll", icon: "cash" },
   { key: "blocks", label: "Group Programs", href: "/(coach)/blocks", icon: "barbell" },
   { key: "spc", label: "SPC", href: "/(coach)/spc", icon: "clipboard", permission: "can_view_spc" },
   { key: "nutrition", label: "Nutrition", href: "/(coach)/nutrition", icon: "restaurant", permission: "can_view_nutrition" },

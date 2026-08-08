@@ -55,6 +55,19 @@ export default function More() {
         </Pressable>
       ) : null}
 
+      {/* No permission gate — every coach logs their own hours here. */}
+      <Pressable
+        onPress={() => router.push("/(coach)/payroll")}
+        className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+      >
+        <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+          Payroll
+        </Text>
+        <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Log hours, view your pay
+        </Text>
+      </Pressable>
+
       {/* Every coach/admin account is also a real training client — jumps
           into the same member tab experience any client uses, reading this
           account's own program data. The member tabs' staff-only
