@@ -11,6 +11,7 @@ import {
   markThreadReadByStaff,
   markThreadUnreadByStaff,
 } from "../../../lib/programming/messages";
+import { getMessagingSettings } from "../../../lib/programming/messagingSettings";
 import { sendPush } from "../../../lib/notifications/sendPush";
 import { MessageThread } from "../../../components/MessageThread";
 import { CoachShell } from "../../../components/CoachShell";
@@ -163,6 +164,11 @@ export default function CoachMessagesInbox() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [messages, setMessages] = useState(null);
   const [messagesError, setMessagesError] = useState(null);
+  // Fallback safety net, same as app/(member)/messages.js — the nav items
+  // that link here (CoachShell's sidebar, more.js) already hide themselves
+  // when messaging's off, but this route is still directly reachable.
+  // Starts true so there's no flash before the real check resolves.
+  const [messagingEnabled, setMessagingEnabled] = useState(true);
 
   const loadSummaries = useCallback(async () => {
     try {
@@ -179,6 +185,9 @@ export default function CoachMessagesInbox() {
   useFocusEffect(
     useCallback(() => {
       loadSummaries();
+      getMessagingSettings()
+        .then((s) => setMessagingEnabled(s.enabled))
+        .catch((err) => console.error("Failed to load messaging settings:", err));
     }, [loadSummaries])
   );
 
@@ -238,6 +247,21 @@ export default function CoachMessagesInbox() {
       }
     }
   };
+
+  if (!messagingEnabled) {
+    return (
+      <CoachShell>
+        <View className="flex-1 items-center justify-center bg-white px-6">
+          <Text className="mb-1 text-center" style={{ fontFamily: fonts.sansSemiBold, fontSize: 16 }}>
+            Messaging is currently turned off
+          </Text>
+          <Text className="text-center text-stone-500" style={{ fontFamily: fonts.sans }}>
+            Turn it back on from Settings → Messaging.
+          </Text>
+        </View>
+      </CoachShell>
+    );
+  }
 
   const coachNameById = new Map(coaches.map((c) => [c.id, c.name]));
 

@@ -15,6 +15,7 @@ import { listOneOffWorkoutsForUser, createOneOffFromTemplate, deleteOneOffWorkou
 import { listCompletedOneOffWorkoutIds } from "../../../lib/programming/sessionCompletions";
 import { listRecentSessionsForUser } from "../../../lib/programming/coachLogs";
 import { listMessages, sendStaffMessage } from "../../../lib/programming/messages";
+import { getMessagingSettings, deriveMessagingScopes, matchesMessagingAudience } from "../../../lib/programming/messagingSettings";
 import { sendPush } from "../../../lib/notifications/sendPush";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -156,6 +157,7 @@ export default function ClientProfile() {
   const [recentSessions, setRecentSessions] = useState([]);
   const [messages, setMessages] = useState(null);
   const [messagesError, setMessagesError] = useState(null);
+  const [messagingSettings, setMessagingSettings] = useState(null);
   const [coaches, setCoaches] = useState([]);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -229,6 +231,16 @@ export default function ClientProfile() {
         setCoaches(await listCoaches());
       } catch {
         setCoaches([]);
+      }
+
+      // Admin kill switch/audience (lib/programming/messagingSettings.js) —
+      // gates the Messages card below. Isolated the same way, defaults to
+      // hidden on failure.
+      try {
+        setMessagingSettings(await getMessagingSettings());
+      } catch (err) {
+        console.error("Failed to load messaging settings:", err);
+        setMessagingSettings({ enabled: false, audience: [] });
       }
 
       // Isolated the same way — migration 0032 might not be run yet on a
@@ -391,6 +403,18 @@ export default function ClientProfile() {
   };
 
   const coachNameById = new Map(coaches.map((c) => [c.id, c.name]));
+  // Gates the inline Messages card below — reuses the assignments/spcActive/
+  // nutritionActive already loaded/computed on this page instead of a
+  // second scope-resolving fetch (unlike CoachMessageBubble, which is
+  // self-contained and does its own).
+  const messagingScopes = deriveMessagingScopes({
+    groupProgramIds: assignments.map((a) => a.group_program_id),
+    spcActive,
+    nutritionActive,
+  });
+  const messagingEnabled = Boolean(
+    messagingSettings && messagingSettings.enabled && matchesMessagingAudience(messagingSettings.audience, messagingScopes)
+  );
 
   if (loadError) {
     return (
@@ -649,21 +673,23 @@ export default function ClientProfile() {
           <RecentSessionsCard userId={userId} sessions={recentSessions} />
         </SettingsCard>
 
-        <SettingsCard icon="chatbubble-outline" title="Messages">
-          <MessageThread
-            messages={messages}
-            loadError={messagesError}
-            onRetry={loadMessages}
-            isOwnMessage={(m) => m.sender_role === "staff"}
-            labelFor={(m) =>
-              m.sender_role === "member" ? member.name : m.sender_id === profile.id ? "You" : coachNameById.get(m.sender_id) ?? "Coach"
-            }
-            placeholder={`Message ${member.name}…`}
-            onSend={handleSendMessage}
-            scrollViewRef={scrollViewRef}
-            scrollOffsetRef={scrollOffsetRef}
-          />
-        </SettingsCard>
+        {messagingEnabled ? (
+          <SettingsCard icon="chatbubble-outline" title="Messages">
+            <MessageThread
+              messages={messages}
+              loadError={messagesError}
+              onRetry={loadMessages}
+              isOwnMessage={(m) => m.sender_role === "staff"}
+              labelFor={(m) =>
+                m.sender_role === "member" ? member.name : m.sender_id === profile.id ? "You" : coachNameById.get(m.sender_id) ?? "Coach"
+              }
+              placeholder={`Message ${member.name}…`}
+              onSend={handleSendMessage}
+              scrollViewRef={scrollViewRef}
+              scrollOffsetRef={scrollOffsetRef}
+            />
+          </SettingsCard>
+        ) : null}
 
         <AssignOneOffModal
           visible={assignModalVisible}

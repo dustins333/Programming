@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../lib/auth/AuthProvider";
 import { getUser, listCoaches } from "../lib/programming/clients";
 import { listMessages, sendStaffMessage, markThreadReadByStaff } from "../lib/programming/messages";
+import { isMessagingEnabledForUser } from "../lib/programming/messagingSettings";
 import { sendPush } from "../lib/notifications/sendPush";
 import { MessageThread } from "./MessageThread";
 import { fonts, colors } from "../lib/theme";
@@ -28,6 +29,13 @@ import { fonts, colors } from "../lib/theme";
 // everything underneath it, including the tab bar, even with
 // pointerEvents="box-none"). Only the opened-thread Modal below is a real
 // Modal, deliberately — blocking the screen while it's open is the point.
+//
+// Also gated on the admin-configured messaging kill switch/audience
+// (lib/programming/messagingSettings.js) — checked against THIS SPECIFIC
+// CLIENT's own memberships (group/SPC/nutrition), not the coach's. A client
+// who's only enrolled in a scope the admin has messaging turned off for
+// won't show this button on any of their pages. Starts hidden (`enabled`
+// null) until the check resolves.
 export function CoachMessageBubble({ userId, clientName }) {
   const { profile } = useAuth();
   const insets = useSafeAreaInsets();
@@ -36,6 +44,17 @@ export function CoachMessageBubble({ userId, clientName }) {
   const [coaches, setCoaches] = useState([]);
   const [messages, setMessages] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [enabled, setEnabled] = useState(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    isMessagingEnabledForUser(userId)
+      .then(setEnabled)
+      .catch((err) => {
+        console.error("Failed to check messaging settings:", err);
+        setEnabled(false);
+      });
+  }, [userId]);
 
   const load = async () => {
     try {
@@ -75,7 +94,7 @@ export function CoachMessageBubble({ userId, clientName }) {
   const coachNameById = new Map(coaches.map((c) => [c.id, c.name]));
   const displayName = clientName ?? member?.name ?? "this client";
 
-  if (!userId) return null;
+  if (!userId || !enabled) return null;
 
   return (
     <>

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { listMessages, sendMemberMessage, markThreadReadByMember } from "../../lib/programming/messages";
+import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
 import { MessageThread } from "../../components/MessageThread";
 import { fonts, colors } from "../../lib/theme";
 
@@ -19,6 +20,12 @@ export default function Messages() {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  // Fallback safety net — the header icon that links here already hides
+  // itself when messaging's off (see index.js), but this route is still
+  // directly reachable (a stale bookmark, deep link, etc.), so it needs its
+  // own gate too. Starts true so there's no flash of the disabled message
+  // before the real check resolves.
+  const [messagingEnabled, setMessagingEnabled] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -31,6 +38,12 @@ export default function Messages() {
 
   useFocusEffect(
     useCallback(() => {
+      isMessagingEnabledForUser(profile.id)
+        .then(setMessagingEnabled)
+        .catch((err) => {
+          console.error("Failed to check messaging settings:", err);
+          setMessagingEnabled(false);
+        });
       load();
       // Opening this screen is what clears the unread flag — standard
       // chat-app behavior, no explicit "mark read" button needed here (that's
@@ -38,13 +51,33 @@ export default function Messages() {
       // read without opening it). Fire-and-forget: a failure here shouldn't
       // block the thread itself from loading.
       markThreadReadByMember().catch((err) => console.error("Failed to mark thread read:", err));
-    }, [load])
+    }, [load, profile.id])
   );
 
   const handleSend = async (body) => {
     await sendMemberMessage(profile.id, body);
     await load();
   };
+
+  if (!messagingEnabled) {
+    return (
+      <View className="flex-1 px-5 pb-8" style={{ backgroundColor: CANVAS, paddingTop: insets.top + 12 }}>
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)"))}
+          className="mb-3 self-start"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>‹ Back</Text>
+        </Pressable>
+        <Text className="mb-2 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+          Messages
+        </Text>
+        <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Messaging isn't available right now — check with your coach.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 px-5 pb-8" style={{ backgroundColor: CANVAS, paddingTop: insets.top + 12 }}>

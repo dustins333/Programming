@@ -1,13 +1,24 @@
+import { useEffect, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { CoachShell } from "../../components/CoachShell";
+import { getMessagingSettings } from "../../lib/programming/messagingSettings";
 import { fonts, colors } from "../../lib/theme";
 
 export default function More() {
   const router = useRouter();
   const { profile, signOut } = useAuth();
   const isAdmin = profile?.role === "admin";
+  // Admin kill switch (lib/programming/messagingSettings.js) — mirrors
+  // CoachShell's own web sidebar gating for this same row.
+  const [messagingEnabled, setMessagingEnabled] = useState(true);
+
+  useEffect(() => {
+    getMessagingSettings()
+      .then((s) => setMessagingEnabled(s.enabled))
+      .catch((err) => console.error("Failed to load messaging settings:", err));
+  }, []);
 
   return (
     <CoachShell>
@@ -30,17 +41,19 @@ export default function More() {
         </Pressable>
       ) : null}
 
-      <Pressable
-        onPress={() => router.push("/(coach)/messages")}
-        className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
-      >
-        <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
-          Messages
-        </Text>
-        <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-          Every client conversation, in one place
-        </Text>
-      </Pressable>
+      {messagingEnabled ? (
+        <Pressable
+          onPress={() => router.push("/(coach)/messages")}
+          className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+        >
+          <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+            Messages
+          </Text>
+          <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+            Every client conversation, in one place
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* Every coach/admin account is also a real training client — jumps
           into the same member tab experience any client uses, reading this

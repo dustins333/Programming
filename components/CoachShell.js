@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, Image, Pressable, Platform, Modal, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../lib/auth/AuthProvider";
+import { getMessagingSettings } from "../lib/programming/messagingSettings";
 import { colors, fonts } from "../lib/theme";
 
 const NAV_ITEMS = [
@@ -55,9 +56,11 @@ function NavRow({ active, icon, label, onPress }) {
 // drawer, which show identical content in different containers.
 // onNavigate lets the mobile drawer close itself before pushing; the
 // desktop sidebar just pushes directly.
-function NavList({ profile, pathname, onNavigate, onSignOut }) {
+function NavList({ profile, pathname, messagingEnabled, onNavigate, onSignOut }) {
   const isAdmin = profile?.role === "admin";
-  const visibleNavItems = NAV_ITEMS.filter((item) => isAdmin || !item.permission || profile?.[item.permission]);
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => (item.key !== "messages" || messagingEnabled) && (isAdmin || !item.permission || profile?.[item.permission])
+  );
 
   // Three direct children (items block, flexible spacer, footer block) so
   // whichever full-height flex-column container renders <NavList/> — the
@@ -124,6 +127,18 @@ export function CoachShell({ children }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Admin kill switch (lib/programming/messagingSettings.js) — web-only
+  // fetch, since native's own nav lives in app/(coach)/more.js instead of
+  // this sidebar/drawer. Defaults true (matches already-shipped behavior)
+  // until the real check resolves.
+  const [messagingEnabled, setMessagingEnabled] = useState(true);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    getMessagingSettings()
+      .then((s) => setMessagingEnabled(s.enabled))
+      .catch((err) => console.error("Failed to load messaging settings:", err));
+  }, []);
 
   // Native's Tabs navigator runs headerShown:false everywhere in (coach),
   // so nothing else accounts for the status bar/notch — without this, every
@@ -177,6 +192,7 @@ export function CoachShell({ children }) {
               <NavList
                 profile={profile}
                 pathname={pathname}
+                messagingEnabled={messagingEnabled}
                 onNavigate={(href) => {
                   setDrawerOpen(false);
                   router.push(href);
@@ -211,7 +227,7 @@ export function CoachShell({ children }) {
             Kova Strength
           </Text>
         </View>
-        <NavList profile={profile} pathname={pathname} onNavigate={(href) => router.push(href)} onSignOut={signOut} />
+        <NavList profile={profile} pathname={pathname} messagingEnabled={messagingEnabled} onNavigate={(href) => router.push(href)} onSignOut={signOut} />
       </View>
 
       <View style={{ flex: 1, minWidth: 0 }}>{children}</View>

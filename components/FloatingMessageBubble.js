@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../lib/auth/AuthProvider";
 import { listMessages, sendMemberMessage, markThreadReadByMember, hasUnreadMessages } from "../lib/programming/messages";
+import { isMessagingEnabledForUser } from "../lib/programming/messagingSettings";
 import { useShowMessageBubble } from "../lib/messageBubblePref";
 import { MessageThread } from "./MessageThread";
 import { fonts, colors } from "../lib/theme";
@@ -35,6 +36,12 @@ import { fonts, colors } from "../lib/theme";
 // only, confirmed with Terra) — the header chat icon and `/messages` route
 // are left completely alone as a fallback either way, so turning the bubble
 // off never removes messaging access outright.
+//
+// Also gated on the admin-configured messaging kill switch/audience
+// (lib/programming/messagingSettings.js) — added after Terra flagged the
+// feature isn't necessarily ready to ship yet (still deciding where
+// messages get watched: in-app vs GHL). Defaults to hidden (`enabled` starts
+// null) until the check resolves, so there's no flash-then-hide.
 export function FloatingMessageBubble() {
   const { profile } = useAuth();
   const showBubble = useShowMessageBubble();
@@ -43,6 +50,17 @@ export function FloatingMessageBubble() {
   const [messages, setMessages] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [hasUnread, setHasUnread] = useState(false);
+  const [enabled, setEnabled] = useState(null);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    isMessagingEnabledForUser(profile.id)
+      .then(setEnabled)
+      .catch((err) => {
+        console.error("Failed to check messaging settings:", err);
+        setEnabled(false);
+      });
+  }, [profile?.id]);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -73,7 +91,7 @@ export function FloatingMessageBubble() {
     await load();
   };
 
-  if (!profile?.id || !showBubble) return null;
+  if (!profile?.id || !showBubble || !enabled) return null;
 
   return (
     <>

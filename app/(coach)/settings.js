@@ -5,6 +5,15 @@ import { useAuth } from "../../lib/auth/AuthProvider";
 import { getSettings, getSetting, updateSetting } from "../../lib/settings";
 import { sendPush } from "../../lib/notifications/sendPush";
 import { listCoaches, updateCoachPermissions, inviteStaffMember } from "../../lib/programming/clients";
+import { listGroupPrograms } from "../../lib/programming/blocks";
+import {
+  getMessagingSettings,
+  setMessagingEnabled as saveMessagingEnabled,
+  setMessagingAudience,
+  MESSAGING_AUDIENCE_ALL,
+  MESSAGING_AUDIENCE_SPC,
+  MESSAGING_AUDIENCE_NUTRITION,
+} from "../../lib/programming/messagingSettings";
 import { listTemplateQuestions, addTemplateQuestion, updateTemplateQuestion, deleteTemplateQuestion } from "../../lib/nutrition/checkin";
 import {
   listQuestionnaireTemplateQuestions,
@@ -35,6 +44,7 @@ const SETTINGS_TABS = [
   { key: "defaults", label: "Program Defaults" },
   { key: "templates", label: "Nutrition Templates" },
   { key: "notifications", label: "Notifications" },
+  { key: "messaging", label: "Messaging" },
   { key: "diagnostics", label: "Diagnostics" },
 ];
 
@@ -108,12 +118,29 @@ export default function Settings() {
   const [checkinQuestions, setCheckinQuestions] = useState([]);
   const [questionnaireQuestions, setQuestionnaireQuestions] = useState([]);
   const [loadError, setLoadError] = useState(null);
+  const [messagingEnabledValue, setMessagingEnabledValue] = useState(true);
+  const [messagingAudience, setMessagingAudienceValue] = useState([MESSAGING_AUDIENCE_ALL]);
+  const [groupPrograms, setGroupPrograms] = useState([]);
+  const [savingMessaging, setSavingMessaging] = useState(false);
 
   const loadCoaches = useCallback(async () => {
     try {
       setCoaches(await listCoaches());
     } catch (err) {
       console.error("Failed to load team list:", err);
+    }
+  }, []);
+
+  // Isolated the same way loadCoaches is — an unrun messaging migration/
+  // settings hiccup shouldn't take down the rest of Settings.
+  const loadMessaging = useCallback(async () => {
+    try {
+      const [messagingSettings, programs] = await Promise.all([getMessagingSettings(), listGroupPrograms()]);
+      setMessagingEnabledValue(messagingSettings.enabled);
+      setMessagingAudienceValue(messagingSettings.audience);
+      setGroupPrograms(programs);
+    } catch (err) {
+      console.error("Failed to load messaging settings:", err);
     }
   }, []);
 
@@ -146,10 +173,11 @@ export default function Settings() {
       // this app.
       await loadCoaches();
       await loadTemplates();
+      await loadMessaging();
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
-  }, [loadCoaches, loadTemplates]);
+  }, [loadCoaches, loadTemplates, loadMessaging]);
 
   const nextPosition = (list) => (list.length > 0 ? Math.max(...list.map((q) => q.position)) + 1 : 1);
 
@@ -234,6 +262,54 @@ export default function Settings() {
       toastError("Failed to save", err);
     } finally {
       setSavingNotifKey(null);
+    }
+  };
+
+  const handleToggleMessagingEnabled = async (value) => {
+    const previous = messagingEnabledValue;
+    setMessagingEnabledValue(value);
+    setSavingMessaging(true);
+    try {
+      await saveMessagingEnabled(value);
+    } catch (err) {
+      setMessagingEnabledValue(previous);
+      toastError("Failed to save", err);
+    } finally {
+      setSavingMessaging(false);
+    }
+  };
+
+  // "Everyone" is exclusive with the specific-membership list below it —
+  // checking it collapses the audience to just ["all"] and dims the rest;
+  // unchecking it clears back to an empty list (nobody) rather than
+  // guessing which specific scopes to restore.
+  const handleToggleMessagingEveryone = async (checked) => {
+    const previous = messagingAudience;
+    const next = checked ? [MESSAGING_AUDIENCE_ALL] : [];
+    setMessagingAudienceValue(next);
+    setSavingMessaging(true);
+    try {
+      await setMessagingAudience(next);
+    } catch (err) {
+      setMessagingAudienceValue(previous);
+      toastError("Failed to save", err);
+    } finally {
+      setSavingMessaging(false);
+    }
+  };
+
+  const handleToggleMessagingScope = async (scopeKey, checked) => {
+    const previous = messagingAudience;
+    const next = checked ? [...messagingAudience, scopeKey] : messagingAudience.filter((s) => s !== scopeKey);
+    setMessagingAudienceValue(next);
+    setSavingMessaging(true);
+    try {
+      await setMessagingAudience(next);
+    } catch (err) {
+      setMessagingAudienceValue(previous);
+      toastError("Failed to save", err);
+    } finally {
+      setSavingMessaging(false);
     }
   };
 
@@ -496,6 +572,78 @@ export default function Settings() {
           />
         </View>
         ))}
+      </View>
+      )}
+
+      {tab === "messaging" && (
+      <View className="rounded-xl border border-stone-200 p-5">
+        <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+          Messaging
+        </Text>
+        <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+          The message bubble on the member and coach apps, plus the coach Messages inbox.
+        </Text>
+
+        <View className="flex-row items-center justify-between gap-4 py-4" style={{ borderBottomWidth: 1, borderBottomColor: "#f1efed" }}>
+          <View className="flex-1">
+            <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Messaging enabled
+            </Text>
+            <Text className="mt-0.5 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Turns the message bubble and Messages inbox on or off for the whole gym.
+            </Text>
+          </View>
+          <Switch
+            value={messagingEnabledValue}
+            onValueChange={handleToggleMessagingEnabled}
+            disabled={savingMessaging}
+            trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
+            thumbColor="#ffffff"
+          />
+        </View>
+
+        <View style={{ opacity: messagingEnabledValue ? 1 : 0.4 }} pointerEvents={messagingEnabledValue ? "auto" : "none"}>
+          <Text className="mb-1 mt-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+            Who can message
+          </Text>
+          <Text className="mb-3 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+            Leave "Everyone" on for the whole gym, or turn it off to restrict messaging to specific memberships.
+          </Text>
+
+          <View className="flex-row items-center justify-between gap-4 py-3" style={{ borderBottomWidth: 1, borderBottomColor: "#f1efed" }}>
+            <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Everyone
+            </Text>
+            <Switch
+              value={messagingAudience.includes(MESSAGING_AUDIENCE_ALL)}
+              onValueChange={handleToggleMessagingEveryone}
+              disabled={savingMessaging || !messagingEnabledValue}
+              trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          <View style={{ opacity: messagingAudience.includes(MESSAGING_AUDIENCE_ALL) ? 0.4 : 1 }} pointerEvents={messagingAudience.includes(MESSAGING_AUDIENCE_ALL) ? "none" : "auto"}>
+            {[
+              { key: MESSAGING_AUDIENCE_NUTRITION, label: "Nutrition" },
+              { key: MESSAGING_AUDIENCE_SPC, label: "SPC" },
+              ...groupPrograms.map((p) => ({ key: p.id, label: p.name })),
+            ].map((scope) => (
+              <View key={scope.key} className="flex-row items-center justify-between gap-4 py-3" style={{ borderBottomWidth: 1, borderBottomColor: "#f1efed" }}>
+                <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                  {scope.label}
+                </Text>
+                <Switch
+                  value={messagingAudience.includes(scope.key)}
+                  onValueChange={(v) => handleToggleMessagingScope(scope.key, v)}
+                  disabled={savingMessaging || !messagingEnabledValue || messagingAudience.includes(MESSAGING_AUDIENCE_ALL)}
+                  trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+            ))}
+          </View>
+        </View>
       </View>
       )}
 
