@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { View, Text, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { getLoggedSetsForDate } from "../lib/programming/memberPlan";
+import {
+  listGroupExerciseCompletionsForItems,
+  listSpcExerciseCompletionsForItems,
+  listOneOffExerciseCompletionsForItems,
+} from "../lib/programming/exerciseCompletions";
 import { fonts, colors } from "../lib/theme";
 import { toastError } from "../lib/toast";
 import { ExerciseCard, targetLineFor } from "./ExerciseCard";
@@ -30,7 +36,14 @@ function summarizeLoggedSets(sets) {
 // summary (independent of finalize state, which never touches this data)
 // instead of a bare name, so a glance at the collapsed list proves nothing
 // was lost after finalizing. Tapping anywhere opens the focus modal there.
-function GroupIndexRow({ group, summaries, onPress }) {
+// The trailing indicator is the real per-exercise "marked complete"
+// checkbox (from `completions`) whenever that feature is active for this
+// caller — this is also, combined with the docked Finalize bar below it,
+// the "whole lift, see what's checked off" summary the last focus card
+// collapses back into. Callers that don't opt into completions (e.g. the
+// coach's read-only past-session viewer) keep the original "has any logged
+// data" dot instead, unchanged.
+function GroupIndexRow({ group, summaries, completions, onPress }) {
   const isSuperset = group.length > 1;
   return (
     <Pressable
@@ -63,7 +76,20 @@ function GroupIndexRow({ group, summaries, onPress }) {
                 {summary?.summaryText ?? targetLineFor(item)}
               </Text>
             </View>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: summary?.hasAny ? "#4d6142" : "#e7e5e4", flexShrink: 0 }} />
+            {completions ? (
+              // Same circle icon, same size, same color as the warm-up
+              // checkboxes on My Fitness (plan.js's WarmupCard) — square
+              // vs. circle here read as two different controls even though
+              // they mean the same thing, per direct feedback.
+              <Ionicons
+                name={completions.has(item.id) ? "checkmark-circle" : "checkmark-circle-outline"}
+                size={24}
+                color="#4d6142"
+                style={{ flexShrink: 0 }}
+              />
+            ) : (
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: summary?.hasAny ? "#4d6142" : "#e7e5e4", flexShrink: 0 }} />
+            )}
           </View>
         );
       })}
@@ -85,7 +111,21 @@ function GroupIndexRow({ group, summaries, onPress }) {
 // scrolling content entirely (My Fitness docks it in a screen-bottom bar
 // instead, when exactly one session is the page's clear focus) without
 // this component losing its own standalone-usable default.
-export function SessionLogger({
+//
+// `onOpenFocus`, when provided, hands control of the whole focus-overlay
+// experience to the caller instead of self-rendering it: tapping a
+// GroupIndexRow calls `onOpenFocus({ groups, completions, focusIndex })`
+// rather than opening SessionLogger's own internal SessionFocusModal.
+// My Fitness (plan.js) uses this so the overlay can render as a sibling of
+// its own page header instead of nested deep inside this component's own
+// return value — a real page header can't stay visible/clickable above a
+// component nested this deep without that lift. Every other caller (e.g.
+// the coach's read-only past-session viewer) doesn't pass it, and keeps
+// the original fully self-contained behavior. `ref.refresh()` is exposed
+// for exactly that lifted case — the caller calls it once its externally-
+// rendered overlay closes, to re-pull summaries/completions the same way
+// this component's own handleCloseFocus already does internally.
+export const SessionLogger = forwardRef(function SessionLogger({
   userId,
   datePerformed,
   source,
@@ -96,14 +136,19 @@ export function SessionLogger({
   hideVideo,
   onExpandExercise,
   layout = "accordion",
-  timer,
-  onToggleTimer,
-  onResetTimer,
-}) {
+  exerciseCompletionType,
+  weekNumber,
+  onOpenFocus,
+}, ref) {
   const [expandedId, setExpandedId] = useState(null);
   const [focusIndex, setFocusIndex] = useState(null);
   const [finalizing, setFinalizing] = useState(false);
   const [summaries, setSummaries] = useState({});
+  // null (not an empty Set) when the feature's off for this caller (no
+  // exerciseCompletionType passed, e.g. the coach's read-only past-session
+  // viewer) — GroupIndexRow uses that distinction to fall back to its
+  // original "has any logged data" dot instead of a real checkbox.
+  const [completions, setCompletions] = useState(null);
 
   const isFocus = layout === "focus";
 
@@ -138,6 +183,7 @@ export function SessionLogger({
   });
 
   const exerciseIdsKey = exercises.map((item) => item.exercise.id).join(",");
+  const completionIdsKey = exercises.map((item) => item.id).join(",");
 
   const fetchSummaryFor = useCallback(
     async (exerciseId) => {
@@ -156,35 +202,80 @@ export function SessionLogger({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocus, exerciseIdsKey]);
 
+  // Batched, one round trip for the whole session — parallel to the
+  // summaries fetch above, keyed by the join-row id (item.id), not the raw
+  // exercise id, since that's what exercise_completions is keyed on.
+  const fetchCompletions = useCallback(async () => {
+    if (!isFocus || !exerciseCompletionType) return;
+    const ids = exercises.map((item) => item.id);
+    const set =
+      exerciseCompletionType === "group"
+        ? await listGroupExerciseCompletionsForItems(userId, ids)
+        : exerciseCompletionType === "spc"
+          ? await listSpcExerciseCompletionsForItems(userId, ids, weekNumber)
+          : await listOneOffExerciseCompletionsForItems(userId, ids);
+    setCompletions(set);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocus, exerciseCompletionType, weekNumber, userId, completionIdsKey]);
+
+  useEffect(() => {
+    fetchCompletions();
+  }, [fetchCompletions]);
+
   const handleCloseFocus = () => {
     const closedGroup = focusIndex !== null ? groups[focusIndex] : null;
     setFocusIndex(null);
     closedGroup?.forEach((item) => fetchSummaryFor(item.exercise.id));
+    // Re-fetch the whole batch (not just the closed group) rather than
+    // patching completions locally — a mark/unmark inside the modal only
+    // updates ExerciseCard's own local state, so the index list's checkbox
+    // needs this to actually reflect what just happened.
+    fetchCompletions();
+  };
+
+  // Exposed for the externally-controlled (onOpenFocus) case — the caller
+  // calls this once its own lifted overlay closes, same refresh
+  // handleCloseFocus already does for the self-contained case.
+  useImperativeHandle(ref, () => ({
+    refresh: () => {
+      exercises.forEach((item) => fetchSummaryFor(item.exercise.id));
+      fetchCompletions();
+    },
+  }));
+
+  const handleOpenFocus = (i) => {
+    if (onOpenFocus) {
+      onOpenFocus({ groups, completions, focusIndex: i });
+    } else {
+      setFocusIndex(i);
+    }
   };
 
   if (isFocus) {
     return (
       <View>
         {groups.map((group, i) => (
-          <GroupIndexRow key={group[0].id} group={group} summaries={summaries} onPress={() => setFocusIndex(i)} />
+          <GroupIndexRow key={group[0].id} group={group} summaries={summaries} completions={completions} onPress={() => handleOpenFocus(i)} />
         ))}
 
-        <SessionFocusModal
-          visible={focusIndex !== null}
-          groups={groups}
-          focusIndex={focusIndex ?? 0}
-          onNavigate={setFocusIndex}
-          onClose={handleCloseFocus}
-          userId={userId}
-          datePerformed={datePerformed}
-          source={source}
-          hideVideo={hideVideo}
-          timer={timer}
-          onToggleTimer={onToggleTimer}
-          onResetTimer={onResetTimer}
-          onFinalize={onFinalize}
-          isCompleted={isCompleted}
-        />
+        {!onOpenFocus && (
+          <SessionFocusModal
+            visible={focusIndex !== null}
+            groups={groups}
+            focusIndex={focusIndex ?? 0}
+            onNavigate={setFocusIndex}
+            onClose={handleCloseFocus}
+            userId={userId}
+            datePerformed={datePerformed}
+            source={source}
+            hideVideo={hideVideo}
+            exerciseCompletionType={exerciseCompletionType}
+            weekNumber={weekNumber}
+            completions={completions}
+            onFinalize={onFinalize}
+            isCompleted={isCompleted}
+          />
+        )}
 
         {!hideFinalizeButton && (
           <Pressable
@@ -202,7 +293,7 @@ export function SessionLogger({
             }}
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
-              {finalizing ? "Saving…" : isCompleted ? "✓ Finalized — tap to update" : "Finalize workout"}
+              {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}
             </Text>
           </Pressable>
         )}
@@ -265,10 +356,10 @@ export function SessionLogger({
           }}
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
-            {finalizing ? "Saving…" : isCompleted ? "✓ Finalized — tap to update" : "Finalize workout"}
+            {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}
           </Text>
         </Pressable>
       )}
     </View>
   );
-}
+});

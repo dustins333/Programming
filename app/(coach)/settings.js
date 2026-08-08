@@ -21,6 +21,7 @@ import {
   updateQuestionnaireTemplateQuestion,
   deleteQuestionnaireTemplateQuestion,
 } from "../../lib/nutrition/onboarding";
+import { listSpecialtyBars, saveSpecialtyBars } from "../../lib/equipment/specialtyBars";
 import { fonts, colors } from "../../lib/theme";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { CoachShell } from "../../components/CoachShell";
@@ -42,6 +43,7 @@ const LABELS = {
 const SETTINGS_TABS = [
   { key: "team", label: "Team" },
   { key: "defaults", label: "Program Defaults" },
+  { key: "equipment", label: "Equipment" },
   { key: "templates", label: "Nutrition Templates" },
   { key: "notifications", label: "Notifications" },
   { key: "messaging", label: "Messaging" },
@@ -122,6 +124,10 @@ export default function Settings() {
   const [messagingAudience, setMessagingAudienceValue] = useState([MESSAGING_AUDIENCE_ALL]);
   const [groupPrograms, setGroupPrograms] = useState([]);
   const [savingMessaging, setSavingMessaging] = useState(false);
+  const [specialtyBars, setSpecialtyBars] = useState([]);
+  const [savingBars, setSavingBars] = useState(false);
+  const [newBarName, setNewBarName] = useState("");
+  const [newBarWeight, setNewBarWeight] = useState("");
 
   const loadCoaches = useCallback(async () => {
     try {
@@ -141,6 +147,15 @@ export default function Settings() {
       setGroupPrograms(programs);
     } catch (err) {
       console.error("Failed to load messaging settings:", err);
+    }
+  }, []);
+
+  // Isolated the same way loadCoaches is.
+  const loadEquipment = useCallback(async () => {
+    try {
+      setSpecialtyBars(await listSpecialtyBars());
+    } catch (err) {
+      console.error("Failed to load specialty bars:", err);
     }
   }, []);
 
@@ -174,10 +189,11 @@ export default function Settings() {
       await loadCoaches();
       await loadTemplates();
       await loadMessaging();
+      await loadEquipment();
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
-  }, [loadCoaches, loadTemplates, loadMessaging]);
+  }, [loadCoaches, loadTemplates, loadMessaging, loadEquipment]);
 
   const nextPosition = (list) => (list.length > 0 ? Math.max(...list.map((q) => q.position)) + 1 : 1);
 
@@ -310,6 +326,46 @@ export default function Settings() {
       toastError("Failed to save", err);
     } finally {
       setSavingMessaging(false);
+    }
+  };
+
+  // Saves the whole array back on every add/delete (immediate, no separate
+  // Save button) — same pattern as the nutrition question-list editors,
+  // simple enough for a gym-wide list that's edited rarely.
+  const handleAddSpecialtyBar = async () => {
+    const name = newBarName.trim();
+    const weight = Number(newBarWeight);
+    if (!name || !Number.isFinite(weight) || weight <= 0) {
+      toastError("Enter a name and a weight", new Error("Missing or invalid fields"));
+      return;
+    }
+    const next = [...specialtyBars, { name, weight }];
+    setSpecialtyBars(next);
+    setSavingBars(true);
+    try {
+      await saveSpecialtyBars(next);
+      setNewBarName("");
+      setNewBarWeight("");
+    } catch (err) {
+      setSpecialtyBars(specialtyBars);
+      toastError("Failed to save", err);
+    } finally {
+      setSavingBars(false);
+    }
+  };
+
+  const handleDeleteSpecialtyBar = async (index) => {
+    const previous = specialtyBars;
+    const next = specialtyBars.filter((_, i) => i !== index);
+    setSpecialtyBars(next);
+    setSavingBars(true);
+    try {
+      await saveSpecialtyBars(next);
+    } catch (err) {
+      setSpecialtyBars(previous);
+      toastError("Failed to save", err);
+    } finally {
+      setSavingBars(false);
     }
   };
 
@@ -515,6 +571,76 @@ export default function Settings() {
             {savingKey === "all" ? "Saving…" : "Save changes"}
           </Text>
         </Pressable>
+      </View>
+      )}
+
+      {tab === "equipment" && (
+      <View className="rounded-xl border border-stone-200 p-5">
+        <Text className="mb-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+          Specialty Bars
+        </Text>
+        <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Named bars (trap bar, safety squat bar, etc.) and their real weight — members pick one of these from the weight calculator instead of typing a weight in from memory.
+        </Text>
+
+        {specialtyBars.map((bar, i) => (
+          <View key={`${bar.name}-${i}`} className="mb-2.5 flex-row items-center justify-between rounded-lg border border-stone-200 px-4 py-3">
+            <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              {bar.name}
+            </Text>
+            <View className="flex-row items-center" style={{ gap: 14 }}>
+              <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+                {bar.weight} lb
+              </Text>
+              <Pressable onPress={() => handleDeleteSpecialtyBar(i)} disabled={savingBars} hitSlop={8}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, color: "#b23a22" }}>Remove</Text>
+              </Pressable>
+            </View>
+          </View>
+        ))}
+        {specialtyBars.length === 0 ? (
+          <Text className="mb-3 text-sm text-stone-400" style={{ fontFamily: fonts.sans }}>
+            No specialty bars added yet.
+          </Text>
+        ) : null}
+
+        <View className="mt-3 flex-row items-end" style={{ gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Name
+            </Text>
+            <TextInput
+              value={newBarName}
+              onChangeText={setNewBarName}
+              placeholder="e.g. Safety Squat Bar"
+              className="rounded-lg border border-stone-300 px-4 py-3 text-base"
+              style={{ fontFamily: fonts.sans }}
+            />
+          </View>
+          <View style={{ width: 110 }}>
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Weight (lb)
+            </Text>
+            <TextInput
+              value={newBarWeight}
+              onChangeText={setNewBarWeight}
+              placeholder="65"
+              keyboardType="decimal-pad"
+              inputAccessoryViewID={NUMERIC_DONE_ID}
+              className="rounded-lg border border-stone-300 px-4 py-3 text-base"
+              style={{ fontFamily: fonts.sans }}
+            />
+          </View>
+          <Pressable
+            onPress={handleAddSpecialtyBar}
+            disabled={savingBars}
+            className="rounded-lg bg-primary px-5 py-3 disabled:opacity-50"
+          >
+            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+              + Add
+            </Text>
+          </Pressable>
+        </View>
       </View>
       )}
 

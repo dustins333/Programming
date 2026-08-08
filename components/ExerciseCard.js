@@ -38,7 +38,24 @@ export function targetLineFor(item) {
 // SessionFocusModal's focus layout (forceExpanded keeps it permanently
 // populated, no header tap needed — see SessionFocusModal.js for why every
 // group's card has to mount immediately either way, not lazily).
-export function ExerciseCard({ userId, datePerformed, source, item, expanded, onToggle, hideVideo, forceExpanded, scrollViewRef, scrollOffsetRef }) {
+export function ExerciseCard({
+  userId,
+  datePerformed,
+  source,
+  item,
+  expanded,
+  onToggle,
+  hideVideo,
+  forceExpanded,
+  scrollViewRef,
+  scrollOffsetRef,
+  exerciseCompletionType,
+  completed,
+  showAdvanceArrow,
+  onToggleComplete,
+  onAdvance,
+  onDataChanged,
+}) {
   const targetSets = getTargetSets(item);
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
@@ -65,6 +82,12 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
   // saved today, which would otherwise immediately re-trigger the autosave
   // effect — this skips exactly that one load-triggered run, not any real edit.
   const skipAutosaveRef = useRef(true);
+  // Same skip-once idiom as skipAutosaveRef, for the auto-complete effect
+  // below — loading already-saved (possibly already-full) sets shouldn't
+  // itself count as "just became complete" and re-fire a mark, especially
+  // if the member had since manually unchecked a fully-logged exercise.
+  const skipCompletionEffectRef = useRef(true);
+  const wasFullyFilledRef = useRef(false);
   // A single exercise's content is usually short enough to already be
   // visible once the keyboard opens, but a superset's two stacked full
   // cards often aren't — the second (bottom) exercise's fields can end up
@@ -93,6 +116,7 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
     const todaysSets = await getLoggedSetsForDate(userId, item.exercise.id, datePerformed);
     if (todaysSets.length > 0) {
       skipAutosaveRef.current = true;
+      skipCompletionEffectRef.current = true;
       setRows((prev) =>
         prev.map((row, i) => {
           const existing = todaysSets.find((s) => s.set_number === i + 1);
@@ -163,6 +187,13 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
           )
         );
         setSaveState("saved");
+        // Only meaningful once a session's already been finalized — the
+        // parent (My Fitness) uses this to revert the Finalize button back
+        // to its unfinalized state, since the finalized_at timestamp in the
+        // database doesn't know a set was just edited after the fact. Not
+        // gated here on whether the session is actually finalized — the
+        // parent already knows that and just no-ops if it isn't relevant.
+        onDataChanged?.();
       } catch {
         setSaveState("error");
       }
@@ -170,6 +201,31 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
     return () => clearTimeout(debounceRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, notes]);
+
+  // Auto-fills the checkbox to solid the moment every set has both reps and
+  // weight — fires only on a genuine false→true transition (detected via
+  // wasFullyFilledRef), never on every keystroke, and never auto-*un*-
+  // completes when a field is later cleared (that's an explicit tap on the
+  // solid checkbox only). The actual mark/unmark API call, the "did the
+  // whole superset group just finish" check, and the delayed advance all
+  // live in the parent (SessionFocusModal) now — a superset's two cards
+  // both report up to it, so it's the only place that can correctly decide
+  // when to actually move on, rather than each card advancing the instant
+  // its own checkbox is hit.
+  useEffect(() => {
+    if (!exerciseCompletionType) return;
+    const fullyFilled = rows.length > 0 && rows.every((r) => r.reps !== "" && r.weight !== "");
+    if (skipCompletionEffectRef.current) {
+      skipCompletionEffectRef.current = false;
+      wasFullyFilledRef.current = fullyFilled;
+      return;
+    }
+    if (fullyFilled && !wasFullyFilledRef.current) {
+      onToggleComplete?.(true, "auto");
+    }
+    wasFullyFilledRef.current = fullyFilled;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   return (
     <View
@@ -356,6 +412,40 @@ export function ExerciseCard({ userId, datePerformed, source, item, expanded, on
               {saveState === "error" && "Couldn't save — check your connection."}
             </Text>
           )}
+
+          {exerciseCompletionType ? (
+            // A manual tap already advances on its own (see
+            // SessionFocusModal's handleToggleComplete), so there's nothing
+            // for an arrow to do then — it only ever shows once the app
+            // auto-fills this card solid, as a deliberate "move on when
+            // you're ready" control. Both stay anchored to the right edge
+            // (flex-end), checkbox first then arrow (left to right) — the
+            // arrow takes the rightmost spot the checkbox used to sit in,
+            // and the checkbox scoots just far enough left to make room for
+            // it, not all the way across the row (an earlier "space-between"
+            // version did that, which read as the checkbox jumping to the
+            // opposite side entirely).
+            <View className="mt-3 flex-row items-center justify-end" style={{ gap: 10 }}>
+              <Pressable
+                onPress={() => onToggleComplete?.(!completed, "manual")}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel={completed ? "Mark exercise not complete" : "Mark exercise complete"}
+              >
+                <Ionicons name={completed ? "checkmark-circle" : "checkmark-circle-outline"} size={36} color="#4d6142" />
+              </Pressable>
+              {showAdvanceArrow && onAdvance ? (
+                <Pressable
+                  onPress={onAdvance}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel="Next exercise"
+                  className="items-center justify-center"
+                  style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: "#e7e5e4" }}
+                >
+                  <Ionicons name="chevron-forward" size={17} color="#4d6142" />
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
 
           <ExerciseHistoryModal
             visible={showAllHistory}

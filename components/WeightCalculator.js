@@ -1,17 +1,22 @@
-import { useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { useEffect, useState } from "react";
+import { Modal, View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
+import { listSpecialtyBars } from "../lib/equipment/specialtyBars";
 import { SegmentedControl } from "./SegmentedControl";
-import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { KeyboardDoneButton } from "./KeyboardDoneButton";
 
 const CARD_BORDER = "#ece7e1";
 
-// The gym only actually has 35 lb barbells, plus whatever specialty bars
-// (trap bar, safety squat bar, etc.) — those don't have one fixed weight,
-// so "Specialty" just opens a plain typed-in field instead of a preset list.
+// The gym only actually has 35 lb barbells, plus whatever named specialty
+// bars (trap bar, safety squat bar, etc.) a coach has configured in
+// Settings → Equipment — tapping "Specialty" opens a picker of those
+// instead of asking someone to remember/type a weight from memory. "No
+// bar" covers dumbbell-only or plate-loaded-machine sets with no bar at all
+// — it's the default, since most quick weight lookups on the plate side are
+// exactly that (a dumbbell or a machine stack), not a barbell lift.
 const BAR_MODES = [
+  { key: "none", label: "No bar" },
   { key: "barbell", label: "Barbell (35 lb)" },
   { key: "specialty", label: "Specialty" },
 ];
@@ -159,16 +164,82 @@ function StandardCalc({ onInsert }) {
   );
 }
 
+// Tapping "Specialty" doesn't just switch modes the way Barbell/No bar do —
+// it opens this list of coach-configured bars (Settings → Equipment) so
+// nobody has to remember "the safety squat bar is 65 lb" from memory.
+function SpecialtyBarPicker({ visible, bars, onSelect, onClose }) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable onPress={onClose} className="flex-1 justify-end" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
+        <Pressable
+          onPress={(e) => e.stopPropagation?.()}
+          style={{ maxHeight: "70%", width: "100%", backgroundColor: "#faf8f6", borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 18, paddingHorizontal: 20, paddingBottom: 28 }}
+        >
+          <View className="mb-3 flex-row items-center justify-between">
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, color: "#44403c" }}>Which bar?</Text>
+            <Pressable onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} className="items-center justify-center" style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "#e7e5e4" }}>
+              <Text style={{ color: "#a8a29e", fontSize: 15 }}>×</Text>
+            </Pressable>
+          </View>
+          {bars.length === 0 ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e", paddingVertical: 12 }}>
+              No specialty bars added yet — a coach can add some in Settings → Equipment.
+            </Text>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {bars.map((bar, i) => (
+                <Pressable
+                  key={`${bar.name}-${i}`}
+                  onPress={() => onSelect(bar)}
+                  className="mb-2 flex-row items-center justify-between rounded-xl bg-white px-4 py-3.5"
+                  style={{ borderWidth: 1, borderColor: CARD_BORDER }}
+                >
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#44403c" }}>{bar.name}</Text>
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e" }}>{bar.weight} lb</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // Tap the bar, then tap each plate exactly as it's loaded — no per-side
 // doubling, since that was confusing the point of clicking through the
 // actual plates: each tap is worth its own face value, and a member loading
 // two 45s per side just taps 45 four times.
 function PlateCalc({ onInsert }) {
-  const [barMode, setBarMode] = useState("barbell");
-  const [specialtyWeight, setSpecialtyWeight] = useState("");
+  const [barMode, setBarMode] = useState("none");
+  const [specialtyBars, setSpecialtyBars] = useState([]);
+  const [selectedSpecialtyBar, setSelectedSpecialtyBar] = useState(null);
+  const [showSpecialtyPicker, setShowSpecialtyPicker] = useState(false);
   const [plateStack, setPlateStack] = useState([]); // one entry per plate tapped, oldest first
 
-  const barWeight = barMode === "barbell" ? 35 : parseFloat(specialtyWeight) || 0;
+  // Fetched once, lazily, the first time the Plate tab is actually opened —
+  // this list rarely changes and isn't needed at all for Standard mode.
+  useEffect(() => {
+    listSpecialtyBars()
+      .then(setSpecialtyBars)
+      .catch((err) => console.error("Failed to load specialty bars:", err));
+  }, []);
+
+  const barWeight = barMode === "barbell" ? 35 : barMode === "specialty" ? selectedSpecialtyBar?.weight ?? 0 : 0;
+
+  const handleBarModePress = (key) => {
+    if (key === "specialty") {
+      setShowSpecialtyPicker(true);
+      return;
+    }
+    setBarMode(key);
+  };
+
+  const handleSelectSpecialtyBar = (bar) => {
+    setSelectedSpecialtyBar(bar);
+    setBarMode("specialty");
+    setShowSpecialtyPicker(false);
+  };
 
   const addPlate = (w) => setPlateStack((prev) => [...prev, w]);
   const undoLast = () => setPlateStack((prev) => prev.slice(0, -1));
@@ -190,7 +261,7 @@ function PlateCalc({ onInsert }) {
           return (
             <Pressable
               key={bar.key}
-              onPress={() => setBarMode(bar.key)}
+              onPress={() => handleBarModePress(bar.key)}
               className="flex-1 items-center justify-center rounded-xl"
               style={{ height: 44, backgroundColor: active ? colors.primary : "white", borderWidth: 1, borderColor: active ? colors.primary : CARD_BORDER }}
             >
@@ -199,18 +270,20 @@ function PlateCalc({ onInsert }) {
           );
         })}
       </View>
-      {barMode === "specialty" ? (
-        <TextInput
-          value={specialtyWeight}
-          onChangeText={setSpecialtyWeight}
-          placeholder="Bar weight"
-          keyboardType="decimal-pad"
-          inputAccessoryViewID={NUMERIC_DONE_ID}
-          placeholderTextColor="#a8a29e"
-          className="mt-2 text-center"
-          style={{ fontFamily: fonts.sans, fontSize: 14, color: "#44403c", height: 44, borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 10 }}
-        />
+      {barMode === "specialty" && selectedSpecialtyBar ? (
+        <Pressable onPress={() => setShowSpecialtyPicker(true)} className="mt-2 flex-row items-center justify-center" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+            Selected: {selectedSpecialtyBar.name} ({selectedSpecialtyBar.weight} lb) — change
+          </Text>
+        </Pressable>
       ) : null}
+
+      <SpecialtyBarPicker
+        visible={showSpecialtyPicker}
+        bars={specialtyBars}
+        onSelect={handleSelectSpecialtyBar}
+        onClose={() => setShowSpecialtyPicker(false)}
+      />
 
       <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#78716c", marginTop: 16, marginBottom: 8 }}>Plates (tap each one you load)</Text>
       <View className="mb-2 flex-row flex-wrap" style={{ gap: 8 }}>

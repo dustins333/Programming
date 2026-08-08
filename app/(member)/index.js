@@ -19,7 +19,7 @@ import { listLogsForDateRange } from "../../lib/nutrition/dailyLog";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { retryOnce } from "../../lib/retry";
 import { SessionPreviewModal } from "../../components/SessionPreviewModal";
-import { fonts, colors } from "../../lib/theme";
+import { fonts, colors, statusColors } from "../../lib/theme";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -65,8 +65,9 @@ function formatToday() {
 // (blank, not omitted, when there's none) / day caption — so the day
 // caption always lands at the same y-position regardless of how many lines
 // the description needs.
-function SessionBubble({ label, description, completed, published, onPress, caption, weekDone, fixedWidth }) {
+function SessionBubble({ label, description, completed, published, onPress, caption, weekDone, fixedWidth, highlight }) {
   const borderColor = weekDone ? "#d6d3cd" : completed ? TILE_COMPLETED_BORDER : CARD_BORDER;
+  const showHighlight = highlight && !weekDone;
   return (
     <Pressable
       onPress={published ? onPress : undefined}
@@ -85,6 +86,35 @@ function SessionBubble({ label, description, completed, published, onPress, capt
         opacity: weekDone ? 0.55 : published ? 1 : 0.5,
       }}
     >
+      {showHighlight ? (
+        // Peach/primary family, not olive — olive already means "completed"
+        // everywhere else on this card (the 2px border, the done pill), so
+        // reusing it here would read as a second, conflicting "done" signal.
+        // Group gets a "TODAY" text pill; SPC (no day-of-week mapping to
+        // label) gets the same color/position as a plain dot, no text.
+        <View
+          style={{
+            position: "absolute",
+            top: -6,
+            right: -6,
+            backgroundColor: colors.primary,
+            borderRadius: 999,
+            borderWidth: 1.5,
+            borderColor: CANVAS,
+            alignItems: "center",
+            justifyContent: "center",
+            ...(highlight === "today"
+              ? { paddingHorizontal: 5, paddingVertical: 2 }
+              : { width: 11, height: 11 }),
+          }}
+        >
+          {highlight === "today" ? (
+            <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 8, letterSpacing: 0.3, color: "#fff" }}>
+              TODAY
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
       <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c", textAlign: "center" }}>
         {label}
       </Text>
@@ -148,7 +178,7 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
         </Text>
       )}
       <View className="flex-row gap-2">
-        {rows.map(({ key, label, title: rowTitle, completed, published, onPress, caption, fixedWidth }) => (
+        {rows.map(({ key, label, title: rowTitle, completed, published, onPress, caption, fixedWidth, highlight }) => (
           <SessionBubble
             key={key}
             label={label}
@@ -159,6 +189,7 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
             caption={caption}
             weekDone={isDone}
             fixedWidth={fixedWidth}
+            highlight={highlight}
           />
         ))}
       </View>
@@ -167,10 +198,15 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
 }
 
 // 7-day consistency strip — olive dot = logged, rust ring = today
-// (unlogged), neutral outline = everything else. No calorie numbers/
-// progress bar — nutrition isn't logged until evening, so nothing
-// calorie-related should show mid-day.
-function NutritionStrip({ days, onNavigate }) {
+// (unlogged), red fill = a past-or-today day that's due and not finalized
+// (opposite of the olive "logged" fill), neutral outline = a future day
+// (nothing to log yet, not tappable). Each past/today circle is its own
+// tap target straight into that exact date on My Nutrition — the whole
+// circle, not just the small header chevron, since that was hard to hit.
+// No calorie numbers/progress bar — nutrition isn't logged until evening,
+// so nothing calorie-related should show mid-day.
+function NutritionStrip({ days, onNavigate, onDayPress }) {
+  const today = todayInBoise();
   return (
     <View className="mb-3.5 rounded-[20px] bg-white px-4 pb-4 pt-4" style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}>
       <View className="mb-3 flex-row items-center justify-between">
@@ -181,9 +217,17 @@ function NutritionStrip({ days, onNavigate }) {
       </View>
       <View className="flex-row justify-between">
         {days.map((day) => {
+          const isDue = day.date <= today;
+          const missed = isDue && !day.finalized;
           const ringToday = day.isToday && !day.finalized;
+          const Wrapper = isDue ? Pressable : View;
           return (
-            <View key={day.date} className="items-center" style={{ gap: 5 }}>
+            <Wrapper
+              key={day.date}
+              className="items-center"
+              style={{ gap: 5 }}
+              {...(isDue ? { onPress: () => onDayPress(day.date), hitSlop: HITSLOP, accessibilityLabel: `Go to ${day.label} in My Nutrition` } : {})}
+            >
               <View
                 style={{
                   width: 24,
@@ -199,8 +243,8 @@ function NutritionStrip({ days, onNavigate }) {
                     width: 20,
                     height: 20,
                     borderRadius: 10,
-                    backgroundColor: day.finalized ? "#4d6142" : "transparent",
-                    borderWidth: day.finalized ? 0 : 1.5,
+                    backgroundColor: day.finalized ? "#4d6142" : missed ? statusColors.urgent.text : "transparent",
+                    borderWidth: day.finalized || missed ? 0 : 1.5,
                     borderColor: day.isToday ? colors.primary : "#d9d4cd",
                   }}
                 />
@@ -208,7 +252,7 @@ function NutritionStrip({ days, onNavigate }) {
               <Text style={{ fontFamily: day.isToday ? fonts.sansBold : fonts.sans, fontSize: 10, color: day.isToday ? colors.primaryOnWhite : "#a8a29e" }}>
                 {day.label}
               </Text>
-            </View>
+            </Wrapper>
           );
         })}
       </View>
@@ -319,6 +363,7 @@ export default function MemberHome() {
                   caption: formatSessionDays(program.session_days?.[sessionNumber - 1]),
                   completed: workout ? completedIds.has(workout.id) : false,
                   isToday: sessionNumber === todaysSessionNumber,
+                  highlight: sessionNumber === todaysSessionNumber ? "today" : null,
                 };
               });
 
@@ -360,6 +405,14 @@ export default function MemberHome() {
         const workoutIds = workouts.map((w) => w.id);
         const completedIds = await getCompletedSpcWorkoutIdsForWeek(profile.id, workoutIds, weekNumber);
 
+        // SPC has no day-of-week mapping (a client just picks whichever day
+        // fits), so there's no literal "today's session" the way group has —
+        // instead, highlight whichever session isn't done yet, same
+        // "next up" logic My Fitness's own default-session picker already
+        // uses. No "Today" text label on these bubbles, just the highlight.
+        const defaultWorkout = workouts.find((w) => !completedIds.has(w.id)) ?? workouts[0];
+        const defaultSessionNumber = defaultWorkout?.session_number ?? null;
+
         const rows = Array.from({ length: sessionsPerWeek }, (_, i) => i + 1).map((sessionNumber) => {
           const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
           const resolvedTitle = workout?.title || "Untitled session";
@@ -371,7 +424,7 @@ export default function MemberHome() {
             label: `Session ${sessionNumber}`,
             title: resolvedTitle,
             completed: workout ? completedIds.has(workout.id) : false,
-            isToday: false,
+            highlight: sessionNumber === defaultSessionNumber ? "next" : null,
           };
         });
 
@@ -491,6 +544,13 @@ export default function MemberHome() {
       loading: true,
       title: `${groupEntry.programName} — Week ${groupEntry.weekNumber}, ${row.label}`,
       subtitle: row.title !== "Untitled session" ? row.title : null,
+      completed: row.completed,
+      logParams: {
+        session: "group",
+        groupProgramId: groupEntry.groupProgramId,
+        weekNumber: String(groupEntry.weekNumber),
+        sessionNumber: String(row.sessionNumber),
+      },
       warmups: [],
       exercises: [],
     });
@@ -507,13 +567,15 @@ export default function MemberHome() {
     }));
   };
 
-  const openSpcPreview = async (row) => {
+  const openSpcPreview = async (spc, row) => {
     if (!row.workout) return;
     setPreview({
       visible: true,
       loading: true,
       title: `SPC — ${row.label}`,
       subtitle: row.title !== "Untitled session" ? row.title : null,
+      completed: row.completed,
+      logParams: { session: "spc", weekNumber: String(spc.weekNumber), sessionNumber: String(row.sessionNumber) },
       warmups: [],
       exercises: [],
     });
@@ -531,7 +593,16 @@ export default function MemberHome() {
   };
 
   const openOneOffPreview = async (item) => {
-    setPreview({ visible: true, loading: true, title: item.label, subtitle: null, warmups: [], exercises: [] });
+    setPreview({
+      visible: true,
+      loading: true,
+      title: item.label,
+      subtitle: null,
+      completed: item.completed,
+      logParams: { session: "one_off", oneOffWorkoutId: item.workoutId },
+      warmups: [],
+      exercises: [],
+    });
     const [warmups, exercises] = await Promise.all([listOneOffWarmups(item.workoutId), listOneOffExercises(item.workoutId)]);
     setPreview((p) => ({
       ...p,
@@ -546,6 +617,13 @@ export default function MemberHome() {
   };
 
   const closePreview = () => setPreview((p) => (p ? { ...p, visible: false } : p));
+
+  const handleLogPress = () => {
+    const logParams = preview?.logParams;
+    if (!logParams) return;
+    closePreview();
+    router.push({ pathname: "/(member)/plan", params: logParams });
+  };
 
   if (groupsLoading) {
     return (
@@ -646,7 +724,7 @@ export default function MemberHome() {
       {spc?.status === "ready" && (
         <ProgramCard
           title="SPC"
-          rows={spc.rows.map((row) => ({ ...row, onPress: () => openSpcPreview(row) }))}
+          rows={spc.rows.map((row) => ({ ...row, onPress: () => openSpcPreview(spc, row) }))}
           target={spc.sessionsPerWeek}
           completedCount={spc.rows.filter((r) => r.completed).length}
           onNavigate={() => router.push({ pathname: "/(member)/plan", params: { program: "spc" } })}
@@ -661,7 +739,11 @@ export default function MemberHome() {
       )}
 
       {nutrition?.status === "ready" && (
-        <NutritionStrip days={nutrition.days} onNavigate={() => router.push("/(member)/nutrition")} />
+        <NutritionStrip
+          days={nutrition.days}
+          onNavigate={() => router.push("/(member)/nutrition")}
+          onDayPress={(date) => router.push({ pathname: "/(member)/nutrition", params: { date } })}
+        />
       )}
 
       <SessionPreviewModal
@@ -672,6 +754,8 @@ export default function MemberHome() {
         loading={preview?.loading}
         warmups={preview?.warmups}
         exercises={preview?.exercises}
+        completed={preview?.completed}
+        onLogPress={handleLogPress}
       />
     </ScrollView>
   );

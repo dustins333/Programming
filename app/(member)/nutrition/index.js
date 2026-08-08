@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Image, TextInput, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
-import { todayInBoise, addDays } from "../../../lib/boiseDate";
+import { todayInBoise, addDays, daysBetween } from "../../../lib/boiseDate";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { getCurrentTarget, deriveCalories } from "../../../lib/nutrition/targets";
@@ -109,6 +109,7 @@ function FocusRow({ item, onChanged }) {
 export default function NutritionToday() {
   const { profile } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const today = todayInBoise();
   const access = useNutritionAccess(profile.id);
@@ -131,6 +132,19 @@ export default function NutritionToday() {
 
   const [dateOffset, setDateOffset] = useState(0);
   const selectedDate = addDays(today, -dateOffset);
+  // A tap on a specific My Week nutrition day-bubble arrives here as a
+  // `date` param — sync it into dateOffset once per fresh navigation. Tabs
+  // stay mounted, so a plain mount-only read of the param would miss a
+  // second visit; same "applied param ref" idiom plan.js already uses for
+  // its own `program` param. Only past-or-today dates are ever linked here
+  // (My Week only makes past/today day-bubbles tappable), so no negative
+  // offset (future-date) case to guard against.
+  const appliedDateParamRef = useRef(undefined);
+  useEffect(() => {
+    if (!params.date || appliedDateParamRef.current === params.date) return;
+    appliedDateParamRef.current = params.date;
+    setDateOffset(Math.max(0, daysBetween(today, params.date)));
+  }, [params.date, today]);
 
   const [target, setTarget] = useState(null);
   const [focusItems, setFocusItems] = useState([]);

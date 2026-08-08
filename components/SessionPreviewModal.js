@@ -6,7 +6,7 @@ import { fonts, colors } from "../lib/theme";
 // warmups/exercises into plain label/detail strings so this component
 // stays shape-agnostic between group's {sets, reps, tempo} and SPC's
 // per-week {sets, reps, rest} exercise rows.
-export function SessionPreviewModal({ visible, onClose, title, subtitle, loading, warmups, exercises }) {
+export function SessionPreviewModal({ visible, onClose, title, subtitle, loading, warmups, exercises, completed, onLogPress }) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable onPress={onClose} className="flex-1 items-center justify-center bg-black/40 px-4">
@@ -65,6 +65,18 @@ export function SessionPreviewModal({ visible, onClose, title, subtitle, loading
               </View>
             </ScrollView>
           )}
+
+          {!loading && onLogPress ? (
+            <Pressable
+              onPress={onLogPress}
+              className="mt-4 items-center justify-center"
+              style={{ height: 52, borderRadius: 12, backgroundColor: completed ? "#4d6142" : colors.primary }}
+            >
+              <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
+                {completed ? "Update session" : "Log session"}
+              </Text>
+            </Pressable>
+          ) : null}
         </Pressable>
       </Pressable>
     </Modal>
