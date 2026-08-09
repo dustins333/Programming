@@ -117,6 +117,7 @@ export default function Announcements() {
   const extraKeyboardPadding = keyboardHeight > 0 ? DONE_BAR_HEIGHT : 0;
   const [audience, setAudience] = useState("all");
   const [targetGroupProgramId, setTargetGroupProgramId] = useState(null);
+  const [requiresReload, setRequiresReload] = useState(false);
   const [timing, setTiming] = useState("now");
   const [scheduleDate, setScheduleDate] = useState(() => toDateValue(roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000))));
   const [scheduleTime, setScheduleTime] = useState(() => toTimeValue(roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000))));
@@ -153,6 +154,7 @@ export default function Announcements() {
     setMessage("");
     setAudience("all");
     setTargetGroupProgramId(null);
+    setRequiresReload(false);
     setTiming("now");
     const nextDefault = roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000));
     setScheduleDate(toDateValue(nextDefault));
@@ -179,7 +181,7 @@ export default function Announcements() {
     try {
       const sendAt = resolveSendAt();
       const created = await createAnnouncement(
-        { title, message, sendAt, targetType: audience, targetGroupProgramId },
+        { title, message, sendAt, targetType: audience, targetGroupProgramId, requiresReload },
         profile.id
       );
       if (timing === "now") {
@@ -268,6 +270,17 @@ export default function Announcements() {
             className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
             style={{ fontFamily: fonts.sans, minHeight: 90, textAlignVertical: "top" }}
           />
+
+          <Pressable onPress={() => setRequiresReload((v) => !v)} className="mb-4 flex-row items-center gap-2">
+            <Ionicons
+              name={requiresReload ? "checkbox" : "checkbox-outline"}
+              size={20}
+              color={requiresReload ? colors.primary : "#a8a29e"}
+            />
+            <Text className="flex-1 text-sm" style={{ fontFamily: fonts.sans, color: "#57534e" }}>
+              Requires a refresh to take effect (adds a "Refresh now" button, web only)
+            </Text>
+          </Pressable>
 
           <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
             Audience
@@ -394,6 +407,7 @@ export default function Announcements() {
                     {audienceLabel(a, groupPrograms)} · {isFuture ? "Scheduled for " : "Sent "}
                     {formatDateTimeInBoise(a.send_at)}
                     {a.pushed_at ? " · Pushed" : isFuture ? " · Pending" : " · In-app only"}
+                    {a.requires_reload ? " · Refresh prompt" : ""}
                   </Text>
                 </View>
                 <Pressable onPress={() => handleDelete(a.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>

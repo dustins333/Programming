@@ -7,6 +7,23 @@
 // scan-nutrition-reminders: someone still mid-onboarding has no check-in
 // cadence to announce yet.
 //
+// Now fires as a real programming.announcements row (target_type:
+// "nutrition") instead of a bare push — per direct ask, this is meant to be
+// the Announcements pipeline's first recurring use, not a bespoke push-only
+// notification. That gets it a real in-app popup (not just a push banner)
+// and a visible entry in the Announcements page's History for free, with no
+// new generic "recurring announcement" system needed — the day/time/content
+// config for this one specific case stays exactly where it already lived
+// (Settings -> Nutrition), only the delivery mechanism changed.
+//
+// The per-user notify_checkin_available opt-out only ever gated the push
+// half in the original version, so it's applied the same way here: the
+// announcement row is inserted (and its pushed_at stamped immediately, so
+// scan-announcements' own poll doesn't also try to push it) unconditionally
+// for the whole nutrition audience — everyone still sees the in-app popup —
+// but the push loop itself still skips anyone who's opted out, same as
+// before this change.
+//
 // Title/body/send-day/time are coach-editable (Settings -> Nutrition, see
 // CLAUDE.md's "Loom or Zoom" session) via core.settings, not hardcoded —
 // this function now polls frequently (see its cron migration) and gates on
@@ -110,13 +127,37 @@ Deno.serve(async (req) => {
     .in("id", clientIds.length > 0 ? clientIds : ["00000000-0000-0000-0000-000000000000"]);
   const prefsByUserId = Object.fromEntries((prefRows ?? []).map((r) => [r.id, r]));
 
-  const results = { scanned: clients?.length ?? 0, pushed: 0, errors: [] as string[] };
+  const results = { scanned: clients?.length ?? 0, pushed: 0, announcementId: null as string | null, errors: [] as string[] };
+
+  // Real announcement row so it gets the same in-app popup + History
+  // visibility as any other announcement — pushed_at is stamped right away
+  // (not left null) so scan-announcements' own 15-minute poll doesn't also
+  // try to push this out a second time.
+  const { data: announcement, error: announcementError } = await admin
+    .schema("programming")
+    .from("announcements")
+    .insert({
+      title,
+      message: body,
+      target_type: "nutrition",
+      send_at: new Date().toISOString(),
+      pushed_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (announcementError) {
+    return new Response(JSON.stringify({ error: announcementError.message }), { status: 500 });
+  }
+  results.announcementId = announcement.id;
 
   for (const client of clients ?? []) {
     try {
       if (prefsByUserId[client.id]?.notify_checkin_available === false) continue;
 
-      const result = await sendPushToUser(admin, client.id, title, body, { type: "nutrition_checkin_available" });
+      const result = await sendPushToUser(admin, client.id, title, body, {
+        type: "announcement",
+        announcementId: announcement.id,
+      });
       if (result.sent > 0) results.pushed += 1;
     } catch (err) {
       results.errors.push(`${client.id}: ${err instanceof Error ? err.message : String(err)}`);

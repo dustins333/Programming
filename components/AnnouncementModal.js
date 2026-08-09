@@ -1,4 +1,4 @@
-import { Modal, View, Text, Pressable } from "react-native";
+import { Modal, View, Text, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 
@@ -10,7 +10,13 @@ import { fonts, colors } from "../lib/theme";
 // fixed "Congrats!" copy — only the title shows anywhere else (push
 // notification banners, if the device has one registered); the message body
 // only ever shows here.
-export function AnnouncementModal({ announcement, onClose }) {
+//
+// requires_reload (set on the compose form for a functional/code-update
+// announcement) swaps the single "Got it" button for a real "Refresh now" /
+// "I'll do it later" pair — web only, since a native rebuild can't be
+// pushed by a page reload the way a stale PWA tab can.
+export function AnnouncementModal({ announcement, onClose, onRefresh }) {
+  const showRefresh = Boolean(announcement?.requires_reload) && Platform.OS === "web";
   return (
     <Modal visible={!!announcement} animationType="fade" transparent onRequestClose={onClose}>
       <View className="flex-1 items-center justify-center bg-black/40 px-6">
@@ -24,11 +30,24 @@ export function AnnouncementModal({ announcement, onClose }) {
           <Text className="mb-6 text-center" style={{ fontFamily: fonts.sans, color: "#57534e" }}>
             {announcement?.message}
           </Text>
-          <Pressable onPress={onClose} className="items-center rounded-lg px-6 py-3" style={{ backgroundColor: colors.primary }}>
-            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-              Got it
-            </Text>
-          </Pressable>
+          {showRefresh ? (
+            <>
+              <Pressable onPress={onRefresh} className="items-center rounded-lg px-6 py-3" style={{ backgroundColor: colors.primary }}>
+                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                  Refresh now
+                </Text>
+              </Pressable>
+              <Pressable onPress={onClose} className="mt-3 items-center">
+                <Text style={{ fontFamily: fonts.sansMedium, color: "#78716c", fontSize: 13 }}>I'll do it later</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Pressable onPress={onClose} className="items-center rounded-lg px-6 py-3" style={{ backgroundColor: colors.primary }}>
+              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                Got it
+              </Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </Modal>
