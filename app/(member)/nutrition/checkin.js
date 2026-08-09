@@ -11,6 +11,7 @@ import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
 import { getClientQuestions, getCheckinForWeek, submitCheckin, getActiveCheckinReopen } from "../../../lib/nutrition/checkin";
 import { listAllPhotos, isPhotoRequirementWeek, hasAllAngles, PHOTO_RECENCY_DAYS } from "../../../lib/nutrition/photos";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
+import { ZoomSchedulerModal } from "../../../components/nutrition/ZoomSchedulerModal";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { formatDateMDY } from "../../../lib/formatDate";
@@ -45,6 +46,30 @@ function TaskRow({ title, subtitle, done, onPress }) {
       </View>
       <Ionicons name="chevron-forward" size={16} color="#a8a29e" />
     </Pressable>
+  );
+}
+
+// Radio-button rendering for a single_choice question (migration 0042) —
+// used in place of the free-text TextInput below, in both the live and
+// reopened-week forms.
+function ChoiceQuestion({ question, value, onChange }) {
+  return (
+    <View className="mb-4">
+      <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+        {question.question_text}
+      </Text>
+      {(question.options || []).map((opt) => {
+        const selected = value === opt;
+        return (
+          <Pressable key={opt} onPress={() => onChange(opt)} className="mb-2 flex-row items-center gap-2.5 py-1">
+            <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={19} color={selected ? colors.primaryOnWhite : "#a8a29e"} />
+            <Text className="text-base" style={{ fontFamily: fonts.sans }}>
+              {opt}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -150,6 +175,11 @@ export default function WeeklyCheckin() {
   const [reopenSubmitError, setReopenSubmitError] = useState(null);
   const [reopenSubmitted, setReopenSubmitted] = useState(false);
 
+  // Opened right after a successful submit if the member's answer to a
+  // single_choice question matches that question's booking_option (the
+  // "Loom or Zoom" question, once a coach sets it up — see migration 0042).
+  const [schedulerOpen, setSchedulerOpen] = useState(false);
+
   const load = async () => {
     try {
       const [q, r, p] = await Promise.all([
@@ -203,6 +233,22 @@ export default function WeeklyCheckin() {
   const reopenFormSatisfied = questions ? questions.every((q) => (reopenAnswers[q.id] || "").trim().length > 0) : false;
   const reopenCanFinalize = reopenPhotosSatisfied && (questions?.length === 0 || reopenFormSatisfied);
 
+  const answerTriggersBooking = (answersMap) =>
+    (questions || []).some((q) => q.question_type === "single_choice" && q.booking_option && answersMap[q.id] === q.booking_option);
+
+  // Finalize used to just be silently disabled when the form wasn't ready —
+  // no explanation, which read as "the button isn't working." Now the
+  // button stays tappable and this builds a specific "go do X" message
+  // instead, shown via the existing submitError/reopenSubmitError text.
+  const buildReadinessMessage = (answersMap, needsPhotos, photosOk) => {
+    const missingCount = (questions || []).filter((q) => !(answersMap[q.id] || "").trim()).length;
+    const parts = [];
+    if (needsPhotos && !photosOk) parts.push("upload this week's progress photos");
+    if (missingCount > 0) parts.push(`answer the ${missingCount} remaining question${missingCount === 1 ? "" : "s"} in the check-in form`);
+    if (parts.length === 0) return null;
+    return `Before finalizing, ${parts.join(" and ")}.`;
+  };
+
   const handlePhotosUploaded = async () => {
     setPhotoPopupOpen(false);
     try {
@@ -222,6 +268,10 @@ export default function WeeklyCheckin() {
   };
 
   const handleReopenSubmit = async () => {
+    if (!reopenCanFinalize) {
+      setReopenSubmitError(buildReadinessMessage(reopenAnswers, reopenPhotosRequired, reopenPhotosSatisfied));
+      return;
+    }
     setReopenSubmitting(true);
     setReopenSubmitError(null);
     try {
@@ -232,6 +282,7 @@ export default function WeeklyCheckin() {
       });
       setReopenSubmitted(true);
       setReopen(null);
+      if (answerTriggersBooking(reopenAnswers)) setSchedulerOpen(true);
     } catch (err) {
       setReopenSubmitError(err.message ?? String(err));
     } finally {
@@ -240,12 +291,17 @@ export default function WeeklyCheckin() {
   };
 
   const handleSubmit = async () => {
+    if (!canFinalize) {
+      setSubmitError(buildReadinessMessage(answers, photosRequired, photosSatisfied));
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
       const payload = questions.map((q) => ({ question: q.question_text, answer: answers[q.id] || "" }));
       const saved = await submitCheckin(profile.id, payload, { photosSkipReason: !photosUploaded ? skipReason : null });
       setResponse(saved);
+      if (answerTriggersBooking(answers)) setSchedulerOpen(true);
     } catch (err) {
       setSubmitError(err.message ?? String(err));
     } finally {
@@ -340,7 +396,8 @@ export default function WeeklyCheckin() {
 
           <Pressable
             onPress={handleReopenSubmit}
-            disabled={reopenSubmitting || !reopenCanFinalize}
+            disabled={reopenSubmitting}
+            style={!reopenCanFinalize ? { opacity: 0.5 } : undefined}
             className="mt-1 items-center rounded-lg bg-primary py-3 disabled:opacity-50"
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
@@ -405,7 +462,8 @@ export default function WeeklyCheckin() {
           {questions.length > 0 || photosRequired ? (
             <Pressable
               onPress={handleSubmit}
-              disabled={submitting || !canFinalize}
+              disabled={submitting}
+              style={!canFinalize ? { opacity: 0.5 } : undefined}
               className="mt-2 items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
             >
               <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
@@ -441,21 +499,25 @@ export default function WeeklyCheckin() {
       </PopupModal>
 
       <PopupModal visible={formPopupOpen} title="Check-in form" onClose={() => setFormPopupOpen(false)}>
-        {questions.map((q) => (
-          <View key={q.id} className="mb-4">
-            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-              {q.question_text}
-            </Text>
-            <TextInput
-              value={answers[q.id] || ""}
-              onChangeText={(t) => setAnswers((a) => ({ ...a, [q.id]: t }))}
-              multiline
-              inputAccessoryViewID={NUMERIC_DONE_ID}
-              className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
-              style={{ fontFamily: fonts.sans }}
-            />
-          </View>
-        ))}
+        {questions.map((q) =>
+          q.question_type === "single_choice" ? (
+            <ChoiceQuestion key={q.id} question={q} value={answers[q.id] || ""} onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))} />
+          ) : (
+            <View key={q.id} className="mb-4">
+              <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                {q.question_text}
+              </Text>
+              <TextInput
+                value={answers[q.id] || ""}
+                onChangeText={(t) => setAnswers((a) => ({ ...a, [q.id]: t }))}
+                multiline
+                inputAccessoryViewID={NUMERIC_DONE_ID}
+                className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
+                style={{ fontFamily: fonts.sans }}
+              />
+            </View>
+          )
+        )}
         <Pressable onPress={() => setFormPopupOpen(false)} className="items-center rounded-lg bg-primary py-3">
           <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
             Done
@@ -500,21 +562,25 @@ export default function WeeklyCheckin() {
           </PopupModal>
 
           <PopupModal visible={reopenFormPopupOpen} title="Check-in form" onClose={() => setReopenFormPopupOpen(false)}>
-            {questions.map((q) => (
-              <View key={q.id} className="mb-4">
-                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                  {q.question_text}
-                </Text>
-                <TextInput
-                  value={reopenAnswers[q.id] || ""}
-                  onChangeText={(t) => setReopenAnswers((a) => ({ ...a, [q.id]: t }))}
-                  multiline
-                  inputAccessoryViewID={NUMERIC_DONE_ID}
-                  className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
-                  style={{ fontFamily: fonts.sans }}
-                />
-              </View>
-            ))}
+            {questions.map((q) =>
+              q.question_type === "single_choice" ? (
+                <ChoiceQuestion key={q.id} question={q} value={reopenAnswers[q.id] || ""} onChange={(v) => setReopenAnswers((a) => ({ ...a, [q.id]: v }))} />
+              ) : (
+                <View key={q.id} className="mb-4">
+                  <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                    {q.question_text}
+                  </Text>
+                  <TextInput
+                    value={reopenAnswers[q.id] || ""}
+                    onChangeText={(t) => setReopenAnswers((a) => ({ ...a, [q.id]: t }))}
+                    multiline
+                    inputAccessoryViewID={NUMERIC_DONE_ID}
+                    className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
+                    style={{ fontFamily: fonts.sans }}
+                  />
+                </View>
+              )
+            )}
             <Pressable onPress={() => setReopenFormPopupOpen(false)} className="items-center rounded-lg bg-primary py-3">
               <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                 Done
@@ -533,6 +599,8 @@ export default function WeeklyCheckin() {
           />
         </>
       ) : null}
+
+      <ZoomSchedulerModal visible={schedulerOpen} onClose={() => setSchedulerOpen(false)} />
     </ScrollView>
   );
 }

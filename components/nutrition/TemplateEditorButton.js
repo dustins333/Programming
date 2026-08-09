@@ -7,7 +7,7 @@ import { fonts, colors } from "../../lib/theme";
 // A question template (weekly check-in / onboarding questionnaire) collapsed
 // behind a button — clicking it pops the editor open in a modal instead of
 // the list sitting permanently expanded on the page.
-export function TemplateEditorButton({ label, description, questions, onAdd, onUpdate, onDelete, onMove }) {
+export function TemplateEditorButton({ label, description, questions, onAdd, onUpdate, onDelete, onMove, choicesEnabled }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -34,6 +34,7 @@ export function TemplateEditorButton({ label, description, questions, onAdd, onU
                 onUpdate={onUpdate}
                 onDelete={onDelete}
                 onMove={onMove}
+                choicesEnabled={choicesEnabled}
               />
             </ScrollView>
             <View className="flex-row justify-end border-t border-stone-100 p-4">

@@ -1,18 +1,42 @@
 // Ported from the standalone Nutrition Tracker app's
 // app/api/cron/checkin-available/route.js — announces the new week's
-// check-in is open. Unconditional (unlike scan-nutrition-reminders' checks),
-// scheduled to only run Sundays (see 0014_nutrition_reminder_cron.sql), same
-// split as the source app. Rewritten to query the same live public.* tables
-// the standalone app itself uses (was originally against Kova's placeholder
+// check-in is open. Rewritten to query the same live public.* tables the
+// standalone app itself uses (was originally against Kova's placeholder
 // nutrition.* schema) — see CLAUDE.md's nutrition-rebuild section. Only
 // announces to clients past onboarding, same reasoning as
 // scan-nutrition-reminders: someone still mid-onboarding has no check-in
 // cadence to announce yet.
 //
+// Title/body/send-day/time are coach-editable (Settings -> Nutrition, see
+// CLAUDE.md's "Loom or Zoom" session) via core.settings, not hardcoded —
+// this function now polls frequently (see its cron migration) and gates on
+// the configured weekday/time itself, same "poll cheap, gate inside the
+// function" shape as scan-payroll-deadline-reminders/scan-announcements,
+// rather than being a fixed once-a-week cron. A per-week idempotency guard
+// (nutrition_checkin_available_last_sent_date) stops it from re-firing every
+// poll for the rest of the matched day, since — unlike payroll's deadline
+// nag, which naturally stops once a coach finalizes — there's no state
+// change that would otherwise end the matching window on its own.
+//
 // Deploy with: supabase functions deploy scan-nutrition-checkin-available --no-verify-jwt
 // Reuses the same CRON_SECRET already set for scan-spc-alerts.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sendPushToUser } from "../_shared/expoPush.ts";
+
+const TIMEZONE = "America/Boise";
+
+function todayInBoise() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+// 0=Sunday..6=Saturday, matching lib/boiseDate.js's dayOfWeekInBoise().
+function weekdayInBoise(dateString: string) {
+  return new Date(`${dateString}T12:00:00`).getDay();
+}
+
+function currentTimeInBoise() {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+}
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -29,15 +53,41 @@ Deno.serve(async (req) => {
   const admin = createClient(supabaseUrl, serviceRoleKey);
   const core = admin.schema("core");
 
-  const { data: setting } = await core
+  const { data: settingRows } = await core
     .from("settings")
-    .select("value")
-    .eq("key", "notify_nutrition_checkin_available")
-    .maybeSingle();
-  const enabled = (setting?.value ?? true) !== false;
+    .select("key, value")
+    .in("key", [
+      "notify_nutrition_checkin_available",
+      "nutrition_checkin_available_title",
+      "nutrition_checkin_available_body",
+      "nutrition_checkin_available_weekday",
+      "nutrition_checkin_available_time",
+      "nutrition_checkin_available_last_sent_date",
+    ]);
+  const settingsByKey = Object.fromEntries((settingRows ?? []).map((r) => [r.key, r.value]));
+
+  const enabled = (settingsByKey.notify_nutrition_checkin_available ?? true) !== false;
+  const title = settingsByKey.nutrition_checkin_available_title ?? "Weekly check-in available";
+  const body = settingsByKey.nutrition_checkin_available_body ?? "Your weekly check-in is ready for you to fill out.";
+  const targetWeekday = Number(settingsByKey.nutrition_checkin_available_weekday ?? 0);
+  const targetTime = settingsByKey.nutrition_checkin_available_time ?? "08:00";
+  const lastSentDate = settingsByKey.nutrition_checkin_available_last_sent_date ?? null;
 
   if (!enabled) {
     return new Response(JSON.stringify({ scanned: 0, pushed: 0, skipped: "disabled", errors: [] }), { status: 200 });
+  }
+
+  const today = todayInBoise();
+
+  if (lastSentDate === today) {
+    return new Response(JSON.stringify({ skipped: true, reason: "already sent today" }), { status: 200 });
+  }
+
+  // Only fire on the configured weekday, once the configured time has
+  // passed — this function can run every 15 minutes via cron without
+  // spamming a push on every single invocation.
+  if (weekdayInBoise(today) !== targetWeekday || currentTimeInBoise() < targetTime) {
+    return new Response(JSON.stringify({ skipped: true, reason: "not yet the configured send window" }), { status: 200 });
   }
 
   const { data: clients, error: clientsError } = await admin
@@ -66,18 +116,19 @@ Deno.serve(async (req) => {
     try {
       if (prefsByUserId[client.id]?.notify_checkin_available === false) continue;
 
-      const result = await sendPushToUser(
-        admin,
-        client.id,
-        "Weekly check-in available",
-        "Your weekly check-in is ready for you to fill out.",
-        { type: "nutrition_checkin_available" }
-      );
+      const result = await sendPushToUser(admin, client.id, title, body, { type: "nutrition_checkin_available" });
       if (result.sent > 0) results.pushed += 1;
     } catch (err) {
       results.errors.push(`${client.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
+  // Stamped after the run regardless of whether any individual push failed
+  // — this is "did we already announce today," not "did every push
+  // succeed," so a partial delivery failure shouldn't cause a same-day
+  // resend attempt against everyone (including the clients who already got
+  // it) on the next 15-minute poll.
+  await core.from("settings").upsert({ key: "nutrition_checkin_available_last_sent_date", value: today, updated_at: new Date().toISOString() }, { onConflict: "key" });
 
   return new Response(JSON.stringify(results), {
     status: 200,

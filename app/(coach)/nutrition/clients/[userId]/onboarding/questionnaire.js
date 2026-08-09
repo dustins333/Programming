@@ -65,8 +65,8 @@ export default function OnboardingQuestionnaire() {
     await load();
   };
 
-  const handleUpdateQuestion = async (id, text) => {
-    await updateQuestionnaireQuestion(id, { question_text: text });
+  const handleUpdateQuestion = async (id, fields) => {
+    await updateQuestionnaireQuestion(id, fields);
     await load();
   };
 

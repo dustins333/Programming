@@ -117,8 +117,8 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
     await addClientQuestion(userId, text, nextPosition(questions));
     await loadQuestions();
   };
-  const handleUpdateQuestion = async (id, text) => {
-    await updateClientQuestion(id, { question_text: text });
+  const handleUpdateQuestion = async (id, fields) => {
+    await updateClientQuestion(id, fields);
     await loadQuestions();
   };
   const handleDeleteQuestion = async (id) => {
@@ -240,6 +240,7 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
                 onUpdate={handleUpdateQuestion}
                 onDelete={handleDeleteQuestion}
                 onMove={handleMoveQuestion}
+                choicesEnabled
               />
             </ExpandableSection>
 

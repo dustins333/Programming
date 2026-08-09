@@ -27,8 +27,45 @@ import { toastError, toastSuccess } from "../../lib/toast";
 import { CoachShell } from "../../components/CoachShell";
 import { AddStaffModal } from "../../components/AddStaffModal";
 import { TemplateEditorButton } from "../../components/nutrition/TemplateEditorButton";
+import { NativePickerField } from "../../components/NativePickerField";
 import { NUMERIC_DONE_ID } from "../../components/NumericInputAccessory";
 import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../lib/scrollToKeyboard";
+
+const isWeb = Platform.OS === "web";
+
+// scan-nutrition-checkin-available polls every 15 minutes (see its cron
+// migration) — quarter-hour granularity here is an honest reflection of
+// that, same reasoning as announcements/index.js's own TIME_OPTIONS.
+function buildTimeOptions() {
+  const options = [];
+  for (let h = 0; h < 24; h += 1) {
+    for (const m of [0, 15, 30, 45]) {
+      const pad = (n) => String(n).padStart(2, "0");
+      const period = h < 12 ? "AM" : "PM";
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      options.push({ value: `${pad(h)}:${pad(m)}`, label: `${h12}:${pad(m)} ${period}` });
+    }
+  }
+  return options;
+}
+const TIME_OPTIONS = buildTimeOptions();
+
+const WEEKDAY_OPTIONS = [
+  { value: 0, label: "Sun" },
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+];
+
+const CHECKIN_NOTIF_DEFAULTS = {
+  title: "Weekly check-in available",
+  body: "Your weekly check-in is ready for you to fill out.",
+  weekday: 0,
+  time: "08:00",
+};
 
 const LABELS = {
   alert_lead_time_days: "Alert lead time (days before a block ends)",
@@ -44,7 +81,7 @@ const SETTINGS_TABS = [
   { key: "team", label: "Team" },
   { key: "defaults", label: "Program Defaults" },
   { key: "equipment", label: "Equipment" },
-  { key: "templates", label: "Nutrition Templates" },
+  { key: "templates", label: "Nutrition" },
   { key: "notifications", label: "Notifications" },
   { key: "messaging", label: "Messaging" },
   { key: "diagnostics", label: "Diagnostics" },
@@ -91,11 +128,9 @@ const NOTIFICATION_TOGGLES = [
     label: "Weekly check-in still needed",
     description: "Monday nudge to a nutrition client if last week's check-in was never submitted.",
   },
-  {
-    key: "notify_nutrition_checkin_available",
-    label: "Weekly check-in available",
-    description: "Sunday announcement to every nutrition client that the new week's check-in is open.",
-  },
+  // notify_nutrition_checkin_available moved to Settings -> Nutrition, next
+  // to the templates it's paired with — its own card there also edits the
+  // notification's title/body/send day/time, not just an on/off toggle.
 ];
 
 export default function Settings() {
@@ -128,6 +163,8 @@ export default function Settings() {
   const [savingBars, setSavingBars] = useState(false);
   const [newBarName, setNewBarName] = useState("");
   const [newBarWeight, setNewBarWeight] = useState("");
+  const [checkinNotif, setCheckinNotif] = useState({ ...CHECKIN_NOTIF_DEFAULTS, enabled: true });
+  const [savingCheckinNotif, setSavingCheckinNotif] = useState(false);
 
   const loadCoaches = useCallback(async () => {
     try {
@@ -170,6 +207,25 @@ export default function Settings() {
     }
   }, []);
 
+  // Isolated the same way loadCoaches is. Bundled as one card/one save
+  // instead of reusing the generic NOTIFICATION_TOGGLES loop, since this one
+  // notification also has editable title/body/send-day/time, not just an
+  // on/off flag.
+  const loadCheckinNotif = useCallback(async () => {
+    try {
+      const [enabled, title, body, weekday, time] = await Promise.all([
+        getSetting("notify_nutrition_checkin_available", true),
+        getSetting("nutrition_checkin_available_title", CHECKIN_NOTIF_DEFAULTS.title),
+        getSetting("nutrition_checkin_available_body", CHECKIN_NOTIF_DEFAULTS.body),
+        getSetting("nutrition_checkin_available_weekday", CHECKIN_NOTIF_DEFAULTS.weekday),
+        getSetting("nutrition_checkin_available_time", CHECKIN_NOTIF_DEFAULTS.time),
+      ]);
+      setCheckinNotif({ enabled, title, body, weekday, time });
+    } catch (err) {
+      console.error("Failed to load check-in notification settings:", err);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     try {
       setLoadError(null);
@@ -190,10 +246,11 @@ export default function Settings() {
       await loadTemplates();
       await loadMessaging();
       await loadEquipment();
+      await loadCheckinNotif();
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
-  }, [loadCoaches, loadTemplates, loadMessaging, loadEquipment]);
+  }, [loadCoaches, loadTemplates, loadMessaging, loadEquipment, loadCheckinNotif]);
 
   const nextPosition = (list) => (list.length > 0 ? Math.max(...list.map((q) => q.position)) + 1 : 1);
 
@@ -201,8 +258,8 @@ export default function Settings() {
     await addTemplateQuestion(text, nextPosition(checkinQuestions));
     await loadTemplates();
   };
-  const handleUpdateCheckinQuestion = async (id, text) => {
-    await updateTemplateQuestion(id, { question_text: text });
+  const handleUpdateCheckinQuestion = async (id, fields) => {
+    await updateTemplateQuestion(id, fields);
     await loadTemplates();
   };
   const handleDeleteCheckinQuestion = async (id) => {
@@ -219,8 +276,8 @@ export default function Settings() {
     await addQuestionnaireTemplateQuestion(text, nextPosition(questionnaireQuestions));
     await loadTemplates();
   };
-  const handleUpdateQuestionnaireQuestion = async (id, text) => {
-    await updateQuestionnaireTemplateQuestion(id, { question_text: text });
+  const handleUpdateQuestionnaireQuestion = async (id, fields) => {
+    await updateQuestionnaireTemplateQuestion(id, fields);
     await loadTemplates();
   };
   const handleDeleteQuestionnaireQuestion = async (id) => {
@@ -278,6 +335,40 @@ export default function Settings() {
       toastError("Failed to save", err);
     } finally {
       setSavingNotifKey(null);
+    }
+  };
+
+  // A "day this last fired" guard also lives in core.settings
+  // (nutrition_checkin_available_last_sent_date) — the scan function reads
+  // and writes it, this page never touches it directly.
+  const handleToggleCheckinNotifEnabled = async (value) => {
+    const previous = checkinNotif.enabled;
+    setCheckinNotif((c) => ({ ...c, enabled: value }));
+    setSavingCheckinNotif(true);
+    try {
+      await updateSetting("notify_nutrition_checkin_available", value);
+    } catch (err) {
+      setCheckinNotif((c) => ({ ...c, enabled: previous }));
+      toastError("Failed to save", err);
+    } finally {
+      setSavingCheckinNotif(false);
+    }
+  };
+
+  const handleSaveCheckinNotif = async () => {
+    setSavingCheckinNotif(true);
+    try {
+      await Promise.all([
+        updateSetting("nutrition_checkin_available_title", checkinNotif.title),
+        updateSetting("nutrition_checkin_available_body", checkinNotif.body),
+        updateSetting("nutrition_checkin_available_weekday", checkinNotif.weekday),
+        updateSetting("nutrition_checkin_available_time", checkinNotif.time),
+      ]);
+      toastSuccess("Saved.");
+    } catch (err) {
+      toastError("Failed to save", err);
+    } finally {
+      setSavingCheckinNotif(false);
     }
   };
 
@@ -660,6 +751,7 @@ export default function Settings() {
             onUpdate={handleUpdateCheckinQuestion}
             onDelete={handleDeleteCheckinQuestion}
             onMove={handleMoveCheckinQuestion}
+            choicesEnabled
           />
         </View>
         <View>
@@ -672,6 +764,102 @@ export default function Settings() {
             onDelete={handleDeleteQuestionnaireQuestion}
             onMove={handleMoveQuestionnaireQuestion}
           />
+        </View>
+
+        <View className="mt-5 rounded-xl border border-stone-200 p-5">
+          <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+            "Check-in available" notification
+          </Text>
+          <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+            Sent to every nutrition client once a week when the new week's check-in opens.
+          </Text>
+
+          <View className="mb-4 flex-row items-center justify-between gap-4 py-1">
+            <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Enabled
+            </Text>
+            <Switch
+              value={checkinNotif.enabled}
+              onValueChange={handleToggleCheckinNotifEnabled}
+              disabled={savingCheckinNotif}
+              trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          <View style={{ opacity: checkinNotif.enabled ? 1 : 0.4 }} pointerEvents={checkinNotif.enabled ? "auto" : "none"}>
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Title
+            </Text>
+            <TextInput
+              value={checkinNotif.title}
+              onChangeText={(t) => setCheckinNotif((c) => ({ ...c, title: t }))}
+              className="mb-3 rounded-lg border border-stone-300 px-4 py-3"
+              style={{ fontFamily: fonts.sans }}
+            />
+
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Body
+            </Text>
+            <TextInput
+              value={checkinNotif.body}
+              onChangeText={(t) => setCheckinNotif((c) => ({ ...c, body: t }))}
+              multiline
+              inputAccessoryViewID={NUMERIC_DONE_ID}
+              className="mb-4 min-h-[70px] rounded-lg border border-stone-300 px-4 py-3"
+              style={{ fontFamily: fonts.sans }}
+            />
+
+            <Text className="mb-1.5 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Send on
+            </Text>
+            <View className="mb-4 flex-row flex-wrap gap-2">
+              {WEEKDAY_OPTIONS.map((d) => {
+                const active = checkinNotif.weekday === d.value;
+                return (
+                  <Pressable
+                    key={d.value}
+                    onPress={() => setCheckinNotif((c) => ({ ...c, weekday: d.value }))}
+                    className="rounded-full border px-3 py-1.5"
+                    style={{ borderColor: active ? colors.primary : "#d6d3d1", backgroundColor: active ? colors.primary : "transparent" }}
+                  >
+                    <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: active ? "white" : "#57534e" }}>{d.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text className="mb-1.5 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              At (Boise time)
+            </Text>
+            <View className="mb-1" style={{ maxWidth: 200 }}>
+              {isWeb ? (
+                <select
+                  value={checkinNotif.time}
+                  onChange={(e) => setCheckinNotif((c) => ({ ...c, time: e.target.value }))}
+                  style={{ fontFamily: fonts.sans, fontSize: 14, padding: "10px 10px", borderRadius: 8, border: "1px solid #d6d3d1" }}
+                >
+                  {TIME_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <NativePickerField options={TIME_OPTIONS} value={checkinNotif.time} onChange={(v) => setCheckinNotif((c) => ({ ...c, time: v }))} placeholder="Pick a time" />
+              )}
+            </View>
+
+            <Pressable
+              onPress={handleSaveCheckinNotif}
+              disabled={savingCheckinNotif}
+              className="mt-4 self-start rounded-lg bg-primary px-5 py-3 disabled:opacity-50"
+            >
+              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                {savingCheckinNotif ? "Saving…" : "Save changes"}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
       )}
