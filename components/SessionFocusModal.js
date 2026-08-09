@@ -390,7 +390,7 @@ export function SessionFocusModal({
                   onPress={handleFinalize}
                   disabled={finalizing}
                   className="items-center justify-center disabled:opacity-50"
-                  style={{
+                  style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1,
                     height: 52,
                     borderRadius: 12,
                     backgroundColor: isCompleted ? "#4d6142" : colors.primary,
@@ -398,7 +398,7 @@ export function SessionFocusModal({
                     shadowOffset: { width: 0, height: 6 },
                     shadowOpacity: 0.25,
                     shadowRadius: 16,
-                  }}
+                  })}
                 >
                   <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
                     {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}

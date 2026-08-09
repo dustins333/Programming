@@ -23,6 +23,10 @@ export function RatingSelect({ label, value, onChangeText, flex }) {
       <Text maxFontSizeMultiplier={1.3} numberOfLines={1} className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
         {label}
       </Text>
+      {/* Scale anchor — "(1-5)" alone never said which end was which. */}
+      <Text maxFontSizeMultiplier={1.2} numberOfLines={1} className="mb-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+        1 = low · 5 = high
+      </Text>
       {isWeb ? (
         <select
           value={value || ""}

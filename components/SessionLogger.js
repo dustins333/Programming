@@ -49,11 +49,12 @@ function GroupIndexRow({ group, summaries, completions, onPress }) {
     <Pressable
       onPress={onPress}
       className="mb-2.5 rounded-2xl bg-white px-4 py-3"
-      style={
+      style={({ pressed }) => [
         isSuperset
           ? { borderWidth: 1.5, borderColor: "#a46a57", borderStyle: "dashed" }
-          : { borderWidth: 1, borderColor: CARD_BORDER, shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 }
-      }
+          : { borderWidth: 1, borderColor: CARD_BORDER, shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 },
+        pressed && { opacity: 0.7 },
+      ]}
     >
       {isSuperset ? (
         <Text className="mb-1.5 self-start rounded-full px-2.5 py-0.5" style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#b23a22", backgroundColor: "#fdece5" }}>
@@ -287,7 +288,7 @@ export const SessionLogger = forwardRef(function SessionLogger({
             onPress={handleFinalize}
             disabled={finalizing}
             className="mt-2 items-center justify-center disabled:opacity-50"
-            style={{
+            style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1,
               height: 52,
               borderRadius: 12,
               backgroundColor: isCompleted ? "#4d6142" : colors.primary,
@@ -295,7 +296,7 @@ export const SessionLogger = forwardRef(function SessionLogger({
               shadowOffset: { width: 0, height: 6 },
               shadowOpacity: 0.25,
               shadowRadius: 16,
-            }}
+            })}
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
               {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}
@@ -350,7 +351,7 @@ export const SessionLogger = forwardRef(function SessionLogger({
           onPress={handleFinalize}
           disabled={finalizing}
           className="mt-2 items-center justify-center disabled:opacity-50"
-          style={{
+          style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1,
             height: 52,
             borderRadius: 12,
             backgroundColor: isCompleted ? "#4d6142" : colors.primary,
@@ -358,7 +359,7 @@ export const SessionLogger = forwardRef(function SessionLogger({
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.25,
             shadowRadius: 16,
-          }}
+          })}
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
             {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}

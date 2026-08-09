@@ -9,6 +9,7 @@ import { WeightCalculator } from "./WeightCalculator";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
 import { useShowLastTime, setShowLastTime } from "../lib/lastTimePref";
+import { RestTimer } from "./RestTimer";
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -377,7 +378,7 @@ export function ExerciseCard({
                       value={row.weight}
                       onChangeText={(v) => updateRow(i, "weight", v)}
                       onFocus={() => scrollFieldIntoView(cardRef.current)}
-                      placeholder="weight"
+                      placeholder="weight (lb)"
                       keyboardType="decimal-pad"
                       inputAccessoryViewID={NUMERIC_DONE_ID}
                       placeholderTextColor="#a8a29e"
@@ -418,6 +419,8 @@ export function ExerciseCard({
               </View>
             );
           })}
+          <RestTimer />
+
           {showHistory && history?.sets.find((s) => s.notes) ? (
             <Text className="mb-2" style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
               Last time's note: {history.sets.find((s) => s.notes).notes}

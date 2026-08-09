@@ -20,6 +20,7 @@ import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { retryOnce } from "../../lib/retry";
 import { SessionPreviewModal } from "../../components/SessionPreviewModal";
 import { fonts, colors, statusColors } from "../../lib/theme";
+import { showToast } from "../../lib/toast";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -70,8 +71,10 @@ function SessionBubble({ label, description, completed, published, onPress, capt
   const showHighlight = highlight && !weekDone;
   return (
     <Pressable
-      onPress={published ? onPress : undefined}
-      style={{
+      // A dead tap used to be the only feedback for an unpublished session —
+      // now it says why nothing opens.
+      onPress={published ? onPress : () => showToast("Not published yet — check back soon.")}
+      style={({ pressed }) => ({
         flex: fixedWidth ? undefined : 1,
         width: fixedWidth || undefined,
         minHeight: 78,
@@ -83,8 +86,8 @@ function SessionBubble({ label, description, completed, published, onPress, capt
         paddingHorizontal: 8,
         paddingTop: 12,
         paddingBottom: 10,
-        opacity: weekDone ? 0.55 : published ? 1 : 0.5,
-      }}
+        opacity: pressed ? 0.6 : weekDone ? 0.55 : published ? 1 : 0.5,
+      })}
     >
       {showHighlight ? (
         // Peach/primary family, not olive — olive already means "completed"
@@ -317,6 +320,7 @@ export default function MemberHome() {
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [spc, setSpc] = useState(null); // null = not enrolled
   const [nutrition, setNutrition] = useState(null);
+  const [nutritionEnrolled, setNutritionEnrolled] = useState(false);
   const [oneOffs, setOneOffs] = useState([]);
   const [hasUnread, setHasUnread] = useState(false);
   const [messagingEnabled, setMessagingEnabled] = useState(false);
@@ -483,6 +487,11 @@ export default function MemberHome() {
         // they're past the coach's Approve & Set Targets step, same gate
         // the 4-tab home itself uses (lib/nutrition/useNutritionAccess.js).
         const nutritionClient = await getNutritionClient(profile.id);
+        // Enrollment (any active row, approved or not) is tracked
+        // separately from the strip — it gates the "not assigned to a
+        // program" message below, which used to fire for nutrition-only
+        // members.
+        if (!isStale()) setNutritionEnrolled(nutritionClient?.status === "active");
         if (!nutritionClient || nutritionClient.status !== "active" || !nutritionClient.objective_tracking_approved_at) {
           return null;
         }
@@ -706,9 +715,14 @@ export default function MemberHome() {
         {formatToday()}
       </Text>
 
-      {groups.length === 0 && !spc && oneOffs.length === 0 && (
+      {groups.length === 0 && !spc && oneOffs.length === 0 && !nutritionEnrolled && (
         <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
           You're not assigned to a program yet — check with your coach.
+        </Text>
+      )}
+      {groups.length === 0 && !spc && oneOffs.length === 0 && nutritionEnrolled && (
+        <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
+          No training program yet — your nutrition plan lives on the My Nutrition tab.
         </Text>
       )}
 

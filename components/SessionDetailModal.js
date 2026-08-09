@@ -1,8 +1,24 @@
-import { useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { useMemo, useState } from "react";
+import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 import { SessionLogger } from "./SessionLogger";
+import { NativePickerField } from "./NativePickerField";
+import { todayInBoise, addDays, dayOfWeekInBoise } from "../lib/boiseDate";
+import { formatDateMDY } from "../lib/formatDate";
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// The last 30 days as picker options — replaces the free-typed YYYY-MM-DD
+// field, which was the most avoidable phone input in the member app.
+function buildRecentDateOptions() {
+  const today = todayInBoise();
+  return Array.from({ length: 30 }, (_, i) => {
+    const date = addDays(today, -i);
+    const label = `${WEEKDAY_SHORT[dayOfWeekInBoise(date)]} ${formatDateMDY(date)}${i === 0 ? " (today)" : i === 1 ? " (yesterday)" : ""}`;
+    return { value: date, label };
+  });
+}
 
 const CARD_BORDER = "#ece7e1";
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 };
@@ -66,6 +82,7 @@ export function SessionDetailModal({
 }) {
   const [logDate, setLogDate] = useState(defaultLogDate ?? "");
   const [dateLocked, setDateLocked] = useState(false);
+  const dateOptions = useMemo(buildRecentDateOptions, []);
 
   const showEditableUnfinalized = !completed && loggable;
 
@@ -135,14 +152,27 @@ export function SessionDetailModal({
                   <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
                     When did you do this?
                   </Text>
-                  <TextInput
-                    value={logDate}
-                    onChangeText={setLogDate}
-                    editable={!dateLocked}
-                    placeholder="YYYY-MM-DD"
-                    className="rounded-lg border border-stone-300 px-3 py-2.5"
-                    style={{ fontFamily: fonts.sans, width: 150, opacity: dateLocked ? 0.5 : 1 }}
-                  />
+                  {dateLocked ? (
+                    <Text className="rounded-lg border border-stone-200 px-3 py-2.5" style={{ fontFamily: fonts.sans, width: 210, opacity: 0.5, color: "#44403c" }}>
+                      {formatDateMDY(logDate)}
+                    </Text>
+                  ) : Platform.OS === "web" ? (
+                    <select
+                      value={logDate}
+                      onChange={(e) => setLogDate(e.target.value)}
+                      style={{ fontFamily: fonts.sans, fontSize: 14, width: 210, padding: "9px 12px", borderRadius: 8, border: "1px solid #d6d3d1", color: "#44403c", backgroundColor: "white" }}
+                    >
+                      {dateOptions.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <View style={{ width: 230, flexDirection: "row" }}>
+                      <NativePickerField options={dateOptions} value={logDate} onChange={setLogDate} placeholder="Pick a date" />
+                    </View>
+                  )}
                   <Text className="mb-3 mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
                     {dateLocked ? "Date locked — start over to change it." : "Defaults to today — change it if you did this earlier."}
                   </Text>

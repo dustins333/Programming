@@ -25,6 +25,7 @@ import { SessionLogger } from "../../components/SessionLogger";
 import { SessionFocusModal } from "../../components/SessionFocusModal";
 import { SessionInfoBar } from "../../components/SessionInfoBar";
 import { ProgramPickerModal } from "../../components/ProgramPickerModal";
+import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { fonts, colors } from "../../lib/theme";
 import { toastError, toastSuccess } from "../../lib/toast";
 
@@ -170,6 +171,7 @@ export default function MyFitness() {
   const [spcDetailError, setSpcDetailError] = useState(null);
   const [spcDetailRetryKey, setSpcDetailRetryKey] = useState(0);
   const [oneOffs, setOneOffs] = useState([]);
+  const [hasNutrition, setHasNutrition] = useState(false);
   // Set once the member picks an option from ProgramPickerModal (only shown
   // when My Fitness is opened with no specific session context and 2+
   // things are still due this week) — sticks for the rest of this screen's
@@ -462,6 +464,16 @@ export default function MyFitness() {
       console.error("My Fitness: failed to load one-offs", err);
       if (!isStale()) setOneOffs([]);
     }
+
+    // Only to tell a nutrition-only member apart from a genuinely
+    // unassigned one on the empty state below — this tab used to tell
+    // nutrition-only clients "you're not assigned to a program yet."
+    try {
+      const nutritionClient = await getNutritionClient(profile.id);
+      if (!isStale()) setHasNutrition(nutritionClient?.status === "active");
+    } catch {
+      if (!isStale()) setHasNutrition(false);
+    }
     // params.session/groupProgramId/weekNumber/sessionNumber deliberately
     // included — a fresh My Week deep link needs to re-resolve which
     // specific group session this loads even when the tab doesn't actually
@@ -692,9 +704,26 @@ export default function MyFitness() {
   if (groups.length === 0 && !hasSpc && oneOffs.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
-        <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
-          You're not assigned to a program yet — check with your coach.
-        </Text>
+        {hasNutrition ? (
+          <>
+            <Text className="mb-4 text-center text-stone-500" style={{ fontFamily: fonts.sans }}>
+              No training program yet — your plan lives on the My Nutrition tab.
+            </Text>
+            <Pressable
+              onPress={() => router.push("/(member)/nutrition")}
+              className="rounded-xl px-5 py-3"
+              style={{ backgroundColor: colors.primary }}
+            >
+              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                Go to My Nutrition
+              </Text>
+            </Pressable>
+          </>
+        ) : (
+          <Text className="text-center text-stone-500" style={{ fontFamily: fonts.sans }}>
+            You're not assigned to a program yet — check with your coach.
+          </Text>
+        )}
       </View>
     );
   }
@@ -710,7 +739,7 @@ export default function MyFitness() {
         flexDirection: "row",
         alignItems: "center",
         gap: 10,
-        borderBottomWidth: activeFinalize ? 0 : 1,
+        borderBottomWidth: activeFinalize || (focus?.type === "extras" && oneOffs.length > 0) ? 0 : 1,
         borderBottomColor: CARD_BORDER,
       }}
     >
@@ -719,7 +748,7 @@ export default function MyFitness() {
       </Pressable>
       <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>My Fitness</Text>
     </View>
-    {activeFinalize && (
+    {activeFinalize ? (
       <View style={{ paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: CARD_BORDER, backgroundColor: CANVAS }}>
         <SessionInfoBar
           eyebrow={activeFinalize.eyebrow}
@@ -733,7 +762,23 @@ export default function MyFitness() {
           onViewBlock={activeFinalize.onViewBlock}
         />
       </View>
-    )}
+    ) : focus?.type === "extras" && oneOffs.length > 0 ? (
+      // One-offs never become "the" activeFinalize (several can coexist, no
+      // single session to dock a Finalize for) — but an Extras logging
+      // session still deserves the same header identity + timer instead of
+      // a visibly different, chrome-less screen.
+      <View style={{ paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: CARD_BORDER, backgroundColor: CANVAS }}>
+        <SessionInfoBar
+          eyebrow="EXTRAS"
+          title={oneOffs.length === 1 ? oneOffs[0].workout.title || "One-off workout" : `${oneOffs.length} one-off workouts`}
+          timer={timer}
+          timerExpanded={timerExpanded}
+          onToggleExpanded={() => setTimerExpanded((e) => !e)}
+          onToggleTimer={handleToggleTimer}
+          onResetTimer={handleResetTimer}
+        />
+      </View>
+    ) : null}
     <View style={{ flex: 1, position: "relative" }}>
     <ScrollView
       className="flex-1"
@@ -996,7 +1041,7 @@ export default function MyFitness() {
           onPress={handleFooterFinalize}
           disabled={footerFinalizing}
           className="items-center justify-center disabled:opacity-50"
-          style={{
+          style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1,
             height: 52,
             borderRadius: 12,
             backgroundColor: activeFinalize.completed ? "#4d6142" : colors.primary,
@@ -1004,7 +1049,7 @@ export default function MyFitness() {
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.25,
             shadowRadius: 16,
-          }}
+          })}
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
             {footerFinalizing ? "Saving…" : activeFinalize.completed ? "✓ Finalized" : "Finalize workout"}
