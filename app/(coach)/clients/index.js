@@ -38,6 +38,7 @@ export default function Clients() {
   const [modalVisible, setModalVisible] = useState(false);
   const [search, setSearch] = useState("");
   const [programFilter, setProgramFilter] = useState(typeof params.program === "string" ? params.program : "");
+  const [flaggedOnly, setFlaggedOnly] = useState(params.filter === "flagged");
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
@@ -67,6 +68,12 @@ export default function Clients() {
     }
   }, [params.program]);
 
+  // Dashboard's "N clients missed a session" attention row deep-links here
+  // with ?filter=flagged — same apply-once-on-arrival rule as ?program=.
+  useEffect(() => {
+    if (params.filter === "flagged") setFlaggedOnly(true);
+  }, [params.filter]);
+
   const handleLink = async (form) => {
     try {
       await linkMemberByAuthId(form);
@@ -92,8 +99,9 @@ export default function Clients() {
     if (q) rows = rows.filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
     if (programFilter === "unassigned") rows = rows.filter((m) => m.unassigned);
     else if (programFilter) rows = rows.filter((m) => m.programKeys.has(programFilter));
+    if (flaggedOnly) rows = rows.filter((m) => m.flagCount > 0);
     return rows;
-  }, [state, search, programFilter]);
+  }, [state, search, programFilter, flaggedOnly]);
 
   return (
     <CoachShell>
@@ -124,12 +132,18 @@ export default function Clients() {
           style={{ fontFamily: fonts.sans, maxWidth: 360 }}
         />
 
-        {programLabel ? (
+        {programLabel || flaggedOnly ? (
           <View className="mb-2 flex-row items-center gap-2">
             <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-              Filtered: {programLabel}
+              Filtered: {[programLabel, flaggedOnly ? "Missed sessions" : null].filter(Boolean).join(" · ")}
             </Text>
-            <Pressable onPress={() => setProgramFilter("")} hitSlop={8}>
+            <Pressable
+              onPress={() => {
+                setProgramFilter("");
+                setFlaggedOnly(false);
+              }}
+              hitSlop={8}
+            >
               <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
                 Clear filter
               </Text>
@@ -171,6 +185,16 @@ export default function Clients() {
                     {item.email}
                   </Text>
                 </View>
+                {item.flagCount > 0 ? (
+                  // Same rust pill as the web list — this count was already
+                  // computed by loadClientsRoster, just never rendered on
+                  // native before.
+                  <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: "#fdece5" }}>
+                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#b23a22" }}>
+                      {item.flagCount} flag{item.flagCount === 1 ? "" : "s"}
+                    </Text>
+                  </View>
+                ) : null}
                 <Ionicons name="chevron-forward" size={16} color="#c7c2be" />
               </Pressable>
             )}

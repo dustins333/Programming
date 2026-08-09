@@ -11,14 +11,14 @@ import {
   listSpcWorkoutsForBlock,
   addDays,
 } from "../../../lib/programming/spcBlocks";
-import { listSpcWorkoutExercisesForWorkouts, copyLastBlockContent, copySpcWorkoutContent } from "../../../lib/programming/spcWorkouts";
+import { listSpcWorkoutExercisesForWorkouts, copyLastBlockContent, copySpcWorkoutContent, setSpcWorkoutStatusBulk } from "../../../lib/programming/spcWorkouts";
 import { currentWeekNumber } from "../../../lib/programming/schedule";
 import { WEEK_OFFSETS, groupRows } from "../../../lib/programming/gridRows";
 import { SessionCell, PlaceholderCell, GapSlot, SESSION_COL_WIDTH, CELL_MIN_HEIGHT, CELL_GAP } from "../../../components/BlockGridCells";
 import { getSetting } from "../../../lib/settings";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
-import { confirmOverwrite } from "../../../lib/confirmDialog";
+import { confirmOverwrite, confirmBulkPublish } from "../../../lib/confirmDialog";
 import { toastError } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS } from "../../../lib/programming/spcStatus";
@@ -26,6 +26,8 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
 import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CoachShell } from "../../../components/CoachShell";
+import { RecentSessionsCard } from "../../../components/RecentSessionsCard";
+import { listRecentSessionsForUser } from "../../../lib/programming/coachLogs";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
@@ -176,6 +178,7 @@ export default function SpcClientDetail() {
   const [copySource, setCopySource] = useState(null);
   const [copyTargets, setCopyTargets] = useState(new Set());
   const [copyBusy, setCopyBusy] = useState(false);
+  const [recentSessions, setRecentSessions] = useState([]);
 
   const load = useCallback(async () => {
     try {
@@ -214,6 +217,14 @@ export default function SpcClientDetail() {
         );
       } else {
         setLatestBlockPreview([]);
+      }
+
+      // Own try/catch, same isolation as clients/[userId].js's copy of this
+      // fetch — the results card failing shouldn't take down the SPC page.
+      try {
+        setRecentSessions(await listRecentSessionsForUser(userId));
+      } catch {
+        setRecentSessions([]);
       }
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -481,11 +492,43 @@ export default function SpcClientDetail() {
           </Pressable>
         </Card>
 
+        {/* The numbers, where SPC programming actually happens — before this
+            the SPC page had no logged-results surface at all and a coach had
+            to leave for the general client page to see what got lifted. */}
+        <Card>
+          <Eyebrow>Recent sessions</Eyebrow>
+          <RecentSessionsCard userId={userId} sessions={recentSessions} />
+        </Card>
+
         <View className="mb-3.5 flex-row items-center justify-between">
           <Text style={{ fontFamily: fonts.sansBold, fontSize: 15 }} className="text-stone-700">
             Blocks
           </Text>
           <View className="flex-row items-center gap-2.5">
+            {(() => {
+              const draftIds = (gridRows ?? []).flatMap((r) => r.sessions ?? []).filter((w) => w.status === "draft").map((w) => w.id);
+              if (!isWeb || draftIds.length === 0) return null;
+              return (
+                <Pressable
+                  onPress={async () => {
+                    const proceed = await confirmBulkPublish(draftIds.length);
+                    if (!proceed) return;
+                    try {
+                      await setSpcWorkoutStatusBulk(draftIds, "published");
+                      await load();
+                    } catch (err) {
+                      toastError("Failed to publish drafts", err);
+                    }
+                  }}
+                  className="rounded-lg border px-4 py-2.5"
+                  style={{ borderColor: "#b3843a", backgroundColor: "#fdf6ec" }}
+                >
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#8a6320" }}>
+                    Publish {draftIds.length} draft{draftIds.length === 1 ? "" : "s"}
+                  </Text>
+                </Pressable>
+              );
+            })()}
             {isWeb && (
               <Pressable
                 onPress={() => setModalVisible(true)}

@@ -116,7 +116,9 @@ export default function PlanBlock() {
           targetReps: ex.reps,
           repScheme: ex.rep_scheme,
           supersetGroupId: ex.superset_group_id,
-          notes: ex.tempo ? `tempo ${ex.tempo}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
+          tempo: ex.tempo,
+          rest: ex.rest,
+          notes: ex.notes,
         })),
       },
     }));

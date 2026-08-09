@@ -5,19 +5,24 @@ import { todayInBoise } from "../lib/boiseDate";
 export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
   const [groupProgramId, setGroupProgramId] = useState(null);
   const [startDate, setStartDate] = useState(todayInBoise());
+  // Same copy-vs-blank choice NewSpcBlockChoiceModal already offers —
+  // group blocks used to always be born empty, restarting every cycle's
+  // programming from zero.
+  const [copyFromLatest, setCopyFromLatest] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setGroupProgramId(programs?.[0]?.id ?? null);
       setStartDate(todayInBoise());
+      setCopyFromLatest(true);
     }
   }, [visible, programs]);
 
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      await onSubmit({ groupProgramId, startDate });
+      await onSubmit({ groupProgramId, startDate, copyFromLatest });
       onClose();
     } finally {
       setSaving(false);
@@ -49,6 +54,26 @@ export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
                   style={{ fontFamily: "Montserrat_400Regular" }}
                 >
                   {p.name} ({p.block_length_weeks}wk)
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+            Start from
+          </Text>
+          <View className="mb-4 flex-row gap-2">
+            {[
+              { key: true, label: "Copy latest block" },
+              { key: false, label: "Start blank" },
+            ].map((opt) => (
+              <Pressable
+                key={String(opt.key)}
+                onPress={() => setCopyFromLatest(opt.key)}
+                className={`rounded-full border px-3.5 py-2.5 ${copyFromLatest === opt.key ? "border-primary bg-primary" : "border-stone-300"}`}
+              >
+                <Text className={copyFromLatest === opt.key ? "text-white" : "text-stone-700"} style={{ fontFamily: "Montserrat_400Regular" }}>
+                  {opt.label}
                 </Text>
               </Pressable>
             ))}

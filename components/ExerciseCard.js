@@ -8,6 +8,7 @@ import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
 import { WeightCalculator } from "./WeightCalculator";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
+import { useShowLastTime, setShowLastTime } from "../lib/lastTimePref";
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -29,8 +30,21 @@ export function getTargetSets(item) {
   return item.targetSets && item.targetSets > 0 ? item.targetSets : 3;
 }
 
+// Prescription only — tempo and rest belong to the target, but the coach's
+// free-text note deliberately does NOT live here anymore. It used to be
+// glued on with "·" in the same muted color, and on the index rows the
+// whole line (note included) got replaced by the logged summary the moment
+// a set was saved — the note gets its own labeled line now (see
+// coachNoteFor / the render below).
 export function targetLineFor(item) {
-  return `Target: ${getTargetSets(item)} sets × ${repSchemeSummary(item.repScheme) ?? item.targetReps ?? "–"}${item.notes ? ` · ${item.notes}` : ""}`;
+  const parts = [`Target: ${getTargetSets(item)} sets × ${repSchemeSummary(item.repScheme) ?? item.targetReps ?? "–"}`];
+  if (item.tempo) parts.push(`tempo ${item.tempo}`);
+  if (item.rest) parts.push(`rest ${item.rest}`);
+  return parts.join(" · ");
+}
+
+export function coachNoteFor(item) {
+  return item.notes || null;
 }
 
 // One exercise's logging card — used both by SessionLogger's accordion
@@ -59,10 +73,12 @@ export function ExerciseCard({
   const targetSets = getTargetSets(item);
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
-  // History is fetched lazily off the clock-icon toggle, not on every
-  // expand — most sessions never get looked at, and it used to be an
-  // always-visible flat "Set 1 / Set 2 / Set 3" block that just ate space.
-  const [showHistory, setShowHistory] = useState(false);
+  // "Last time" shows by default — the whole point of the lift-tracking
+  // pass is seeing last time's numbers without asking for them. The
+  // preference is device-local and shared across every card
+  // (lib/lastTimePref.js), so one "Hide" sticks for all exercises/sessions
+  // instead of resetting per card the way the old per-card toggle did.
+  const showHistory = useShowLastTime();
   const [history, setHistory] = useState(null); // null until loaded — see historyLoaded for "loaded but genuinely empty"
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -143,20 +159,29 @@ export function ExerciseCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceExpanded]);
 
-  // Fetched once, on first tap of the clock icon — not on every expand,
-  // since most sessions never get looked at and this used to fire
-  // unconditionally. Toggling back off just hides it, doesn't reset it.
-  const handleToggleHistory = async () => {
-    const next = !showHistory;
-    setShowHistory(next);
-    if (next && !historyLoaded) {
-      setHistoryLoading(true);
+  // Fetched once per card, whenever it's open with the pref on — covers the
+  // default-on case and re-enabling after Hide. Hiding just hides; the
+  // loaded data sticks around.
+  const loadHistory = async () => {
+    if (historyLoaded || historyLoading) return;
+    setHistoryLoading(true);
+    try {
       const last = await getLastLoggedSession(userId, item.exercise.id, datePerformed);
       setHistory(last);
       setHistoryLoaded(true);
+    } catch (err) {
+      console.error("Failed to load last-time history:", err);
+    } finally {
       setHistoryLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isExpanded && showHistory) loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExpanded, showHistory]);
+
+  const handleToggleHistory = () => setShowLastTime(!showHistory);
 
   const updateRow = (index, field, value) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
@@ -268,6 +293,18 @@ export function ExerciseCard({
 
       {isExpanded && (
         <View className="mt-3">
+          {coachNoteFor(item) ? (
+            <Text className="mb-2" style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Coach note: </Text>
+              {coachNoteFor(item)}
+            </Text>
+          ) : null}
+          {item.exercise.cues ? (
+            <Text className="mb-2" style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Cues: </Text>
+              {item.exercise.cues}
+            </Text>
+          ) : null}
           {!hideVideo && item.exercise.video_url ? (
             <Pressable
               onPress={() => Linking.openURL(item.exercise.video_url)}
@@ -292,7 +329,7 @@ export function ExerciseCard({
                 {historyLoading
                   ? "Loading last time…"
                   : showHistory && history
-                    ? `Last time: ${formatDateMDY(history.date)}`
+                    ? `Last time: ${formatDateMDY(history.date)} · hide`
                     : showHistory
                       ? "Last time"
                       : "Show last time"}
@@ -302,10 +339,10 @@ export function ExerciseCard({
               onPress={() => setShowAllHistory(true)}
               className="flex-row items-center gap-1.5"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="Show all history"
+              accessibilityLabel="History and progress chart"
             >
-              <Ionicons name="list-outline" size={14} color={colors.primary} />
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>Show all history</Text>
+              <Ionicons name="trending-up-outline" size={14} color={colors.primary} />
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>History + chart</Text>
             </Pressable>
           </View>
           {showHistory && historyLoaded && history === null ? (

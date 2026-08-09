@@ -26,7 +26,7 @@ import { SessionFocusModal } from "../../components/SessionFocusModal";
 import { SessionInfoBar } from "../../components/SessionInfoBar";
 import { ProgramPickerModal } from "../../components/ProgramPickerModal";
 import { fonts, colors } from "../../lib/theme";
-import { toastError } from "../../lib/toast";
+import { toastError, toastSuccess } from "../../lib/toast";
 
 // Design tokens from design_handoff_visual_pass_v4/README.md.
 const CANVAS = "#faf8f6";
@@ -333,7 +333,9 @@ export default function MyFitness() {
                 targetReps: ex.reps,
                 repScheme: ex.rep_scheme,
                 supersetGroupId: ex.superset_group_id,
-                notes: ex.tempo ? `tempo ${ex.tempo}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
+                tempo: ex.tempo,
+                rest: ex.rest,
+                notes: ex.notes,
               })),
             };
           } catch (err) {
@@ -447,7 +449,9 @@ export default function MyFitness() {
               targetSets: ex.sets,
               targetReps: ex.reps,
               repScheme: ex.rep_scheme,
-              notes: ex.rest ? `rest ${ex.rest}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
+              tempo: ex.tempo,
+              rest: ex.rest,
+              notes: ex.notes,
             })),
           };
         })
@@ -505,7 +509,9 @@ export default function MyFitness() {
             targetReps: ex.reps,
             repScheme: ex.rep_scheme,
             supersetGroupId: ex.superset_group_id,
-            notes: ex.rest ? `rest ${ex.rest}${ex.notes ? ` · ${ex.notes}` : ""}` : ex.notes,
+            tempo: ex.tempo,
+            rest: ex.rest,
+            notes: ex.notes,
           })),
         });
       } catch (err) {
@@ -524,6 +530,7 @@ export default function MyFitness() {
   const handleFinalizeGroup = async (groupEntry) => {
     await finalizeGroupSession(profile.id, groupEntry.workout.id);
     setGroups((prev) => prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: true } : g)));
+    toastSuccess("Workout finalized — nice work!");
   };
 
   const handleFinalizeSpc = async () => {
@@ -531,6 +538,7 @@ export default function MyFitness() {
     if (!session) return;
     await finalizeSpcSession(profile.id, session.workout.id, spc.weekNumber);
     setSpc((s) => ({ ...s, sessions: s.sessions.map((row) => (row.sessionNumber === session.sessionNumber ? { ...row, completed: true } : row)) }));
+    toastSuccess("Workout finalized — nice work!");
   };
 
   // One-offs are open-until-completed, no recurrence — once finalized it
@@ -538,6 +546,7 @@ export default function MyFitness() {
   const handleFinalizeOneOff = async (workoutId) => {
     await finalizeOneOffSession(profile.id, workoutId);
     setOneOffs((prev) => prev.filter((o) => o.workout.id !== workoutId));
+    toastSuccess("Workout finalized — nice work!");
   };
 
   if (groupsLoading) {

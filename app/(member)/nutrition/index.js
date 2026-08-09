@@ -21,7 +21,7 @@ import { TargetField } from "../../../components/nutrition/TargetField";
 import { RatingSelect } from "../../../components/nutrition/RatingSelect";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
-import { toastError } from "../../../lib/toast";
+import { toastError, toastSuccess } from "../../../lib/toast";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useScrollToKeyboard, useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
@@ -286,12 +286,11 @@ export default function NutritionToday() {
     setFinalizing(true);
     setFinalizeError(null);
     try {
+      // finalizeLog throws on failure (it never returns an error field) —
+      // the old `result.error` branch here was dead code.
       const result = await finalizeLog(profile.id, selectedDate, values);
-      if (result.error) {
-        setFinalizeError(result.error);
-      } else {
-        setFinalizedAt(result.data.finalized_at);
-      }
+      setFinalizedAt(result.data.finalized_at);
+      toastSuccess("Day finalized — nice work!");
     } catch (err) {
       setFinalizeError(err.message ?? String(err));
     } finally {

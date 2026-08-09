@@ -8,6 +8,7 @@ import { listDismissals, dismissAttentionItem } from "../../lib/programming/dash
 import { STATUS_LABELS as SPC_STATUS_LABELS, STATUS_TONES as SPC_STATUS_TONES, STATUS_ORDER as SPC_STATUS_ORDER } from "../../lib/programming/spcStatus";
 import { CoachShell } from "../../components/CoachShell";
 import { fonts, colors, statusColors } from "../../lib/theme";
+import { ActivityFeed } from "../../components/ActivityFeed";
 
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
 
@@ -323,6 +324,10 @@ export default function CoachHomeWeb() {
         <Text className="mb-7 text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 14 }}>
           {profile?.role === "admin" ? "Admin" : "Coach"} · {formatToday()}
         </Text>
+
+        <View style={{ maxWidth: 1180 }}>
+          <ActivityFeed />
+        </View>
 
         <View className="flex-row gap-4" style={{ maxWidth: 1180 }}>
           <Panel title="Needs your attention" style={{ flex: 1.1 }}>

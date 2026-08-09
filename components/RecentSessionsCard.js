@@ -25,7 +25,12 @@ function groupByExercise(logs) {
   return groups;
 }
 
-function SessionRow({ userId, session }) {
+// Exported for the coach dashboard's ActivityFeed, which renders the same
+// expandable per-set row but titled with the member's name (`title`) and
+// with a tap-through into the client page (`onOpenClient`) inside the
+// expansion. Both props optional — the per-client card below passes neither
+// and behaves exactly as before.
+export function SessionRow({ userId, session, title, onOpenClient }) {
   const [open, setOpen] = useState(false);
   const [logs, setLogs] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -51,10 +56,10 @@ function SessionRow({ userId, session }) {
       <Pressable onPress={handleToggle} className="flex-row items-center justify-between">
         <View className="flex-1 pr-3">
           <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13.5 }} className="text-stone-700">
-            {session.label}
+            {title ?? session.label}
           </Text>
           <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-            {formatDateMDY(session.date)}
+            {title ? `${session.label} · ${formatDateMDY(session.date)}` : formatDateMDY(session.date)}
           </Text>
         </View>
         <Ionicons name={open ? "chevron-up" : "chevron-down"} size={16} color="#a8a29e" />
@@ -62,6 +67,11 @@ function SessionRow({ userId, session }) {
 
       {open ? (
         <View className="mt-2.5 pl-1">
+          {onOpenClient ? (
+            <Pressable onPress={onOpenClient} className="mb-2 self-start" hitSlop={8}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Open client page ›</Text>
+            </Pressable>
+          ) : null}
           {loadError ? (
             <Text className="text-xs text-red-600" style={{ fontFamily: fonts.sans }}>
               Couldn't load this session: {loadError}

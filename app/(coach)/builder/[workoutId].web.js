@@ -21,6 +21,7 @@ import {
   setWorkoutStatus,
   setWorkoutTitle,
 } from "../../../lib/programming/workouts";
+import { listWorkoutsForBlock } from "../../../lib/programming/blocks";
 import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../components/ExercisePickerModal";
 import { PatternTally } from "../../../components/PatternTally";
@@ -199,6 +200,13 @@ function SortableExerciseRow({ item, onChange, onRemove, onLinkSuperset, onUnlin
             style={{ fontFamily: "Montserrat_400Regular" }}
           />
           <TextInput
+            value={item.rest ?? ""}
+            onChangeText={(v) => onChange(item.id, { rest: v })}
+            placeholder="rest"
+            className="w-20 rounded-lg border border-stone-300 px-2 py-2.5 text-center"
+            style={{ fontFamily: "Montserrat_400Regular" }}
+          />
+          <TextInput
             value={item.notes ?? ""}
             onChangeText={(v) => onChange(item.id, { notes: v })}
             placeholder="notes"
@@ -241,6 +249,9 @@ export default function WorkoutBuilderWeb() {
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Every session in this block (week/session order) — powers the prev/next
+  // arrows so programming Session 1 → 2 → 3 doesn't bounce through the grid.
+  const [blockWorkouts, setBlockWorkouts] = useState([]);
   // Warm-ups collapsed by default per the direct ask; muscle-group sections
   // start expanded. Keyed by "warmups" or a muscle-group string.
   const [collapsedSections, setCollapsedSections] = useState(() => new Set(["warmups"]));
@@ -270,16 +281,18 @@ export default function WorkoutBuilderWeb() {
       setLoadError(null);
       const w = await getWorkout(workoutId);
       setWorkout(w);
-      const [warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
+      const [warmupRows, exerciseRows, libraryRows, siblings, allBlockWorkouts] = await Promise.all([
         listWarmups(workoutId),
         listWorkoutExercises(workoutId),
         listExercises(),
         getSiblingPatterns(w.group_blocks.id, w.week_number, workoutId),
+        listWorkoutsForBlock(w.group_blocks.id),
       ]);
       setWarmups(warmupRows);
       setExercises(exerciseRows);
       setLibrary(libraryRows);
       setSiblingPatterns(siblings);
+      setBlockWorkouts(allBlockWorkouts);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -580,14 +593,43 @@ export default function WorkoutBuilderWeb() {
                 className="text-xs"
                 style={{ fontFamily: "Montserrat_500Medium", color: workout.status === "published" ? "#8a5140" : "#a8a29e" }}
               >
-                {workout.status}
+                {workout.status === "published" ? "Published" : "Draft"}
               </Text>
             </View>
-            <Pressable onPress={handleTogglePublish} disabled={publishing} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
-              <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
-                {workout.status === "published" ? "Unpublish" : "Publish"}
-              </Text>
-            </Pressable>
+            <View className="flex-row items-center gap-2.5">
+              {(() => {
+                // Prev/next through the block in week/session order —
+                // programming Session 1 → 2 → 3 used to mean builder →
+                // grid → builder for every hop.
+                const idx = blockWorkouts.findIndex((w) => w.id === workout.id);
+                const prev = idx > 0 ? blockWorkouts[idx - 1] : null;
+                const next = idx >= 0 && idx < blockWorkouts.length - 1 ? blockWorkouts[idx + 1] : null;
+                const NavArrow = ({ target, label }) =>
+                  target ? (
+                    <Pressable
+                      onPress={() => router.push(`/(coach)/builder/${target.id}`)}
+                      className="rounded-lg border px-3 py-2.5"
+                      style={{ borderColor: "#d9d4cd" }}
+                      accessibilityLabel={`${label}: Week ${target.week_number}, Session ${target.session_number}`}
+                    >
+                      <Text className="text-stone-700" style={{ fontFamily: "Montserrat_600SemiBold", fontSize: 12.5 }}>
+                        {label === "Previous session" ? `‹ Wk${target.week_number} · S${target.session_number}` : `Wk${target.week_number} · S${target.session_number} ›`}
+                      </Text>
+                    </Pressable>
+                  ) : null;
+                return (
+                  <>
+                    <NavArrow target={prev} label="Previous session" />
+                    <NavArrow target={next} label="Next session" />
+                  </>
+                );
+              })()}
+              <Pressable onPress={handleTogglePublish} disabled={publishing} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
+                <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+                  {workout.status === "published" ? "Unpublish" : "Publish"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
 
           <TextInput

@@ -15,6 +15,7 @@ import { ZoomSchedulerModal } from "../../../components/nutrition/ZoomSchedulerM
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { formatDateMDY } from "../../../lib/formatDate";
+import { toastSuccess } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { KeyboardDoneButton } from "../../../components/KeyboardDoneButton";
@@ -324,6 +325,7 @@ export default function WeeklyCheckin() {
       });
       setReopenSubmitted(true);
       setReopen(null);
+      toastSuccess("Check-in submitted — your coach will review it!");
       if (answerTriggersBooking(reopenAnswers)) setSchedulerOpen(true);
     } catch (err) {
       setReopenSubmitError(err.message ?? String(err));
@@ -343,6 +345,7 @@ export default function WeeklyCheckin() {
       const payload = questions.map((q) => ({ question: q.question_text, answer: answers[q.id] || "" }));
       const saved = await submitCheckin(profile.id, payload, { photosSkipReason: !photosUploaded ? skipReason : null });
       setResponse(saved);
+      toastSuccess("Check-in submitted — your coach will review it!");
       if (answerTriggersBooking(answers)) setSchedulerOpen(true);
     } catch (err) {
       setSubmitError(err.message ?? String(err));

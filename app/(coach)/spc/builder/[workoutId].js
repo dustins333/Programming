@@ -95,7 +95,7 @@ export default function SpcWorkoutBuilderNative() {
         className="mb-1 text-xs"
         style={{ fontFamily: fonts.sansMedium, color: workout.status === "published" ? colors.primaryOnWhite : "#a8a29e" }}
       >
-        {workout.status}
+        {workout.status === "published" ? "Published" : "Draft"}
       </Text>
       {workout.title ? (
         <Text className="mb-4 text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 15 }}>

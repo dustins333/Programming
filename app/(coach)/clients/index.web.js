@@ -88,6 +88,13 @@ export default function ClientsWeb() {
     }
   }, [params.program]);
 
+  // Dashboard's "N clients missed a session" attention row deep-links with
+  // ?filter=flagged — maps onto the existing has-flag status filter, same
+  // apply-once-on-arrival rule as ?program=.
+  useEffect(() => {
+    if (params.filter === "flagged") setStatusFilter("has-flag");
+  }, [params.filter]);
+
   useEffect(() => {
     setPage(1);
   }, [search, programFilter, statusFilter, sort]);

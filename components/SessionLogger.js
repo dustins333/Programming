@@ -72,9 +72,14 @@ function GroupIndexRow({ group, summaries, completions, onPress }) {
               <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#44403c" }}>
                 {item.exercise.name}
               </Text>
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: summary?.hasAny ? "#78716c" : "#a8a29e", marginTop: 1 }}>
-                {summary?.summaryText ?? targetLineFor(item)}
-              </Text>
+              {/* Target (with tempo/rest) always shows — it used to be
+                  replaced by the logged summary the instant a set saved,
+                  which erased what the coach prescribed mid-session. The
+                  logged summary renders as its own second line instead. */}
+              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", marginTop: 1 }}>{targetLineFor(item)}</Text>
+              {summary?.hasAny && summary?.summaryText ? (
+                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: "#78716c", marginTop: 1 }}>{summary.summaryText}</Text>
+              ) : null}
             </View>
             {completions ? (
               // Same circle icon, same size, same color as the warm-up

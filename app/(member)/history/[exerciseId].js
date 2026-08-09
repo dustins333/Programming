@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLogsForExercise } from "../../../lib/programming/memberPlan";
 import { formatDateMDY } from "../../../lib/formatDate";
+import { LiftProgressSection } from "../../../components/LiftProgress";
 import { fonts, colors } from "../../../lib/theme";
 
 const CANVAS = "#faf8f6";
@@ -77,6 +78,7 @@ export default function ExerciseHistory() {
           <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
             {logs[0]?.exercises?.name ?? "History"}
           </Text>
+          <LiftProgressSection logs={logs} />
           <FlatList
         data={groups}
         keyExtractor={(group) => group.date}

@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { listGroupPrograms, createGroupProgram, updateGroupProgram, createBlock, listWorkoutsForBlock, listBlocksForProgram, addDays } from "../../../lib/programming/blocks";
-import { listWorkoutExercisesForWorkouts, copyWorkoutContent } from "../../../lib/programming/workouts";
+import { listWorkoutExercisesForWorkouts, copyWorkoutContent, setWorkoutStatusBulk, copyLastGroupBlockContent } from "../../../lib/programming/workouts";
 import { currentWeekNumber } from "../../../lib/programming/schedule";
 import { WEEK_OFFSETS, groupRows } from "../../../lib/programming/gridRows";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
-import { confirmOverwrite } from "../../../lib/confirmDialog";
+import { confirmOverwrite, confirmBulkPublish } from "../../../lib/confirmDialog";
 import { toastError } from "../../../lib/toast";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { NewBlockModal } from "../../../components/NewBlockModal";
@@ -124,9 +124,17 @@ export default function Blocks() {
     cancelCopy();
   }, [selectedProgramId, cancelCopy]);
 
-  const handleCreate = async ({ groupProgramId, startDate }) => {
+  const handleCreate = async ({ groupProgramId, startDate, copyFromLatest }) => {
     try {
-      await createBlock({ groupProgramId, startDate, createdBy: profile.id });
+      // Resolve the source block BEFORE creating — the new block would
+      // otherwise be its own "latest". listBlocksForProgram is oldest-first.
+      let sourceBlock = null;
+      if (copyFromLatest) {
+        const existing = await listBlocksForProgram(groupProgramId);
+        sourceBlock = existing[existing.length - 1] ?? null;
+      }
+      const newBlock = await createBlock({ groupProgramId, startDate, createdBy: profile.id });
+      if (sourceBlock) await copyLastGroupBlockContent(sourceBlock.id, newBlock.id);
       await load();
     } catch (err) {
       toastError("Failed to create block", err);
@@ -191,6 +199,20 @@ export default function Blocks() {
       else next.add(workoutId);
       return next;
     });
+  };
+
+  // Publishes every draft session visible on the selected program's grid in
+  // one query — releasing a block used to mean opening each session's
+  // builder and clicking Publish a dozen separate times.
+  const handleBulkPublish = async (draftIds) => {
+    const proceed = await confirmBulkPublish(draftIds.length);
+    if (!proceed) return;
+    try {
+      await setWorkoutStatusBulk(draftIds, "published");
+      await load();
+    } catch (err) {
+      toastError("Failed to publish drafts", err);
+    }
   };
 
   const handleConfirmCopy = async () => {
@@ -339,6 +361,21 @@ export default function Blocks() {
                           <Text style={{ fontFamily: fonts.display, fontSize: 17 }} className="text-primary">
                             {DISPLAY_NAME[program.name] ?? program.name}
                           </Text>
+                          {(() => {
+                            const draftIds = rows.flatMap((r) => r.sessions ?? []).filter((w) => w.status === "draft").map((w) => w.id);
+                            if (!isWeb || draftIds.length === 0) return null;
+                            return (
+                              <Pressable
+                                onPress={() => handleBulkPublish(draftIds)}
+                                className="mt-1.5 rounded-full border px-3 py-1"
+                                style={{ borderColor: "#b3843a", backgroundColor: "#fdf6ec" }}
+                              >
+                                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: "#8a6320" }}>
+                                  Publish {draftIds.length} draft{draftIds.length === 1 ? "" : "s"}
+                                </Text>
+                              </Pressable>
+                            );
+                          })()}
                         </View>
 
                         <View className="mb-3 flex-row gap-3">

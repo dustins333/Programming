@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { listLogsForExercise } from "../lib/programming/memberPlan";
 import { formatDateMDY } from "../lib/formatDate";
+import { LiftProgressSection } from "./LiftProgress";
 import { fonts, colors } from "../lib/theme";
 
 const CARD_BORDER = "#ece7e1";
@@ -78,6 +79,7 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
             </View>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false}>
+              <LiftProgressSection logs={logs} />
               {groups.length === 0 ? (
                 <Text className="py-3 text-center text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
                   No logged history for this lift yet.

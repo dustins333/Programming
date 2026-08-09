@@ -28,6 +28,7 @@ import {
   setSpcWorkoutStatus,
   setSpcWorkoutTitle,
 } from "../../../../lib/programming/spcWorkouts";
+import { listSpcWorkoutsForBlock } from "../../../../lib/programming/spcBlocks";
 import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
 import { CommentThread } from "../../../../components/CommentThread";
@@ -226,6 +227,9 @@ export default function SpcWorkoutBuilderWeb() {
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Every session in this block (week/session order) — powers the prev/next
+  // arrows so programming sessions in sequence doesn't bounce through the grid.
+  const [blockWorkouts, setBlockWorkouts] = useState([]);
   const [collapsedSections, setCollapsedSections] = useState(() => new Set(["warmups"]));
   const [expandedParents, setExpandedParents] = useState(() => new Set());
 
@@ -253,18 +257,20 @@ export default function SpcWorkoutBuilderWeb() {
       setLoadError(null);
       const w = await getSpcWorkout(workoutId);
       setWorkout(w);
-      const [memberRow, warmupRows, exerciseRows, libraryRows, siblings] = await Promise.all([
+      const [memberRow, warmupRows, exerciseRows, libraryRows, siblings, allBlockWorkouts] = await Promise.all([
         getUser(w.spc_blocks.spc_client_id),
         listSpcWarmups(workoutId),
         listSpcWorkoutExercises(workoutId),
         listExercises(),
         getSpcSiblingPatterns(w.spc_blocks.id, w.week_number, workoutId),
+        listSpcWorkoutsForBlock(w.spc_blocks.id),
       ]);
       setMember(memberRow);
       setWarmups(warmupRows);
       setExercises(exerciseRows);
       setLibrary(libraryRows);
       setSiblingPatterns(siblings);
+      setBlockWorkouts(allBlockWorkouts);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -559,14 +565,42 @@ export default function SpcWorkoutBuilderWeb() {
                 className="text-xs"
                 style={{ fontFamily: fonts.sansMedium, color: workout.status === "published" ? "#8a5140" : "#a8a29e" }}
               >
-                {workout.status}
+                {workout.status === "published" ? "Published" : "Draft"}
               </Text>
             </View>
-            <Pressable onPress={handleTogglePublish} disabled={publishing} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
-              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                {workout.status === "published" ? "Unpublish" : "Publish"}
-              </Text>
-            </Pressable>
+            <View className="flex-row items-center gap-2.5">
+              {(() => {
+                // Prev/next through the block in week/session order — same
+                // affordance as the group web builder.
+                const idx = blockWorkouts.findIndex((w) => w.id === workout.id);
+                const prev = idx > 0 ? blockWorkouts[idx - 1] : null;
+                const next = idx >= 0 && idx < blockWorkouts.length - 1 ? blockWorkouts[idx + 1] : null;
+                const NavArrow = ({ target, isPrev }) =>
+                  target ? (
+                    <Pressable
+                      onPress={() => router.push(`/(coach)/spc/builder/${target.id}`)}
+                      className="rounded-lg border px-3 py-2.5"
+                      style={{ borderColor: "#d9d4cd" }}
+                      accessibilityLabel={`${isPrev ? "Previous" : "Next"} session: Week ${target.week_number}, Session ${target.session_number}`}
+                    >
+                      <Text className="text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5 }}>
+                        {isPrev ? `‹ Wk${target.week_number} · S${target.session_number}` : `Wk${target.week_number} · S${target.session_number} ›`}
+                      </Text>
+                    </Pressable>
+                  ) : null;
+                return (
+                  <>
+                    <NavArrow target={prev} isPrev />
+                    <NavArrow target={next} />
+                  </>
+                );
+              })()}
+              <Pressable onPress={handleTogglePublish} disabled={publishing} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
+                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                  {workout.status === "published" ? "Unpublish" : "Publish"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
 
           <TextInput
