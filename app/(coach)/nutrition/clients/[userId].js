@@ -321,7 +321,7 @@ export default function NutritionClientDetail() {
         state: onboarding.trackingState,
         subtext:
           onboarding.trackingCount === 0
-            ? "No dates assigned"
+            ? "Skipped — no days assigned (optional)"
             : onboarding.trackingState === "overdue"
               ? `${onboarding.overdueCount} day${onboarding.overdueCount === 1 ? "" : "s"} overdue`
               : `${onboarding.loggedCount} of ${onboarding.trackingCount} logged`,
@@ -402,10 +402,10 @@ export default function NutritionClientDetail() {
                 accent="primary"
                 done={onboarding.phases.tracking}
                 subtext={
-                  onboarding.phases.tracking
-                    ? "All days logged — tap to view"
-                    : onboarding.trackingCount === 0
-                      ? "No dates assigned"
+                  onboarding.trackingCount === 0
+                    ? "Skipped — no days assigned (optional, tap to add)"
+                    : onboarding.phases.tracking
+                      ? "All days logged — tap to view"
                       : `${onboarding.loggedCount} of ${onboarding.trackingCount} logged`
                 }
                 onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/tracking`)}

@@ -359,7 +359,11 @@ export default function NutritionOnboarding() {
       ) : null}
 
       <View className="gap-3">
-        {TASKS.map((task) => (
+        {/* Objective Tracking is hidden entirely when the coach assigned no
+            days — zero days means the phase was deliberately skipped (it
+            auto-counts as complete, see lib/nutrition/onboarding.js), not
+            an empty task for the member to puzzle over. */}
+        {TASKS.filter((task) => task.key !== "tracking" || status.trackingCount > 0).map((task) => (
           <TaskButton
             key={task.key}
             label={task.label}

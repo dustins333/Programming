@@ -226,6 +226,58 @@ function ProgramCard({ title, subtitle, rows, target, completedCount, onNavigate
 // circle, not just the small header chevron, since that was hard to hit.
 // No calorie numbers/progress bar — nutrition isn't logged until evening,
 // so nothing calorie-related should show mid-day.
+// Mid-onboarding replacement for NutritionStrip — same card shell, but the
+// content is the client's assigned Objective Tracking days (checked off as
+// each gets logged) instead of the weekly finalize strip, which means
+// nothing until targets exist. Tapping anywhere goes to the Nutrition tab,
+// which renders the onboarding hub directly at this stage. With zero
+// assigned days (tracking skipped), it's a plain "finish your onboarding"
+// pointer instead.
+function OnboardingNutritionCard({ nutrition, onNavigate }) {
+  return (
+    <Pressable
+      onPress={onNavigate}
+      accessibilityLabel="Continue nutrition onboarding"
+      className="mb-3.5 rounded-[20px] bg-white px-4 pb-4 pt-4"
+      style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}
+    >
+      <View className="mb-1 flex-row items-center justify-between">
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>Nutrition</Text>
+        <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} />
+      </View>
+      {nutrition.trackingCount > 0 ? (
+        <>
+          <Text className="mb-3" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+            Objective Tracking · {nutrition.loggedCount} of {nutrition.trackingCount} days logged
+          </Text>
+          <View className="flex-row flex-wrap" style={{ gap: 10 }}>
+            {nutrition.trackingDates.map((d) => {
+              const logged = !!nutrition.logsByDate[d.date];
+              const [, month, day] = d.date.split("-").map(Number);
+              return (
+                <View key={d.id ?? d.date} className="items-center" style={{ gap: 3 }}>
+                  <Ionicons
+                    name={logged ? "checkmark-circle" : "ellipse-outline"}
+                    size={22}
+                    color={logged ? TILE_COMPLETED_BORDER : "#c9c4bd"}
+                  />
+                  <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 10, color: "#78716c" }}>
+                    {month}/{day}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      ) : (
+        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
+          Finish your onboarding to get started ›
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
 function NutritionStrip({ days, onNavigate, onDayPress }) {
   const today = todayInBoise();
   return (
@@ -488,31 +540,43 @@ export default function MemberHome() {
     // falls on — dayOfWeekInBoise is 0=Sunday..6=Saturday, so Sunday needs
     // its own offset (Monday was 6 days ago) rather than 1 - day.
     try {
-      const days = await retryOnce(async () => {
-        // A client mid-onboarding (or not turned on at all) has no real
-        // daily-log target yet — the strip only means something once
-        // they're past the coach's Approve & Set Targets step, same gate
-        // the 4-tab home itself uses (lib/nutrition/useNutritionAccess.js).
+      const result = await retryOnce(async () => {
         const nutritionClient = await getNutritionClient(profile.id);
         // Enrollment (any active row, approved or not) is tracked
         // separately from the strip — it gates the "not assigned to a
         // program" message below, which used to fire for nutrition-only
         // members.
         if (!isStale()) setNutritionEnrolled(nutritionClient?.status === "active");
-        if (!nutritionClient || nutritionClient.status !== "active" || !nutritionClient.objective_tracking_approved_at) {
-          return null;
+        if (!nutritionClient || nutritionClient.status !== "active") return null;
+
+        // Mid-onboarding (sent, not yet approved): My Week still shows a
+        // Nutrition card, with the client's objective-tracking days inside
+        // it — per direct ask; before this the whole section just vanished
+        // until Approve & Set Targets.
+        if (!nutritionClient.objective_tracking_approved_at) {
+          if (!nutritionClient.onboarding_sent_at) return null;
+          const ob = await getOnboardingStatus(profile.id);
+          return {
+            status: "onboarding",
+            trackingDates: ob.trackingDates,
+            logsByDate: ob.logsByDate,
+            trackingCount: ob.trackingCount,
+            loggedCount: ob.loggedCount,
+          };
         }
+
         const dow = dayOfWeekInBoise(today);
         const weekStart = addDays(today, dow === 0 ? -6 : 1 - dow);
         const weekEnd = addDays(weekStart, 6);
         const logs = await listLogsForDateRange(profile.id, weekStart, weekEnd);
         const finalizedDates = new Set(logs.filter((l) => l.finalized_at).map((l) => l.date));
-        return Array.from({ length: 7 }, (_, i) => {
+        const days = Array.from({ length: 7 }, (_, i) => {
           const date = addDays(weekStart, i);
           return { date, label: DAY_LABELS[i], finalized: finalizedDates.has(date), isToday: date === today };
         });
+        return { status: "ready", days };
       });
-      if (!isStale()) setNutrition(days ? { status: "ready", days } : null);
+      if (!isStale()) setNutrition(result ?? null);
     } catch (err) {
       console.error("My Week: failed to load nutrition", err);
       if (!isStale()) setNutrition(null);
@@ -798,6 +862,9 @@ export default function MemberHome() {
           onNavigate={() => router.push("/(member)/nutrition")}
           onDayPress={(date) => router.push({ pathname: "/(member)/nutrition", params: { date } })}
         />
+      )}
+      {nutrition?.status === "onboarding" && (
+        <OnboardingNutritionCard nutrition={nutrition} onNavigate={() => router.push("/(member)/nutrition")} />
       )}
 
       <SessionPreviewModal

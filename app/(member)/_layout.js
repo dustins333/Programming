@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../lib/nutrition/useNutritionAccess";
+import { useHasFitness } from "../../lib/programming/useFitnessAccess";
 import { AnnouncementChecker } from "../../lib/notifications/AnnouncementChecker";
 import { FloatingMessageBubble } from "../../components/FloatingMessageBubble";
 import { colors, fonts } from "../../lib/theme";
@@ -50,6 +51,10 @@ export default function MemberLayout() {
   // NutritionAccessMessage) than to hide it entirely on a network blip.
   const showNutritionTab =
     nutritionStatus === "active" || nutritionStatus === "onboarding" || nutritionStatus === "pending" || nutritionStatus === "error";
+  // Nutrition-only members shouldn't see a permanently-empty My Fitness tab
+  // — hidden only once confirmed they have no group/SPC/one-off programming
+  // (defaults visible while loading/on error, see useFitnessAccess.js).
+  const showFitnessTab = useHasFitness(session?.user?.id);
 
   if (!ready) {
     return (
@@ -82,7 +87,15 @@ export default function MemberLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "My Week", tabBarIcon: TabIcon("today"), tabBarLabel: TabLabel("My Week") }} />
-      <Tabs.Screen name="plan" options={{ title: "My Fitness", tabBarIcon: TabIcon("barbell"), tabBarLabel: TabLabel("My Fitness") }} />
+      <Tabs.Screen
+        name="plan"
+        options={{
+          title: "My Fitness",
+          tabBarIcon: TabIcon("barbell"),
+          tabBarLabel: TabLabel("My Fitness"),
+          href: showFitnessTab ? undefined : null,
+        }}
+      />
       <Tabs.Screen
         name="nutrition"
         options={{
