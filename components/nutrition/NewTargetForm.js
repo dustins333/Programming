@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { toastError } from "../../lib/toast";
 import { createTarget } from "../../lib/nutrition/targets";
@@ -6,11 +6,32 @@ import { todayInBoise } from "../../lib/boiseDate";
 import { TargetField } from "./TargetField";
 import { fonts } from "../../lib/theme";
 
-const EMPTY_FORM = { protein_g: "", carb_g: "", fat_g: "", fiber_g: "", step_goal: "", sleep_hours_goal: "", note: "" };
+// Prefilled from the current target, not blank — targets are insert-only
+// versioned rows, so "change only protein" used to require retyping every
+// field, and a macro left blank silently saved as 0.
+function formFromTarget(t) {
+  const s = (v) => (v == null ? "" : String(v));
+  return {
+    protein_g: s(t?.protein_g),
+    carb_g: s(t?.carb_g),
+    fat_g: s(t?.fat_g),
+    fiber_g: s(t?.fiber_g),
+    step_goal: s(t?.step_goal),
+    sleep_hours_goal: s(t?.sleep_hours_goal),
+    note: "",
+  };
+}
 
 export function NewTargetForm({ userId, setBy, currentTarget, onSaved }) {
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(() => formFromTarget(currentTarget));
   const [saving, setSaving] = useState(false);
+
+  // Re-prefill when the current target changes identity — covers a late
+  // async load and the post-save reload (the freshly-saved target becomes
+  // the new baseline).
+  useEffect(() => {
+    setForm(formFromTarget(currentTarget));
+  }, [currentTarget?.id]);
 
   const protein = Number(form.protein_g) || 0;
   const carb = Number(form.carb_g) || 0;
@@ -33,7 +54,6 @@ export function NewTargetForm({ userId, setBy, currentTarget, onSaved }) {
         effectiveDate: todayInBoise(),
         note: form.note,
       });
-      setForm(EMPTY_FORM);
       await onSaved();
     } catch (err) {
       toastError("Failed to save target", err);

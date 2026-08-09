@@ -467,7 +467,7 @@ export default function NutritionToday() {
           </Text>
 
           <DailyLogCard color="#eef1e7" title="Log these in the morning">
-            <TargetField label="Weight" styleKey="weight" current={target?.weight_target} value={values.weight} onChangeText={(t) => update("weight", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+            <TargetField label="Weight (lb)" styleKey="weight" value={values.weight} onChangeText={(t) => update("weight", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             <View className="flex-row gap-3">
               <TargetField label="Sleep (hrs)" styleKey="sleep" current={target?.sleep_hours_goal} flex value={values.sleep_hours} onChangeText={(t) => update("sleep_hours", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
               <RatingSelect label="Sleep quality (1-5)" flex value={values.sleep_quality} onChangeText={(t) => update("sleep_quality", t)} />

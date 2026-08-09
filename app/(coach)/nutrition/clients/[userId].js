@@ -9,7 +9,7 @@ import { getClient, sendOnboardingToClient } from "../../../../lib/nutrition/cli
 import { listCoaches } from "../../../../lib/programming/clients";
 import { listTargets, deriveCalories } from "../../../../lib/nutrition/targets";
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
-import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsSince, listCheckinReopensSince } from "../../../../lib/nutrition/checkin";
+import { getCheckinForWeek, finalizeCheckin, listCheckinsSince, listCheckinReopensSince } from "../../../../lib/nutrition/checkin";
 import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
 import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
@@ -139,7 +139,6 @@ export default function NutritionClientDetail() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [checkin, setCheckin] = useState(null);
   const [finalizing, setFinalizing] = useState(false);
-  const [copying, setCopying] = useState(false);
   const [trendMetric, setTrendMetric] = useState("weight");
   const [trendRange, setTrendRange] = useState(30);
   const [loadError, setLoadError] = useState(null);
@@ -266,19 +265,6 @@ export default function NutritionClientDetail() {
       toastError("Failed to send to client", err);
     } finally {
       setSending(false);
-    }
-  };
-
-  const handleCopyQuestions = async () => {
-    setCopying(true);
-    try {
-      await copyTemplateToClient(userId);
-      await load();
-      toastSuccess("Check-in questions copied from the template.");
-    } catch (err) {
-      toastError("Failed to copy questions", err);
-    } finally {
-      setCopying(false);
     }
   };
 
@@ -695,16 +681,7 @@ export default function NutritionClientDetail() {
               <WeeklySnapshot thisWeek={selectedWeekSummary} lastWeek={priorToSelectedSummary} />
             </SectionCard>
 
-            <SectionCard
-              title="Check-in answers"
-              headerRight={
-                <Pressable onPress={handleCopyQuestions} disabled={copying} hitSlop={10}>
-                  <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                    {copying ? "Copying…" : "Copy questions from template"}
-                  </Text>
-                </Pressable>
-              }
-            >
+            <SectionCard title="Check-in answers">
               {checkin ? (
                 <View>
                   {checkin.answers.map((a, i) => (

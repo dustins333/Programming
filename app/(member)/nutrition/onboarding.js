@@ -39,7 +39,7 @@ function TaskButton({ label, detail, done, onPress }) {
   );
 }
 
-function QuestionnairePanel({ questions, response, onSubmitted }) {
+function QuestionnairePanel({ userId, questions, response, onSubmitted }) {
   const [values, setValues] = useState(() => Object.fromEntries(questions.map((q) => [q.id, ""])));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -70,7 +70,7 @@ function QuestionnairePanel({ questions, response, onSubmitted }) {
     setError(null);
     try {
       const answers = questions.map((q) => ({ question: q.question_text, answer: values[q.id] || "" }));
-      await submitQuestionnaire(answers);
+      await submitQuestionnaire(userId, answers);
       await onSubmitted();
     } catch (err) {
       setError(err.message ?? String(err));
@@ -295,7 +295,7 @@ export default function NutritionOnboarding() {
           <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
         </Pressable>
         {activeTask === "questionnaire" ? (
-          <QuestionnairePanel questions={questions} response={status.response} onSubmitted={load} />
+          <QuestionnairePanel userId={profile.id} questions={questions} response={status.response} onSubmitted={load} />
         ) : activeTask === "tracking" ? (
           <ObjectiveTrackingPanel status={status} onLogged={handleLogDay} />
         ) : (
