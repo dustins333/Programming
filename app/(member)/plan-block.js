@@ -194,7 +194,7 @@ export default function PlanBlock() {
       ) : (
         <>
           <Text className="mb-0.5 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-            {state.program.name} Plan
+            {state.program.name} Block
           </Text>
           <Text className="mb-5" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
             {formatDateMDY(state.block.block_start_date)} → {formatDateMDY(state.block.block_end_date)}

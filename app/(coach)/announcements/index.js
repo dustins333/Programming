@@ -391,7 +391,7 @@ export default function Announcements() {
           <ActivityIndicator color={colors.primary} />
         ) : history.length === 0 ? (
           <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-            No announcements yet.
+            No announcements yet — compose one above and it'll appear here.
           </Text>
         ) : (
           history.map((a) => {

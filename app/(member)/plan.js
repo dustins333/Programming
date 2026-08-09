@@ -660,12 +660,6 @@ export default function MyFitness() {
     };
   }
 
-  // Same canGoBack-or-fallback guard used elsewhere in this codebase for a
-  // screen that can be reached either as a real stack push (My Week's "Log
-  // session" deep link) or by tapping the bottom tab bar directly (no
-  // history to go back to, so fall back to My Week).
-  const handleBack = () => (router.canGoBack() ? router.back() : router.push("/(member)"));
-
   const handleToggleTimer = () => {
     setTimer((t) =>
       t.running
@@ -743,10 +737,17 @@ export default function MyFitness() {
         borderBottomColor: CARD_BORDER,
       }}
     >
-      <Pressable onPress={handleBack} hitSlop={HITSLOP} accessibilityLabel="Back" className="items-center justify-center" style={{ width: 30, height: 30 }}>
-        <Ionicons name="chevron-back" size={20} color="#78716c" />
+      {/* Root-tab header — matches the other three tabs' display-serif
+          title (this used to be a 16px bold sans with a back chevron that
+          navigated to a *different* tab, unlike any other root tab). The
+          gear mirrors My Week's header; the audit flagged it as belonging
+          on every tab. */}
+      <Text className="flex-1" numberOfLines={1} style={{ fontFamily: fonts.display, fontSize: 24, color: colors.primary }}>
+        My Fitness
+      </Text>
+      <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={HITSLOP} accessibilityLabel="Settings">
+        <Ionicons name="settings-outline" size={22} color="#78716c" />
       </Pressable>
-      <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>My Fitness</Text>
     </View>
     {activeFinalize ? (
       <View style={{ paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: CARD_BORDER, backgroundColor: CANVAS }}>
@@ -835,7 +836,7 @@ export default function MyFitness() {
                   hitSlop={HITSLOP}
                 >
                   <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                    View full block →
+                    View full block ›
                   </Text>
                 </Pressable>
               </FitnessCard>

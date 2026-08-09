@@ -12,7 +12,7 @@ import {
   removeNutritionAssignment,
 } from "../../../lib/payroll/nutritionAssignments";
 import { toastError, toastSuccess } from "../../../lib/toast";
-import { confirmRemoveQuestion } from "../../../lib/confirmDialog";
+import { confirmDelete } from "../../../lib/confirmDialog";
 import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { PayrollTabBar } from "../../../components/PayrollTabBar";
@@ -116,7 +116,12 @@ export default function PayrollNutrition() {
   };
 
   const handleRemove = async (assignment) => {
-    const confirmed = await confirmRemoveQuestion(assignment.client_name);
+    // Was confirmRemoveQuestion — the dialog literally asked "Remove this
+    // question?" about a person's name.
+    const confirmed = await confirmDelete(
+      `Stop billing for ${assignment.client_name}? Their 1:1 Nutrition line won't appear in future finalizations.`,
+      "Remove billing client?"
+    );
     if (!confirmed) return;
     try {
       await removeNutritionAssignment(assignment.id);

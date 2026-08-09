@@ -22,7 +22,7 @@ import { buildRateMaps, computeTotalsByStaff, formatMoney } from "../../../../li
 import { buildPeriodCsv, downloadCsv } from "../../../../lib/payroll/csvExport";
 import { formatDateMD } from "../../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../../lib/toast";
-import { confirmClosePayPeriod } from "../../../../lib/confirmDialog";
+import { confirmClosePayPeriod, confirmDelete } from "../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
 import { AdminPayrollTabBar } from "../../../../components/AdminPayrollTabBar";
@@ -216,6 +216,7 @@ export default function AdminPayrollPeriods() {
   const closedPeriods = listClosedPeriods(periodOptions);
 
   const handleReopen = async (finalization) => {
+    if (!(await confirmDelete("Reopen this coach's finalized payroll? They'll be able to edit their entries again and will need to re-finalize.", "Reopen finalization?"))) return;
     try {
       await reopenFinalization(finalization.id, profile.id);
       toastSuccess("Reopened");

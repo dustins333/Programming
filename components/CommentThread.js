@@ -61,7 +61,7 @@ export function CommentThread({ groupBlockId, spcBlockId, scrollViewRef, scrollO
           ))
         ) : (
           <Text className="text-xs text-stone-400" style={{ fontFamily: "Montserrat_400Regular" }}>
-            No notes yet.
+            No notes yet — leave one below for the other coaches.
           </Text>
         )}
       </ScrollView>

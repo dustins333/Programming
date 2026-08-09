@@ -332,6 +332,9 @@ export default function NutritionToday() {
           <Text className="mb-1 flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
             My Nutrition
           </Text>
+          <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={10} accessibilityLabel="Settings">
+            <Ionicons name="settings-outline" size={22} color="#78716c" />
+          </Pressable>
           <Image source={require("../../../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
         </View>
 

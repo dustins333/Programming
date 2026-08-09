@@ -167,7 +167,7 @@ export default function TemplatesIndex() {
               </Text>
               {rows.length === 0 ? (
                 <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
-                  None yet.
+                  None yet — create one with “+ New template” above.
                 </Text>
               ) : (
                 rows.map((t) => (

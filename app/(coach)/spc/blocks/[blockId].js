@@ -160,9 +160,9 @@ export default function SpcBlockDetail() {
               onPress={handleDelete}
               disabled={deleting}
               className="rounded-lg border px-4 py-2.5 disabled:opacity-50"
-              style={{ borderColor: "#dc2626" }}
+              style={{ borderColor: "#b23a22" }}
             >
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#dc2626" }}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#b23a22" }}>
                 {deleting ? "Deleting…" : "Delete block"}
               </Text>
             </Pressable>

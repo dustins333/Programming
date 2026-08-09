@@ -86,7 +86,7 @@ export default function SpcSessionPrintView() {
           onClick={() => (router.canGoBack() ? router.back() : router.push(`/(coach)/spc/history/${block.spc_client_id}`))}
           style={{ padding: "8px 14px" }}
         >
-          ← Back
+          ‹ Back
         </button>
         <button onClick={() => window.print()} style={{ padding: "8px 14px", background: "#a46a57", color: "white", border: "none", borderRadius: 6 }}>
           Print

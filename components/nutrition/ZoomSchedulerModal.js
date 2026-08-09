@@ -65,9 +65,15 @@ export function ZoomSchedulerModal({ visible, onClose }) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View className="flex-1 items-center justify-center bg-black/40 px-4">
-        <View className="w-full max-w-md rounded-2xl bg-white" style={{ maxHeight: "85%" }}>
-          <View className="border-b border-stone-100 px-5 py-4">
+      {/* House bottom sheet — was a centered white card, the odd one out
+          among the member-facing content modals. */}
+      <Pressable onPress={handleClose} className="flex-1 justify-end" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
+        <Pressable
+          onPress={(e) => e.stopPropagation?.()}
+          className="w-full"
+          style={{ maxHeight: "85%", backgroundColor: "#faf8f6", borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: "hidden" }}
+        >
+          <View className="border-b border-stone-200 px-5 py-4">
             <Text style={{ fontFamily: fonts.sansBold, fontSize: 16 }}>Schedule your Zoom check-in</Text>
             <Text className="mt-0.5 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
               Pick a time that works for you.
@@ -148,8 +154,8 @@ export function ZoomSchedulerModal({ visible, onClose }) {
               </Text>
             </Pressable>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

@@ -16,6 +16,7 @@ import { HighlightableAnswer } from "../../../../../../components/nutrition/High
 import { QuestionListEditor } from "../../../../../../components/nutrition/QuestionListEditor";
 import { CoachShell } from "../../../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../../../lib/formatDate";
+import { confirmRemoveQuestion } from "../../../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../../../lib/theme";
 
 export default function OnboardingQuestionnaire() {
@@ -71,6 +72,8 @@ export default function OnboardingQuestionnaire() {
   };
 
   const handleDeleteQuestion = async (id) => {
+    const q = questions.find((row) => row.id === id);
+    if (!(await confirmRemoveQuestion(q?.question_text ?? "this question"))) return;
     await deleteQuestionnaireQuestion(id);
     await load();
   };

@@ -96,9 +96,15 @@ function PopupModal({ visible, title, onClose, children, scrollViewRef: external
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 items-center justify-center bg-black/40 px-4">
-        <View className="w-full max-w-md rounded-2xl bg-white" style={{ maxHeight: "85%" }}>
-          <View className="flex-row items-center justify-between border-b border-stone-100 px-5 py-4">
+      {/* House bottom sheet (canvas bg, 22px top radius, warm scrim) — this
+          was one of the two member-facing centered-card holdouts. */}
+      <Pressable onPress={onClose} className="flex-1 justify-end" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
+        <Pressable
+          onPress={(e) => e.stopPropagation?.()}
+          className="w-full"
+          style={{ maxHeight: "85%", backgroundColor: "#faf8f6", borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: "hidden" }}
+        >
+          <View className="flex-row items-center justify-between border-b border-stone-200 px-5 py-4">
             <Text style={{ fontFamily: fonts.sansBold, fontSize: 16 }}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={8}>
               <Ionicons name="close" size={22} color="#78716c" />
@@ -115,8 +121,8 @@ function PopupModal({ visible, title, onClose, children, scrollViewRef: external
           >
             {children}
           </ScrollView>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
       <KeyboardDoneButton />
     </Modal>
   );
@@ -472,7 +478,7 @@ export default function WeeklyCheckin() {
             className="mt-1 items-center rounded-lg bg-primary py-3 disabled:opacity-50"
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-              {reopenSubmitting ? "Submitting…" : "Submit missed check-in"}
+              {reopenSubmitting ? "Submitting…" : "Finalize missed check-in"}
             </Text>
           </Pressable>
         </View>

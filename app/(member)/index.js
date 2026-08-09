@@ -146,7 +146,7 @@ function SessionBubble({ label, description, completed, published, onPress, capt
 // explicit ask, replacing an earlier attempt that swapped individual
 // bubbles' day-of-week captions for "Not needed" text, which read as
 // confusing/inconsistent with the always-real day captions elsewhere.
-function ProgramCard({ title, rows, target, completedCount, onNavigate, navigateLabel, onViewBlock }) {
+function ProgramCard({ title, subtitle, rows, target, completedCount, onNavigate, navigateLabel, onViewBlock }) {
   const isDone = completedCount >= target;
   return (
     <View
@@ -156,9 +156,16 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
       <View className="mb-3 flex-row items-center justify-between">
         <View className="mr-2 flex-1 flex-row items-center gap-2">
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
-          <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c", flexShrink: 1 }}>
-            {title}
-          </Text>
+          <View style={{ flexShrink: 1 }}>
+            <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e" }}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
           {/* Same "View full block ›" link used on My Fitness's own session
               header (SessionInfoBar.js) while actively logging — same
               copy/styling, just reachable from My Week too now, right next
@@ -769,6 +776,7 @@ export default function MemberHome() {
       {spc?.status === "ready" && (
         <ProgramCard
           title="SPC"
+          subtitle="Your individual strength program"
           rows={spc.rows.map((row) => ({ ...row, onPress: () => openSpcPreview(spc, row) }))}
           target={spc.sessionsPerWeek}
           completedCount={spc.rows.filter((r) => r.completed).length}

@@ -11,6 +11,7 @@ import { KeyboardDoneButton } from "../KeyboardDoneButton";
 import { CheckinWeekTimeline } from "./CheckinWeekTimeline";
 import { CoachAssignmentField } from "./CoachAssignmentField";
 import { fonts, colors } from "../../lib/theme";
+import { confirmRemoveQuestion } from "../../lib/confirmDialog";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../lib/scrollToKeyboard";
 
 // Collapsed-by-default section — click the header to expand, matching the
@@ -139,6 +140,8 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
     await loadQuestions();
   };
   const handleDeleteQuestion = async (id) => {
+    const q = questions.find((row) => row.id === id);
+    if (!(await confirmRemoveQuestion(q?.question_text ?? "this question"))) return;
     await deleteClientQuestion(id);
     await loadQuestions();
   };

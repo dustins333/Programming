@@ -12,6 +12,7 @@ import { DateCalendarPicker } from "../../../../../../components/nutrition/DateC
 import { CoachAssignmentField } from "../../../../../../components/nutrition/CoachAssignmentField";
 import { CoachShell } from "../../../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../../../lib/formatDate";
+import { confirmDelete } from "../../../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../../../lib/theme";
 import { toastError } from "../../../../../../lib/toast";
 
@@ -55,6 +56,7 @@ export default function OnboardingTracking() {
   };
 
   const handleUnassignDate = async (dateId) => {
+    if (!(await confirmDelete("Unassign this tracking date? Anything the client already logged for it stays saved.", "Unassign tracking date?"))) return;
     try {
       await removeTrackingDate(dateId);
       await load();

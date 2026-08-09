@@ -13,7 +13,7 @@ const CARD_BORDER = "#ece7e1";
 export function ProgramPickerModal({ visible, options, onSelect, onClose }) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable onPress={onClose} className="flex-1 justify-end bg-black/40">
+      <Pressable onPress={onClose} className="flex-1 justify-end" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
         <Pressable onPress={(e) => e.stopPropagation?.()} className="rounded-t-[22px] bg-[#faf8f6] px-5 pb-8 pt-5">
           <Text className="mb-4 text-center" style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>
             What are you logging?

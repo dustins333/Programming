@@ -90,7 +90,7 @@ export default function BlockHistory() {
             keyExtractor={(item) => item.id}
             ListEmptyComponent={
               <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
-                No blocks yet.
+                No past blocks yet — finished blocks land here once their end date passes.
               </Text>
             }
             renderItem={({ item }) => {
@@ -110,7 +110,7 @@ export default function BlockHistory() {
                   <View className="flex-row items-center gap-3">
                     {isAdmin && isFuture ? (
                       <Pressable onPress={() => handleDelete(item)} disabled={deletingId === item.id} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#dc2626" }}>
+                        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#b23a22" }}>
                           {deletingId === item.id ? "Deleting…" : "Delete"}
                         </Text>
                       </Pressable>

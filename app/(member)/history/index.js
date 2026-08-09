@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, Pressable, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLoggedExercises } from "../../../lib/programming/memberPlan";
 import { listDayTimeline } from "../../../lib/history";
@@ -220,30 +220,26 @@ function ByWorkoutView({ profile }) {
 }
 
 export default function HistoryIndex() {
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState("day");
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerStyle={{ paddingTop: insets.top + 6, paddingHorizontal: 24, paddingBottom: 32 }}>
-      <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        My History
-      </Text>
+      <View className="mb-4 flex-row items-center justify-between">
+        <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+          My History
+        </Text>
+        <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={10} accessibilityLabel="Settings">
+          <Ionicons name="settings-outline" size={22} color="#78716c" />
+        </Pressable>
+      </View>
 
       <SegmentedControl segments={MODES} activeKey={mode} onSelect={setMode} />
 
       {mode === "day" ? <ByDayView profile={profile} /> : <ByWorkoutView profile={profile} />}
 
-      <Pressable
-        onPress={signOut}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        accessibilityLabel="Sign out"
-        className="mt-6 self-start rounded-lg border border-stone-300 px-5 py-3"
-      >
-        <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
-          Sign out
-        </Text>
-      </Pressable>
     </ScrollView>
   );
 }

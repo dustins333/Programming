@@ -7,6 +7,7 @@ import { getCurrentPeriodStart, getPayPeriod, isPeriodClosed } from "../../../li
 import { listOwnRequests, listPendingRequests, submitRequest, cancelOwnPendingRequest, approveRequest, denyRequest } from "../../../lib/payroll/requests";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../lib/toast";
+import { confirmDelete } from "../../../lib/confirmDialog";
 import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { PayrollTabBar } from "../../../components/PayrollTabBar";
@@ -107,6 +108,7 @@ export default function PayrollRequests() {
   };
 
   const handleCancel = async (id) => {
+    if (!(await confirmDelete("Cancel this pending request? You can re-enter it later if needed.", "Cancel request?"))) return;
     try {
       await cancelOwnPendingRequest(id);
       await load();
@@ -265,7 +267,7 @@ export default function PayrollRequests() {
             </Text>
             {ownRequests.length === 0 ? (
               <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                No requests yet.
+                No requests yet — submit one above when you have a custom payroll item.
               </Text>
             ) : (
               ownRequests.map((r) => (

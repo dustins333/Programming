@@ -28,6 +28,7 @@ import { CoachShell } from "../../components/CoachShell";
 import { AddStaffModal } from "../../components/AddStaffModal";
 import { TemplateEditorButton } from "../../components/nutrition/TemplateEditorButton";
 import { NativePickerField } from "../../components/NativePickerField";
+import { confirmRemoveQuestion, confirmDelete } from "../../lib/confirmDialog";
 import { NUMERIC_DONE_ID } from "../../components/NumericInputAccessory";
 import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../lib/scrollToKeyboard";
 
@@ -263,6 +264,8 @@ export default function Settings() {
     await loadTemplates();
   };
   const handleDeleteCheckinQuestion = async (id) => {
+    const q = checkinQuestions.find((row) => row.id === id);
+    if (!(await confirmRemoveQuestion(q?.question_text ?? "this question"))) return;
     await deleteTemplateQuestion(id);
     await loadTemplates();
   };
@@ -281,6 +284,8 @@ export default function Settings() {
     await loadTemplates();
   };
   const handleDeleteQuestionnaireQuestion = async (id) => {
+    const q = questionnaireQuestions.find((row) => row.id === id);
+    if (!(await confirmRemoveQuestion(q?.question_text ?? "this question"))) return;
     await deleteQuestionnaireTemplateQuestion(id);
     await loadTemplates();
   };
@@ -446,6 +451,7 @@ export default function Settings() {
   };
 
   const handleDeleteSpecialtyBar = async (index) => {
+    if (!(await confirmDelete(`Remove "${specialtyBars[index]?.name ?? "this bar"}" from the specialty bar list?`, "Remove specialty bar?"))) return;
     const previous = specialtyBars;
     const next = specialtyBars.filter((_, i) => i !== index);
     setSpecialtyBars(next);
