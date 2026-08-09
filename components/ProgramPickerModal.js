@@ -1,4 +1,4 @@
-import { Modal, View, Text, Pressable } from "react-native";
+import { Modal, Text, Pressable } from "react-native";
 import { fonts } from "../lib/theme";
 
 const CARD_BORDER = "#ece7e1";

@@ -34,7 +34,7 @@ export function PayrollTabBar({ active, profile }) {
   const router = useRouter();
   const pathname = usePathname();
   const isAdmin = profile?.role === "admin";
-  const tabs = ALL_TABS.filter((t) => (!t.adminOnly || isAdmin) && (!t.permission || isAdmin || profile?.[t.permission]));
+  const tabs = ALL_TABS.filter((t) => !t.permission || isAdmin || profile?.[t.permission]);
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6 border-b border-stone-200">

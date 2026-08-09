@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Platform } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase, core } from "../../../lib/supabase/client";
 import { getUser, listCoaches, listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../../lib/programming/clients";
@@ -151,6 +151,13 @@ export default function ClientProfile() {
   const [missedFlags, setMissedFlags] = useState([]);
   const [spcClient, setSpcClient] = useState(null);
   const [nutritionClient, setNutritionClient] = useState(null);
+  // Per-module fetch errors — an SPC/Nutrition failure renders inline in its
+  // own card instead of blanking the whole profile. The enrollment Switch is
+  // withheld while errored: a silently-null row would read as "Not enrolled"
+  // and invite a wrong toggle (re-enroll side effects) on a client who's
+  // actually enrolled.
+  const [spcError, setSpcError] = useState(null);
+  const [nutritionError, setNutritionError] = useState(null);
   const [oneOffs, setOneOffs] = useState([]);
   const [completedOneOffIds, setCompletedOneOffIds] = useState(new Set());
   const [templates, setTemplates] = useState([]);
@@ -172,17 +179,33 @@ export default function ClientProfile() {
 
   const load = useCallback(async () => {
     try {
-      const [memberRow, assignmentRows, programRows, spcRow, nutritionRow, oneOffRows, completedIds, templateRows] = await Promise.all([
+      // SPC and Nutrition are fetched via allSettled, isolated from the core
+      // programming fetches — a failure in one module (e.g. an unrun
+      // migration) shouldn't take down the whole profile. See
+      // spcError/nutritionError above for how a failure renders.
+      const [memberRow, assignmentRows, programRows, oneOffRows, completedIds, templateRows] = await Promise.all([
         getUser(userId),
         listAssignmentsForUser(userId),
         listGroupPrograms(),
-        getSpcClient(userId),
-        getNutritionClient(userId),
         listOneOffWorkoutsForUser(userId),
         listCompletedOneOffWorkoutIds(userId),
         listTemplates(),
       ]);
       setMember(memberRow);
+
+      const [spcResult, nutritionResult] = await Promise.allSettled([getSpcClient(userId), getNutritionClient(userId)]);
+      if (spcResult.status === "fulfilled") {
+        setSpcClient(spcResult.value);
+        setSpcError(null);
+      } else {
+        setSpcError(spcResult.reason?.message ?? String(spcResult.reason));
+      }
+      if (nutritionResult.status === "fulfilled") {
+        setNutritionClient(nutritionResult.value);
+        setNutritionError(null);
+      } else {
+        setNutritionError(nutritionResult.reason?.message ?? String(nutritionResult.reason));
+      }
 
       // Staff-only, reads auth.users.last_sign_in_at (migration 0022) — real
       // account-level signal for "has this person ever actually opened the
@@ -198,8 +221,6 @@ export default function ClientProfile() {
       }
       setAssignments(assignmentRows);
       setPrograms(programRows);
-      setSpcClient(spcRow);
-      setNutritionClient(nutritionRow);
       setOneOffs(oneOffRows);
       setCompletedOneOffIds(completedIds);
       setTemplates(templateRows);
@@ -257,9 +278,14 @@ export default function ClientProfile() {
     }
   }, [userId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // useFocusEffect, not mount-only — pushing into a builder/SPC/nutrition
+  // screen and popping back would otherwise show stale enrollment/flags,
+  // same reasoning as blocks/[blockId].js and spc/[userId].js.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   // A client can hold several memberships at once now (e.g. Flagship plus
   // a specialty program), so this toggles one specific program's
@@ -583,18 +609,26 @@ export default function ClientProfile() {
               title="SPC"
               headerRight={spcClient ? <StatusBadge tone={STATUS_TONES[spcClient.status]} label={STATUS_LABELS[spcClient.status]} /> : null}
             >
-              <View className="flex-row items-center gap-3">
-                <Switch
-                  value={spcActive}
-                  onValueChange={handleSpcToggle}
-                  trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
-                  thumbColor="#ffffff"
-                />
-                <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
-                  {spcClient ? "Enrolled" : "Not enrolled"}
+              {spcError ? (
+                <Text className="text-red-600" style={{ fontFamily: fonts.sans }}>
+                  Couldn't load SPC status: {spcError}
                 </Text>
-              </View>
-              {spcClient ? <ViewLink label="View SPC program ›" onPress={() => router.push(`/(coach)/spc/${userId}`)} /> : null}
+              ) : (
+                <>
+                  <View className="flex-row items-center gap-3">
+                    <Switch
+                      value={spcActive}
+                      onValueChange={handleSpcToggle}
+                      trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
+                      thumbColor="#ffffff"
+                    />
+                    <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                      {spcClient ? "Enrolled" : "Not enrolled"}
+                    </Text>
+                  </View>
+                  {spcClient ? <ViewLink label="View SPC program ›" onPress={() => router.push(`/(coach)/spc/${userId}`)} /> : null}
+                </>
+              )}
             </SettingsCard>
           </View>
 
@@ -611,20 +645,28 @@ export default function ClientProfile() {
                 ) : null
               }
             >
-              <View className="flex-row items-center gap-3">
-                <Switch
-                  value={nutritionActive}
-                  onValueChange={handleNutritionToggle}
-                  trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
-                  thumbColor="#ffffff"
-                />
-                <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
-                  {nutritionClient ? "Enrolled" : "Not enrolled"}
+              {nutritionError ? (
+                <Text className="text-red-600" style={{ fontFamily: fonts.sans }}>
+                  Couldn't load nutrition status: {nutritionError}
                 </Text>
-              </View>
-              {nutritionClient ? (
-                <ViewLink label="View nutrition dashboard ›" onPress={() => router.push(`/(coach)/nutrition/clients/${userId}`)} />
-              ) : null}
+              ) : (
+                <>
+                  <View className="flex-row items-center gap-3">
+                    <Switch
+                      value={nutritionActive}
+                      onValueChange={handleNutritionToggle}
+                      trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
+                      thumbColor="#ffffff"
+                    />
+                    <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                      {nutritionClient ? "Enrolled" : "Not enrolled"}
+                    </Text>
+                  </View>
+                  {nutritionClient ? (
+                    <ViewLink label="View nutrition dashboard ›" onPress={() => router.push(`/(coach)/nutrition/clients/${userId}`)} />
+                  ) : null}
+                </>
+              )}
             </SettingsCard>
           </View>
         </View>

@@ -4,7 +4,7 @@ import { toastError } from "../../lib/toast";
 import { createTarget } from "../../lib/nutrition/targets";
 import { todayInBoise } from "../../lib/boiseDate";
 import { TargetField } from "./TargetField";
-import { fonts, colors } from "../../lib/theme";
+import { fonts } from "../../lib/theme";
 
 const EMPTY_FORM = { protein_g: "", carb_g: "", fat_g: "", fiber_g: "", step_goal: "", sleep_hours_goal: "", note: "" };
 

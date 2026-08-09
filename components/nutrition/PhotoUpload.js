@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { pickPhoto } from "../../lib/nutrition/imagePicker";
 import { uploadPhoto } from "../../lib/nutrition/photos";
 import { todayInBoise } from "../../lib/boiseDate";
-import { fonts, colors } from "../../lib/theme";
+import { fonts } from "../../lib/theme";
 
 const isWeb = Platform.OS === "web";
 

@@ -21,7 +21,7 @@ import { formatDateMD } from "../../../lib/formatDate";
 import { confirmOverwrite } from "../../../lib/confirmDialog";
 import { toastError } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
-import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
+import { STATUS_LABELS } from "../../../lib/programming/spcStatus";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
 import { CoachMessageBubble } from "../../../components/CoachMessageBubble";

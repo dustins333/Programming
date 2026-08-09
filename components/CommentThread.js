@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { useAuth } from "../lib/auth/AuthProvider";
 import { listComments, addComment } from "../lib/programming/comments";
 import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
+import { toastError } from "../lib/toast";
 
 // scrollViewRef/scrollOffsetRef are optional — this card is normally
 // embedded as one of several on a longer page (a block detail screen), so
@@ -36,6 +37,8 @@ export function CommentThread({ groupBlockId, spcBlockId, scrollViewRef, scrollO
       await addComment({ groupBlockId, spcBlockId, coachId: profile.id, commentText: draft.trim() });
       setDraft("");
       await load();
+    } catch (err) {
+      toastError("Couldn't post note", err);
     } finally {
       setPosting(false);
     }

@@ -17,6 +17,7 @@ import {
   reorderTemplateExercises,
 } from "../../../../lib/programming/templates";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
+import { toastError } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
 
 const CATEGORY_LABELS = { away: "Away programming", trial: "Trial session" };
@@ -79,24 +80,34 @@ export default function TemplateBuilder() {
   }, [load]);
 
   const handlePick = async (exercise) => {
-    if (pickerTarget === "warmup") {
-      const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: warmups.length + 1 });
-      setWarmups((prev) => [...prev, created]);
-    } else if (pickerTarget === "exercise") {
-      const created = await addTemplateExercise({ templateId, exerciseId: exercise.id, position: exercises.length + 1 });
-      setExercises((prev) => [...prev, created]);
+    try {
+      if (pickerTarget === "warmup") {
+        const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: warmups.length + 1 });
+        setWarmups((prev) => [...prev, created]);
+      } else if (pickerTarget === "exercise") {
+        const created = await addTemplateExercise({ templateId, exerciseId: exercise.id, position: exercises.length + 1 });
+        setExercises((prev) => [...prev, created]);
+      }
+    } catch (err) {
+      toastError("Couldn't add exercise", err);
     }
     setPickerTarget(null);
   };
 
   const handleExerciseChange = (id, fields) => {
     setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...fields } : e)));
-    updateTemplateExercise(id, fields);
+    updateTemplateExercise(id, fields).catch((err) => toastError("Couldn't save change", err));
   };
 
   const handleRemoveExercise = async (id) => {
+    const previous = exercises;
     setExercises((prev) => prev.filter((e) => e.id !== id));
-    await removeTemplateExercise(id);
+    try {
+      await removeTemplateExercise(id);
+    } catch (err) {
+      setExercises(previous);
+      toastError("Couldn't remove exercise", err);
+    }
   };
 
   const moveExercise = (index, direction) => {
@@ -105,7 +116,9 @@ export default function TemplateBuilder() {
     const reordered = [...exercises];
     [reordered[index], reordered[newIndex]] = [reordered[newIndex], reordered[index]];
     setExercises(reordered);
-    reorderTemplateExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 })));
+    reorderTemplateExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 }))).catch((err) =>
+      toastError("Couldn't reorder exercises", err)
+    );
   };
 
   const adjustSets = (item, delta) => {
@@ -114,8 +127,14 @@ export default function TemplateBuilder() {
   };
 
   const handleRemoveWarmup = async (id) => {
+    const previous = warmups;
     setWarmups((prev) => prev.filter((w) => w.id !== id));
-    await removeTemplateWarmup(id);
+    try {
+      await removeTemplateWarmup(id);
+    } catch (err) {
+      setWarmups(previous);
+      toastError("Couldn't remove warm-up", err);
+    }
   };
 
   if (loadError) {

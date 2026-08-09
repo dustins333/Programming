@@ -1,7 +1,7 @@
-import { useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, Switch, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { supabase } from "../../lib/supabase/client";
@@ -232,23 +232,28 @@ export default function MemberSettings() {
     });
   }, [profile]);
 
-  useEffect(() => {
-    if (!profile) return;
-    (async () => {
-      try {
-        const client = await getClient(profile.id);
-        if (!client) {
+  // useFocusEffect, not mount-only — this screen stays mounted as a Tabs
+  // child, so a coach reassignment should show up on the next visit rather
+  // than only after a full app restart.
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile) return;
+      (async () => {
+        try {
+          const client = await getClient(profile.id);
+          if (!client) {
+            setCoachName(null);
+            return;
+          }
+          const coach = await getCoachRow(client.coach_id);
+          setCoachName(coach?.name ?? null);
+        } catch (err) {
+          console.error("Failed to load assigned coach:", err);
           setCoachName(null);
-          return;
         }
-        const coach = await getCoachRow(client.coach_id);
-        setCoachName(coach?.name ?? null);
-      } catch (err) {
-        console.error("Failed to load assigned coach:", err);
-        setCoachName(null);
-      }
-    })();
-  }, [profile]);
+      })();
+    }, [profile])
+  );
 
   const handleChangeEmail = async (email) => {
     const { error } = await supabase.auth.updateUser({ email });

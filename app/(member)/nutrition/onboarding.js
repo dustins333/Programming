@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
-import { todayInBoise } from "../../../lib/boiseDate";
 import { getOnboardingStatus, submitQuestionnaire, logObjectiveTrackingDay } from "../../../lib/nutrition/onboarding";
-import { getClient } from "../../../lib/nutrition/clients";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";

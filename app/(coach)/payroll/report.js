@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
@@ -23,16 +23,22 @@ export default function PayrollReport() {
   const [finalization, setFinalization] = useState(null);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
 
-  useEffect(() => {
-    if (!profile?.id || !report.selectedPeriod) return;
-    let cancelled = false;
-    getOwnFinalization(profile.id, report.selectedPeriod).then((f) => {
-      if (!cancelled) setFinalization(f);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [profile?.id, report.selectedPeriod]);
+  // useFocusEffect, not a plain useEffect — useOwnReport restores the same
+  // selectedPeriod on refocus, so an effect keyed on it alone never re-runs
+  // on a return visit and the lock state would sit stale (e.g. after an
+  // admin reopens a finalization) even though the totals beside it refresh.
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile?.id || !report.selectedPeriod) return;
+      let cancelled = false;
+      getOwnFinalization(profile.id, report.selectedPeriod).then((f) => {
+        if (!cancelled) setFinalization(f);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [profile?.id, report.selectedPeriod])
+  );
 
   const currentPeriodRow = report.periodOptions.find((p) => p.start_date === report.selectedPeriod);
   const closed = isPeriodClosed(currentPeriodRow);

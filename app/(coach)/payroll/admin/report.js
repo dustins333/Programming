@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
+import { Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Redirect, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listPayPeriodOptions, getCurrentPeriodStart } from "../../../../lib/payroll/periods";

@@ -13,7 +13,7 @@ import { getCheckinForWeek, finalizeCheckin, copyTemplateToClient, listCheckinsS
 import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
 import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
-import { computeWeekWindows, currentCalendarWeek, summarizeWeek, enumerateUpcomingWeeks } from "../../../../lib/nutrition/weekCycle";
+import { computeWeekWindows, currentCalendarWeek, summarizeWeek } from "../../../../lib/nutrition/weekCycle";
 import { OnboardingStepper } from "../../../../components/nutrition/OnboardingStepper";
 import { PhaseCard } from "../../../../components/nutrition/PhaseCard";
 import { WeekList, enumerateRecentWeeks } from "../../../../components/nutrition/WeekList";
@@ -159,28 +159,40 @@ export default function NutritionClientDetail() {
 
   const load = useCallback(async () => {
     try {
-      const [clientRow, coachRows, targetRows, logRows, focusRows, checkinRow, onboardingStatus, photoRows, checkinRows, otLogRows] = await Promise.all([
+      // Core fetches only — the rows that gate rendering (client/targets/
+      // logs/onboarding) or drive real actions (checkin → Finalize). The
+      // display-only fetches below are isolated via allSettled so one
+      // domain's failure doesn't blank the whole page (same reasoning as
+      // the milestones/reopens isolation further down).
+      const [clientRow, coachRows, targetRows, logRows, checkinRow, onboardingStatus] = await Promise.all([
         getClient(userId),
         listCoaches(),
         listTargets(userId),
         listLogs(userId, { limit: 400 }),
-        listFocusItems(userId),
         getCheckinForWeek(userId, selectedWeek.start),
         getOnboardingStatus(userId),
-        listAllPhotos(userId),
-        listCheckinsSince(userId, addDays(today, -7 * TIMELINE_PAST_WEEKS)),
-        listObjectiveTrackingLogs(userId),
       ]);
       setClient(clientRow);
       setCoaches(coachRows);
       setTargets(targetRows);
       setLogs(logRows);
-      setFocusItems(focusRows);
       setCheckin(checkinRow);
       setOnboarding(onboardingStatus);
-      setPhotos(photoRows);
-      setCheckins(checkinRows);
-      setOtLogs(otLogRows);
+
+      const [focusResult, photosResult, checkinsResult, otLogsResult] = await Promise.allSettled([
+        listFocusItems(userId),
+        listAllPhotos(userId),
+        listCheckinsSince(userId, addDays(today, -7 * TIMELINE_PAST_WEEKS)),
+        listObjectiveTrackingLogs(userId),
+      ]);
+      if (focusResult.status === "fulfilled") setFocusItems(focusResult.value);
+      else console.error("Failed to load focus items:", focusResult.reason);
+      if (photosResult.status === "fulfilled") setPhotos(photosResult.value);
+      else console.error("Failed to load photos:", photosResult.reason);
+      if (checkinsResult.status === "fulfilled") setCheckins(checkinsResult.value);
+      else console.error("Failed to load check-in history:", checkinsResult.reason);
+      if (otLogsResult.status === "fulfilled") setOtLogs(otLogsResult.value);
+      else console.error("Failed to load objective-tracking logs:", otLogsResult.reason);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }

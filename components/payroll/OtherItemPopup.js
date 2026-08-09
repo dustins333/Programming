@@ -3,7 +3,7 @@
 // popup only ever edits qty/notes, whether for a brand-new item or an
 // existing one reopened from EntryListPopup.
 import { useEffect, useState } from "react";
-import { View, Text, TextInput } from "react-native";
+import { TextInput } from "react-native";
 import { fonts } from "../../lib/theme";
 import { PayrollBottomSheet, SheetField, SheetSaveButton, SheetDeleteButton } from "./PayrollBottomSheet";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";

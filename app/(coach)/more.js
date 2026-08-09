@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { View, Text, Pressable } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { CoachShell } from "../../components/CoachShell";
 import { getMessagingSettings } from "../../lib/programming/messagingSettings";
@@ -17,11 +17,16 @@ export default function More() {
   // every load for anyone with messaging turned off).
   const [messagingEnabled, setMessagingEnabled] = useState(false);
 
-  useEffect(() => {
-    getMessagingSettings()
-      .then((s) => setMessagingEnabled(s.enabled))
-      .catch((err) => console.error("Failed to load messaging settings:", err));
-  }, []);
+  // useFocusEffect, not a mount-only useEffect — this is a Tabs root that
+  // stays mounted, so an admin flipping the messaging kill switch in
+  // Settings needs the row to re-check on the next visit, not next launch.
+  useFocusEffect(
+    useCallback(() => {
+      getMessagingSettings()
+        .then((s) => setMessagingEnabled(s.enabled))
+        .catch((err) => console.error("Failed to load messaging settings:", err));
+    }, [])
+  );
 
   return (
     <CoachShell>

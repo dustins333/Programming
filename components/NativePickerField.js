@@ -5,7 +5,7 @@
 // second caller (PayrollOtherRow) doesn't duplicate it — web callers keep
 // using a real <select> directly, this is native-only.
 import { useState } from "react";
-import { View, Text, Pressable, Modal, ScrollView } from "react-native";
+import { Text, Pressable, Modal, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 

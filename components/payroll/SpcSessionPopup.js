@@ -2,7 +2,7 @@
 // plus button opens this directly for a new session; tapping a row inside
 // EntryListPopup reopens it pre-filled for editing that specific session.
 import { useEffect, useState } from "react";
-import { View, Text, TextInput } from "react-native";
+import { TextInput } from "react-native";
 import { fonts } from "../../lib/theme";
 import { PayrollBottomSheet, SheetField, SheetSaveButton, SheetDeleteButton } from "./PayrollBottomSheet";
 import { SpcAttendeePicker } from "./SpcAttendeePicker";
