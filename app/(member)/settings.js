@@ -8,6 +8,7 @@ import { supabase } from "../../lib/supabase/client";
 import { getClient, getCoachRow } from "../../lib/nutrition/clients";
 import { updateOwnNotificationPrefs } from "../../lib/notifications/memberPrefs";
 import { useShowMessageBubble, setShowMessageBubble } from "../../lib/messageBubblePref";
+import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
 import { fonts, colors } from "../../lib/theme";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../lib/scrollToKeyboard";
@@ -207,6 +208,9 @@ export default function MemberSettings() {
   const [coachName, setCoachName] = useState(undefined); // undefined = loading, null = no nutrition client row
   const [deleteOpen, setDeleteOpen] = useState(false);
   const showMessageBubble = useShowMessageBubble();
+  // Hidden until confirmed on — same default as every other messaging
+  // entry point (FloatingMessageBubble, My Week's header icon).
+  const [messagingOn, setMessagingOn] = useState(false);
 
   // The Danger zone's Delete-account field sits at the very bottom of this
   // page — exactly the "focused field near the end of scrollable content"
@@ -238,6 +242,9 @@ export default function MemberSettings() {
   useFocusEffect(
     useCallback(() => {
       if (!profile) return;
+      isMessagingEnabledForUser(profile.id)
+        .then(setMessagingOn)
+        .catch(() => setMessagingOn(false));
       (async () => {
         try {
           const client = await getClient(profile.id);
@@ -353,26 +360,36 @@ export default function MemberSettings() {
           description="Sunday announcement that the new week's check-in is open."
           value={notifValues.checkinAvailable}
           onValueChange={(v) => handleToggleNotif("checkinAvailable", v)}
+          last={!messagingOn}
         />
-        <ToggleRow
-          label="Coach messages"
-          description="New comments from your coach."
-          value={notifValues.coachMessages}
-          onValueChange={(v) => handleToggleNotif("coachMessages", v)}
-          last
-        />
+        {messagingOn ? (
+          <ToggleRow
+            label="Coach messages"
+            description="New comments from your coach."
+            value={notifValues.coachMessages}
+            onValueChange={(v) => handleToggleNotif("coachMessages", v)}
+            last
+          />
+        ) : null}
       </Card>
 
-      <Card>
-        <CardTitle>Messaging</CardTitle>
-        <ToggleRow
-          label="Show message bubble"
-          description="A floating button to message your coach, always on screen. Turning this off doesn't remove messaging — you can still reach it from the chat icon on My Week."
-          value={showMessageBubble}
-          onValueChange={setShowMessageBubble}
-          last
-        />
-      </Card>
+      {/* Both messaging settings hide whenever messaging is off for this
+          member — either the admin kill switch, or an audience scope that
+          doesn't include any of their memberships (same audience-aware
+          check the bubble/header icon/route already use). Settings for a
+          feature you can't reach are just confusing. */}
+      {messagingOn ? (
+        <Card>
+          <CardTitle>Messaging</CardTitle>
+          <ToggleRow
+            label="Show message bubble"
+            description="A floating button to message your coach, always on screen. Turning this off doesn't remove messaging — you can still reach it from the chat icon on My Week."
+            value={showMessageBubble}
+            onValueChange={setShowMessageBubble}
+            last
+          />
+        </Card>
+      ) : null}
 
       {coachName ? (
         <Card>

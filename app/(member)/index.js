@@ -226,54 +226,32 @@ function ProgramCard({ title, subtitle, rows, target, completedCount, onNavigate
 // circle, not just the small header chevron, since that was hard to hit.
 // No calorie numbers/progress bar — nutrition isn't logged until evening,
 // so nothing calorie-related should show mid-day.
-// Mid-onboarding replacement for NutritionStrip — same card shell, but the
-// content is the client's assigned Objective Tracking days (checked off as
-// each gets logged) instead of the weekly finalize strip, which means
-// nothing until targets exist. Tapping anywhere goes to the Nutrition tab,
-// which renders the onboarding hub directly at this stage. With zero
-// assigned days (tracking skipped), it's a plain "finish your onboarding"
-// pointer instead.
-function OnboardingNutritionCard({ nutrition, onNavigate }) {
+// Mid-onboarding version of the Nutrition card — same card shell as
+// NutritionStrip so My Week looks fully active, but where the 7 day
+// bubbles would be there's a single "Onboarding" button into the hub
+// (which is what the Nutrition tab renders at this stage). Deliberately
+// no progress numbers or "not set up yet" copy — per direct ask, nothing
+// on My Week should read like something's missing.
+function OnboardingNutritionCard({ onNavigate }) {
   return (
     <Pressable
       onPress={onNavigate}
-      accessibilityLabel="Continue nutrition onboarding"
+      accessibilityLabel="Go to nutrition onboarding"
       className="mb-3.5 rounded-[20px] bg-white px-4 pb-4 pt-4"
       style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}
     >
-      <View className="mb-1 flex-row items-center justify-between">
+      <View className="mb-3 flex-row items-center justify-between">
         <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>Nutrition</Text>
         <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} />
       </View>
-      {nutrition.trackingCount > 0 ? (
-        <>
-          <Text className="mb-3" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-            Objective Tracking · {nutrition.loggedCount} of {nutrition.trackingCount} days logged
-          </Text>
-          <View className="flex-row flex-wrap" style={{ gap: 10 }}>
-            {nutrition.trackingDates.map((d) => {
-              const logged = !!nutrition.logsByDate[d.date];
-              const [, month, day] = d.date.split("-").map(Number);
-              return (
-                <View key={d.id ?? d.date} className="items-center" style={{ gap: 3 }}>
-                  <Ionicons
-                    name={logged ? "checkmark-circle" : "ellipse-outline"}
-                    size={22}
-                    color={logged ? TILE_COMPLETED_BORDER : "#c9c4bd"}
-                  />
-                  <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 10, color: "#78716c" }}>
-                    {month}/{day}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        </>
-      ) : (
-        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
-          Finish your onboarding to get started ›
+      <View
+        className="items-center rounded-xl py-3"
+        style={{ backgroundColor: colors.primary, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10 }}
+      >
+        <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }}>
+          Onboarding
         </Text>
-      )}
+      </View>
     </Pressable>
   );
 }
@@ -550,19 +528,11 @@ export default function MemberHome() {
         if (!nutritionClient || nutritionClient.status !== "active") return null;
 
         // Mid-onboarding (sent, not yet approved): My Week still shows a
-        // Nutrition card, with the client's objective-tracking days inside
-        // it — per direct ask; before this the whole section just vanished
-        // until Approve & Set Targets.
+        // normal-looking Nutrition card with an "Onboarding" button where
+        // the day bubbles will eventually be — per direct ask; before this
+        // the whole section just vanished until Approve & Set Targets.
         if (!nutritionClient.objective_tracking_approved_at) {
-          if (!nutritionClient.onboarding_sent_at) return null;
-          const ob = await getOnboardingStatus(profile.id);
-          return {
-            status: "onboarding",
-            trackingDates: ob.trackingDates,
-            logsByDate: ob.logsByDate,
-            trackingCount: ob.trackingCount,
-            loggedCount: ob.loggedCount,
-          };
+          return nutritionClient.onboarding_sent_at ? { status: "onboarding" } : null;
         }
 
         const dow = dayOfWeekInBoise(today);
@@ -786,14 +756,13 @@ export default function MemberHome() {
         {formatToday()}
       </Text>
 
+      {/* Only shown when the member has genuinely nothing — a
+          nutrition-only member just sees their Nutrition card below with
+          no "you're missing training" style message at all, per direct
+          ask ("makes it feel like they are missing something"). */}
       {groups.length === 0 && !spc && oneOffs.length === 0 && !nutritionEnrolled && (
         <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
           You're not assigned to a program yet — check with your coach.
-        </Text>
-      )}
-      {groups.length === 0 && !spc && oneOffs.length === 0 && nutritionEnrolled && (
-        <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans }}>
-          No training program yet — your nutrition plan lives on the My Nutrition tab.
         </Text>
       )}
 
@@ -864,7 +833,7 @@ export default function MemberHome() {
         />
       )}
       {nutrition?.status === "onboarding" && (
-        <OnboardingNutritionCard nutrition={nutrition} onNavigate={() => router.push("/(member)/nutrition")} />
+        <OnboardingNutritionCard onNavigate={() => router.push("/(member)/nutrition")} />
       )}
 
       <SessionPreviewModal
