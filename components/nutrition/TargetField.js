@@ -6,6 +6,17 @@ import { fonts } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
 
+// Every control that can sit in a shared flex-row with a TargetField has to
+// render at exactly this height, or the input boxes don't line up across the
+// row — a TextInput sized only by its own padding + font metrics and a web
+// <select> sized by its own padding never land on the same number by
+// coincidence. RatingSelect imports this for the same reason. minHeight, not
+// height, so Dynamic Type can still grow the box rather than clip it.
+// 50 is what a TargetField already measures at its default size (1px border +
+// py-3 + a 24px line box, measured in the browser) — so this pins the other
+// controls to the existing look instead of resizing everything.
+export const FIELD_MIN_HEIGHT = 50;
+
 // A labeled numeric input with the client's current target value shown as a
 // small colored pill underneath the input box — shared by the coach's "set
 // new target" form and the member's daily-log form, so both read the same
@@ -31,12 +42,20 @@ export function TargetField({ label, styleKey, current, pillLabel = "target", un
       <Text maxFontSizeMultiplier={1.3} numberOfLines={1} className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
         {label}
       </Text>
-      <View className="flex-row items-center rounded-lg border border-stone-300 px-4">
+      <View className="flex-row items-center rounded-lg border border-stone-300 px-4" style={{ minHeight: FIELD_MIN_HEIGHT }}>
         <TextInput
           value={value}
           onChangeText={onChangeText}
           onFocus={() => scrollFieldIntoView(fieldRef.current)}
           keyboardType="decimal-pad"
+          // react-native-web defaults every TextInput to autocomplete="on"
+          // when the prop is omitted (confirmed in its TextInput source) —
+          // that's an explicit opt-IN to browser autofill, which is what made
+          // iOS Safari offer "AutoFill Contact" and paint its blue
+          // autofill-target boxes over these macro fields in the installed
+          // PWA. Off here (and app-wide via babel/noAutofillPlugin.js) —
+          // nobody's protein intake is in their contact card.
+          autoComplete="off"
           inputAccessoryViewID={NUMERIC_DONE_ID}
           className="flex-1 py-3 text-base"
           style={{ fontFamily: onTrack ? fonts.sansSemiBold : fonts.sans, color: onTrack ? "#4d6142" : "#44403c" }}

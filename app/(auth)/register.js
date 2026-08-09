@@ -125,6 +125,11 @@ export default function Register() {
               value={code}
               onChangeText={setCode}
               keyboardType="number-pad"
+              // Explicit, so babel/noAutofillPlugin.js leaves it alone — this
+              // is the one field in the app that genuinely wants autofill
+              // from the SMS we just sent.
+              autoComplete="one-time-code"
+              textContentType="oneTimeCode"
               inputAccessoryViewID={NUMERIC_DONE_ID}
               placeholder="6-digit code"
               maxLength={6}
@@ -136,6 +141,8 @@ export default function Register() {
               onChangeText={setPassword}
               secureTextEntry
               autoCapitalize="none"
+              autoComplete="new-password"
+              textContentType="newPassword"
               placeholder="New password"
               className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}

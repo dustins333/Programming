@@ -114,6 +114,10 @@ function InlineChangeForm({ visible, placeholder, secure, submitLabel, onSubmit,
         placeholder={placeholder}
         secureTextEntry={secure}
         autoCapitalize="none"
+        // Explicit, so babel/noAutofillPlugin.js's blanket "off" doesn't stop
+        // a password manager offering to save the change here.
+        autoComplete={secure ? "new-password" : "email"}
+        textContentType={secure ? "newPassword" : "emailAddress"}
         className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
         style={{ fontFamily: fonts.sans }}
       />

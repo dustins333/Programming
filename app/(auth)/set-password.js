@@ -55,6 +55,8 @@ export default function SetPassword() {
             onChangeText={setPassword}
             secureTextEntry
             autoCapitalize="none"
+            autoComplete="new-password"
+            textContentType="newPassword"
             placeholder="New password"
             className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}

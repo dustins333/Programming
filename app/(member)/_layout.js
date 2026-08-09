@@ -24,17 +24,32 @@ function TabIcon(name) {
 // Type) — this hand-rolled label has no such protection by default, and at
 // even a capped scale the 5-across labels ("My Nutrition", "My History")
 // truncate and inflate the whole tab bar's height.
+// lineHeight is explicit for a real reason, not tidiness: react-navigation's
+// tab bar gives each item a fixed 49pt box (TABBAR_HEIGHT_UIKIT), spends 5pt
+// of padding top and bottom and 28pt on the icon wrapper (ICON_SIZE_TALL),
+// and leaves whatever's left — 11pt — for the label. Montserrat's natural
+// line box at fontSize 11 is ~13.4pt, so the bottom of every label
+// ("My Week", "Coaching") was being sliced off in the installed PWA. The
+// coach tab bar never showed this because it uses react-navigation's own
+// label at fontSize 10 in the system font (~11.7pt) — just barely inside.
+// Fixed from both ends: TAB_ICON_STYLE below shrinks the icon wrapper to
+// 24pt (the glyph itself is 21pt and centres inside it, so nothing visibly
+// changes), which widens the label slot to 15pt; a defined 14pt line box
+// then fits inside it with room for descenders instead of relying on
+// whatever the font's metrics happen to produce.
 function TabLabel(title) {
   return ({ focused, color }) => (
     <Text
       numberOfLines={1}
       maxFontSizeMultiplier={1}
-      style={{ fontFamily: focused ? fonts.sansBold : fonts.sansMedium, fontSize: 11, color }}
+      style={{ fontFamily: focused ? fonts.sansBold : fonts.sansMedium, fontSize: 11, lineHeight: 14, color }}
     >
       {title}
     </Text>
   );
 }
+
+const TAB_ICON_STYLE = { height: 24 };
 
 export default function MemberLayout() {
   const { session, profile, ready } = useAuth();
@@ -84,6 +99,7 @@ export default function MemberLayout() {
         tabBarActiveTintColor: colors.primaryOnWhite,
         tabBarInactiveTintColor: "#b5afa6",
         tabBarStyle: { borderTopColor: "#e7e5e4" },
+        tabBarIconStyle: TAB_ICON_STYLE,
       }}
     >
       <Tabs.Screen name="index" options={{ title: "My Week", tabBarIcon: TabIcon("today"), tabBarLabel: TabLabel("My Week") }} />

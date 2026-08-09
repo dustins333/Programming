@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, Modal, Platform } from "react-native";
 import { fonts, colors } from "../../lib/theme";
+import { FIELD_MIN_HEIGHT } from "./TargetField";
 
 const isWeb = Platform.OS === "web";
 const OPTIONS = [1, 2, 3, 4, 5];
@@ -13,25 +14,36 @@ export function RatingSelect({ label, value, onChangeText, flex }) {
   const [open, setOpen] = useState(false);
 
   return (
-    // Top-aligned (no justify-end) to match TargetField's current layout —
-    // TargetField's own target-pill now renders below its input instead of
-    // next to the label, so every sibling field in a shared flex-row (e.g.
-    // Steps/Hunger/Energy) naturally lines up its label+input at the same
-    // top position regardless of whether a sibling has extra pill content
-    // beneath it.
+    // Structure has to mirror TargetField exactly — label, then the control,
+    // then any extra caption — or a shared flex-row (Sleep/Sleep quality,
+    // Steps/Hunger/Energy) renders this control lower than its neighbours.
+    // The "1 = low · 5 = high" scale anchor used to sit *between* the label
+    // and the control, which pushed this box ~18px down while TargetField's
+    // box stayed put; that was the misalignment, not the target pills. It
+    // now renders below the control, where TargetField's own pill goes.
     <View className={flex ? "mb-2 flex-1" : "mb-2"}>
       <Text maxFontSizeMultiplier={1.3} numberOfLines={1} className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
         {label}
-      </Text>
-      {/* Scale anchor — "(1-5)" alone never said which end was which. */}
-      <Text maxFontSizeMultiplier={1.2} numberOfLines={1} className="mb-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-        1 = low · 5 = high
       </Text>
       {isWeb ? (
         <select
           value={value || ""}
           onChange={(e) => onChangeText(e.target.value)}
-          style={{ fontFamily: fonts.sans, fontSize: 15, width: "100%", padding: "11px 14px", borderRadius: 8, border: "1px solid #d6d3d1", color: "#44403c", backgroundColor: "white" }}
+          style={{
+            fontFamily: fonts.sans,
+            fontSize: 15,
+            width: "100%",
+            // Matching TargetField's box height exactly (see
+            // FIELD_MIN_HEIGHT) — padding alone never lands a <select> and a
+            // TextInput on the same rendered height.
+            height: FIELD_MIN_HEIGHT,
+            boxSizing: "border-box",
+            padding: "0 14px",
+            borderRadius: 8,
+            border: "1px solid #d6d3d1",
+            color: "#44403c",
+            backgroundColor: "white",
+          }}
         >
           <option value="">—</option>
           {OPTIONS.map((n) => (
@@ -42,7 +54,7 @@ export function RatingSelect({ label, value, onChangeText, flex }) {
         </select>
       ) : (
         <>
-          <Pressable onPress={() => setOpen(true)} className="rounded-lg border border-stone-300 px-4 py-3">
+          <Pressable onPress={() => setOpen(true)} className="justify-center rounded-lg border border-stone-300 px-4" style={{ minHeight: FIELD_MIN_HEIGHT }}>
             <Text style={{ fontFamily: fonts.sans, fontSize: 15 }}>{value || "—"}</Text>
           </Pressable>
           <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -66,6 +78,11 @@ export function RatingSelect({ label, value, onChangeText, flex }) {
           </Modal>
         </>
       )}
+      {/* Scale anchor — "(1-5)" alone never said which end was which. Sits
+          below the control, in the same slot TargetField's target pill uses. */}
+      <Text maxFontSizeMultiplier={1.2} numberOfLines={1} className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+        1 = low · 5 = high
+      </Text>
     </View>
   );
 }
