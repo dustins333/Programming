@@ -1,13 +1,24 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { useAuth } from "../lib/auth/AuthProvider";
 import { listComments, addComment } from "../lib/programming/comments";
+import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
 
-export function CommentThread({ groupBlockId, spcBlockId }) {
+// scrollViewRef/scrollOffsetRef are optional — this card is normally
+// embedded as one of several on a longer page (a block detail screen), so
+// it has no ScrollView of its own to scroll within. When the embedding
+// page passes its own ScrollView's ref pair (same "embedded" convention
+// MessageThread.js uses), a focused draft field scrolls itself into view on
+// tap; when it doesn't, useScrollToKeyboard's own null-ref guard makes this
+// a harmless no-op, so existing call sites that don't pass anything are
+// unaffected.
+export function CommentThread({ groupBlockId, spcBlockId, scrollViewRef, scrollOffsetRef }) {
   const { profile } = useAuth();
   const [comments, setComments] = useState(null);
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
+  const draftRef = useRef(null);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
 
   const load = useCallback(async () => {
     const rows = await listComments({ groupBlockId, spcBlockId });
@@ -53,8 +64,10 @@ export function CommentThread({ groupBlockId, spcBlockId }) {
       </ScrollView>
       <View className="flex-row gap-2">
         <TextInput
+          ref={draftRef}
           value={draft}
           onChangeText={setDraft}
+          onFocus={() => scrollFieldIntoView(draftRef.current)}
           placeholder="Leave a note for other coaches…"
           className="flex-1 rounded-lg border border-stone-300 px-3 py-2"
           style={{ fontFamily: "Montserrat_400Regular" }}

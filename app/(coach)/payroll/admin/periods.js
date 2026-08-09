@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useContext, useRef } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Redirect, useRouter, useFocusEffect } from "expo-router";
+import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import {
@@ -26,6 +27,7 @@ import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
 import { AdminPayrollTabBar } from "../../../../components/AdminPayrollTabBar";
 import { NUMERIC_DONE_ID } from "../../../../components/NumericInputAccessory";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../../lib/scrollToKeyboard";
 
 function periodLabel(p) {
   return `${formatDateMD(p.start_date)} – ${formatDateMD(p.end_date)}`;
@@ -36,12 +38,14 @@ function periodLabel(p) {
 // on-demand expand into that period's full per-staff breakdown, read at
 // its own frozen rates (getRateMapsForPeriod) so it can never drift from
 // what was actually true when it closed.
-function ClosedPeriodRow({ period, onTaxesSaved }) {
+function ClosedPeriodRow({ period, onTaxesSaved, scrollViewRef, scrollOffsetRef }) {
   const [taxes, setTaxes] = useState(period.taxes_paid != null ? String(period.taxes_paid) : "");
   const [savingTaxes, setSavingTaxes] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [staffTotals, setStaffTotals] = useState(null);
   const [loadingReport, setLoadingReport] = useState(false);
+  const rowRef = useRef(null);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
 
   const ownerPay = Number(period.owner_pay) || 0;
   const staffPay = Number(period.staff_pay) || 0;
@@ -83,7 +87,7 @@ function ClosedPeriodRow({ period, onTaxesSaved }) {
   };
 
   return (
-    <View className="mb-3 max-w-2xl rounded-xl border border-stone-200 p-4">
+    <View ref={rowRef} className="mb-3 max-w-2xl rounded-xl border border-stone-200 p-4">
       <Pressable onPress={handleExpand} className="mb-3 flex-row items-center justify-between">
         <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{periodLabel(period)}</Text>
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#a8a29e" />
@@ -109,6 +113,7 @@ function ClosedPeriodRow({ period, onTaxesSaved }) {
             <TextInput
               value={taxes}
               onChangeText={setTaxes}
+              onFocus={() => scrollFieldIntoView(rowRef.current)}
               placeholder="0.00"
               keyboardType="decimal-pad"
               inputAccessoryViewID={NUMERIC_DONE_ID}
@@ -166,6 +171,15 @@ export default function AdminPayrollPeriods() {
     selectedPeriodRef.current = value;
     setSelectedPeriod(value);
   }, []);
+
+  // Closed periods can pile up over time — a Taxes field on a row near the
+  // bottom of that list needs real scroll room to clear the keyboard.
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const keyboardHeight = useKeyboardHeight();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+  const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
 
   const load = useCallback(async () => {
     try {
@@ -266,7 +280,17 @@ export default function AdminPayrollPeriods() {
 
   return (
     <CoachShell>
-      <ScrollView style={{ backgroundColor: colors.canvas }} className="flex-1 px-8 pt-8" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={{ backgroundColor: colors.canvas }}
+        className="flex-1 px-8 pt-8"
+        contentContainerStyle={{ paddingBottom: 40 + keyboardPadding }}
+        keyboardShouldPersistTaps="handled"
+        onScroll={(e) => {
+          scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+      >
         {Platform.OS !== "web" ? (
           <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/payroll"))} className="mb-4 self-start">
             <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
@@ -342,7 +366,15 @@ export default function AdminPayrollPeriods() {
                 No closed periods yet.
               </Text>
             ) : (
-              closedPeriods.map((p) => <ClosedPeriodRow key={p.start_date} period={p} onTaxesSaved={load} />)
+              closedPeriods.map((p) => (
+                <ClosedPeriodRow
+                  key={p.start_date}
+                  period={p}
+                  onTaxesSaved={load}
+                  scrollViewRef={scrollViewRef}
+                  scrollOffsetRef={scrollOffsetRef}
+                />
+              ))
             )}
           </>
         )}

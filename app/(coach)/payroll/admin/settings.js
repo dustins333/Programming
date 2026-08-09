@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useContext, useRef } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter, useFocusEffect } from "expo-router";
+import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listAllRates, updateCoreRate, updateSpcTier, updateOtherRate, createOtherRate } from "../../../../lib/payroll/rates";
 import { toastError, toastSuccess } from "../../../../lib/toast";
@@ -10,6 +11,7 @@ import { CoachShell } from "../../../../components/CoachShell";
 import { AdminPayrollTabBar } from "../../../../components/AdminPayrollTabBar";
 import { RateRow } from "../../../../components/payroll/RateRow";
 import { NUMERIC_DONE_ID } from "../../../../components/NumericInputAccessory";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../../lib/scrollToKeyboard";
 
 // Small pill toggle for the two per-Other-type entry-form field switches
 // (Quantity/Notes) — deliberately not a full Switch component, since these
@@ -36,12 +38,20 @@ const CORE_LABELS = {
 };
 
 // New-Other-rate form — the first real caller of createOtherRate, which
-// existed in lib/payroll/rates.js but was dead code until now.
-function AddOtherRateForm({ onAdded }) {
+// existed in lib/payroll/rates.js but was dead code until now. This card
+// sits mid-page (below the Rates and SPC Tiers sections) on a fairly long
+// admin screen, so its 3 fields are a real risk of ending up behind the
+// keyboard — scrollFieldIntoView targets the whole card (cardRef), same
+// whole-unit-not-just-field approach ExerciseCard.js uses, since all 3
+// fields sit close enough together that scrolling the card into view
+// reveals whichever one is focused.
+function AddOtherRateForm({ onAdded, scrollViewRef, scrollOffsetRef }) {
   const [otherType, setOtherType] = useState("");
   const [unit, setUnit] = useState("");
   const [rate, setRate] = useState("");
   const [saving, setSaving] = useState(false);
+  const cardRef = useRef(null);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
 
   const handleAdd = async () => {
     const n = Number(rate);
@@ -65,7 +75,7 @@ function AddOtherRateForm({ onAdded }) {
   };
 
   return (
-    <View className="mb-4 max-w-xl rounded-xl border border-stone-200 p-4">
+    <View ref={cardRef} className="mb-4 max-w-xl rounded-xl border border-stone-200 p-4">
       <Text className="mb-2 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
         Add a new type
       </Text>
@@ -73,6 +83,7 @@ function AddOtherRateForm({ onAdded }) {
         <TextInput
           value={otherType}
           onChangeText={setOtherType}
+          onFocus={() => scrollFieldIntoView(cardRef.current)}
           placeholder="Type name"
           className="flex-1 rounded-lg border border-stone-300 px-3 py-2"
           style={{ fontFamily: fonts.sans }}
@@ -80,6 +91,7 @@ function AddOtherRateForm({ onAdded }) {
         <TextInput
           value={unit}
           onChangeText={setUnit}
+          onFocus={() => scrollFieldIntoView(cardRef.current)}
           placeholder="Unit (e.g. hour)"
           className="flex-1 rounded-lg border border-stone-300 px-3 py-2"
           style={{ fontFamily: fonts.sans }}
@@ -87,6 +99,7 @@ function AddOtherRateForm({ onAdded }) {
         <TextInput
           value={rate}
           onChangeText={setRate}
+          onFocus={() => scrollFieldIntoView(cardRef.current)}
           placeholder="Rate"
           keyboardType="decimal-pad"
           inputAccessoryViewID={NUMERIC_DONE_ID}
@@ -117,6 +130,20 @@ export default function AdminPayrollSettings() {
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
 
+  // This page runs Rates → SPC Tiers → Other (new-type form + list) — by
+  // the time a coach reaches the Add-a-new-type fields there's often not
+  // enough scrollable room below to bring a lower field above the keyboard,
+  // same class of bug lib/scrollToKeyboard.js's own comment describes.
+  // tabBarHeight is subtracted since this route is a Tabs.Screen under
+  // (coach)'s navigator (href:null hides it from the tab bar row, not the
+  // bar itself).
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const keyboardHeight = useKeyboardHeight();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+  const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
+
   const load = useCallback(async () => {
     try {
       setRates(await listAllRates());
@@ -142,7 +169,17 @@ export default function AdminPayrollSettings() {
 
   return (
     <CoachShell>
-      <ScrollView style={{ backgroundColor: colors.canvas }} className="flex-1 px-8 pt-8" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={{ backgroundColor: colors.canvas }}
+        className="flex-1 px-8 pt-8"
+        contentContainerStyle={{ paddingBottom: 40 + keyboardPadding }}
+        keyboardShouldPersistTaps="handled"
+        onScroll={(e) => {
+          scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+      >
         {Platform.OS !== "web" ? (
           <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/payroll"))} className="mb-4 self-start">
             <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
@@ -200,7 +237,7 @@ export default function AdminPayrollSettings() {
               Quantity/Notes control which fields show on the entry form for that type — turn either off for a type that
               doesn't need it (e.g. a flat one-time item with no notes).
             </Text>
-            <AddOtherRateForm onAdded={load} />
+            <AddOtherRateForm onAdded={load} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             <View className="mb-2 max-w-xl">
               {activeOther.map((r) => (
                 <View key={r.other_type} className="mb-2 rounded-lg border border-stone-200 px-3 py-2.5">

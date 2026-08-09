@@ -6,8 +6,8 @@ import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
 
 // A labeled numeric input with the client's current target value shown as a
-// small colored pill next to the label — shared by the coach's "set new
-// target" form and the member's daily-log form, so both read the same
+// small colored pill underneath the input box — shared by the coach's "set
+// new target" form and the member's daily-log form, so both read the same
 // target-vs-what-you're-entering context. `current` is the target value (a
 // number) or null/undefined to hide the pill; `styleKey` picks the color
 // from MacroPills' shared palette. `scrollViewRef`/`scrollOffsetRef` are
@@ -21,29 +21,10 @@ export function TargetField({ label, styleKey, current, pillLabel = "target", un
   const fieldRef = useRef(null);
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
   return (
-    // justify-end: when a sibling field in the same flex-row wraps its label
-    // to a second line (e.g. a long target pill at a larger Dynamic Type
-    // size), the row's default cross-axis "stretch" makes every field the
-    // same height — without this, a field with a short single-line label
-    // just leaves blank space below its own input instead of matching the
-    // taller field's input position. Pushing each field's content to the
-    // bottom keeps every input in the row level regardless of label wrap.
-    <View ref={fieldRef} className={flex ? "mb-2 flex-1 justify-end" : "mb-2 justify-end"}>
-      <View className="mb-1 flex-row flex-wrap items-center gap-1.5">
-        <Text maxFontSizeMultiplier={1.3} className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-          {label}
-        </Text>
-        {current !== null && current !== undefined ? (
-          <View className="rounded-full px-1.5 py-0.5" style={{ backgroundColor: s.bg }}>
-            {/* A supplementary badge, not primary content — pinned to (near-)no
-                scale rather than growing with the label and overlapping it. */}
-            <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ fontFamily: fonts.sansMedium, fontSize: 10.5, color: s.text }}>
-              {pillLabel}: {current}
-              {unit}
-            </Text>
-          </View>
-        ) : null}
-      </View>
+    <View ref={fieldRef} className={flex ? "mb-2 flex-1" : "mb-2"}>
+      <Text maxFontSizeMultiplier={1.3} numberOfLines={1} className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+        {label}
+      </Text>
       <View className="flex-row items-center rounded-lg border border-stone-300 px-4">
         <TextInput
           value={value}
@@ -60,6 +41,14 @@ export function TargetField({ label, styleKey, current, pillLabel = "target", un
           </Text>
         ) : null}
       </View>
+      {current !== null && current !== undefined ? (
+        <View className="mt-1 self-start rounded-full px-1.5 py-0.5" style={{ backgroundColor: s.bg }}>
+          <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ fontFamily: fonts.sansMedium, fontSize: 10.5, color: s.text }}>
+            {pillLabel}: {current}
+            {unit}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

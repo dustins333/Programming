@@ -120,7 +120,11 @@ export default function PlanSpcBlock() {
     });
   };
 
-  const goToMyFitness = () => router.push({ pathname: "/(member)/plan", params: { program: "spc" } });
+  // Reachable from more than one place now (My Fitness's own "View full SPC
+  // block" link, and My Week's) — see plan-block.js's identical goBack for
+  // the full reasoning. Falls back to a real push only when there's no
+  // history to pop (a direct deep-link with nothing behind it).
+  const goBack = () => (router.canGoBack() ? router.back() : router.push({ pathname: "/(member)/plan", params: { program: "spc" } }));
 
   if (state.status === "loading") {
     return (
@@ -148,8 +152,8 @@ export default function PlanSpcBlock() {
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
-      <Pressable onPress={goToMyFitness} className="mb-3 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>‹ My Fitness</Text>
+      <Pressable onPress={goBack} className="mb-3 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>‹ Back</Text>
       </Pressable>
 
       {state.status !== "ready" ? (

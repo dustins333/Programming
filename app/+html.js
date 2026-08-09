@@ -13,7 +13,20 @@ export default function Root({ children }) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        {/* viewport-fit=cover is what unlocks real env(safe-area-inset-*)
+            values on iOS — without it they're always 0, so
+            react-native-safe-area-context's useSafeAreaInsets() (which
+            @react-navigation/bottom-tabs' BottomTabBar reads to size itself,
+            same as every other insets.bottom usage in this app — the
+            floating message bubble, the web push banner, etc.) silently
+            reported no bottom clearance at all when installed as a
+            standalone PWA. In a regular Safari tab this went unnoticed —
+            Safari's own chrome already reserves that space — but a
+            standalone PWA has no browser chrome, so the page itself has to
+            claim the space the OS reserves for the home-indicator gesture
+            area, which is exactly what was missing (tab bar rendering at
+            its bare-minimum height, buttons reading as too small/cramped). */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
         <ScrollViewStyleReset />
 
         <link rel="manifest" href="/manifest.json" />

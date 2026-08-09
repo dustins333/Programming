@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, Switch, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { supabase } from "../../lib/supabase/client";
 import { getClient, getCoachRow } from "../../lib/nutrition/clients";
@@ -9,6 +10,7 @@ import { updateOwnNotificationPrefs } from "../../lib/notifications/memberPrefs"
 import { useShowMessageBubble, setShowMessageBubble } from "../../lib/messageBubblePref";
 import { fonts, colors } from "../../lib/theme";
 import { toastError, toastSuccess } from "../../lib/toast";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../lib/scrollToKeyboard";
 
 const CANVAS = "#faf8f6";
 
@@ -78,10 +80,12 @@ function ToggleRow({ label, description, value, onValueChange, last }) {
 
 // Inline text-entry field, expand/collapse — used for both the email and
 // password change rows so neither needs its own separate route/modal.
-function InlineChangeForm({ visible, placeholder, secure, submitLabel, onSubmit, onCancel }) {
+function InlineChangeForm({ visible, placeholder, secure, submitLabel, onSubmit, onCancel, scrollViewRef, scrollOffsetRef }) {
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const inputRef = useRef(null);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
 
   if (!visible) return null;
 
@@ -102,8 +106,10 @@ function InlineChangeForm({ visible, placeholder, secure, submitLabel, onSubmit,
   return (
     <View className="mb-3 mt-1">
       <TextInput
+        ref={inputRef}
         value={value}
         onChangeText={setValue}
+        onFocus={() => scrollFieldIntoView(inputRef.current)}
         placeholder={placeholder}
         secureTextEntry={secure}
         autoCapitalize="none"
@@ -131,10 +137,12 @@ function InlineChangeForm({ visible, placeholder, secure, submitLabel, onSubmit,
 
 const CONFIRM_TEXT = "DELETE";
 
-function DeleteAccountModal({ visible, email, onClose, onConfirm }) {
+function DeleteAccountModal({ visible, email, onClose, onConfirm, scrollViewRef, scrollOffsetRef }) {
   const [typed, setTyped] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
+  const inputRef = useRef(null);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
 
   if (!visible) return null;
 
@@ -155,8 +163,10 @@ function DeleteAccountModal({ visible, email, onClose, onConfirm }) {
         Type {CONFIRM_TEXT} to confirm. This permanently deletes your account, logs, and photos — it can't be undone.
       </Text>
       <TextInput
+        ref={inputRef}
         value={typed}
         onChangeText={setTyped}
+        onFocus={() => scrollFieldIntoView(inputRef.current)}
         placeholder={CONFIRM_TEXT}
         autoCapitalize="characters"
         className="mb-2 rounded-lg border border-stone-300 bg-white px-4 py-3"
@@ -197,6 +207,21 @@ export default function MemberSettings() {
   const [coachName, setCoachName] = useState(undefined); // undefined = loading, null = no nutrition client row
   const [deleteOpen, setDeleteOpen] = useState(false);
   const showMessageBubble = useShowMessageBubble();
+
+  // The Danger zone's Delete-account field sits at the very bottom of this
+  // page — exactly the "focused field near the end of scrollable content"
+  // case lib/scrollToKeyboard.js's own comment warns about, since a
+  // ScrollView can't scroll further than its own content height allows.
+  // Extra bottom padding (keyboardPadding below) guarantees there's always
+  // enough room to scroll it into view; tabBarHeight is subtracted since
+  // this screen sits inside (member)'s Tabs navigator, whose bar occupies
+  // space the keyboard visually covers but doesn't actually resize around.
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const keyboardHeight = useKeyboardHeight();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+  const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
 
   useEffect(() => {
     if (!profile) return;
@@ -266,7 +291,18 @@ export default function MemberSettings() {
   }
 
   return (
-    <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-5 pb-8" contentContainerStyle={{ paddingTop: insets.top + 12 }}>
+    <ScrollView
+      ref={scrollViewRef}
+      className="flex-1"
+      style={{ backgroundColor: CANVAS }}
+      contentContainerClassName="px-5"
+      contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 32 + keyboardPadding }}
+      keyboardShouldPersistTaps="handled"
+      onScroll={(e) => {
+        scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+      }}
+      scrollEventThrottle={16}
+    >
       <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)"))} className="mb-3 self-start">
         <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
       </Pressable>
@@ -283,6 +319,8 @@ export default function MemberSettings() {
           submitLabel="Save"
           onSubmit={handleChangeEmail}
           onCancel={() => setChangingEmail(false)}
+          scrollViewRef={scrollViewRef}
+          scrollOffsetRef={scrollOffsetRef}
         />
         <Row label="Password" actionLabel="Change" onPress={() => setChangingPassword((v) => !v)} last={!changingPassword} />
         <InlineChangeForm
@@ -292,6 +330,8 @@ export default function MemberSettings() {
           submitLabel="Save"
           onSubmit={handleChangePassword}
           onCancel={() => setChangingPassword(false)}
+          scrollViewRef={scrollViewRef}
+          scrollOffsetRef={scrollOffsetRef}
         />
       </Card>
 
@@ -352,7 +392,14 @@ export default function MemberSettings() {
             </Text>
           </Pressable>
         ) : (
-          <DeleteAccountModal visible={deleteOpen} email={profile.email} onClose={() => setDeleteOpen(false)} onConfirm={handleDeleteAccount} />
+          <DeleteAccountModal
+            visible={deleteOpen}
+            email={profile.email}
+            onClose={() => setDeleteOpen(false)}
+            onConfirm={handleDeleteAccount}
+            scrollViewRef={scrollViewRef}
+            scrollOffsetRef={scrollOffsetRef}
+          />
         )}
       </View>
     </ScrollView>

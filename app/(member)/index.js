@@ -143,7 +143,7 @@ function SessionBubble({ label, description, completed, published, onPress, capt
 // explicit ask, replacing an earlier attempt that swapped individual
 // bubbles' day-of-week captions for "Not needed" text, which read as
 // confusing/inconsistent with the always-real day captions elsewhere.
-function ProgramCard({ title, rows, target, completedCount, onNavigate, navigateLabel }) {
+function ProgramCard({ title, rows, target, completedCount, onNavigate, navigateLabel, onViewBlock }) {
   const isDone = completedCount >= target;
   return (
     <View
@@ -153,9 +153,20 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
       <View className="mb-3 flex-row items-center justify-between">
         <View className="mr-2 flex-1 flex-row items-center gap-2">
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
-          <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>
+          <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c", flexShrink: 1 }}>
             {title}
           </Text>
+          {/* Same "View full block ›" link used on My Fitness's own session
+              header (SessionInfoBar.js) while actively logging — same
+              copy/styling, just reachable from My Week too now, right next
+              to the program's name. */}
+          {onViewBlock ? (
+            <Pressable onPress={onViewBlock} hitSlop={HITSLOP} style={{ flexShrink: 0 }}>
+              <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: colors.primaryOnWhite }}>
+                View full block ›
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
         <View className="flex-row items-center gap-2">
           <View
@@ -208,12 +219,22 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
 function NutritionStrip({ days, onNavigate, onDayPress }) {
   const today = todayInBoise();
   return (
-    <View className="mb-3.5 rounded-[20px] bg-white px-4 pb-4 pt-4" style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}>
+    // Whole card navigates to My Nutrition now, not just the header chevron
+    // — per explicit ask, everywhere on this card except a specific
+    // past/today day circle (which still deep-links to that exact date)
+    // should behave like every other program card's tap-to-navigate. Each
+    // day's own Pressable stops propagation so tapping it doesn't also fire
+    // this outer one — same "nested Pressable is a real DOM click on web"
+    // fix already used in SessionPreviewModal.js's backdrop.
+    <Pressable
+      onPress={onNavigate}
+      accessibilityLabel="Go to My Nutrition"
+      className="mb-3.5 rounded-[20px] bg-white px-4 pb-4 pt-4"
+      style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}
+    >
       <View className="mb-3 flex-row items-center justify-between">
         <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>Nutrition</Text>
-        <Pressable onPress={onNavigate} hitSlop={HITSLOP} accessibilityLabel="Go to My Nutrition">
-          <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} />
-        </Pressable>
+        <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} />
       </View>
       <View className="flex-row justify-between">
         {days.map((day) => {
@@ -226,7 +247,16 @@ function NutritionStrip({ days, onNavigate, onDayPress }) {
               key={day.date}
               className="items-center"
               style={{ gap: 5 }}
-              {...(isDue ? { onPress: () => onDayPress(day.date), hitSlop: HITSLOP, accessibilityLabel: `Go to ${day.label} in My Nutrition` } : {})}
+              {...(isDue
+                ? {
+                    onPress: (e) => {
+                      e.stopPropagation?.();
+                      onDayPress(day.date);
+                    },
+                    hitSlop: HITSLOP,
+                    accessibilityLabel: `Go to ${day.label} in My Nutrition`,
+                  }
+                : {})}
             >
               <View
                 style={{
@@ -256,7 +286,7 @@ function NutritionStrip({ days, onNavigate, onDayPress }) {
           );
         })}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -706,6 +736,7 @@ export default function MemberHome() {
             target={groupEntry.sessionsPerWeek}
             completedCount={completedCount}
             onNavigate={() => router.push({ pathname: "/(member)/plan", params: { program: groupEntry.groupProgramId } })}
+            onViewBlock={() => router.push({ pathname: "/(member)/plan-block", params: { programId: groupEntry.groupProgramId } })}
           />
         );
       })}
@@ -728,6 +759,7 @@ export default function MemberHome() {
           target={spc.sessionsPerWeek}
           completedCount={spc.rows.filter((r) => r.completed).length}
           onNavigate={() => router.push({ pathname: "/(member)/plan", params: { program: "spc" } })}
+          onViewBlock={() => router.push("/(member)/plan-spc-block")}
         />
       )}
 

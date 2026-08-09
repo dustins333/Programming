@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
+import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { listExercises } from "../../../../lib/programming/exercises";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../../lib/scrollToKeyboard";
 import {
   getTemplate,
   listTemplateWarmups,
@@ -34,6 +36,26 @@ export default function TemplateBuilder() {
   const [library, setLibrary] = useState([]);
   const [pickerTarget, setPickerTarget] = useState(null); // "warmup" | "exercise" | null
   const [loadError, setLoadError] = useState(null);
+
+  // Native has no automatic keyboard-avoidance in this app (see
+  // lib/scrollToKeyboard.js) — this builder is a plain ScrollView with a
+  // reps/rest/notes TextInput per exercise, unwired until now, so a
+  // lower-in-the-list field could sit hidden behind the keyboard with no
+  // way to scroll it into view. scrollFieldIntoView is called from the
+  // whole item's own ref (itemRefs, keyed by exercise id — a dynamic-length
+  // list, so refs live in a Map rather than one per fixed slot), same
+  // whole-card-not-just-field target ExerciseCard.js uses for the identical
+  // reason. tabBarHeight is subtracted since this screen is a Tabs.Screen
+  // under (coach)'s navigator (href:null just hides it from the tab bar
+  // list, the bar itself still renders).
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
+  const itemRefs = useRef(new Map());
+  const keyboardHeight = useKeyboardHeight();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+  const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
 
   const load = useCallback(async () => {
     try {
@@ -120,8 +142,14 @@ export default function TemplateBuilder() {
 
   return (
     <ScrollView
+      ref={scrollViewRef}
       className="flex-1 bg-white"
-      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: insets.top + 32, paddingBottom: 32, maxWidth: 640 }}
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: insets.top + 32, paddingBottom: 32 + keyboardPadding, maxWidth: 640 }}
+      keyboardShouldPersistTaps="handled"
+      onScroll={(e) => {
+        scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+      }}
+      scrollEventThrottle={16}
     >
         <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
           ‹ Back to templates
@@ -168,7 +196,13 @@ export default function TemplateBuilder() {
           Exercises
         </Text>
         {exercises.map((item, i) => (
-          <View key={item.id} className="mb-3 rounded-lg border border-stone-200 px-3 py-3">
+          <View
+            key={item.id}
+            ref={(el) => {
+              if (el) itemRefs.current.set(item.id, el);
+            }}
+            className="mb-3 rounded-lg border border-stone-200 px-3 py-3"
+          >
             <View className="mb-2 flex-row items-center justify-between">
               <Text className="flex-1" style={{ fontFamily: fonts.sansMedium }}>
                 {item.exercises?.name}
@@ -222,6 +256,7 @@ export default function TemplateBuilder() {
               <TextInput
                 value={item.reps ?? ""}
                 onChangeText={(v) => handleExerciseChange(item.id, { reps: v })}
+                onFocus={() => scrollFieldIntoView(itemRefs.current.get(item.id))}
                 placeholder="reps"
                 className="w-20 rounded-lg border border-stone-300 px-2 py-3"
                 style={{ fontFamily: fonts.sans }}
@@ -229,6 +264,7 @@ export default function TemplateBuilder() {
               <TextInput
                 value={item.rest ?? ""}
                 onChangeText={(v) => handleExerciseChange(item.id, { rest: v })}
+                onFocus={() => scrollFieldIntoView(itemRefs.current.get(item.id))}
                 placeholder="rest"
                 className="w-20 rounded-lg border border-stone-300 px-2 py-3"
                 style={{ fontFamily: fonts.sans }}
@@ -237,6 +273,7 @@ export default function TemplateBuilder() {
             <TextInput
               value={item.notes ?? ""}
               onChangeText={(v) => handleExerciseChange(item.id, { notes: v })}
+              onFocus={() => scrollFieldIntoView(itemRefs.current.get(item.id))}
               placeholder="Notes (optional)"
               className="mt-2 rounded-lg border border-stone-300 px-2 py-3"
               style={{ fontFamily: fonts.sans }}

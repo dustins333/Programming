@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
 import { Link, useRouter } from "expo-router";
+import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listTemplates, createTemplate, deleteTemplate } from "../../../../lib/programming/templates";
 import { CoachShell } from "../../../../components/CoachShell";
 import { fonts, colors } from "../../../../lib/theme";
 import { toastError } from "../../../../lib/toast";
 import { confirmDeleteTemplate } from "../../../../lib/confirmDialog";
+import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../../lib/scrollToKeyboard";
 
 const CATEGORY_LABELS = { away: "Away programming", trial: "Trial sessions" };
 
@@ -70,6 +72,15 @@ export default function TemplatesIndex() {
   const [templates, setTemplates] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
+  // The New Template name field always sits near the top of this page, so
+  // it's low-risk — this is just the cheap consistency/future-proofing
+  // padding bump per lib/scrollToKeyboard.js's convention, not a fix for an
+  // observed bug here.
+  const keyboardHeight = useKeyboardHeight();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+  const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
+
   const load = useCallback(async () => {
     try {
       setTemplates(await listTemplates());
@@ -130,7 +141,10 @@ export default function TemplatesIndex() {
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 640 }}>
+      <ScrollView
+        className="flex-1 bg-white"
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 32 + keyboardPadding, maxWidth: 640 }}
+      >
         <Link href="/(coach)/spc" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 20 }}>
           ‹ Back to SPC
         </Link>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { toastError } from "../../lib/toast";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,7 @@ import { KeyboardDoneButton } from "../KeyboardDoneButton";
 import { CheckinWeekTimeline } from "./CheckinWeekTimeline";
 import { CoachAssignmentField } from "./CoachAssignmentField";
 import { fonts, colors } from "../../lib/theme";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../lib/scrollToKeyboard";
 
 // Collapsed-by-default section — click the header to expand, matching the
 // "button that expands into the data" pattern used for both check-in
@@ -67,6 +68,22 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
   const [frequencyStart, setFrequencyStart] = useState("");
   const [saving, setSaving] = useState(false);
   const [questions, setQuestions] = useState([]);
+
+  // A real dense form (Name/Phone/Start date/Status/Coach/Photo frequency/
+  // Frequency start), plus an expandable check-in-question editor and
+  // timeline below it, all inside a fixed maxHeight:"85%" Modal — no
+  // automatic keyboard avoidance in this app, so a lower field can easily
+  // end up with no room to scroll above the keyboard. No tabBarHeight
+  // subtraction needed — a Modal presents above the tab bar entirely.
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
+  const nameFieldRef = useRef(null);
+  const phoneFieldRef = useRef(null);
+  const startDateFieldRef = useRef(null);
+  const frequencyStartFieldRef = useRef(null);
+  const keyboardHeight = useKeyboardHeight();
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
 
   const loadQuestions = useCallback(async () => {
     if (!userId) return;
@@ -137,7 +154,15 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View className="flex-1 items-center justify-center bg-black/40 px-4">
         <View className="w-full max-w-md rounded-2xl bg-white" style={{ maxHeight: "85%" }}>
-          <ScrollView contentContainerStyle={{ padding: 24 }}>
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={{ padding: 24, paddingBottom: 24 + occludedHeight }}
+            keyboardShouldPersistTaps="handled"
+            onScroll={(e) => {
+              scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
+          >
             <Text className="mb-4 text-xl text-primary" style={{ fontFamily: fonts.sansSemiBold }}>
               {client.name} — Client Settings
             </Text>
@@ -145,14 +170,23 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
             <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
               Name
             </Text>
-            <TextInput value={name} onChangeText={setName} className="mb-4 rounded-lg border border-stone-300 px-4 py-3" style={{ fontFamily: fonts.sans }} />
+            <TextInput
+              ref={nameFieldRef}
+              value={name}
+              onChangeText={setName}
+              onFocus={() => scrollFieldIntoView(nameFieldRef.current)}
+              className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
+              style={{ fontFamily: fonts.sans }}
+            />
 
             <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
               Phone
             </Text>
             <TextInput
+              ref={phoneFieldRef}
               value={phone}
               onChangeText={setPhone}
+              onFocus={() => scrollFieldIntoView(phoneFieldRef.current)}
               keyboardType="phone-pad"
               className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: fonts.sans }}
@@ -162,8 +196,10 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
               Start date
             </Text>
             <TextInput
+              ref={startDateFieldRef}
               value={startDate}
               onChangeText={setStartDate}
+              onFocus={() => scrollFieldIntoView(startDateFieldRef.current)}
               placeholder="YYYY-MM-DD"
               className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: fonts.sans }}
@@ -205,8 +241,10 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
                   Starting the week of
                 </Text>
                 <TextInput
+                  ref={frequencyStartFieldRef}
                   value={frequencyStart}
                   onChangeText={setFrequencyStart}
+                  onFocus={() => scrollFieldIntoView(frequencyStartFieldRef.current)}
                   placeholder="YYYY-MM-DD"
                   className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
                   style={{ fontFamily: fonts.sans }}

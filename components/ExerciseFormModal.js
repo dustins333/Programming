@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "react-native";
 import { MUSCLE_GROUPS, MOVEMENT_PATTERNS } from "../lib/programming/exercises";
 import { fonts, colors } from "../lib/theme";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { KeyboardDoneButton } from "./KeyboardDoneButton";
 import { findLikelyDuplicates } from "../lib/stringSimilarity";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../lib/scrollToKeyboard";
 
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
 
@@ -85,6 +86,23 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
   const [form, setForm] = useState(emptyForm(initialType));
   const [saving, setSaving] = useState(false);
 
+  // Real risk here: Cues and Video link sit near the bottom of a dense
+  // form inside a fixed max-h-[85vh] Modal — no automatic keyboard
+  // avoidance in this app (see lib/scrollToKeyboard.js), so without this
+  // there's not always enough scrollable room below them to clear the
+  // keyboard. A Modal presents above the tab bar entirely, so no
+  // tabBarHeight subtraction is needed here (unlike a Tabs.Screen).
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
+  const nameRef = useRef(null);
+  const defaultSetsRef = useRef(null);
+  const defaultRepsRef = useRef(null);
+  const cuesRef = useRef(null);
+  const videoUrlRef = useRef(null);
+  const keyboardHeight = useKeyboardHeight();
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+
   useEffect(() => {
     if (visible) {
       setForm(
@@ -140,7 +158,15 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View className="flex-1 items-center justify-center bg-black/40 px-4">
         <View className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6">
-          <ScrollView>
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={{ paddingBottom: occludedHeight }}
+            keyboardShouldPersistTaps="handled"
+            onScroll={(e) => {
+              scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
+          >
             <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 19 }} className="mb-4">
               {initialExercise ? "Edit exercise" : "New exercise"}
             </Text>
@@ -173,8 +199,10 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               Name
             </Text>
             <TextInput
+              ref={nameRef}
               value={form.name}
               onChangeText={(name) => setForm((f) => ({ ...f, name }))}
+              onFocus={() => scrollFieldIntoView(nameRef.current)}
               className="rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: "Montserrat_400Regular" }}
             />
@@ -201,8 +229,10 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
                       Sets
                     </Text>
                     <TextInput
+                      ref={defaultSetsRef}
                       value={form.defaultSets}
                       onChangeText={(defaultSets) => setForm((f) => ({ ...f, defaultSets }))}
+                      onFocus={() => scrollFieldIntoView(defaultSetsRef.current)}
                       keyboardType="numeric"
                       inputAccessoryViewID={NUMERIC_DONE_ID}
                       className="rounded-lg border border-stone-300 bg-white px-3 py-2.5"
@@ -214,8 +244,10 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
                       Reps
                     </Text>
                     <TextInput
+                      ref={defaultRepsRef}
                       value={form.defaultReps}
                       onChangeText={(defaultReps) => setForm((f) => ({ ...f, defaultReps }))}
+                      onFocus={() => scrollFieldIntoView(defaultRepsRef.current)}
                       className="rounded-lg border border-stone-300 bg-white px-3 py-2.5"
                       style={{ fontFamily: fonts.sans }}
                     />
@@ -304,8 +336,10 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               Cues
             </Text>
             <TextInput
+              ref={cuesRef}
               value={form.cues}
               onChangeText={(cues) => setForm((f) => ({ ...f, cues }))}
+              onFocus={() => scrollFieldIntoView(cuesRef.current)}
               multiline
               inputAccessoryViewID={NUMERIC_DONE_ID}
               numberOfLines={3}
@@ -317,8 +351,10 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               Video link (YouTube / Vimeo / Instagram)
             </Text>
             <TextInput
+              ref={videoUrlRef}
               value={form.videoUrl}
               onChangeText={(videoUrl) => setForm((f) => ({ ...f, videoUrl }))}
+              onFocus={() => scrollFieldIntoView(videoUrlRef.current)}
               autoCapitalize="none"
               keyboardType="url"
               className="mb-1 rounded-lg border border-stone-300 px-4 py-3"

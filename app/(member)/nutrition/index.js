@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { View, Text, Image, TextInput, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays, daysBetween } from "../../../lib/boiseDate";
@@ -15,13 +16,14 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { TodayCardSlider } from "../../../components/nutrition/TodayCardSlider";
 import { MilestoneCongratsModal } from "../../../components/nutrition/MilestoneCongratsModal";
 import { MilestoneDetailModal } from "../../../components/nutrition/MilestoneDetailModal";
+import { CalorieOverrideModal } from "../../../components/nutrition/CalorieOverrideModal";
 import { TargetField } from "../../../components/nutrition/TargetField";
 import { RatingSelect } from "../../../components/nutrition/RatingSelect";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
 import { toastError } from "../../../lib/toast";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
-import { useScrollToKeyboard } from "../../../lib/scrollToKeyboard";
+import { useScrollToKeyboard, useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
 const AUTOSAVE_DELAY_MS = 900;
 const CANVAS = "#faf8f6";
@@ -127,8 +129,23 @@ export default function NutritionToday() {
   const scrollViewRef = useRef(null);
   const scrollOffsetRef = useRef(0);
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
-  const caloriesRef = useRef(null);
   const notesRef = useRef(null);
+  const [calorieModalOpen, setCalorieModalOpen] = useState(false);
+  // Notes is the very last field before Finalize, with little real content
+  // below it — measureInWindow-based scrolling (above) can only reveal a
+  // field if the ScrollView actually has enough scrollable distance left to
+  // reach it; a ScrollView clamps its max offset to contentHeight -
+  // viewportHeight, so without this the keyboard (plus the floating Done
+  // bar sitting on top of it) simply covers Notes with nowhere left to
+  // scroll. Same full occludedHeight pattern as SessionFocusModal.js /
+  // MessageThread.js, tabBarHeight subtracted since this screen sits inside
+  // (member)/_layout.js's Tabs navigator and that space is already
+  // reserved in the layout (padding by the raw keyboard height would
+  // double-count it).
+  const keyboardHeight = useKeyboardHeight();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+  const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
 
   const [dateOffset, setDateOffset] = useState(0);
   const selectedDate = addDays(today, -dateOffset);
@@ -292,6 +309,8 @@ export default function NutritionToday() {
     deriveCalories({ protein_g: Number(values.protein_g) || 0, carb_g: Number(values.carb_g) || 0, fat_g: Number(values.fat_g) || 0 })
   );
   const calorieTarget = target ? Math.round(deriveCalories(target)) : null;
+  const isCalorieOverridden = values.calories_override !== "" && values.calories_override !== null && values.calories_override !== undefined;
+  const displayedCalories = isCalorieOverridden ? Math.round(Number(values.calories_override)) : calculatedCalories;
 
   return (
     <View style={{ flex: 1, backgroundColor: CANVAS }}>
@@ -351,7 +370,8 @@ export default function NutritionToday() {
         <ScrollView
           ref={scrollViewRef}
           className="flex-1"
-          contentContainerClassName="px-6 pb-8"
+          contentContainerClassName="px-6"
+          contentContainerStyle={{ paddingBottom: 32 + keyboardPadding }}
           keyboardShouldPersistTaps="handled"
           onScroll={(e) => {
             scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
@@ -446,7 +466,7 @@ export default function NutritionToday() {
             Daily Log
           </Text>
 
-          <DailyLogCard color="#eef1e7" title="Log these first thing when you wake up">
+          <DailyLogCard color="#eef1e7" title="Log these in the morning">
             <TargetField label="Weight" styleKey="weight" current={target?.weight_target} value={values.weight} onChangeText={(t) => update("weight", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             <View className="flex-row gap-3">
               <TargetField label="Sleep (hrs)" styleKey="sleep" current={target?.sleep_hours_goal} flex value={values.sleep_hours} onChangeText={(t) => update("sleep_hours", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
@@ -454,7 +474,7 @@ export default function NutritionToday() {
             </View>
           </DailyLogCard>
 
-          <DailyLogCard color="#fdf6f2" title="Macros">
+          <DailyLogCard color="#fdf6f2" title="Log your macros">
             <View className="flex-row gap-3">
               <TargetField label="Protein (g)" styleKey="protein" current={target?.protein_g} flex value={values.protein_g} onChangeText={(t) => update("protein_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
               <TargetField label="Carb (g)" styleKey="carb" current={target?.carb_g} flex value={values.carb_g} onChangeText={(t) => update("carb_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
@@ -464,27 +484,28 @@ export default function NutritionToday() {
               <TargetField label="Fiber (g)" styleKey="fiber" current={target?.fiber_g} flex value={values.fiber_g} onChangeText={(t) => update("fiber_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             </View>
 
-            <Text className="mb-1" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-              Calculated Calories (from Macros): {calculatedCalories}
-              {calorieTarget ? ` · target: ${calorieTarget}` : ""}
-            </Text>
-            <Text className="mb-1 mt-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-              Calories from Cronometer (optional)
-            </Text>
-            <TextInput
-              ref={caloriesRef}
-              value={values.calories_override}
-              onChangeText={(t) => update("calories_override", t)}
-              onFocus={() => scrollFieldIntoView(caloriesRef.current)}
-              keyboardType="numeric"
-              inputAccessoryViewID={NUMERIC_DONE_ID}
-              placeholder="Leave blank to use calculated calories"
-              className="rounded-lg border border-stone-300 px-4 py-3 text-base"
-              style={{ fontFamily: fonts.sans }}
-            />
+            <View className="mb-1.5 flex-row items-center justify-between border-b border-stone-200 pb-2">
+              <View className="flex-row items-center gap-1.5">
+                <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                  {isCalorieOverridden ? "Cronometer Calories" : "Calculated Calories"}
+                </Text>
+                <Pressable onPress={() => setCalorieModalOpen(true)} hitSlop={8} accessibilityLabel="About calculated calories">
+                  <Ionicons name="information-circle-outline" size={17} color={colors.primaryOnWhite} />
+                </Pressable>
+              </View>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>{displayedCalories}</Text>
+            </View>
+            <View className="flex-row items-center justify-between border-b border-stone-200 pb-2">
+              <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                Target Calories
+              </Text>
+              <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                {calorieTarget ?? "—"}
+              </Text>
+            </View>
           </DailyLogCard>
 
-          <DailyLogCard color="#f4ede3" title="Activity">
+          <DailyLogCard color="#f4ede3" title="Log these in the evening">
             <View className="flex-row gap-3">
               <TargetField label="Steps" styleKey="steps" current={target?.step_goal} flex value={values.steps} onChangeText={(t) => update("steps", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
               <RatingSelect label="Hunger (1-5)" flex value={values.hunger} onChangeText={(t) => update("hunger", t)} />
@@ -532,6 +553,15 @@ export default function NutritionToday() {
       )}
       <MilestoneCongratsModal milestone={congratsMilestone} onClose={handleCloseCongrats} />
       <MilestoneDetailModal milestone={selectedMilestone} onClose={() => setSelectedMilestone(null)} />
+      <CalorieOverrideModal
+        visible={calorieModalOpen}
+        initialValue={values.calories_override}
+        onClose={() => setCalorieModalOpen(false)}
+        onOverride={(text) => {
+          update("calories_override", text);
+          setCalorieModalOpen(false);
+        }}
+      />
     </View>
   );
 }

@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useContext, useRef } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getCurrentPeriodStart, getPayPeriod, isPeriodClosed } from "../../../lib/payroll/periods";
 import { listOwnRequests, listPendingRequests, submitRequest, cancelOwnPendingRequest, approveRequest, denyRequest } from "../../../lib/payroll/requests";
@@ -10,6 +11,7 @@ import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { PayrollTabBar } from "../../../components/PayrollTabBar";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
 const STATUS_TONE = {
   pending: { bg: "#f4ede3", text: "#8a5a2e" },
@@ -41,6 +43,20 @@ export default function PayrollRequests() {
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [decidingId, setDecidingId] = useState(null);
+
+  // The "Request a custom amount" card sits below Pending requests (admin
+  // only) and above Your requests — for a non-admin with no requests yet,
+  // that card can end up close to the end of the scrollable content, so
+  // there's not always enough room to scroll a focused field above the
+  // keyboard without the extra padding below.
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
+  const requestCardRef = useRef(null);
+  const keyboardHeight = useKeyboardHeight();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+  const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
 
   const load = useCallback(async () => {
     if (!profile?.id) return;
@@ -127,7 +143,17 @@ export default function PayrollRequests() {
 
   return (
     <CoachShell>
-      <ScrollView style={{ backgroundColor: colors.canvas }} className="flex-1 px-8 pt-8" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={{ backgroundColor: colors.canvas }}
+        className="flex-1 px-8 pt-8"
+        contentContainerStyle={{ paddingBottom: 40 + keyboardPadding }}
+        keyboardShouldPersistTaps="handled"
+        onScroll={(e) => {
+          scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+      >
         {Platform.OS !== "web" ? (
           <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/payroll/entries"))} className="mb-4 self-start">
             <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
@@ -196,13 +222,14 @@ export default function PayrollRequests() {
                 This pay period is closed — new requests will apply to the next open period.
               </Text>
             ) : (
-              <View className="mb-8 max-w-xl rounded-2xl border border-stone-200 p-5">
+              <View ref={requestCardRef} className="mb-8 max-w-xl rounded-2xl border border-stone-200 p-5">
                 <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
                   Description
                 </Text>
                 <TextInput
                   value={description}
                   onChangeText={setDescription}
+                  onFocus={() => scrollFieldIntoView(requestCardRef.current)}
                   placeholder="e.g. CPR training reimbursement"
                   className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
                   style={{ fontFamily: fonts.sans }}
@@ -213,6 +240,7 @@ export default function PayrollRequests() {
                 <TextInput
                   value={amount}
                   onChangeText={setAmount}
+                  onFocus={() => scrollFieldIntoView(requestCardRef.current)}
                   placeholder="0.00"
                   keyboardType="decimal-pad"
                   inputAccessoryViewID={NUMERIC_DONE_ID}

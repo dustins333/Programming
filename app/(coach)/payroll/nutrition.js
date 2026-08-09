@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useContext, useRef } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Redirect, useRouter, useFocusEffect } from "expo-router";
+import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listClientsForCoach } from "../../../lib/nutrition/clients";
@@ -16,6 +17,7 @@ import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { PayrollTabBar } from "../../../components/PayrollTabBar";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
 export default function PayrollNutrition() {
   const { profile } = useAuth();
@@ -28,6 +30,21 @@ export default function PayrollNutrition() {
   const [newDayByClient, setNewDayByClient] = useState({});
   const [addingClientId, setAddingClientId] = useState(null);
   const [editingDay, setEditingDay] = useState({});
+
+  // Both the "needs a billing day" list and the assigned-clients list can
+  // run long (a coach's whole nutrition roster) — a row's billing-day field
+  // near the bottom needs real scroll room, same class of bug as every
+  // other list-of-rows-with-a-field file in this pass. Refs are keyed Maps
+  // since both lists are dynamic-length.
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
+  const newDayRowRefs = useRef(new Map());
+  const editDayRowRefs = useRef(new Map());
+  const keyboardHeight = useKeyboardHeight();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+  const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
 
   const load = useCallback(async () => {
     if (!profile?.id) return;
@@ -111,7 +128,17 @@ export default function PayrollNutrition() {
 
   return (
     <CoachShell>
-      <ScrollView style={{ backgroundColor: colors.canvas }} className="flex-1 px-8 pt-8" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={{ backgroundColor: colors.canvas }}
+        className="flex-1 px-8 pt-8"
+        contentContainerStyle={{ paddingBottom: 40 + keyboardPadding }}
+        keyboardShouldPersistTaps="handled"
+        onScroll={(e) => {
+          scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+      >
         {Platform.OS !== "web" ? (
           <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/payroll/entries"))} className="mb-4 self-start">
             <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
@@ -142,6 +169,9 @@ export default function PayrollNutrition() {
                   return (
                     <View
                       key={c.id}
+                      ref={(el) => {
+                        if (el) newDayRowRefs.current.set(c.id, el);
+                      }}
                       className="mb-2 flex-row items-center justify-between rounded-xl bg-white px-4 py-3"
                       style={{ borderWidth: 1, borderColor: "#ece7e1" }}
                     >
@@ -151,6 +181,7 @@ export default function PayrollNutrition() {
                       <TextInput
                         value={day}
                         onChangeText={(v) => setNewDayByClient((prev) => ({ ...prev, [c.id]: v }))}
+                        onFocus={() => scrollFieldIntoView(newDayRowRefs.current.get(c.id))}
                         placeholder="Day"
                         keyboardType="decimal-pad"
                         inputAccessoryViewID={NUMERIC_DONE_ID}
@@ -183,7 +214,13 @@ export default function PayrollNutrition() {
               </Text>
             ) : (
               assignments.map((a) => (
-                <View key={a.id} className="mb-2 max-w-xl flex-row items-center justify-between rounded-xl border border-stone-200 p-4">
+                <View
+                  key={a.id}
+                  ref={(el) => {
+                    if (el) editDayRowRefs.current.set(a.id, el);
+                  }}
+                  className="mb-2 max-w-xl flex-row items-center justify-between rounded-xl border border-stone-200 p-4"
+                >
                   <View className="flex-1 pr-3">
                     <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{a.client_name}</Text>
                     {editingDay[a.id] !== undefined ? (
@@ -191,6 +228,7 @@ export default function PayrollNutrition() {
                         <TextInput
                           value={editingDay[a.id]}
                           onChangeText={(v) => setEditingDay((prev) => ({ ...prev, [a.id]: v }))}
+                          onFocus={() => scrollFieldIntoView(editDayRowRefs.current.get(a.id))}
                           keyboardType="decimal-pad"
                           inputAccessoryViewID={NUMERIC_DONE_ID}
                           className="rounded-lg border border-stone-300 px-2 py-1.5"

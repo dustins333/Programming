@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -18,6 +18,7 @@ import { formatDateMDY } from "../../../lib/formatDate";
 import { fonts, colors } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { KeyboardDoneButton } from "../../../components/KeyboardDoneButton";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
 // Matches My Week/My Fitness/My History's shared canvas — the 4 nutrition
 // screens were left on plain white, which read as inconsistent with the
@@ -73,7 +74,24 @@ function ChoiceQuestion({ question, value, onChange }) {
   );
 }
 
-function PopupModal({ visible, title, onClose, children }) {
+// scrollViewRef/scrollOffsetRef are optional — only the two form popups
+// (check-in questions) actually have TextInputs that need scrolling into
+// view; the photo popups pass nothing and this component just falls back
+// to its own local (unused-for-scrolling) refs. Either way, the extra
+// keyboard-aware bottom padding applies unconditionally — a Modal's own
+// fixed maxHeight (85%) plus a short question list means there's often not
+// enough scrollable room to reveal a lower field without it, matching
+// lib/scrollToKeyboard.js's own "give the ScrollView more room to scroll"
+// fix. No tab bar to subtract here — a native Modal presents above the tab
+// bar entirely, so the raw occluded height is already correct.
+function PopupModal({ visible, title, onClose, children, scrollViewRef: externalScrollViewRef, scrollOffsetRef: externalScrollOffsetRef }) {
+  const internalScrollViewRef = useRef(null);
+  const internalScrollOffsetRef = useRef(0);
+  const scrollViewRef = externalScrollViewRef ?? internalScrollViewRef;
+  const scrollOffsetRef = externalScrollOffsetRef ?? internalScrollOffsetRef;
+  const keyboardHeight = useKeyboardHeight();
+  const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View className="flex-1 items-center justify-center bg-black/40 px-4">
@@ -84,7 +102,17 @@ function PopupModal({ visible, title, onClose, children }) {
               <Ionicons name="close" size={22} color="#78716c" />
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 20 }}>{children}</ScrollView>
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={{ padding: 20, paddingBottom: 20 + occludedHeight }}
+            keyboardShouldPersistTaps="handled"
+            onScroll={(e) => {
+              scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
+          >
+            {children}
+          </ScrollView>
         </View>
       </View>
       <KeyboardDoneButton />
@@ -179,6 +207,20 @@ export default function WeeklyCheckin() {
   // single_choice question matches that question's booking_option (the
   // "Loom or Zoom" question, once a coach sets it up — see migration 0042).
   const [schedulerOpen, setSchedulerOpen] = useState(false);
+
+  // One scrollViewRef/scrollOffsetRef pair per form popup (live + reopened
+  // week) — each PopupModal owns its own ScrollView, so a shared ref
+  // wouldn't point at the right one. Per-question TextInput refs live in a
+  // Map (dynamic-length list, same pattern used elsewhere for a mapped
+  // array of fields) so onFocus can scroll that exact question into view.
+  const formScrollViewRef = useRef(null);
+  const formScrollOffsetRef = useRef(0);
+  const scrollFormFieldIntoView = useScrollToKeyboard(formScrollViewRef, formScrollOffsetRef);
+  const formAnswerRefs = useRef(new Map());
+  const reopenFormScrollViewRef = useRef(null);
+  const reopenFormScrollOffsetRef = useRef(0);
+  const scrollReopenFormFieldIntoView = useScrollToKeyboard(reopenFormScrollViewRef, reopenFormScrollOffsetRef);
+  const reopenFormAnswerRefs = useRef(new Map());
 
   const load = async () => {
     try {
@@ -498,7 +540,13 @@ export default function WeeklyCheckin() {
         ) : null}
       </PopupModal>
 
-      <PopupModal visible={formPopupOpen} title="Check-in form" onClose={() => setFormPopupOpen(false)}>
+      <PopupModal
+        visible={formPopupOpen}
+        title="Check-in form"
+        onClose={() => setFormPopupOpen(false)}
+        scrollViewRef={formScrollViewRef}
+        scrollOffsetRef={formScrollOffsetRef}
+      >
         {questions.map((q) =>
           q.question_type === "single_choice" ? (
             <ChoiceQuestion key={q.id} question={q} value={answers[q.id] || ""} onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))} />
@@ -508,8 +556,12 @@ export default function WeeklyCheckin() {
                 {q.question_text}
               </Text>
               <TextInput
+                ref={(el) => {
+                  if (el) formAnswerRefs.current.set(q.id, el);
+                }}
                 value={answers[q.id] || ""}
                 onChangeText={(t) => setAnswers((a) => ({ ...a, [q.id]: t }))}
+                onFocus={() => scrollFormFieldIntoView(formAnswerRefs.current.get(q.id))}
                 multiline
                 inputAccessoryViewID={NUMERIC_DONE_ID}
                 className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
@@ -561,7 +613,13 @@ export default function WeeklyCheckin() {
             ) : null}
           </PopupModal>
 
-          <PopupModal visible={reopenFormPopupOpen} title="Check-in form" onClose={() => setReopenFormPopupOpen(false)}>
+          <PopupModal
+            visible={reopenFormPopupOpen}
+            title="Check-in form"
+            onClose={() => setReopenFormPopupOpen(false)}
+            scrollViewRef={reopenFormScrollViewRef}
+            scrollOffsetRef={reopenFormScrollOffsetRef}
+          >
             {questions.map((q) =>
               q.question_type === "single_choice" ? (
                 <ChoiceQuestion key={q.id} question={q} value={reopenAnswers[q.id] || ""} onChange={(v) => setReopenAnswers((a) => ({ ...a, [q.id]: v }))} />
@@ -571,8 +629,12 @@ export default function WeeklyCheckin() {
                     {q.question_text}
                   </Text>
                   <TextInput
+                    ref={(el) => {
+                      if (el) reopenFormAnswerRefs.current.set(q.id, el);
+                    }}
                     value={reopenAnswers[q.id] || ""}
                     onChangeText={(t) => setReopenAnswers((a) => ({ ...a, [q.id]: t }))}
+                    onFocus={() => scrollReopenFormFieldIntoView(reopenFormAnswerRefs.current.get(q.id))}
                     multiline
                     inputAccessoryViewID={NUMERIC_DONE_ID}
                     className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
