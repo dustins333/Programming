@@ -4,14 +4,16 @@
 import { useEffect, useState } from "react";
 import { View, Text, TextInput } from "react-native";
 import { fonts } from "../../lib/theme";
-import { PayrollBottomSheet, SheetField, SheetSaveButton } from "./PayrollBottomSheet";
+import { PayrollBottomSheet, SheetField, SheetSaveButton, SheetDeleteButton } from "./PayrollBottomSheet";
 import { SpcAttendeePicker } from "./SpcAttendeePicker";
+import { confirmDeletePayrollEntry } from "../../lib/confirmDialog";
 import { toastError } from "../../lib/toast";
 
-export function SpcSessionPopup({ visible, onClose, onSave, initial }) {
+export function SpcSessionPopup({ visible, onClose, onSave, onDelete, initial }) {
   const [attendees, setAttendees] = useState(null);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -35,6 +37,20 @@ export function SpcSessionPopup({ visible, onClose, onSave, initial }) {
     }
   };
 
+  const handleDelete = async () => {
+    const ok = await confirmDeletePayrollEntry(`${attendees ?? "?"} attendee${attendees === 1 ? "" : "s"} SPC session`);
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+      onClose();
+    } catch (err) {
+      toastError("Failed to delete", err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <PayrollBottomSheet visible={visible} onClose={onClose} title={initial ? "Edit SPC session" : "Log an SPC session"}>
       <SheetField label="How many attendees?">
@@ -51,6 +67,7 @@ export function SpcSessionPopup({ visible, onClose, onSave, initial }) {
         />
       </SheetField>
       <SheetSaveButton onPress={handleSave} disabled={saving} label={saving ? "Saving…" : "Save"} />
+      {initial && onDelete ? <SheetDeleteButton onPress={handleDelete} disabled={deleting} label={deleting ? "Deleting…" : "Delete this session"} /> : null}
     </PayrollBottomSheet>
   );
 }

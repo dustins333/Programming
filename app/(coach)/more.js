@@ -11,8 +11,11 @@ export default function More() {
   const { profile, signOut } = useAuth();
   const isAdmin = profile?.role === "admin";
   // Admin kill switch (lib/programming/messagingSettings.js) — mirrors
-  // CoachShell's own web sidebar gating for this same row.
-  const [messagingEnabled, setMessagingEnabled] = useState(true);
+  // CoachShell's own web sidebar gating for this same row. Defaults false
+  // until the check resolves — see CoachShell's own comment on this same
+  // default for why (a true default flashes the row in, then out, on
+  // every load for anyone with messaging turned off).
+  const [messagingEnabled, setMessagingEnabled] = useState(false);
 
   useEffect(() => {
     getMessagingSettings()

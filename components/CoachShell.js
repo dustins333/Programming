@@ -134,9 +134,13 @@ export function CoachShell({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Admin kill switch (lib/programming/messagingSettings.js) — web-only
   // fetch, since native's own nav lives in app/(coach)/more.js instead of
-  // this sidebar/drawer. Defaults true (matches already-shipped behavior)
-  // until the real check resolves.
-  const [messagingEnabled, setMessagingEnabled] = useState(true);
+  // this sidebar/drawer. Defaults FALSE until the real check resolves —
+  // this used to default true, which (since CoachShell remounts fresh on
+  // every page navigation on web) meant the Messages nav item visibly
+  // flashed in and then disappeared on every single page load for anyone
+  // with messaging turned off admin-side. Same "hidden until confirmed"
+  // convention as FloatingMessageBubble/CoachMessageBubble.
+  const [messagingEnabled, setMessagingEnabled] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;

@@ -13,6 +13,17 @@ const CHECK_COLOR = "#4d6142";
 const TILE_BG = { idle: "#fdf6f2", solid: "#eef1e7" };
 const TILE_BORDER = { idle: "#f0ddd2", solid: CHECK_COLOR };
 
+// Every grid tile (Group/SPC/Programs Written/Welcome/Strategy/Admin/Ops)
+// used to size itself off its own content (minHeight only) — fine in
+// isolation, but two tiles side by side in a row with genuinely different
+// content heights (e.g. SPC's label+button+caption vs. Group's
+// label+counter) rendered at different heights, so their checkmarks (each
+// pinned to its OWN tile's bottom edge) landed at different vertical
+// positions on screen. A single static height for every grid tile is what
+// makes them line up, per direct ask ("just have to make them all a
+// static size, rather than dynamic").
+export const TILE_HEIGHT = 136;
+
 // Half-overlapping the tile's bottom edge, per the explicit ask — same
 // round checkmark already shipped on My Fitness's exercise-completion
 // cards (components/ExerciseCard.js), just repositioned. Sits on its own
@@ -87,7 +98,7 @@ export function TileBadge({ count, onPress }) {
 // switches the tile's own border to the same olive — border-only
 // "completed" convention already used app-wide (My Fitness), not a
 // background fill.
-export function PayrollTile({ children, checkState = "none", onCheckPress, badgeCount, onBadgePress, style, onPress }) {
+export function PayrollTile({ children, checkState = "none", onCheckPress, badgeCount, onBadgePress, style, onPress, height = TILE_HEIGHT }) {
   const solid = checkState === "solid";
   const content = (
     <View
@@ -100,7 +111,7 @@ export function PayrollTile({ children, checkState = "none", onCheckPress, badge
           backgroundColor: solid ? TILE_BG.solid : TILE_BG.idle,
           padding: 16,
           paddingBottom: checkState !== "none" ? 28 : 16,
-          minHeight: 108,
+          height,
           shadowColor: "#44403c",
           shadowOffset: { width: 0, height: 1 },
           shadowOpacity: 0.03,

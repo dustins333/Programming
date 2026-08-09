@@ -13,12 +13,13 @@ import {
   createOtherItem,
   updateOtherItem,
   upsertCustomForDate,
+  deleteDayEntry,
 } from "../../../lib/payroll/dayEntries";
 import { partitionDayEntries, buildRateMaps, computeTotals, formatMoney } from "../../../lib/payroll/calc";
 import { getOwnFinalization, isLocked as isFinalizationLocked } from "../../../lib/payroll/finalizations";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
-import { toastError, toastSuccess } from "../../../lib/toast";
+import { toastError } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { PayrollTabBar } from "../../../components/PayrollTabBar";
@@ -32,7 +33,6 @@ import { NamesListPopup } from "../../../components/payroll/NamesListPopup";
 import { HourMinuteStepperPopup } from "../../../components/payroll/HourMinuteStepperPopup";
 import { OtherItemPopup } from "../../../components/payroll/OtherItemPopup";
 import { CustomEntryPopup } from "../../../components/payroll/CustomEntryPopup";
-import { FinalizeModal } from "../../../components/payroll/FinalizeModal";
 
 // "hollow" = data present but not yet confirmed (the pending value differs
 // from what's saved); "solid" = confirmed and saved; "none" = nothing
@@ -133,11 +133,10 @@ export default function PayrollEntries() {
   const [finalization, setFinalization] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(todayInBoise());
-  const [finalizeOpen, setFinalizeOpen] = useState(false);
 
   const [spcPopup, setSpcPopup] = useState({ open: false, session: null });
   const [spcListOpen, setSpcListOpen] = useState(false);
-  const [otherPopup, setOtherPopup] = useState({ open: false, type: null, item: null });
+  const [otherPopup, setOtherPopup] = useState({ open: false, type: null, item: null, qty: null });
   const [otherListOpen, setOtherListOpen] = useState(false);
   const [customPopupOpen, setCustomPopupOpen] = useState(false);
   const [namesPopup, setNamesPopup] = useState({ open: false, kind: null });
@@ -233,10 +232,27 @@ export default function PayrollEntries() {
     await reload();
   };
 
-  const openNewOther = (type) => setOtherPopup({ open: true, type, item: null });
+  // The Other row already collects quantity inline (PayrollOtherRow) before
+  // this ever fires — a type with no notes to collect has nothing left for
+  // a popup to do, so it saves straight away with no popup at all; a type
+  // with notes still opens OtherItemPopup, but only for the notes field
+  // (the qty field stays hidden there since it's already been provided).
+  const handleConfirmOtherRow = async (type, qty) => {
+    const config = rates.otherRates.find((r) => r.other_type === type);
+    if (config && config.has_notes === false) {
+      try {
+        await createOtherItem(profile.id, periodStart, selectedDate, { otherType: type, qty, notes: "" });
+        await reload();
+      } catch (err) {
+        toastError("Failed to save", err);
+      }
+      return;
+    }
+    setOtherPopup({ open: true, type, item: null, qty });
+  };
   const openEditOther = (item) => {
     setOtherListOpen(false);
-    setOtherPopup({ open: true, type: item.other_type, item });
+    setOtherPopup({ open: true, type: item.other_type, item, qty: null });
   };
   const handleSaveOther = async ({ qty, notes }) => {
     if (otherPopup.item) {
@@ -244,6 +260,11 @@ export default function PayrollEntries() {
     } else {
       await createOtherItem(profile.id, periodStart, selectedDate, { otherType: otherPopup.type, qty, notes });
     }
+    await reload();
+  };
+
+  const handleDeleteEntry = async (item) => {
+    await deleteDayEntry(item.id);
     await reload();
   };
 
@@ -255,8 +276,10 @@ export default function PayrollEntries() {
   const handleSaveNames = async (joinedNames) => {
     if (namesPopup.kind === "welcome") {
       await handleSaveCoreField({ welcome_sessions: pendingWelcome, welcome_notes: joinedNames });
-    } else {
+    } else if (namesPopup.kind === "strategy") {
       await handleSaveCoreField({ strategy_sessions: pendingStrategy, strategy_notes: joinedNames });
+    } else {
+      await handleSaveCoreField({ programs_written: pendingPrograms, program_notes: joinedNames });
     }
   };
 
@@ -348,7 +371,7 @@ export default function PayrollEntries() {
                       <View style={{ flex: 1 }}>
                         <PayrollTile
                           checkState={counterCheckState(pendingPrograms, partition.core?.programs_written || 0)}
-                          onCheckPress={() => handleSaveCoreField({ programs_written: pendingPrograms })}
+                          onCheckPress={() => pendingPrograms > 0 && setNamesPopup({ open: true, kind: "programs" })}
                         >
                           <CounterTileContent
                             label="Programs Written"
@@ -417,7 +440,7 @@ export default function PayrollEntries() {
                     <PayrollOtherRow
                       otherRates={rates.otherRates.filter((r) => r.active)}
                       items={partition.otherItems}
-                      onOpenNewItem={openNewOther}
+                      onOpenNewItem={handleConfirmOtherRow}
                       onViewList={() => setOtherListOpen(true)}
                     />
                   </View>
@@ -426,16 +449,10 @@ export default function PayrollEntries() {
                     <PayrollCustomRow custom={partition.custom} onPress={() => setCustomPopupOpen(true)} />
                   </View>
 
-                  <Pressable
-                    onPress={() => setFinalizeOpen(true)}
-                    disabled={allEntries.length === 0}
-                    className="mt-4 items-center rounded-xl px-5 py-4"
-                    style={{ backgroundColor: colors.primary, opacity: allEntries.length === 0 ? 0.5 : 1 }}
-                  >
-                    <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 15 }}>
-                      Finalize
-                    </Text>
-                  </Pressable>
+                  <Text className="mt-2 text-center text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                    Everything above saves as you go — head to the Report tab when you're ready to review and finalize the
+                    whole period.
+                  </Text>
                 </View>
               </>
             )}
@@ -447,6 +464,7 @@ export default function PayrollEntries() {
         visible={spcPopup.open}
         onClose={() => setSpcPopup({ open: false, session: null })}
         onSave={handleSaveSpc}
+        onDelete={spcPopup.session ? () => handleDeleteEntry(spcPopup.session) : undefined}
         initial={spcPopup.session ? { attendees: spcPopup.session.spc_attendees, notes: spcPopup.session.spc_notes } : null}
       />
       <EntryListPopup
@@ -460,14 +478,24 @@ export default function PayrollEntries() {
           raw: s,
         }))}
         onSelectItem={(item) => openEditSpc(item.raw)}
+        onDeleteItem={handleDeleteEntry}
       />
 
       <OtherItemPopup
         visible={otherPopup.open}
-        onClose={() => setOtherPopup({ open: false, type: null, item: null })}
+        onClose={() => setOtherPopup({ open: false, type: null, item: null, qty: null })}
         otherTypeLabel={otherPopup.type}
-        initial={otherPopup.item ? { qty: otherPopup.item.other_qty, notes: otherPopup.item.notes } : null}
+        config={rates.otherRates.find((r) => r.other_type === otherPopup.type)}
+        hideQtyField={!otherPopup.item}
+        initial={
+          otherPopup.item
+            ? { qty: otherPopup.item.other_qty, notes: otherPopup.item.notes }
+            : otherPopup.qty != null
+              ? { qty: otherPopup.qty, notes: "" }
+              : null
+        }
         onSave={handleSaveOther}
+        onDelete={otherPopup.item ? () => handleDeleteEntry(otherPopup.item) : undefined}
       />
       <EntryListPopup
         visible={otherListOpen}
@@ -480,6 +508,7 @@ export default function PayrollEntries() {
           raw: item,
         }))}
         onSelectItem={(item) => openEditOther(item.raw)}
+        onDeleteItem={handleDeleteEntry}
       />
 
       <CustomEntryPopup
@@ -492,9 +521,17 @@ export default function PayrollEntries() {
       <NamesListPopup
         visible={namesPopup.open}
         onClose={() => setNamesPopup({ open: false, kind: null })}
-        title={namesPopup.kind === "welcome" ? "Welcome session names" : "Strategy session names"}
-        count={namesPopup.kind === "welcome" ? pendingWelcome : pendingStrategy}
-        initialNotes={namesPopup.kind === "welcome" ? partition.core?.welcome_notes : partition.core?.strategy_notes}
+        title={
+          namesPopup.kind === "welcome" ? "Welcome session names" : namesPopup.kind === "strategy" ? "Strategy session names" : "Programs written for"
+        }
+        count={namesPopup.kind === "welcome" ? pendingWelcome : namesPopup.kind === "strategy" ? pendingStrategy : pendingPrograms}
+        initialNotes={
+          namesPopup.kind === "welcome"
+            ? partition.core?.welcome_notes
+            : namesPopup.kind === "strategy"
+              ? partition.core?.strategy_notes
+              : partition.core?.program_notes
+        }
         onSave={handleSaveNames}
       />
 
@@ -504,17 +541,6 @@ export default function PayrollEntries() {
         title={hoursPopup.kind === "admin" ? "Admin Hours" : "Ops Hours"}
         initialDecimal={hoursPopup.kind === "admin" ? partition.core?.admin_hours : partition.core?.ops_hours}
         onSave={handleSaveHours}
-      />
-
-      <FinalizeModal
-        visible={finalizeOpen}
-        onClose={() => setFinalizeOpen(false)}
-        onFinalized={load}
-        profile={profile}
-        periodStart={periodStart}
-        periodEnd={periodEnd}
-        entries={allEntries}
-        rateMaps={rateMaps}
       />
     </CoachShell>
   );

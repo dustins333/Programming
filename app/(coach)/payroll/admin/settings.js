@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listAllRates, updateCoreRate, updateSpcTier, updateOtherRate, createOtherRate } from "../../../../lib/payroll/rates";
@@ -9,6 +10,21 @@ import { CoachShell } from "../../../../components/CoachShell";
 import { AdminPayrollTabBar } from "../../../../components/AdminPayrollTabBar";
 import { RateRow } from "../../../../components/payroll/RateRow";
 import { NUMERIC_DONE_ID } from "../../../../components/NumericInputAccessory";
+
+// Small pill toggle for the two per-Other-type entry-form field switches
+// (Quantity/Notes) — deliberately not a full Switch component, since these
+// sit inline in an already-dense row alongside the rate editor and Archive
+// link.
+function FieldToggle({ label, value, onToggle }) {
+  return (
+    <Pressable onPress={onToggle} className="flex-row items-center gap-1" hitSlop={6}>
+      <Ionicons name={value ? "checkbox" : "square-outline"} size={16} color={value ? colors.primaryOnWhite : "#a8a29e"} />
+      <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: value ? "#44403c" : "#a8a29e" }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
 const CORE_LABELS = {
   group_session: "Group session",
@@ -180,31 +196,55 @@ export default function AdminPayrollSettings() {
             <Text className="mb-2 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: "#78716c" }}>
               Other
             </Text>
+            <Text className="mb-3 max-w-xl text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Quantity/Notes control which fields show on the entry form for that type — turn either off for a type that
+              doesn't need it (e.g. a flat one-time item with no notes).
+            </Text>
             <AddOtherRateForm onAdded={load} />
             <View className="mb-2 max-w-xl">
               {activeOther.map((r) => (
-                <View key={r.other_type} className="mb-2 flex-row items-center gap-2">
-                  <View style={{ flex: 1 }}>
-                    <RateRow
-                      label={r.other_type}
-                      unit={r.unit}
-                      value={r.rate}
-                      onSave={async (n) => {
-                        await updateOtherRate(r.other_type, { rate: n });
+                <View key={r.other_type} className="mb-2 rounded-lg border border-stone-200 px-3 py-2.5">
+                  <View className="mb-2 flex-row items-center gap-2">
+                    <View style={{ flex: 1 }}>
+                      <RateRow
+                        label={r.other_type}
+                        unit={r.unit}
+                        value={r.rate}
+                        onSave={async (n) => {
+                          await updateOtherRate(r.other_type, { rate: n });
+                          await load();
+                        }}
+                      />
+                    </View>
+                    <Pressable
+                      onPress={async () => {
+                        await updateOtherRate(r.other_type, { active: false });
+                        await load();
+                      }}
+                    >
+                      <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#a8a29e" }}>
+                        Archive
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <View className="flex-row gap-4">
+                    <FieldToggle
+                      label="Quantity"
+                      value={r.has_qty}
+                      onToggle={async () => {
+                        await updateOtherRate(r.other_type, { has_qty: !r.has_qty });
+                        await load();
+                      }}
+                    />
+                    <FieldToggle
+                      label="Notes"
+                      value={r.has_notes}
+                      onToggle={async () => {
+                        await updateOtherRate(r.other_type, { has_notes: !r.has_notes });
                         await load();
                       }}
                     />
                   </View>
-                  <Pressable
-                    onPress={async () => {
-                      await updateOtherRate(r.other_type, { active: false });
-                      await load();
-                    }}
-                  >
-                    <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#a8a29e" }}>
-                      Archive
-                    </Text>
-                  </Pressable>
                 </View>
               ))}
             </View>

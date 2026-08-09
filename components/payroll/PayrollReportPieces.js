@@ -120,14 +120,19 @@ export function CategoryBreakdown({ totals, entries, rateMaps }) {
             drillItems.map((item, i) => (
               <View
                 key={`${item.date}-${i}`}
-                className="mb-2 flex-row items-center justify-between rounded-xl bg-white px-4 py-3"
+                className="mb-2 flex-row items-start justify-between rounded-xl bg-white px-4 py-3"
                 style={{ borderWidth: 1, borderColor: "#ece7e1" }}
               >
-                <View>
+                <View className="flex-1 pr-3">
                   <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>{formatDateMDY(item.date)}</Text>
                   <Text className="mt-0.5 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
                     {item.quantityLabel}
                   </Text>
+                  {item.notes ? (
+                    <Text className="mt-1 text-xs" style={{ fontFamily: fonts.sans, color: "#a8a29e", fontStyle: "italic" }}>
+                      {item.notes}
+                    </Text>
+                  ) : null}
                 </View>
                 <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>{formatMoney(item.amount)}</Text>
               </View>

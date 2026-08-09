@@ -61,3 +61,14 @@ export function SheetSaveButton({ label = "Save", onPress, disabled }) {
     </Pressable>
   );
 }
+
+// Shown only when editing an existing repeatable entry (SPC session, Other
+// line item) — a lighter-weight companion to SheetSaveButton, not styled as
+// a primary action.
+export function SheetDeleteButton({ label = "Delete", onPress, disabled }) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} className="mt-2 items-center rounded-xl px-5 py-3" style={{ opacity: disabled ? 0.5 : 1 }}>
+      <Text style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>{label}</Text>
+    </Pressable>
+  );
+}
