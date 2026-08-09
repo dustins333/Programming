@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
-import { Link } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getNutritionRoster } from "../../../lib/nutrition/dashboard";
 import { STATUS_META, STATUS_ORDER, NEW_CLIENT_STATUSES, ACTIVE_CLIENT_STATUSES, OTHER_STATUSES } from "../../../lib/nutrition/rosterStatus";
@@ -88,9 +88,13 @@ function TileSection({ title, statuses, countByStatus, statusFilter, onToggle })
         {title}
       </Text>
       <View className="flex-row gap-2.5">
-        {statuses.map((status) => (
-          <StatusTile key={status} status={status} count={countByStatus[status] ?? 0} active={statusFilter === status} onToggle={onToggle} />
-        ))}
+        {/* Zero-count tiles are hidden (native already did this) — a
+            clickable "0 clients" tile only ever led to an empty list. */}
+        {statuses
+          .filter((status) => (countByStatus[status] ?? 0) > 0)
+          .map((status) => (
+            <StatusTile key={status} status={status} count={countByStatus[status] ?? 0} active={statusFilter === status} onToggle={onToggle} />
+          ))}
       </View>
     </View>
   );
@@ -185,10 +189,15 @@ function ClientGridRow({ client, isHeader }) {
 }
 
 export default function NutritionDashboardWeb() {
+  const router = useRouter();
   const [roster, setRoster] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [filterCoach, setFilterCoach] = useState(null);
-  const [statusFilter, setStatusFilter] = useState(null);
+  // Kept in the URL (?status=) so working a queue survives the round trip
+  // into a client page and back — plain state reset on every return, which
+  // meant re-picking the filter after every single client.
+  const params = useLocalSearchParams();
+  const [statusFilter, setStatusFilter] = useState(typeof params.status === "string" && params.status ? params.status : null);
   // Defaults to alphabetical, not status-grouped — per direct feedback, an
   // unfiltered roster should read as a plain client list; "Sort: Status"
   // stays available in the dropdown for anyone who wants grouping back.
@@ -235,7 +244,12 @@ export default function NutritionDashboardWeb() {
     return counts;
   }, [baseFiltered]);
 
-  const toggleStatusFilter = (status) => setStatusFilter((prev) => (prev === status ? null : status));
+  const toggleStatusFilter = (status) =>
+    setStatusFilter((prev) => {
+      const next = prev === status ? null : status;
+      router.setParams({ status: next ?? "" });
+      return next;
+    });
 
   if (loadError) {
     return (

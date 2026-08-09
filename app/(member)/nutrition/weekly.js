@@ -8,7 +8,7 @@ import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { listLogs } from "../../../lib/nutrition/dailyLog";
 import { getCurrentTarget } from "../../../lib/nutrition/targets";
-import { currentCalendarWeek, summarizeWeek } from "../../../lib/nutrition/weekCycle";
+import { currentCalendarWeek, summarizeWeek, colorForTarget } from "../../../lib/nutrition/weekCycle";
 import { WeekList, WeekDayTable, enumerateRecentWeeks } from "../../../components/nutrition/WeekList";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
@@ -131,7 +131,9 @@ export default function NutritionWeekly() {
           <Text className="text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
             {WEEKS_SHOWN}-week weight trend
           </Text>
-          <Text className="mt-1 text-xl" style={{ fontFamily: fonts.display, color: weightTrend !== null && weightTrend < 0 ? "#4d6142" : colors.primary }}>
+          {/* Neutral color either direction — green-only-when-negative
+              hardcoded a weight-loss framing that isn't every client's goal. */}
+          <Text className="mt-1 text-xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
             {weightTrend !== null ? `${weightTrend > 0 ? "+" : ""}${weightTrend} lb` : "—"}
           </Text>
         </View>
@@ -142,6 +144,9 @@ export default function NutritionWeekly() {
           <Text className="mt-1 text-xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
             {avgAdherence !== null ? `${avgAdherence}%` : "—"}
           </Text>
+          <Text className="mt-0.5 text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 10.5 }}>
+            days logged out of 7
+          </Text>
         </View>
       </View>
 
@@ -149,6 +154,40 @@ export default function NutritionWeekly() {
         This week — day by day
       </Text>
       <View className="mb-6 rounded-xl border border-stone-200 bg-white p-4">
+        {(() => {
+          // "Am I on track *this week*?" answered directly — weekly average
+          // vs target per metric, colored with the same ±10% band the table
+          // cells below already use.
+          const t = currentWeekSummary.target;
+          const avg = currentWeekSummary.summary.averages;
+          if (!t || currentWeekSummary.summary.days.length === 0) return null;
+          const METRICS = [
+            { key: "protein_g", label: "Protein", target: t.protein_g },
+            { key: "carb_g", label: "Carb", target: t.carb_g },
+            { key: "fat_g", label: "Fat", target: t.fat_g },
+            { key: "fiber_g", label: "Fiber", target: t.fiber_g },
+          ];
+          return (
+            <View className="mb-3 flex-row flex-wrap" style={{ gap: 10 }}>
+              {METRICS.map((m) => {
+                const value = avg[m.key];
+                const tone = colorForTarget(value, m.target);
+                const color = tone === "green" ? "#4d6142" : tone === "red" ? "#b23a22" : "#78716c";
+                return (
+                  <View key={m.key}>
+                    <Text className="text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 10.5 }}>
+                      {m.label} avg
+                    </Text>
+                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color }}>
+                      {value != null ? Math.round(value) : "—"}
+                      <Text style={{ fontFamily: fonts.sans, color: "#a8a29e" }}> / {m.target ?? "—"}</Text>
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })()}
         <WeekDayTable week={currentWeekSummary} />
       </View>
 

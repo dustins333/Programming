@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
             client.id,
             "Daily log reminder",
             "Don't forget to log today — weight, macros, steps, sleep.",
-            { type: "nutrition_daily_log_reminder" }
+            { type: "nutrition_daily_log_reminder", url: "/nutrition" }
           );
           if (result.sent > 0) results.dailyLogPushed += 1;
         }
@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
             client.id,
             "Weekly check-in still needed",
             "Your weekly check-in is still open — get it in when you can.",
-            { type: "nutrition_checkin_nag" }
+            { type: "nutrition_checkin_nag", url: "/nutrition/checkin" }
           );
           if (result.sent > 0) results.checkinNagPushed += 1;
         }

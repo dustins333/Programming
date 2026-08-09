@@ -42,7 +42,40 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Invalid or expired session" }), { status: 401, headers: jsonHeaders });
   }
 
-  const { userId, title, body, data } = await req.json();
+  const { userId, title, body, data, notifyCoachOfClient } = await req.json();
+
+  // notifyCoachOfClient: push a nutrition client's *assigned coach* about
+  // that client (check-in submitted, onboarding ready for review). The
+  // target is resolved server-side from public.clients.coach_id — a member
+  // caller may only ever trigger this about themselves, so the only user a
+  // member can reach through this branch is their own coach.
+  if (notifyCoachOfClient) {
+    if (!title || !body) {
+      return new Response(JSON.stringify({ error: "title and body are required" }), { status: 400, headers: jsonHeaders });
+    }
+    if (notifyCoachOfClient !== caller.id) {
+      const { data: callerProfile } = await adminClient
+        .schema("core")
+        .from("users")
+        .select("role")
+        .eq("id", caller.id)
+        .maybeSingle();
+      if (!callerProfile || !["admin", "coach"].includes(callerProfile.role)) {
+        return new Response(JSON.stringify({ error: "Not allowed to notify other clients' coaches" }), { status: 403, headers: jsonHeaders });
+      }
+    }
+    const { data: clientRow } = await adminClient.from("clients").select("coach_id").eq("id", notifyCoachOfClient).maybeSingle();
+    if (!clientRow?.coach_id) {
+      return new Response(JSON.stringify({ sent: 0, message: "No assigned coach for this client" }), { status: 200, headers: jsonHeaders });
+    }
+    try {
+      const result = await sendPushToUser(adminClient, clientRow.coach_id, title, body, data ?? {});
+      return new Response(JSON.stringify(result), { status: 200, headers: jsonHeaders });
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), { status: 500, headers: jsonHeaders });
+    }
+  }
+
   if (!userId || !title || !body) {
     return new Response(JSON.stringify({ error: "userId, title, and body are required" }), { status: 400, headers: jsonHeaders });
   }

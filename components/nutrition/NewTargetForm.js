@@ -2,9 +2,18 @@ import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { toastError } from "../../lib/toast";
 import { createTarget } from "../../lib/nutrition/targets";
-import { todayInBoise } from "../../lib/boiseDate";
+import { todayInBoise, addDays, dayOfWeekInBoise } from "../../lib/boiseDate";
+import { formatDateMDY } from "../../lib/formatDate";
 import { TargetField } from "./TargetField";
 import { fonts } from "../../lib/theme";
+
+// Next Monday (the start of the next check-in cycle) — getCurrentTarget
+// fully supports future-dated rows, there was just never a way to pick one.
+function nextMonday() {
+  const today = todayInBoise();
+  const dow = dayOfWeekInBoise(today); // 0=Sun..6=Sat
+  return addDays(today, dow === 0 ? 1 : 8 - dow);
+}
 
 // Prefilled from the current target, not blank — targets are insert-only
 // versioned rows, so "change only protein" used to require retyping every
@@ -22,9 +31,10 @@ function formFromTarget(t) {
   };
 }
 
-export function NewTargetForm({ userId, setBy, currentTarget, onSaved }) {
+export function NewTargetForm({ userId, setBy, currentTarget, recentAverages, onSaved }) {
   const [form, setForm] = useState(() => formFromTarget(currentTarget));
   const [saving, setSaving] = useState(false);
+  const [startNextWeek, setStartNextWeek] = useState(false);
 
   // Re-prefill when the current target changes identity — covers a late
   // async load and the post-save reload (the freshly-saved target becomes
@@ -51,7 +61,7 @@ export function NewTargetForm({ userId, setBy, currentTarget, onSaved }) {
         fiberG: Number(form.fiber_g),
         stepGoal: form.step_goal ? Number(form.step_goal) : null,
         sleepHoursGoal: form.sleep_hours_goal ? Number(form.sleep_hours_goal) : null,
-        effectiveDate: todayInBoise(),
+        effectiveDate: startNextWeek ? nextMonday() : todayInBoise(),
         note: form.note,
       });
       await onSaved();
@@ -64,6 +74,14 @@ export function NewTargetForm({ userId, setBy, currentTarget, onSaved }) {
 
   return (
     <View>
+      {recentAverages ? (
+        <Text className="mb-3 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Actual this week — P {recentAverages.protein_g != null ? Math.round(recentAverages.protein_g) : "—"} · C{" "}
+          {recentAverages.carb_g != null ? Math.round(recentAverages.carb_g) : "—"} · F{" "}
+          {recentAverages.fat_g != null ? Math.round(recentAverages.fat_g) : "—"} · Fiber{" "}
+          {recentAverages.fiber_g != null ? Math.round(recentAverages.fiber_g) : "—"}
+        </Text>
+      ) : null}
       <View className="mb-2 flex-row gap-3">
         <TargetField label="Protein (g)" styleKey="protein" pillLabel="now" flex current={currentTarget?.protein_g} value={form.protein_g} onChangeText={(t) => setForm((f) => ({ ...f, protein_g: t }))} pct={pct(4 * protein)} />
         <TargetField label="Carb (g)" styleKey="carb" pillLabel="now" flex current={currentTarget?.carb_g} value={form.carb_g} onChangeText={(t) => setForm((f) => ({ ...f, carb_g: t }))} pct={pct(4 * carb)} />
@@ -86,6 +104,26 @@ export function NewTargetForm({ userId, setBy, currentTarget, onSaved }) {
         className="mb-3 rounded-lg border border-stone-300 px-4 py-3"
         style={{ fontFamily: fonts.sans }}
       />
+      <View className="mb-3 flex-row items-center gap-2">
+        <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+          Starts:
+        </Text>
+        {[
+          { key: false, label: "Today" },
+          { key: true, label: `Next week (${formatDateMDY(nextMonday())})` },
+        ].map((opt) => (
+          <Pressable
+            key={String(opt.key)}
+            onPress={() => setStartNextWeek(opt.key)}
+            className="rounded-full border px-3 py-1.5"
+            style={{ borderColor: startNextWeek === opt.key ? "#a46a57" : "#d6d3d1", backgroundColor: startNextWeek === opt.key ? "#fdf6f2" : "white" }}
+          >
+            <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: startNextWeek === opt.key ? "#8a5140" : "#57534e" }}>
+              {opt.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       <Pressable onPress={handleSave} disabled={saving} className="items-center rounded-lg bg-primary py-3.5 disabled:opacity-50">
         <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
           {saving ? "Saving…" : "Save New Target"}

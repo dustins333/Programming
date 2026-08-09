@@ -16,6 +16,7 @@ import {
 import { ProtestStrike_400Regular } from "@expo-google-fonts/protest-strike";
 import { AuthProvider } from "../lib/auth/AuthProvider";
 import { PushRegistrar } from "../lib/notifications/PushRegistrar";
+import { PushDeepLink } from "../lib/notifications/PushDeepLink";
 import { KeyboardDoneButton } from "../components/KeyboardDoneButton";
 import { ViewportZoomReset } from "../components/ViewportZoomReset";
 import { ToastHost } from "../components/ToastHost";
@@ -53,6 +54,7 @@ export default function RootLayout() {
         <StatusBar style="dark" />
         <AuthProvider>
           <PushRegistrar />
+          <PushDeepLink />
           <WebPushBanner />
           <ViewportZoomReset />
           <AppUpdateChecker />

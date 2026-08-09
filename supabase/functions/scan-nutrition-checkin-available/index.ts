@@ -157,6 +157,7 @@ Deno.serve(async (req) => {
       const result = await sendPushToUser(admin, client.id, title, body, {
         type: "announcement",
         announcementId: announcement.id,
+        url: "/nutrition/checkin",
       });
       if (result.sent > 0) results.pushed += 1;
     } catch (err) {

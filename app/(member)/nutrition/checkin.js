@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
-import { todayInBoise, addDays } from "../../../lib/boiseDate";
+import { todayInBoise, addDays, dateInBoise } from "../../../lib/boiseDate";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
@@ -16,6 +16,7 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { toastSuccess } from "../../../lib/toast";
+import { notifyCoachOfClient } from "../../../lib/notifications/sendPush";
 import { fonts, colors } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { KeyboardDoneButton } from "../../../components/KeyboardDoneButton";
@@ -279,6 +280,17 @@ export default function WeeklyCheckin() {
   const answerTriggersBooking = (answersMap) =>
     (questions || []).some((q) => q.question_type === "single_choice" && q.booking_option && answersMap[q.id] === q.booking_option);
 
+  // Same check against an already-submitted response's stored
+  // {question, answer} pairs (keyed by question text, not id) — powers the
+  // "Schedule your Zoom call" re-entry on the submitted state.
+  const responseTriggersBooking = (resp) =>
+    (questions || []).some(
+      (q) =>
+        q.question_type === "single_choice" &&
+        q.booking_option &&
+        (resp?.answers ?? []).some((a) => a.question === q.question_text && a.answer === q.booking_option)
+    );
+
   // Finalize used to just be silently disabled when the form wasn't ready —
   // no explanation, which read as "the button isn't working." Now the
   // button stays tappable and this builds a specific "go do X" message
@@ -326,6 +338,12 @@ export default function WeeklyCheckin() {
       setReopenSubmitted(true);
       setReopen(null);
       toastSuccess("Check-in submitted — your coach will review it!");
+      notifyCoachOfClient({
+        clientUserId: profile.id,
+        title: "Missed check-in submitted",
+        body: `${profile.name ?? "A client"} caught up on a reopened check-in.`,
+        data: { type: "nutrition_checkin_submitted", url: `/nutrition/clients/${profile.id}` },
+      }).catch((err) => console.error("Coach check-in push failed:", err));
       if (answerTriggersBooking(reopenAnswers)) setSchedulerOpen(true);
     } catch (err) {
       setReopenSubmitError(err.message ?? String(err));
@@ -346,6 +364,14 @@ export default function WeeklyCheckin() {
       const saved = await submitCheckin(profile.id, payload, { photosSkipReason: !photosUploaded ? skipReason : null });
       setResponse(saved);
       toastSuccess("Check-in submitted — your coach will review it!");
+      // Fire-and-forget — the coach side was entirely pull-based before
+      // (nothing ever told a coach a check-in landed).
+      notifyCoachOfClient({
+        clientUserId: profile.id,
+        title: "Check-in submitted",
+        body: `${profile.name ?? "A client"} submitted their weekly check-in.`,
+        data: { type: "nutrition_checkin_submitted", url: `/nutrition/clients/${profile.id}` },
+      }).catch((err) => console.error("Coach check-in push failed:", err));
       if (answerTriggersBooking(answers)) setSchedulerOpen(true);
     } catch (err) {
       setSubmitError(err.message ?? String(err));
@@ -396,7 +422,7 @@ export default function WeeklyCheckin() {
         Nutrition
       </Text>
       <Text className="mb-4 text-base text-stone-500" style={{ fontFamily: fonts.sans }}>
-        Week of {currentWeek.start}
+        Week of {formatDateMDY(currentWeek.start)}
       </Text>
 
       <SegmentedControl
@@ -460,9 +486,23 @@ export default function WeeklyCheckin() {
 
       {response ? (
         <View>
-          <Text className="mb-4 text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-            Submitted {new Date(response.submitted_at).toLocaleDateString()}
-          </Text>
+          {/* Green, affirmed — the primary path used to be a drab plain line
+              while the reopened-exception path got the celebratory card. */}
+          <View className="mb-4 rounded-2xl border px-4 py-3.5" style={{ borderColor: "#4d6142", borderWidth: 2, backgroundColor: "#f3f6ef" }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#4d6142" }}>
+              Submitted {formatDateMDY(dateInBoise(new Date(response.submitted_at)))} ✓ — your coach will review it.
+            </Text>
+            {responseTriggersBooking(response) ? (
+              // The scheduler used to be openable exactly once, right after
+              // submit — closing it ("Skip for now") permanently lost the
+              // booking. This keeps a way back in for the rest of the week.
+              <Pressable onPress={() => setSchedulerOpen(true)} className="mt-2 self-start rounded-lg px-3.5 py-2" style={{ backgroundColor: colors.primary }}>
+                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5 }}>
+                  Schedule your Zoom call
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
           {response.answers.map((a, i) => (
             <View key={i} className="mb-4">
               <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold }}>
@@ -481,12 +521,25 @@ export default function WeeklyCheckin() {
           ) : null}
 
           {photosRequired ? (
-            <TaskRow
-              title="This week's progress photos"
-              done={photosSatisfied}
-              subtitle={photosUploaded ? "Submitted" : skipReason ? `Skipped — ${skipReason}` : "Tap to upload"}
-              onPress={() => setPhotoPopupOpen(true)}
-            />
+            <>
+              <TaskRow
+                title="This week's progress photos"
+                done={photosSatisfied}
+                subtitle={photosUploaded ? "Submitted" : skipReason ? `Skipped — ${skipReason}` : "Tap to upload"}
+                onPress={() => setPhotoPopupOpen(true)}
+              />
+              {!photosUploaded && !skipReason ? (
+                // Surfaced on the task itself — the skip option used to hide
+                // inside the upload modal, so a member who couldn't take
+                // photos had to open an upload sheet to learn they could
+                // decline.
+                <Pressable onPress={() => setSkipModalOpen(true)} className="mb-3 self-start" hitSlop={8}>
+                  <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
+                    I can't provide photos this week
+                  </Text>
+                </Pressable>
+              ) : null}
+            </>
           ) : null}
 
           {questions.length > 0 ? (

@@ -6,6 +6,8 @@ import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bo
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays, daysBetween } from "../../../lib/boiseDate";
+import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
+import { getCheckinForWeek } from "../../../lib/nutrition/checkin";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { getCurrentTarget, deriveCalories } from "../../../lib/nutrition/targets";
@@ -171,6 +173,7 @@ export default function NutritionToday() {
   const [congratsMilestone, setCongratsMilestone] = useState(null);
   const [values, setValues] = useState(EMPTY_VALUES);
   const [ready, setReady] = useState(false);
+  const [checkinDue, setCheckinDue] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
   const [saveState, setSaveState] = useState("idle");
@@ -224,6 +227,17 @@ export default function NutritionToday() {
       getUnseenCompletedMilestone(profile.id)
         .then(setCongratsMilestone)
         .catch((err) => console.error("Failed to check for completed milestones:", err));
+      // Check-in due signal (dot on the Check-In segment + a line below) —
+      // isolated so a failure just hides the nudge.
+      (async () => {
+        try {
+          const { currentWeek } = computeWeekWindows(todayInBoise());
+          const checkin = await getCheckinForWeek(profile.id, currentWeek.start);
+          setCheckinDue(!checkin);
+        } catch {
+          setCheckinDue(false);
+        }
+      })();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [access.status])
   );
@@ -324,11 +338,19 @@ export default function NutritionToday() {
         <SegmentedControl
           segments={NUTRITION_TABS}
           activeKey="today"
+          badges={checkinDue ? ["checkin"] : null}
           onSelect={(key) => {
             const seg = NUTRITION_TABS.find((s) => s.key === key);
             if (seg && seg.key !== "today") router.push(seg.href);
           }}
         />
+        {checkinDue ? (
+          <Pressable onPress={() => router.push("/(member)/nutrition/checkin")} className="mb-3 -mt-4 self-start" hitSlop={8}>
+            <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: "#b23a22" }}>
+              This week's check-in is due — tap to fill it in ›
+            </Text>
+          </Pressable>
+        ) : null}
 
         {/* Sticky date nav — pinned above the scroll content (not part of
             it) so it stays visible no matter how far down the form the
@@ -468,19 +490,19 @@ export default function NutritionToday() {
           <DailyLogCard color="#eef1e7" title="Log these in the morning">
             <TargetField label="Weight (lb)" styleKey="weight" value={values.weight} onChangeText={(t) => update("weight", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             <View className="flex-row gap-3">
-              <TargetField label="Sleep (hrs)" styleKey="sleep" current={target?.sleep_hours_goal} flex value={values.sleep_hours} onChangeText={(t) => update("sleep_hours", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <TargetField liveCompare label="Sleep (hrs)" styleKey="sleep" current={target?.sleep_hours_goal} flex value={values.sleep_hours} onChangeText={(t) => update("sleep_hours", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
               <RatingSelect label="Sleep quality (1-5)" flex value={values.sleep_quality} onChangeText={(t) => update("sleep_quality", t)} />
             </View>
           </DailyLogCard>
 
           <DailyLogCard color="#fdf6f2" title="Log your macros">
             <View className="flex-row gap-3">
-              <TargetField label="Protein (g)" styleKey="protein" current={target?.protein_g} flex value={values.protein_g} onChangeText={(t) => update("protein_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-              <TargetField label="Carb (g)" styleKey="carb" current={target?.carb_g} flex value={values.carb_g} onChangeText={(t) => update("carb_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <TargetField liveCompare label="Protein (g)" styleKey="protein" current={target?.protein_g} flex value={values.protein_g} onChangeText={(t) => update("protein_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <TargetField liveCompare label="Carb (g)" styleKey="carb" current={target?.carb_g} flex value={values.carb_g} onChangeText={(t) => update("carb_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             </View>
             <View className="mb-3 flex-row gap-3">
-              <TargetField label="Fat (g)" styleKey="fat" current={target?.fat_g} flex value={values.fat_g} onChangeText={(t) => update("fat_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-              <TargetField label="Fiber (g)" styleKey="fiber" current={target?.fiber_g} flex value={values.fiber_g} onChangeText={(t) => update("fiber_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <TargetField liveCompare label="Fat (g)" styleKey="fat" current={target?.fat_g} flex value={values.fat_g} onChangeText={(t) => update("fat_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <TargetField liveCompare label="Fiber (g)" styleKey="fiber" current={target?.fiber_g} flex value={values.fiber_g} onChangeText={(t) => update("fiber_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             </View>
 
             <View className="mb-1.5 flex-row items-center justify-between border-b border-stone-200 pb-2">
@@ -506,7 +528,7 @@ export default function NutritionToday() {
 
           <DailyLogCard color="#f4ede3" title="Log these in the evening">
             <View className="flex-row gap-3">
-              <TargetField label="Steps" styleKey="steps" current={target?.step_goal} flex value={values.steps} onChangeText={(t) => update("steps", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <TargetField liveCompare label="Steps" styleKey="steps" current={target?.step_goal} flex value={values.steps} onChangeText={(t) => update("steps", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
               <RatingSelect label="Hunger (1-5)" flex value={values.hunger} onChangeText={(t) => update("hunger", t)} />
               <RatingSelect label="Energy (1-5)" flex value={values.energy} onChangeText={(t) => update("energy", t)} />
             </View>
@@ -542,10 +564,13 @@ export default function NutritionToday() {
           <Pressable
             onPress={handleFinalize}
             disabled={finalizing}
-            className="mb-6 items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+            className="mb-6 items-center rounded-lg py-3.5 disabled:opacity-50"
+            // Olive once finalized — same completed-state language as the
+            // fitness Finalize button, which used to stay terracotta here.
+            style={({ pressed }) => ({ backgroundColor: finalizedAt ? "#4d6142" : colors.primary, opacity: pressed ? 0.75 : 1 })}
           >
             <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-              {finalizing ? "Saving…" : finalizedAt ? "Day finalized ✓ (tap to re-finalize)" : "Finalize Day"}
+              {finalizing ? "Saving…" : finalizedAt ? "✓ Day finalized" : "Finalize Day"}
             </Text>
           </Pressable>
         </ScrollView>

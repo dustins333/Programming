@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { View, Text, TextInput } from "react-native";
 import { MACRO_STYLES } from "./MacroPills";
+import { colorForTarget } from "../../lib/nutrition/weekCycle";
 import { fonts } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
@@ -16,10 +17,15 @@ import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
 // (which can't account for KeyboardDoneButton's floating bar — confirmed
 // on a real device it was leaving fields half-hidden behind it), passing
 // them wires this field into that same mechanism.
-export function TargetField({ label, styleKey, current, pillLabel = "target", unit = "", value, onChangeText, flex, pct, scrollViewRef, scrollOffsetRef }) {
+export function TargetField({ label, styleKey, current, pillLabel = "target", unit = "", value, onChangeText, flex, pct, liveCompare, scrollViewRef, scrollOffsetRef }) {
   const s = MACRO_STYLES[styleKey];
   const fieldRef = useRef(null);
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
+  // Positive-only live feedback (opt-in via liveCompare, the member's daily
+  // log): the typed value turns olive once it lands within the same ±10%
+  // band Weekly's tables use. Deliberately never red — a daily log fills in
+  // cumulatively through the day, so "under" at noon is normal, not wrong.
+  const onTrack = liveCompare && value !== "" && colorForTarget(Number(value), current) === "green";
   return (
     <View ref={fieldRef} className={flex ? "mb-2 flex-1" : "mb-2"}>
       <Text maxFontSizeMultiplier={1.3} numberOfLines={1} className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
@@ -33,8 +39,13 @@ export function TargetField({ label, styleKey, current, pillLabel = "target", un
           keyboardType="decimal-pad"
           inputAccessoryViewID={NUMERIC_DONE_ID}
           className="flex-1 py-3 text-base"
-          style={{ fontFamily: fonts.sans }}
+          style={{ fontFamily: onTrack ? fonts.sansSemiBold : fonts.sans, color: onTrack ? "#4d6142" : "#44403c" }}
         />
+        {onTrack ? (
+          <Text maxFontSizeMultiplier={1} style={{ fontSize: 12, color: "#4d6142" }}>
+            ✓
+          </Text>
+        ) : null}
         {pct !== undefined && pct !== null ? (
           <Text maxFontSizeMultiplier={1.2} numberOfLines={1} className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
             {pct}

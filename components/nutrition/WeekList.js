@@ -98,9 +98,12 @@ function NoteCell({ note }) {
 // cells rather than a missing row).
 export function WeekList({ weeks }) {
   const [expanded, setExpanded] = useState(() => new Set());
-  const shown = weeks.filter((w) => w.summary.days.length > 0);
+  // Weeks with no logs stay in the list as muted "no logs" rows — filtering
+  // them out made a skipped week look like it never existed.
+  const shown = weeks;
+  const hasAnyLogs = weeks.some((w) => w.summary.days.length > 0);
 
-  if (shown.length === 0) {
+  if (shown.length === 0 || !hasAnyLogs) {
     return (
       <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
         No check-in weeks yet.
@@ -164,7 +167,7 @@ export function WeekList({ weeks }) {
         )}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ScrollView horizontal showsHorizontalScrollIndicator>
         <View style={{ width: metricsWidth }}>
           <View className="flex-row border-b border-stone-200 pb-2">
             {METRIC_COLUMNS.map((c) => (
@@ -234,7 +237,7 @@ export function WeekDayTable({ week }) {
         ))}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ScrollView horizontal showsHorizontalScrollIndicator>
         <View style={{ width: metricsWidth }}>
           <View className="flex-row border-b border-stone-200 pb-2">
             {METRIC_COLUMNS.map((c) => (

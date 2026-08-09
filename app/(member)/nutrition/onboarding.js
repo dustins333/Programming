@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -9,6 +9,7 @@ import { NutritionAccessMessage } from "../../../components/nutrition/NutritionA
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { supabase } from "../../../lib/supabase/client";
 import { formatDateMDY } from "../../../lib/formatDate";
+import { notifyCoachOfClient } from "../../../lib/notifications/sendPush";
 import { fonts, colors } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
@@ -200,6 +201,11 @@ function ObjectiveTrackingPanel({ status, onLogged }) {
       <Text className="mb-1 text-xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
         Objective Tracking
       </Text>
+      {status.trackingCount > 0 ? (
+        <Text className="mb-1 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: status.loggedCount >= status.trackingCount ? "#4d6142" : colors.primaryOnWhite }}>
+          {status.loggedCount} of {status.trackingCount} days logged
+        </Text>
+      ) : null}
       <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
         Log what you'd normally eat on each assigned date below — no targets to hit, just an honest baseline. You can
         come back and update any day's numbers any time before your coach reviews them.
@@ -238,6 +244,11 @@ export default function NutritionOnboarding() {
   const keyboardHeight = useKeyboardHeight();
   const extraKeyboardPadding = keyboardHeight > 0 ? DONE_BAR_HEIGHT : 0;
 
+  // Tracks the readyForReview phase across reloads so completing the last
+  // task fires exactly one "ready for review" push to the assigned coach —
+  // before this, every coach-side onboarding signal was pull-only.
+  const wasReadyRef = useRef(null);
+
   const load = useCallback(async () => {
     try {
       const [onboardingStatus, { data: questionRows }] = await Promise.all([
@@ -246,6 +257,17 @@ export default function NutritionOnboarding() {
       ]);
       setStatus(onboardingStatus);
       setQuestions(questionRows ?? []);
+
+      const isReady = Boolean(onboardingStatus?.phases?.readyForReview);
+      if (wasReadyRef.current === false && isReady) {
+        notifyCoachOfClient({
+          clientUserId: profile.id,
+          title: "Onboarding ready for review",
+          body: `${profile.name ?? "A client"} finished their nutrition onboarding — review and set their targets.`,
+          data: { type: "nutrition_onboarding_ready", url: `/nutrition/clients/${profile.id}` },
+        }).catch((err) => console.error("Coach onboarding push failed:", err));
+      }
+      wasReadyRef.current = isReady;
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -316,7 +338,7 @@ export default function NutritionOnboarding() {
   return (
     <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6" contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: 32 + extraKeyboardPadding }}>
       <Pressable
-        onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)/nutrition"))}
+        onPress={() => router.push("/(member)")}
         className="mb-4 self-start"
       >
         <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>

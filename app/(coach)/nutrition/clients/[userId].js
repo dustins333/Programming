@@ -137,6 +137,10 @@ export default function NutritionClientDetail() {
   const [onboarding, setOnboarding] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [weekOffset, setWeekOffset] = useState(0);
+  // Paging to another week refetches the whole page — this drives a small
+  // spinner next to the week label so stale data isn't silently shown
+  // while the new week loads.
+  const [weekPaging, setWeekPaging] = useState(false);
   const [checkin, setCheckin] = useState(null);
   const [finalizing, setFinalizing] = useState(false);
   const [trendMetric, setTrendMetric] = useState("weight");
@@ -211,6 +215,7 @@ export default function NutritionClientDetail() {
     } catch (err) {
       console.error("Failed to load check-in reopens:", err);
     }
+    setWeekPaging(false);
   }, [userId, selectedWeek.start]);
 
   useEffect(() => {
@@ -353,13 +358,13 @@ export default function NutritionClientDetail() {
           {client.onboarding_sent_at ? (
             <View className="mb-5 rounded-lg border px-4 py-3" style={{ borderColor: "#ece7e1", backgroundColor: "#faf8f6" }}>
               <Text style={{ fontFamily: fonts.sansMedium, color: "#78716c" }}>
-                Sent to client {formatDateMDY(client.onboarding_sent_at.slice(0, 10))} — she can see her questionnaire and tracking dates.
+                Sent to client {formatDateMDY(client.onboarding_sent_at.slice(0, 10))} — they can see their questionnaire and tracking dates.
               </Text>
             </View>
           ) : (
             <View className="mb-5 flex-row items-center justify-between rounded-lg border px-4 py-3" style={{ borderColor: "#f0ddd2", backgroundColor: "#fdf6f2" }}>
               <Text className="flex-1 pr-3" style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>
-                Not sent yet — she can't see her questionnaire or tracking dates until you send it.
+                Not sent yet — they can't see their questionnaire or tracking dates until you send it.
               </Text>
               <Pressable onPress={handleSendToClient} disabled={sending} className="rounded-lg px-4 py-2.5" style={{ backgroundColor: colors.primary }}>
                 <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
@@ -666,13 +671,16 @@ export default function NutritionClientDetail() {
         {tab === "checkin" && (
           <View>
             <View className="mb-4 flex-row items-center justify-between">
-              <Pressable onPress={() => setWeekOffset((o) => o + 1)}>
+              <Pressable onPress={() => { setWeekPaging(true); setWeekOffset((o) => o + 1); }}>
                 <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Prior week</Text>
               </Pressable>
-              <Text style={{ fontFamily: fonts.sansSemiBold }}>
-                Week of {formatDateMDY(selectedWeek.start)}
-              </Text>
-              <Pressable onPress={() => setWeekOffset((o) => Math.max(0, o - 1))} disabled={weekOffset === 0}>
+              <View className="flex-row items-center gap-2">
+                <Text style={{ fontFamily: fonts.sansSemiBold }}>
+                  Week of {formatDateMDY(selectedWeek.start)}
+                </Text>
+                {weekPaging ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+              </View>
+              <Pressable onPress={() => { if (weekOffset > 0) { setWeekPaging(true); setWeekOffset((o) => Math.max(0, o - 1)); } }} disabled={weekOffset === 0}>
                 <Text style={{ fontFamily: fonts.sansMedium, color: weekOffset === 0 ? "#d6d3d1" : colors.primaryOnWhite }}>Next week ›</Text>
               </Pressable>
             </View>
@@ -696,6 +704,41 @@ export default function NutritionClientDetail() {
                       />
                     </View>
                   ))}
+                  {/* What the client was actually working against that week —
+                      submitCheckin has stored these snapshots on every
+                      response since day one, but nothing ever rendered them,
+                      so the coach was reading last week's answers against
+                      TODAY'S focus/targets. */}
+                  {checkin.targets_snapshot || (checkin.focus_snapshot ?? []).length > 0 || checkin.game_plan_snapshot ? (
+                    <View className="mt-3 rounded-xl border border-stone-200 p-3" style={{ backgroundColor: "#faf8f6" }}>
+                      <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.4 }}>
+                        That week's targets & focus
+                      </Text>
+                      {checkin.targets_snapshot ? (
+                        <View className="mb-2">
+                          <MacroPills
+                            protein={checkin.targets_snapshot.protein_g}
+                            carb={checkin.targets_snapshot.carb_g}
+                            fat={checkin.targets_snapshot.fat_g}
+                            fiber={checkin.targets_snapshot.fiber_g}
+                            calories={Math.round(deriveCalories(checkin.targets_snapshot))}
+                            steps={checkin.targets_snapshot.step_goal}
+                            sleepHours={checkin.targets_snapshot.sleep_hours_goal}
+                          />
+                        </View>
+                      ) : null}
+                      {(checkin.focus_snapshot ?? []).map((f, i) => (
+                        <Text key={i} className="text-sm" style={{ fontFamily: fonts.sans, color: f.done ? "#4d6142" : "#57534e" }}>
+                          {f.done ? "✓" : "○"} {f.text}
+                        </Text>
+                      ))}
+                      {checkin.game_plan_snapshot ? (
+                        <Text className="mt-1 text-sm text-stone-500" style={{ fontFamily: fonts.sans, fontStyle: "italic" }}>
+                          Game plan: {checkin.game_plan_snapshot}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
                   {/* Finalize action itself lives at the top of the page now,
                       next to the client's name — this is just a status
                       readout for whoever's down here reading the answers. */}
@@ -709,6 +752,31 @@ export default function NutritionClientDetail() {
                 </Text>
               )}
             </SectionCard>
+
+            {/* The realistic review loop — read answers → update focus/game
+                plan → set the new target — used to cost 3 tab switches; the
+                live editing surfaces now sit right under the answers. */}
+            <View style={{ flexDirection: isWeb ? "row" : "column", gap: 16 }}>
+              <View style={{ flex: 1 }}>
+                <SectionCard title="Focus items (live)">
+                  <FocusChecklist userId={userId} items={focusItems} onChanged={load} />
+                </SectionCard>
+              </View>
+              <View style={{ flex: 1 }}>
+                <SectionCard
+                  title="Game plan (live)"
+                  headerRight={
+                    <Pressable onPress={() => setTab("targets")} hitSlop={8}>
+                      <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
+                        Set new target ›
+                      </Text>
+                    </Pressable>
+                  }
+                >
+                  <GamePlan userId={userId} initialGamePlan={client.game_plan} />
+                </SectionCard>
+              </View>
+            </View>
           </View>
         )}
 
@@ -738,7 +806,7 @@ export default function NutritionClientDetail() {
         {tab === "targets" && (
           <View>
             <SectionCard title="Set new target">
-              <NewTargetForm userId={userId} setBy={profile.id} currentTarget={currentTarget} onSaved={load} />
+              <NewTargetForm userId={userId} setBy={profile.id} currentTarget={currentTarget} recentAverages={selectedWeekSummary?.averages} onSaved={load} />
             </SectionCard>
             <SectionCard title="Target history">
               <TargetsHistory history={targets} />
