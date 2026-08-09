@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Image, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Image, ScrollView, ActivityIndicator, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
 import { getClient } from "../../../../../../lib/nutrition/clients";
 import { listAllPhotos, getPhotoSignedUrls } from "../../../../../../lib/nutrition/photos";
+import { photosSinceEngagement } from "../../../../../../lib/nutrition/onboarding";
 import { CoachShell } from "../../../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../../../lib/formatDate";
 import { fonts, colors } from "../../../../../../lib/theme";
@@ -22,12 +23,18 @@ export default function OnboardingPhotos() {
     try {
       const [clientRow, allPhotos] = await Promise.all([getClient(userId), listAllPhotos(userId)]);
       setClient(clientRow);
-      if (allPhotos.length === 0) {
+      // "Earliest photo on file" is only the starting set for a client whose
+      // whole photo history began with this engagement. Clients migrated off
+      // the old Google Sheets trackers carry years of older sets, so scope to
+      // the engagement first (same rule as the onboarding phase check), then
+      // take the earliest within it.
+      const engagementPhotos = photosSinceEngagement(allPhotos, clientRow);
+      if (engagementPhotos.length === 0) {
         setStartingPhotos([]);
         return;
       }
-      const earliestDate = allPhotos.reduce((min, p) => (p.date < min ? p.date : min), allPhotos[0].date);
-      const starting = allPhotos.filter((p) => p.date === earliestDate);
+      const earliestDate = engagementPhotos.reduce((min, p) => (p.date < min ? p.date : min), engagementPhotos[0].date);
+      const starting = engagementPhotos.filter((p) => p.date === earliestDate);
       setStartingPhotos(starting);
       setUrls(await getPhotoSignedUrls(starting.map((p) => p.storage_path)));
     } catch (err) {
