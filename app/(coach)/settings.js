@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Switch, Platform } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Switch, Platform, useWindowDimensions } from "react-native";
 import { Redirect, Link, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { getSettings, getSetting, updateSetting } from "../../lib/settings";
@@ -68,12 +68,43 @@ const CHECKIN_NOTIF_DEFAULTS = {
   time: "08:00",
 };
 
-const LABELS = {
-  alert_lead_time_days: "Alert lead time (days before a block ends)",
-  default_block_length_flagship_weeks: "Default Flagship block length (weeks)",
-  default_block_length_bwa_weeks: "Default Better With Age block length (weeks)",
-  default_block_length_spc_weeks: "Default SPC block length (weeks)",
-};
+// core.settings is a generic key/value table shared by every admin-facing
+// setting in the app (messaging kill switch, payroll deadline, specialty
+// bars, the nutrition check-in notification's title/body, ...). This tab
+// used to render *every* row in it as a numeric text input and write all of
+// them back on Save — which meant a jsonb array rendered as "[object
+// Object]", the check-in body's paragraph got squeezed into a one-line
+// numeric field, and saving rewrote `messaging_enabled: false` as the
+// string "false" (truthy — it would have silently turned messaging back on).
+// Program Defaults now owns exactly these four keys; everything else in
+// core.settings is edited from the tab that actually understands it.
+const PROGRAM_DEFAULTS = [
+  {
+    key: "default_block_length_flagship_weeks",
+    label: "Flagship block length",
+    unit: "weeks",
+    fallback: 4,
+  },
+  {
+    key: "default_block_length_bwa_weeks",
+    label: "Better With Age block length",
+    unit: "weeks",
+    fallback: 6,
+  },
+  {
+    key: "default_block_length_spc_weeks",
+    label: "SPC block length",
+    unit: "weeks",
+    fallback: 4,
+  },
+  {
+    key: "alert_lead_time_days",
+    label: "Block-ending alert lead time",
+    unit: "days",
+    hint: "How far ahead of a block's end date the next SPC block is auto-drafted.",
+    fallback: 3,
+  },
+];
 
 // design_handoff_v2_settings_nutrition — one long scroll replaced with an
 // underline sub-tab bar, same visual pattern as the nutrition client-detail
@@ -138,6 +169,10 @@ export default function Settings() {
   const { profile } = useAuth();
   const router = useRouter();
   const [tab, setTab] = useState("team");
+  // Same 768 breakpoint CoachShell uses to swap its sidebar for a drawer —
+  // the two-up defaults grid gets too cramped below it.
+  const { width } = useWindowDimensions();
+  const narrow = width < 768;
   const [settings, setSettings] = useState(null);
   const [values, setValues] = useState({});
   const [savingKey, setSavingKey] = useState(null);
@@ -232,7 +267,14 @@ export default function Settings() {
       setLoadError(null);
       const rows = await getSettings();
       setSettings(rows);
-      setValues(Object.fromEntries(rows.map((r) => [r.key, String(r.value)])));
+      // Only the Program Defaults keys are editable here — see PROGRAM_DEFAULTS.
+      // A key with no row yet shows its documented fallback rather than blank.
+      const byKey = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+      setValues(
+        Object.fromEntries(
+          PROGRAM_DEFAULTS.map((d) => [d.key, String(byKey[d.key] ?? d.fallback)])
+        )
+      );
 
       const notifRows = await Promise.all(
         NOTIFICATION_TOGGLES.map((t) => getSetting(t.key, true))
@@ -310,15 +352,22 @@ export default function Settings() {
 
   // Combined save, per the mock: the 4 numeric defaults live in one card now
   // instead of one input+Save pair per row, so one button saves whichever of
-  // them changed rather than requiring 4 separate taps.
+  // them changed rather than requiring 4 separate taps. Every one of these is
+  // a whole number of weeks/days — reject anything else up front instead of
+  // writing a string into a column the rest of the app does math on.
   const handleSaveAll = async () => {
+    const invalid = PROGRAM_DEFAULTS.find((d) => {
+      const n = Number(values[d.key]);
+      return !Number.isInteger(n) || n < 1;
+    });
+    if (invalid) {
+      toastError(`${invalid.label} must be a whole number of ${invalid.unit} (1 or more).`);
+      return;
+    }
     setSavingKey("all");
     try {
       await Promise.all(
-        settings.map((row) => {
-          const numeric = Number(values[row.key]);
-          return updateSetting(row.key, Number.isFinite(numeric) ? numeric : values[row.key]);
-        })
+        PROGRAM_DEFAULTS.map((d) => updateSetting(d.key, Number(values[d.key])))
       );
       await load();
       toastSuccess("Saved.");
@@ -641,23 +690,40 @@ export default function Settings() {
 
       {tab === "defaults" && (
       <View className="rounded-xl border border-stone-200 p-5">
-        <Text className="mb-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+        <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
           Program Defaults
         </Text>
-        <View className="flex-row flex-wrap" style={{ marginHorizontal: -8 }}>
-          {settings.map((row) => (
-            <View key={row.key} style={{ width: "50%", paddingHorizontal: 8 }} className="mb-5">
-              <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                {LABELS[row.key] ?? row.key}
+        <Text className="mb-5 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Starting values for new blocks. Changing one only affects blocks created from here on — existing blocks keep the length they were built with.
+        </Text>
+        <View className={narrow ? undefined : "flex-row flex-wrap"} style={narrow ? undefined : { marginHorizontal: -8 }}>
+          {PROGRAM_DEFAULTS.map((d) => (
+            <View
+              key={d.key}
+              style={narrow ? undefined : { width: "50%", paddingHorizontal: 8 }}
+              className="mb-5"
+            >
+              <Text className="mb-1.5 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                {d.label}
               </Text>
-              <TextInput
-                value={values[row.key] ?? ""}
-                onChangeText={(text) => setValues((v) => ({ ...v, [row.key]: text }))}
-                keyboardType="numeric"
-                inputAccessoryViewID={NUMERIC_DONE_ID}
-                className="rounded-lg border border-stone-300 px-4 py-3 text-base"
-                style={{ fontFamily: fonts.sans }}
-              />
+              <View className="flex-row items-center" style={{ gap: 10 }}>
+                <TextInput
+                  value={values[d.key] ?? ""}
+                  onChangeText={(text) => setValues((v) => ({ ...v, [d.key]: text }))}
+                  keyboardType="numeric"
+                  inputAccessoryViewID={NUMERIC_DONE_ID}
+                  className="rounded-lg border border-stone-300 px-4 py-3 text-base"
+                  style={{ fontFamily: fonts.sans, width: 88 }}
+                />
+                <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+                  {d.unit}
+                </Text>
+              </View>
+              {d.hint ? (
+                <Text className="mt-1.5 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                  {d.hint}
+                </Text>
+              ) : null}
             </View>
           ))}
         </View>

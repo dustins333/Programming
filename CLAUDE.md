@@ -988,6 +988,18 @@ Terra's pre-Kova nutrition clients each had a Google Sheets "tracker" (`tsmout1@
 
 Verified by SQL simulation across every not-yet-approved active client (only Abbi's phase changes, the other four are untouched) plus a clean `npx expo export -p web`. **Not click-tested** — standing login limitation.
 
+## Settings → Program Defaults was writing to every core.settings row (2026-08-09)
+
+Reported as "it's a mess" visually; turned out to be a real data-corruption bug underneath. `app/(coach)/settings.js`'s Program Defaults tab rendered `getSettings()`'s output directly — and `getSettings()` returns **every** row in `core.settings`, which is the generic key/value table shared by every admin setting in the app (messaging kill switch, payroll deadline/anchor date, specialty bars, the nutrition check-in notification's title/body/weekday/time, `notify_*` toggles). All 15 live rows rendered as single-line numeric `TextInput`s, so the tab showed raw keys, `specialty_bars` as `"[object Object]"`, and the check-in notification's multi-paragraph body squeezed into a number field.
+
+**The save was the real problem**: `handleSaveAll` mapped over the same unfiltered list and wrote all 15 back through `Number(...)`-or-fall-back-to-string. Confirmed against the live table what that would have done — `specialty_bars` (jsonb array) → the string `"[object Object]"`, wiping the specialty-bar list the weight calculator reads; `messaging_enabled: false` → the **string** `"false"`, which is truthy, silently re-enabling messaging gym-wide; `notify_payroll_deadline_reminders` → a string instead of a boolean.
+
+Fixed with an explicit `PROGRAM_DEFAULTS` whitelist (the 4 block-length/alert-lead-time keys this tab is actually for) driving both the render and the save — every other `core.settings` key is edited from the tab that understands it. Also: whole-number validation before saving (it was writing arbitrary strings into columns the rest of the app does arithmetic on), unit shown as a suffix beside each field instead of buried in the label, a line noting changes only affect future blocks, a documented per-key fallback so a key with no row yet shows its real default rather than blank, and a single-column layout below 768 (same breakpoint `CoachShell` uses).
+
+**General lesson**: `core.settings` is a shared bag, not one feature's table — never render or write it wholesale. Any new settings surface should whitelist its own keys explicitly.
+
+Also removed the SPC subtitle ("Your individual strength program") from My Week's SPC card per direct ask — added during the 2026-08-09 UX overhaul's Phase 4, unwanted. `ProgramCard`'s now-unused `subtitle` prop went with it. Screenshot-verified the rebuilt defaults card at desktop and mobile widths via the login-screen mount technique; `npx expo export -p web` clean.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
