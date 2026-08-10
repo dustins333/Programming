@@ -32,31 +32,6 @@ export default function Login() {
     router.replace("/");
   };
 
-  // TEMP VISUAL HARNESS — remove
-  return (
-    <View style={{ flex: 1, backgroundColor: "#faf8f6", padding: 32, paddingTop: 120 }}>
-      <Text style={{ fontFamily: "Montserrat_600SemiBold", marginBottom: 16, color: "#57534e" }}>
-        Onboarding actions — ready for review (both shown)
-      </Text>
-      <View className="mt-5 flex-row flex-wrap items-center gap-4">
-        <Pressable className="items-center self-start rounded-lg px-5 py-3" style={{ backgroundColor: "#a46a57" }}>
-          <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>Approve & Set Targets</Text>
-        </Pressable>
-        <Pressable className="items-center self-start rounded-lg px-5 py-3" style={{ borderWidth: 1.5, borderColor: "#a46a57" }}>
-          <Text style={{ fontFamily: "Montserrat_600SemiBold", color: "#8a5140" }}>Close out onboarding →</Text>
-        </Pressable>
-      </View>
-      <Text style={{ fontFamily: "Montserrat_600SemiBold", marginTop: 48, marginBottom: 16, color: "#57534e" }}>
-        Abbi's case — photos missing, so only this shows
-      </Text>
-      <View className="mt-5 flex-row flex-wrap items-center gap-4">
-        <Pressable className="items-center self-start rounded-lg px-5 py-3" style={{ borderWidth: 1.5, borderColor: "#a46a57" }}>
-          <Text style={{ fontFamily: "Montserrat_600SemiBold", color: "#8a5140" }}>Close out onboarding →</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
