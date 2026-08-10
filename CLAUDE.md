@@ -1132,6 +1132,37 @@ so "bundle clean" is weaker evidence than it looks.
 handoff calls it a separate ticket; the logger's `parseRestSeconds` stays
 forgiving about `0:20`/`90`/`90s` until then).
 
+## Safari's "AutoFill Contact" blue boxes on the PWA: no page-level fix exists (2026-08-10)
+
+Do not spend another cycle trying to suppress the blue highlight box +
+"AutoFill Contact" keyboard bar on the member's numeric fields in the
+installed iOS PWA. Three deploys were tested on a real device with three
+completely different field signatures — (1) `type="text"`, no `name`,
+`autocomplete="off"`; (2) `type="search"`, `name="kova-search-1"`; (3)
+`type="search"`, `name="searchfield1"` — and produced pixel-identical UI
+every time. If Safari's field-classification heuristics were the trigger,
+changing every input to the classifier would have changed *something*; it
+didn't. Conclusion: on current iOS this is Safari's own manual-AutoFill
+affordance — Apple's docs describe "tap a blank field... tap AutoFill
+Contact above the keyboard" as the intended flow for arbitrary fields — and
+the blue rounded box is the native fill-target indicator drawn by browser
+chrome *over* the page (which is also why an earlier session saw the boxes
+offset in layout-viewport coordinates while the keyboard shifted the visual
+viewport). DOM attributes and CSS cannot reach that layer, and
+`inputmode="decimal"` picking the numeric keypad doesn't factor into it.
+
+What actually works: Settings → Apps → Safari → AutoFill → turn off "Use
+Contact Info" on the device (applies to the installed PWA too), and the
+native App Store/TestFlight build, which doesn't involve Safari at all. The
+`lib/webAutofillSuppression.js` shims (type="search", dash-free name) are
+left in place — harmless, and they still suppress the older automatic
+contact-dropdown class on other iOS versions — but they demonstrably do not
+remove this bar/box. The one untried hack is readonly-until-focus; odds are
+low for the same reason (the affordance doesn't consult field state), so it
+was deliberately not attempted. The dash lesson stands independently: a
+dash in a `name` attribute makes Safari classify a field as a phone number,
+so never generate dashed name attributes on inputs.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
