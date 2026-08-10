@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Modal, View, Text, Pressable, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 
 // Web-only — a Vercel deploy doesn't touch an already-open tab's in-memory
@@ -10,21 +11,30 @@ import { fonts, colors } from "../lib/theme";
 // index.html for its current script src (always accurate to what's really
 // deployed, regardless of any HTTP caching) and compares it to what this
 // tab actually loaded.
-const CHECK_INTERVAL_MS = 5 * 60 * 1000;
+//
+// Deliberately NOT naggy, after a direct report that it "constantly asks
+// for a refresh" — during an active push-several-times-a-day stretch every
+// one of those prompts is a *true* positive, which is exactly why it needs
+// to be quiet rather than more accurate:
+//   - dismissing (×) suppresses that specific version for good in this tab,
+//     so returning to the tab doesn't re-raise the same prompt;
+//   - it never reloads the page on its own. The old version force-reloaded
+//     whenever the tab was backgrounded with a banner up, which meant
+//     coming back to a page that had silently thrown away whatever was
+//     half-typed into it.
+const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 function extractScriptSrc(html) {
   return html.match(/<script[^>]+src="([^"]+)"/)?.[1] ?? null;
 }
 
 export function AppUpdateChecker() {
-  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [latestSrc, setLatestSrc] = useState(null);
   const insets = useSafeAreaInsets();
-  const updateAvailableRef = useRef(false);
   const currentSrcRef = useRef(null);
-
-  useEffect(() => {
-    updateAvailableRef.current = updateAvailable;
-  }, [updateAvailable]);
+  // Versions the coach has already waved off in this tab. Keyed by script
+  // src (i.e. by deploy), so a *newer* deploy still gets to prompt once.
+  const dismissedRef = useRef(new Set());
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -38,16 +48,9 @@ export function AppUpdateChecker() {
     const checkForUpdate = async () => {
       try {
         const res = await fetch("/", { cache: "no-store" });
-        const latestSrc = extractScriptSrc(await res.text());
-        if (!latestSrc || latestSrc === currentSrcRef.current) return;
-
-        // Nobody's looking at this tab right now — swap to the new version
-        // immediately instead of leaving a banner unread indefinitely.
-        if (document.visibilityState === "hidden") {
-          window.location.reload();
-        } else {
-          setUpdateAvailable(true);
-        }
+        const src = extractScriptSrc(await res.text());
+        if (!src || src === currentSrcRef.current || dismissedRef.current.has(src)) return;
+        setLatestSrc(src);
       } catch {
         // Offline / transient network blip — just try again next interval,
         // never treated as "no update available."
@@ -56,13 +59,7 @@ export function AppUpdateChecker() {
 
     const interval = setInterval(checkForUpdate, CHECK_INTERVAL_MS);
     const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        // A banner shown while active but never tapped shouldn't sit stale
-        // forever — apply it the moment the tab is backgrounded.
-        if (updateAvailableRef.current) window.location.reload();
-      } else {
-        checkForUpdate();
-      }
+      if (document.visibilityState === "visible") checkForUpdate();
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
@@ -71,30 +68,48 @@ export function AppUpdateChecker() {
     };
   }, []);
 
-  if (Platform.OS !== "web" || !updateAvailable) return null;
+  const handleDismiss = useCallback(() => {
+    if (latestSrc) dismissedRef.current.add(latestSrc);
+    setLatestSrc(null);
+  }, [latestSrc]);
+
+  if (Platform.OS !== "web" || !latestSrc) return null;
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={() => {}}>
-      <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end" }}>
+    <Modal visible transparent animationType="none" onRequestClose={handleDismiss}>
+      <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end", alignItems: "center" }}>
         <View
           style={{
             backgroundColor: "#3d3835",
-            paddingTop: 12,
-            paddingBottom: insets.bottom + 12,
-            paddingHorizontal: 16,
+            borderRadius: 999,
+            paddingVertical: 8,
+            paddingLeft: 16,
+            paddingRight: 8,
+            marginBottom: insets.bottom + 16,
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
+            gap: 10,
+            maxWidth: "92%",
+            shadowColor: "#44403c",
+            shadowOpacity: 0.18,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 4 },
           }}
         >
-          <Text style={{ color: "white", fontFamily: fonts.sansMedium, fontSize: 13, flex: 1, marginRight: 12 }}>
-            A new version of Kova is available.
-          </Text>
+          <Text style={{ color: "white", fontFamily: fonts.sansMedium, fontSize: 13 }}>New version available</Text>
           <Pressable
             onPress={() => window.location.reload()}
-            style={{ backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14 }}
+            style={{ backgroundColor: colors.primary, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 }}
           >
             <Text style={{ color: "white", fontFamily: fonts.sansSemiBold, fontSize: 13 }}>Refresh</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleDismiss}
+            hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
+            accessibilityLabel="Dismiss update notice"
+            style={{ paddingHorizontal: 4 }}
+          >
+            <Ionicons name="close" size={17} color="#a8a29e" />
           </Pressable>
         </View>
       </View>

@@ -1,17 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { Link, useLocalSearchParams } from "expo-router";
 import { DndContext, PointerSensor, useSensor, useSensors, pointerWithin } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
-import {
-  listExercises,
-  MUSCLE_GROUPS,
-  createExercise,
-  groupExercisesByParent,
-  summarizeRepScheme,
-} from "../../../../lib/programming/exercises";
+import { listExercises, createExercise, summarizeRepScheme } from "../../../../lib/programming/exercises";
 import {
   getTemplate,
   listTemplateWarmups,
@@ -26,68 +20,11 @@ import {
 } from "../../../../lib/programming/templates";
 import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
+import { ExerciseLibrarySidebar } from "../../../../components/ExerciseLibrarySidebar";
 import { fonts, colors } from "../../../../lib/theme";
 import { toastError } from "../../../../lib/toast";
 
 const CATEGORY_LABELS = { away: "Away programming", trial: "Trial session" };
-
-// Click-to-insert only — no drag-from-library. Used to be a dnd-kit
-// draggable row with the "expand variations" chevron nested inside it —
-// that's nested interactive content (a focusable draggable wrapper
-// containing its own focusable button), which caused a real bug: clicking
-// the chevron while scrolled down shifted the sidebar's scroll position out
-// from under the click. Fixed at the root by making the chevron a sibling
-// of the insert button, not nested inside it, and dropping the drag wiring
-// entirely — plain click-to-insert already covers the same functionality.
-function LibraryExercise({ exercise, onInsertClick, hasChildren, expanded, onToggleExpand, indented }) {
-  return (
-    <View
-      className="mb-1.5 flex-row items-center rounded-lg border border-stone-200 px-3 py-2"
-      style={{ marginLeft: indented ? 14 : 0 }}
-    >
-      <Pressable onPress={() => onInsertClick(exercise)} className="flex-1 flex-row items-center active:opacity-70">
-        <View className="flex-1">
-          <View className="flex-row items-center gap-1.5">
-            <Text style={{ fontFamily: fonts.sansMedium }}>{exercise.name}</Text>
-            {exercise.type === "warmup" ? (
-              <View className="rounded-full px-2 py-[2px]" style={{ backgroundColor: "#fdf6ee" }}>
-                <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5a2e", fontSize: 9.5 }}>warm-up</Text>
-              </View>
-            ) : null}
-          </View>
-          {exercise.movement_pattern?.length ? (
-            <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-              {exercise.movement_pattern.map((p) => p.replace("_", " ")).join(", ")}
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
-      {hasChildren ? (
-        <Pressable
-          onPress={onToggleExpand}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel={expanded ? `Collapse ${exercise.name} variations` : `Show ${exercise.name} variations`}
-        >
-          <Text className="text-stone-400">{expanded ? "▾" : "▸"}</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
-function CollapsibleSection({ title, collapsed, onToggle, tint, children }) {
-  return (
-    <View className="mb-4">
-      <Pressable onPress={onToggle} className="mb-1 flex-row items-center justify-between">
-        <Text className="text-xs uppercase" style={{ fontFamily: fonts.sansSemiBold, color: tint ?? "#a8a29e" }}>
-          {title}
-        </Text>
-        <Text className="text-xs text-stone-400">{collapsed ? "▸" : "▾"}</Text>
-      </Pressable>
-      {collapsed ? null : children}
-    </View>
-  );
-}
 
 function RepSchemeRows({ item, onChange }) {
   const scheme = item.rep_scheme?.length ? item.rep_scheme : [item.reps ?? ""];
@@ -210,26 +147,6 @@ export default function TemplateBuilderWeb() {
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [loadError, setLoadError] = useState(null);
-  const [collapsedSections, setCollapsedSections] = useState(() => new Set(["warmups"]));
-  const [expandedParents, setExpandedParents] = useState(() => new Set());
-
-  const toggleSection = (key) => {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-  const toggleParent = (id) => {
-    setExpandedParents((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const load = useCallback(async () => {
@@ -252,32 +169,6 @@ export default function TemplateBuilderWeb() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const filteredLibrary = useMemo(() => {
-    if (!search) return library;
-    return library.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()));
-  }, [library, search]);
-
-  // Warm-ups are pinned above the muscle-group-grouped lifts, not bucketed
-  // alongside them — a warm-up exercise has no muscle_group (null since
-  // migration 0012), and mixing warm-up movements into the "back"/"chest"/
-  // etc. lists would make it ambiguous which exercises are actually meant
-  // for a session's warm-up slot.
-  const isSearching = search.length > 0;
-  const warmupLibrary = useMemo(() => filteredLibrary.filter((e) => e.type === "warmup"), [filteredLibrary]);
-  const { childrenByParent } = useMemo(() => groupExercisesByParent(library), [library]);
-  const libraryByGroup = useMemo(() => {
-    const groups = {};
-    MUSCLE_GROUPS.forEach((mg) => (groups[mg] = []));
-    filteredLibrary.forEach((e) => {
-      if (e.type === "warmup" || e.parent_exercise_id) return;
-      (e.muscle_group ?? []).forEach((mg) => {
-        if (!groups[mg]) groups[mg] = [];
-        groups[mg].push(e);
-      });
-    });
-    return groups;
-  }, [filteredLibrary]);
 
   const handleInsertExercise = async (exercise) => {
     try {
@@ -337,7 +228,8 @@ export default function TemplateBuilderWeb() {
   };
 
   // Only reordering already-placed exercises uses drag now (SortableContext
-  // below) — inserting from the library is click-only, see LibraryExercise.
+  // below) — inserting from the library is click-only, see
+  // components/ExerciseLibrarySidebar.js.
   const handleDragEnd = (event) => {
     const { active, over } = event;
     if (!over) return;
@@ -377,89 +269,14 @@ export default function TemplateBuilderWeb() {
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
       <View className="flex-1 flex-row bg-white">
-        <View className="flex-col border-r border-stone-200" style={{ width: 288, flexGrow: 0, flexShrink: 0, height: "100%", minHeight: 0 }}>
-          <View className="px-4 pb-3 pt-6">
-            <Text className="mb-3 text-lg text-primary" style={{ fontFamily: fonts.sansSemiBold }}>
-              Exercise Library
-            </Text>
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search…"
-              className="mb-3 rounded-lg border border-stone-300 px-3 py-2"
-              style={{ fontFamily: fonts.sans }}
-            />
-            <Pressable onPress={() => setNewExerciseModalVisible(true)} className="rounded-lg border border-primary px-3 py-2.5">
-              <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
-                + New Exercise
-              </Text>
-            </Pressable>
-          </View>
-
-          <ScrollView className="px-4 pb-6" style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ flexGrow: 1 }}>
-            {isSearching ? (
-              <View className="mb-4">
-                <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
-                  Results
-                </Text>
-                {filteredLibrary.filter((e) => e.type !== "warmup").map((exercise) => (
-                  <LibraryExercise key={exercise.id} exercise={exercise} onInsertClick={handleInsertExercise} />
-                ))}
-                {warmupLibrary.map((exercise) => (
-                  <LibraryExercise key={exercise.id} exercise={exercise} onInsertClick={handleAddWarmup} />
-                ))}
-              </View>
-            ) : (
-              <>
-                {warmupLibrary.length > 0 && (
-                  <View className="mb-1 rounded-lg p-2" style={{ backgroundColor: "#f4ede3" }}>
-                    <CollapsibleSection
-                      title="Warm-ups"
-                      collapsed={collapsedSections.has("warmups")}
-                      onToggle={() => toggleSection("warmups")}
-                      tint="#8a5a2e"
-                    >
-                      {warmupLibrary.map((exercise) => (
-                        <LibraryExercise key={exercise.id} exercise={exercise} onInsertClick={handleAddWarmup} />
-                      ))}
-                    </CollapsibleSection>
-                  </View>
-                )}
-                {MUSCLE_GROUPS.map((mg) =>
-                  libraryByGroup[mg]?.length ? (
-                    <CollapsibleSection
-                      key={mg}
-                      title={mg.replace("_", " ")}
-                      collapsed={collapsedSections.has(mg)}
-                      onToggle={() => toggleSection(mg)}
-                    >
-                      {libraryByGroup[mg].map((exercise) => {
-                        const children = childrenByParent.get(exercise.id) ?? [];
-                        const expanded = expandedParents.has(exercise.id);
-                        return (
-                          <View key={exercise.id}>
-                            <LibraryExercise
-                              exercise={exercise}
-                              onInsertClick={handleInsertExercise}
-                              hasChildren={children.length > 0}
-                              expanded={expanded}
-                              onToggleExpand={() => toggleParent(exercise.id)}
-                            />
-                            {expanded
-                              ? children.map((child) => (
-                                  <LibraryExercise key={child.id} exercise={child} onInsertClick={handleInsertExercise} indented />
-                                ))
-                              : null}
-                          </View>
-                        );
-                      })}
-                    </CollapsibleSection>
-                  ) : null
-                )}
-              </>
-            )}
-          </ScrollView>
-        </View>
+        <ExerciseLibrarySidebar
+          library={library}
+          search={search}
+          onSearchChange={setSearch}
+          onNewExercise={() => setNewExerciseModalVisible(true)}
+          onInsertLift={handleInsertExercise}
+          onInsertWarmup={handleAddWarmup}
+        />
 
         <ScrollView className="flex-1 px-8 py-6">
           <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: "#8a5140", marginBottom: 12 }}>

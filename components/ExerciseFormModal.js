@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { MUSCLE_GROUPS, MOVEMENT_PATTERNS } from "../lib/programming/exercises";
 import { fonts, colors } from "../lib/theme";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
@@ -133,8 +134,12 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
 
   // Only parent-less lift exercises can be picked as a parent — caps
   // nesting at one level — and an exercise can't be parented to itself.
+  // Archived exercises are excluded too: the Exercise Library page loads
+  // with includeArchived so its own "Show archived" toggle has something to
+  // show, and that same full list is what gets handed here, so without this
+  // filter every retired movement showed up as a pickable parent.
   const parentOptions = allExercises.filter(
-    (ex) => ex.type !== "warmup" && !ex.parent_exercise_id && ex.id !== initialExercise?.id
+    (ex) => ex.type !== "warmup" && !ex.parent_exercise_id && ex.is_active !== false && ex.id !== initialExercise?.id
   );
 
   const toggleInArray = (field, value) => {
@@ -158,6 +163,28 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View className="flex-1 items-center justify-center bg-black/40 px-4">
         <View className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6">
+          {/* Sibling of the ScrollView, not inside it, so it stays pinned to
+              the card corner instead of scrolling away with the form. The
+              Cancel button at the bottom does the same thing — this is the
+              close affordance you expect to find without scrolling. */}
+          <Pressable
+            onPress={onClose}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Close"
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 10,
+              padding: 4,
+              // Opaque backdrop so it never reads as sitting on top of the
+              // form's own scrollbar/content behind it.
+              backgroundColor: "white",
+              borderRadius: 999,
+            }}
+          >
+            <Ionicons name="close" size={22} color="#a8a29e" />
+          </Pressable>
           <ScrollView
             ref={scrollViewRef}
             contentContainerStyle={{ paddingBottom: occludedHeight }}
