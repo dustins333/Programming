@@ -1150,9 +1150,25 @@ Safari both implement this). So `:focus:not(:focus-visible)` is dead code
 for exactly the elements it targets. Fixed in `app/+html.js`: input/
 textarea drop the outline **unconditionally** (every text field in this
 app has its own border/caret, so keyboard users still see where they are);
-`<select>` keeps the guarded form, since selects have no caret, the ring
-is their only keyboard indicator, and they genuinely match
-`:focus-visible` only on keyboard focus.
+**A follow-up sweep for the same bug then caught `<select>`**: a real
+mouse click on a select reports `:focus-visible === true` as well
+(measured in the browser, contradicting the first version of this note),
+so the same guarded rule was dead code there too and every coach-side
+dropdown — ~12 files: SPC coach picker, announcements audience/date/time,
+nutrition roster filters, clients list filters, settings,
+ExerciseFormModal, PayrollOtherRow, RatingSelect, SessionDetailModal,
+photo-compare — kept the browser's ring. Now input/textarea/select all
+drop the UA outline unconditionally, and select (no caret, so it genuinely
+needs an indicator) gets an explicit `2px solid #a46a57` on
+`:focus-visible`. The rule of thumb this leaves: **never write
+`:focus:not(:focus-visible)` as a "keyboard-only" guard** — for anything a
+user can click into it resolves to nothing. Style focus positively
+instead, so the fallback is your own design rather than the UA's.
+
+Verified in the same sweep and NOT a problem: focusable `<div tabindex>`
+elements (every RNW `Pressable`) report `:focus-visible === false` on
+click and draw no ring, and `textarea` / `input type="date"` are already
+covered by the unconditional rule.
 
 What the three failed rounds still established, kept for the record: (1)
 the "AutoFill Contact" item on the iOS keyboard bar is an OS-level

@@ -55,10 +55,18 @@ export default function Root({ children }) {
             input/textarea now drop the outline unconditionally — every text
             field in this app carries its own border/background styling and
             a visible caret, so keyboard-tab users still see where they are.
-            <select> keeps the guarded form: selects have no caret, the
-            focus ring is their only keyboard-nav indicator, and (unlike
-            text fields) they genuinely match :focus-visible only on
-            keyboard focus, so the guard actually works there.
+            A follow-up sweep for this same bug caught one more: a real
+            mouse click on a <select> ALSO reports :focus-visible === true
+            (measured, not assumed — the earlier draft of this comment
+            claimed the opposite), so a guarded `select:focus:not(
+            :focus-visible)` rule was dead code too, and every coach-side
+            dropdown kept the browser's ring. Nothing here depends on that
+            heuristic anymore: input/textarea/select all drop the UA
+            outline unconditionally, and <select> — which has no caret, so
+            it does need *some* focus indicator — gets an explicit
+            brand-colored one. Whether an engine matches :focus-visible on
+            click or only on tab, the worst case is now our own terracotta
+            ring rather than the browser's blue box.
 
             The AutoFill Contact BAR on the iOS keyboard is a separate,
             OS-level affordance — that part page code still can't remove.
@@ -86,11 +94,15 @@ textarea:-webkit-autofill {
 }
 input, textarea, select { -webkit-tap-highlight-color: transparent; }
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   outline: none;
   outline-style: none;
 }
-select:focus:not(:focus-visible) { outline: none; }
+select:focus-visible {
+  outline: 2px solid #a46a57;
+  outline-offset: 1px;
+}
 `,
           }}
         />
