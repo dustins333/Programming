@@ -23,9 +23,10 @@ import {
 import { retryOnce } from "../../lib/retry";
 import { SessionLogger } from "../../components/SessionLogger";
 import { SessionFocusModal } from "../../components/SessionFocusModal";
-import { SessionInfoBar } from "../../components/SessionInfoBar";
+import { SessionHeroBar } from "../../components/SessionHeroBar";
 import { ProgramPickerModal } from "../../components/ProgramPickerModal";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
+import { PressFade } from "../../components/PressFade";
 import { fonts, colors } from "../../lib/theme";
 import { toastError, toastSuccess } from "../../lib/toast";
 
@@ -33,7 +34,6 @@ import { toastError, toastSuccess } from "../../lib/toast";
 const CANVAS = "#faf8f6";
 const CARD_BORDER = "#ece7e1";
 const HITSLOP = { top: 10, bottom: 10, left: 10, right: 10 };
-const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 };
 const EYEBROW_MUTED = { fontFamily: fonts.sansBold, fontSize: 11, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 8 };
 
 // Matches My Week's card treatment — a light spacing wrapper, not its own
@@ -43,7 +43,7 @@ const EYEBROW_MUTED = { fontFamily: fonts.sansBold, fontSize: 11, color: "#a8a29
 // big enclosing box). `title` is only passed for statuses that have no
 // other on-page context naming the program (done/no_block/rest_day/
 // not_published) — a "ready" session already gets its program name from
-// the page's own header (SessionInfoBar), so passing null there avoids
+// the page's own header (SessionHeroBar), so passing null there avoids
 // showing the same name twice.
 function FitnessCard({ title, children }) {
   return (
@@ -54,42 +54,6 @@ function FitnessCard({ title, children }) {
         </Text>
       ) : null}
       {children}
-    </View>
-  );
-}
-
-// SPC sessions aren't tied to a day of the week the way Flagship/BWA are,
-// so when a client does more than one a week, which one they're working on
-// right now has to be a choice, not a lookup — this is that picker. Only
-// rendered when sessionsPerWeek > 1; a 1x/week client has nothing to pick
-// between, so their single session just loads directly (same as before).
-// Border-only states, no checkmark circle: done-but-not-selected gets the
-// same 2px olive border as a completed session tile elsewhere in the app;
-// selected-not-done gets a peach tint; everything else is a plain outline.
-function SpcSessionPicker({ sessions, selected, onSelect }) {
-  return (
-    <View className="mb-4 flex-row gap-2.5">
-      {sessions.map((s) => {
-        const isSelected = s.sessionNumber === selected;
-        const doneNotSelected = s.completed && !isSelected;
-        return (
-          <Pressable
-            key={s.sessionNumber}
-            onPress={() => onSelect(s.sessionNumber)}
-            className="flex-1 items-center justify-center rounded-2xl py-4"
-            style={{
-              backgroundColor: isSelected ? "#fdf6f2" : "white",
-              borderWidth: doneNotSelected ? 2 : isSelected ? 1.5 : 1,
-              borderColor: doneNotSelected ? "#4d6142" : isSelected ? colors.primary : CARD_BORDER,
-              ...CARD_SHADOW,
-            }}
-          >
-            <Text style={{ fontFamily: isSelected ? fonts.sansBold : fonts.sansSemiBold, fontSize: 14, color: isSelected ? colors.primaryOnWhite : "#44403c" }}>
-              Session {s.sessionNumber}
-            </Text>
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
@@ -119,7 +83,7 @@ function WarmupCard({ warmups }) {
   return (
     <>
       <Text style={EYEBROW_MUTED}>Warm-up</Text>
-      <View className="mb-5 rounded-2xl bg-white px-3.5" style={{ borderWidth: 1, borderColor: CARD_BORDER, ...CARD_SHADOW }}>
+      <View className="mb-5 rounded-2xl px-3.5" style={{ backgroundColor: "#fdfbf8", borderWidth: 1, borderColor: "#f2ede7" }}>
         {warmups.map((w, i) => {
           const key = w.id ?? i;
           const detail = w.sets && w.reps ? `${w.sets}×${w.reps}` : w.sets || w.reps || "";
@@ -128,7 +92,7 @@ function WarmupCard({ warmups }) {
             <View
               key={key}
               className="flex-row items-center justify-between py-2.5"
-              style={i < warmups.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f2eee9" } : undefined}
+              style={i < warmups.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f4efe9" } : undefined}
             >
               <View className="flex-1 pr-2">
                 <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>{w.exercises?.name ?? w.label}</Text>
@@ -638,25 +602,53 @@ export default function MyFitness() {
   // of the scrolling content. One-offs are excluded: there can be several
   // of them at once with no single "the" session, so theirs stay inline on
   // their own cards.
+  // "{n} exercises | {m} sets" for the hero's meta line — counted off the
+  // already-loaded exercise rows, no extra query.
+  const describeSession = (exercises) => {
+    if (!exercises || exercises.length === 0) return null;
+    const sets = exercises.reduce((sum, ex) => sum + (Number(ex.targetSets) || 0), 0);
+    const exLabel = `${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`;
+    return sets > 0 ? `${exLabel} | ${sets} sets` : exLabel;
+  };
+
   let activeFinalize = null;
   const visibleGroup = groups.find((g) => (!focus || (focus.type === "group" && focus.groupProgramId === g.groupProgramId)) && g.status === "ready");
   if (visibleGroup) {
     activeFinalize = {
       key: visibleGroup.groupProgramId,
       completed: visibleGroup.completed,
-      eyebrow: `${visibleGroup.programName} · WEEK ${visibleGroup.weekNumber}`,
+      programLabel: visibleGroup.programName,
+      eyebrowDetail: `Week ${visibleGroup.weekNumber} | Session ${visibleGroup.sessionNumber}`,
       title: visibleGroup.workout.title || `Session ${visibleGroup.sessionNumber}`,
+      meta: describeSession(visibleGroup.exercises),
       onFinalize: () => handleFinalizeGroup(visibleGroup),
       onViewBlock: () => router.push({ pathname: "/(member)/plan-block", params: { programId: visibleGroup.groupProgramId } }),
+      // No session tabs for a group program: which session a member can log
+      // is decided by today's weekday (schedule.js's sessionNumberForDate),
+      // not by choice, so a tab row would offer a switch that isn't real.
+      // My Week's stripes are where another session gets opened.
     };
   } else if ((!focus || focus.type === "spc") && spc?.status === "ready" && spcDetail) {
     activeFinalize = {
       key: "spc",
       completed: spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false,
-      eyebrow: `SPC · SESSION ${spcDetail.sessionNumber}`,
+      programLabel: "SPC",
+      eyebrowDetail: `Week ${spc.weekNumber}`,
       title: spcDetail.title || `Session ${spcDetail.sessionNumber}`,
+      meta: describeSession(spcDetail.exercises),
       onFinalize: handleFinalizeSpc,
       onViewBlock: () => router.push("/(member)/plan-spc-block"),
+      // SPC genuinely is a choice (no day-of-week routing), so its sessions
+      // become the hero's tab row — replacing the separate SpcSessionPicker
+      // card that used to sit above the exercise list.
+      tabs: spc.sessions.map((s) => ({
+        key: s.sessionNumber,
+        label: `Session ${s.sessionNumber}`,
+        subtitle: s.workout?.title && s.workout.title !== "Untitled session" ? s.workout.title : null,
+        completed: s.completed,
+      })),
+      selectedTab: spc.selectedSessionNumber,
+      onSelectTab: (sessionNumber) => setSpc((s) => ({ ...s, selectedSessionNumber: sessionNumber })),
     };
   }
 
@@ -750,17 +742,23 @@ export default function MyFitness() {
       </Pressable>
     </View>
     {activeFinalize ? (
-      <View style={{ paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: CARD_BORDER, backgroundColor: CANVAS }}>
-        <SessionInfoBar
-          eyebrow={activeFinalize.eyebrow}
+      <View style={{ paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
+        <SessionHeroBar
+          programLabel={activeFinalize.programLabel}
+          onPickProgram={candidates.length > 1 ? () => setPickerDismissed(false) : null}
+          eyebrowDetail={activeFinalize.eyebrowDetail}
           title={activeFinalize.title}
+          meta={activeFinalize.meta}
           completed={activeFinalize.completed}
+          onViewBlock={activeFinalize.onViewBlock}
           timer={timer}
           timerExpanded={timerExpanded}
           onToggleExpanded={() => setTimerExpanded((e) => !e)}
           onToggleTimer={handleToggleTimer}
           onResetTimer={handleResetTimer}
-          onViewBlock={activeFinalize.onViewBlock}
+          tabs={activeFinalize.tabs}
+          selectedTab={activeFinalize.selectedTab}
+          onSelectTab={activeFinalize.onSelectTab}
         />
       </View>
     ) : focus?.type === "extras" && oneOffs.length > 0 ? (
@@ -768,9 +766,10 @@ export default function MyFitness() {
       // single session to dock a Finalize for) — but an Extras logging
       // session still deserves the same header identity + timer instead of
       // a visibly different, chrome-less screen.
-      <View style={{ paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: CARD_BORDER, backgroundColor: CANVAS }}>
-        <SessionInfoBar
-          eyebrow="EXTRAS"
+      <View style={{ paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
+        <SessionHeroBar
+          programLabel="Extras"
+          onPickProgram={candidates.length > 1 ? () => setPickerDismissed(false) : null}
           title={oneOffs.length === 1 ? oneOffs[0].workout.title || "One-off workout" : `${oneOffs.length} one-off workouts`}
           timer={timer}
           timerExpanded={timerExpanded}
@@ -915,14 +914,6 @@ export default function MyFitness() {
 
           {spc?.status === "ready" && (
             <FitnessCard title={null}>
-              {spc.sessionsPerWeek > 1 && (
-                <SpcSessionPicker
-                  sessions={spc.sessions}
-                  selected={spc.selectedSessionNumber}
-                  onSelect={(sessionNumber) => setSpc((s) => ({ ...s, selectedSessionNumber: sessionNumber }))}
-                />
-              )}
-
               {spcDetailError ? (
                 <View className="items-center py-4">
                   <Text className="mb-2 text-center" style={{ fontFamily: fonts.sans, fontSize: 13, color: "#b23a22" }}>
@@ -1038,11 +1029,12 @@ export default function MyFitness() {
 
     {activeFinalize && (
       <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: CARD_BORDER, backgroundColor: CANVAS }}>
-        <Pressable
+        <PressFade
           onPress={handleFooterFinalize}
           disabled={footerFinalizing}
           className="items-center justify-center disabled:opacity-50"
-          style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1,
+          pressedOpacity={0.75}
+          style={{
             height: 52,
             borderRadius: 12,
             backgroundColor: activeFinalize.completed ? "#4d6142" : colors.primary,
@@ -1050,12 +1042,12 @@ export default function MyFitness() {
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.25,
             shadowRadius: 16,
-          })}
+          }}
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
             {footerFinalizing ? "Saving…" : activeFinalize.completed ? "✓ Finalized" : "Finalize workout"}
           </Text>
-        </Pressable>
+        </PressFade>
       </View>
     )}
 

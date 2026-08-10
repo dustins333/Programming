@@ -1,5 +1,7 @@
 import { View, Pressable, Text, Keyboard, Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useKeyboardHeight } from "../lib/scrollToKeyboard";
+import { useAccessoryAction } from "../lib/keyboardAccessory";
 import { fonts, colors } from "../lib/theme";
 
 // Floating replacement for the old InputAccessoryView-based "Done" bar
@@ -24,13 +26,19 @@ import { fonts, colors } from "../lib/theme";
 // name for the current list).
 export function KeyboardDoneButton() {
   const keyboardHeight = useKeyboardHeight();
+  // Contributed by whichever field is focused (lib/keyboardAccessory.js) —
+  // today that's the weight fields inside a live logging session offering
+  // the plate calculator. Nothing else registers one, so every other
+  // keyboard in the app still gets a plain Done bar.
+  const action = useAccessoryAction();
   if (Platform.OS !== "ios" || keyboardHeight === 0) return null;
   return (
     <View style={{ position: "absolute", left: 0, right: 0, bottom: keyboardHeight, zIndex: 1000 }}>
       <View
         style={{
           flexDirection: "row",
-          justifyContent: "flex-end",
+          alignItems: "center",
+          justifyContent: "space-between",
           backgroundColor: "#f4ede3",
           paddingHorizontal: 14,
           paddingVertical: 8,
@@ -38,6 +46,19 @@ export function KeyboardDoneButton() {
           borderTopColor: "#e7dfd6",
         }}
       >
+        {action ? (
+          <Pressable
+            onPress={action.onPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={action.label}
+            style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+          >
+            <Ionicons name={action.icon ?? "calculator-outline"} size={17} color={colors.primaryOnWhite} />
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: colors.primaryOnWhite }}>{action.label}</Text>
+          </Pressable>
+        ) : (
+          <View />
+        )}
         <Pressable onPress={() => Keyboard.dismiss()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: colors.primaryOnWhite }}>Done</Text>
         </Pressable>

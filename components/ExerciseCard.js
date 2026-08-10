@@ -9,15 +9,184 @@ import { WeightCalculator } from "./WeightCalculator";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
 import { useShowLastTime, setShowLastTime } from "../lib/lastTimePref";
-import { RestTimer } from "./RestTimer";
+import { PressFade } from "./PressFade";
+import { setAccessoryAction, clearAccessoryAction } from "../lib/keyboardAccessory";
 
 const AUTOSAVE_DELAY_MS = 900;
 
-// Design tokens from design_handoff_visual_pass_v4/README.md.
+// Design tokens from design_handoff_visual_pass_v4/README.md, extended by
+// design_handoff_member_mobile_v5 (1d).
 const CARD_BORDER = "#ece7e1";
 const INPUT_BORDER = "#d9d4cd";
 const PILL_BG = "#fdece5";
 const PILL_TEXT = "#b23a22";
+const OLIVE = "#4d6142";
+const OLIVE_BORDER = "#dbe8cf";
+const CANVAS = "#faf8f6";
+const PEACH_BG = "#fdf6f2";
+const PEACH_BORDER = "#f0ddd2";
+const WEIGHT_STEP = 2.5; // smallest real plate pair in the gym
+
+// "0:20" / "90" / "90s" → seconds. Coach-authored free text (the column is
+// still text — v5 flags making it a real integer as a separate coach-side
+// ticket), so this stays forgiving rather than assuming a format.
+function parseRestSeconds(rest) {
+  if (!rest) return null;
+  const raw = String(rest).trim();
+  if (raw.includes(":")) {
+    const [m, s] = raw.split(":");
+    const total = (Number(m) || 0) * 60 + (Number(s) || 0);
+    return total > 0 ? total : null;
+  }
+  const digits = Number(raw.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(digits) && digits > 0 ? Math.round(digits) : null;
+}
+
+function formatSeconds(total) {
+  const mm = Math.floor(total / 60);
+  const ss = String(Math.max(0, total) % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+// One ± group. The 44pt buttons are the point — this is meant to be usable
+// standing at a rack without the keyboard, though the value itself is still
+// a real field, so tapping it opens the numeric keypad (both work, per
+// direct ask).
+function Stepper({ label, value, onChange, step = 1, min = 0, onFocusField, onBlurField, inputRef }) {
+  const numeric = value === "" ? null : Number(value);
+  const bump = (delta) => {
+    const base = numeric ?? 0;
+    const next = Math.max(min, Math.round((base + delta) * 100) / 100);
+    onChange(String(next));
+  };
+  return (
+    <View style={{ flex: 1 }}>
+      <Text
+        maxFontSizeMultiplier={1.1}
+        style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1, textTransform: "uppercase", color: "#a8a29e", marginBottom: 5 }}
+      >
+        {label}
+      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: CANVAS, borderRadius: 14, padding: 5, gap: 5 }}>
+        <PressFade
+          onPress={() => bump(-step)}
+          accessibilityLabel={`Decrease ${label}`}
+          style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" }}
+        >
+          <Ionicons name="remove" size={19} color="#8a5140" />
+        </PressFade>
+        <TextInput
+          ref={inputRef}
+          value={value}
+          onChangeText={onChange}
+          onFocus={onFocusField}
+          onBlur={onBlurField}
+          keyboardType="decimal-pad"
+          placeholder="–"
+          placeholderTextColor="#c9c4bd"
+          autoComplete="off"
+          accessibilityLabel={label}
+          maxFontSizeMultiplier={1.1}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: 44,
+            textAlign: "center",
+            backgroundColor: "#fff",
+            borderRadius: 9,
+            borderWidth: 1,
+            borderColor: CARD_BORDER,
+            fontFamily: fonts.display,
+            fontSize: 22,
+            color: "#44403c",
+          }}
+        />
+        <PressFade
+          onPress={() => bump(step)}
+          accessibilityLabel={`Increase ${label}`}
+          style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" }}
+        >
+          <Ionicons name="add" size={19} color="#8a5140" />
+        </PressFade>
+      </View>
+    </View>
+  );
+}
+
+// Rest never auto-starts (explicit in the handoff) — it defaults to the
+// coach's programmed rest and only runs on tap. With no programmed value it
+// reads "Rest" and offers the same presets the old inline timer had.
+function RestButton({ seconds }) {
+  const [endsAt, setEndsAt] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [, tick] = useState(0);
+  const remainingMs = endsAt ? endsAt - Date.now() : null;
+  const running = endsAt !== null && remainingMs > 0;
+
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => tick((n) => n + 1), 250);
+    return () => clearInterval(id);
+  }, [running]);
+
+  const start = (secs) => {
+    setPickerOpen(false);
+    setEndsAt(Date.now() + secs * 1000);
+  };
+
+  const label = running ? formatSeconds(Math.ceil(remainingMs / 1000)) : seconds ? formatSeconds(seconds) : "Rest";
+
+  return (
+    <>
+      <PressFade
+        onPress={() => (running ? setEndsAt(null) : seconds ? start(seconds) : setPickerOpen(true))}
+        accessibilityLabel={running ? "Cancel rest timer" : "Start rest timer"}
+        style={{
+          width: 96,
+          borderRadius: 15,
+          backgroundColor: PEACH_BG,
+          borderWidth: 1.5,
+          borderColor: running ? colors.primary : PEACH_BORDER,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingVertical: 8,
+        }}
+      >
+        <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 17, color: "#8a5140" }}>
+          {label}
+        </Text>
+        <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.9, color: "#c0a294" }}>
+          {running ? "TAP TO STOP" : "REST"}
+        </Text>
+      </PressFade>
+      {pickerOpen ? (
+        <View style={{ position: "absolute", right: 0, bottom: 58, flexDirection: "row", gap: 6, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: CARD_BORDER, padding: 6 }}>
+          {[60, 90, 120].map((s) => (
+            <PressFade
+              key={s}
+              onPress={() => start(s)}
+              style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: CANVAS }}
+            >
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: "#8a5140" }}>{formatSeconds(s)}</Text>
+            </PressFade>
+          ))}
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+// "3 × 10 @ 65" when last time was uniform, otherwise the sets spelled out.
+function summarizeHistorySets(sets) {
+  const real = sets.filter((s) => s.reps != null || s.weight != null);
+  if (real.length === 0) return "no sets logged";
+  const reps = real.map((s) => s.reps);
+  const weights = real.map((s) => s.weight);
+  if (new Set(reps).size <= 1 && new Set(weights).size <= 1) {
+    return `${real.length} × ${reps[0] ?? "–"}${weights[0] != null ? ` @ ${weights[0]} lb` : ""}`;
+  }
+  return real.map((s) => `${s.reps ?? "–"}${s.weight != null ? `@${s.weight}` : ""}`).join(", ");
+}
 
 // Only worth showing as a per-set breakdown when the sets actually differ —
 // a uniform scheme reads better as the existing flat "X sets × Y reps".
@@ -74,6 +243,13 @@ export function ExerciseCard({
   const targetSets = getTargetSets(item);
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
+  // How many sets are "logged" — the progression the Log set button
+  // drives (v5, 1d). Deliberately separate from whether the fields have
+  // values: carry-over prefills the next set before it's been done, so
+  // "has numbers in it" can't stand in for "completed". Persistence is
+  // unchanged — every keystroke still autosaves, so nothing depends on
+  // the member remembering to press it.
+  const [loggedCount, setLoggedCount] = useState(0);
   // "Last time" shows by default — the whole point of the lift-tracking
   // pass is seeing last time's numbers without asking for them. The
   // preference is device-local and shared across every card
@@ -142,6 +318,16 @@ export function ExerciseCard({
       );
       const notedRow = todaysSets.find((s) => s.notes);
       if (notedRow) setNotes(notedRow.notes);
+      // Reopening a session mid-way: every leading set that already has
+      // both numbers counts as logged, so the card resumes on the right one
+      // instead of restarting at set 1.
+      let restored = 0;
+      for (let i = 0; i < targetSets; i += 1) {
+        const existing = todaysSets.find((s) => s.set_number === i + 1);
+        if (existing && existing.reps !== null && existing.weight !== null) restored += 1;
+        else break;
+      }
+      setLoggedCount(restored);
     }
   };
 
@@ -187,6 +373,26 @@ export function ExerciseCard({
   const updateRow = (index, field, value) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
   };
+
+  // Carry-over (v5, 1d): the set that just became current inherits the one
+  // before it, so a straight 3×10 @ 65 is three taps. The very first set
+  // falls back to last time's matching set instead. Only ever fills a blank
+  // field — it never overwrites something already typed.
+  useEffect(() => {
+    const i = loggedCount;
+    if (i >= rows.length) return;
+    const source = i > 0 ? rows[i - 1] : null;
+    const histSet = i === 0 && history ? history.sets.find((s) => s.set_number === 1) : null;
+    const reps = source ? source.reps : histSet?.reps != null ? String(histSet.reps) : "";
+    const weight = source ? source.weight : histSet?.weight != null ? String(histSet.weight) : "";
+    if (!reps && !weight) return;
+    setRows((prev) =>
+      prev.map((r, idx) =>
+        idx === i ? { reps: r.reps === "" ? reps : r.reps, weight: r.weight === "" ? weight : r.weight } : r
+      )
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedCount, history]);
 
   useEffect(() => {
     if (skipAutosaveRef.current) {
@@ -272,13 +478,11 @@ export function ExerciseCard({
       }
     >
       {forceExpanded ? (
-        <View className="flex-row items-center justify-between" style={{ gap: 12 }}>
-          <View className="flex-1" style={{ minWidth: 0 }}>
-            <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: "#44403c" }}>
-              {item.exercise.name}
-            </Text>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", marginTop: 1 }}>{targetLineFor(item)}</Text>
-          </View>
+        <View style={{ gap: 2 }}>
+          <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: 27, lineHeight: 31, color: "#44403c" }}>
+            {item.exercise.name}
+          </Text>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>{targetLineFor(item)}</Text>
         </View>
       ) : (
         <Pressable onPress={handleToggle} className="flex-row items-center justify-between" style={{ gap: 12 }}>
@@ -306,46 +510,83 @@ export function ExerciseCard({
               {item.exercise.cues}
             </Text>
           ) : null}
-          {!hideVideo && item.exercise.video_url ? (
-            <Pressable
-              onPress={() => Linking.openURL(item.exercise.video_url)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel={`Watch video for ${item.exercise.name}`}
-              className="mb-3 flex-row items-center gap-1.5 self-start"
-            >
-              <Ionicons name="play" size={11} color={colors.primaryOnWhite} />
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>Watch video</Text>
-            </Pressable>
-          ) : null}
-
-          <View className="mb-3 flex-row flex-wrap items-center" style={{ gap: 16 }}>
-            <Pressable
-              onPress={handleToggleHistory}
-              className="flex-row items-center gap-1.5"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel={showHistory ? "Hide last time" : "Show last time"}
-            >
-              <Ionicons name={showHistory ? "time" : "time-outline"} size={14} color={colors.primary} />
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>
-                {historyLoading
-                  ? "Loading last time…"
-                  : showHistory && history
-                    ? `Last time: ${formatDateMDY(history.date)} · hide`
-                    : showHistory
-                      ? "Last time"
-                      : "Show last time"}
-              </Text>
-            </Pressable>
-            <Pressable
+          {/* Outlined pills (v5, 1d) rather than bare text links. */}
+          <View className="mb-3 flex-row flex-wrap items-center" style={{ gap: 8 }}>
+            {!hideVideo && item.exercise.video_url ? (
+              <PressFade
+                onPress={() => Linking.openURL(item.exercise.video_url)}
+                accessibilityLabel={`Watch video for ${item.exercise.name}`}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 5,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: CARD_BORDER,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                }}
+              >
+                <Ionicons name="play" size={11} color={colors.primaryOnWhite} />
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: colors.primaryOnWhite }}>Watch video</Text>
+              </PressFade>
+            ) : null}
+            <PressFade
               onPress={() => setShowAllHistory(true)}
-              className="flex-row items-center gap-1.5"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityLabel="History and progress chart"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: CARD_BORDER,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+              }}
             >
-              <Ionicons name="trending-up-outline" size={14} color={colors.primary} />
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>History + chart</Text>
-            </Pressable>
+              <Ionicons name="trending-up-outline" size={12} color={colors.primary} />
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: colors.primaryOnWhite }}>History + chart</Text>
+            </PressFade>
+            <PressFade
+              onPress={handleToggleHistory}
+              accessibilityLabel={showHistory ? "Hide last time" : "Show last time"}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: CARD_BORDER,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+              }}
+            >
+              <Ionicons name={showHistory ? "time" : "time-outline"} size={12} color={colors.primary} />
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: colors.primaryOnWhite }}>
+                {showHistory ? "Hide last time" : "Show last time"}
+              </Text>
+            </PressFade>
           </View>
+
+          {/* The "last time" summary block — one line, not a per-set list;
+              the per-set reference now rides the current set row instead. */}
+          {showHistory && history ? (
+            <View
+              className="mb-3 flex-row items-center"
+              style={{ gap: 8, backgroundColor: PILL_BG, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9 }}
+            >
+              <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: PILL_TEXT }} />
+              <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={{ flex: 1, fontFamily: fonts.sansBold, fontSize: 11.5, color: PILL_TEXT }}>
+                Last time {formatDateMDY(history.date)} | {summarizeHistorySets(history.sets)}
+              </Text>
+            </View>
+          ) : null}
+          {showHistory && historyLoading ? (
+            <Text className="mb-2 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+              Loading last time…
+            </Text>
+          ) : null}
           {showHistory && historyLoaded && history === null ? (
             <Text className="mb-2 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
               No previous history for this lift yet.
@@ -358,68 +599,166 @@ export function ExerciseCard({
             // up by number get an annotation; anything else is silently
             // dropped rather than showing a mismatched row.
             const histSet = showHistory && history ? history.sets.find((s) => s.set_number === i + 1) : null;
-            return (
-              <View key={i} className="mb-2.5">
-                <View className="flex-row items-center gap-2.5">
-                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#78716c", width: 46 }}>Set {i + 1}</Text>
-                  <TextInput
-                    value={row.reps}
-                    onChangeText={(v) => updateRow(i, "reps", v)}
-                    onFocus={() => scrollFieldIntoView(cardRef.current)}
-                    placeholder={item.repScheme?.[i] ?? item.targetReps ?? "reps"}
-                    keyboardType="numeric"
-                    inputAccessoryViewID={NUMERIC_DONE_ID}
-                    placeholderTextColor="#a8a29e"
-                    className="flex-1 text-center"
-                    style={{ fontFamily: fonts.sans, fontSize: 14, color: "#44403c", height: 44, borderWidth: 1, borderColor: INPUT_BORDER, borderRadius: 10 }}
-                  />
-                  <View className="flex-1" style={{ position: "relative" }}>
-                    <TextInput
-                      value={row.weight}
-                      onChangeText={(v) => updateRow(i, "weight", v)}
-                      onFocus={() => scrollFieldIntoView(cardRef.current)}
-                      placeholder="weight (lb)"
-                      keyboardType="decimal-pad"
-                      inputAccessoryViewID={NUMERIC_DONE_ID}
-                      placeholderTextColor="#a8a29e"
-                      className="text-center"
-                      style={{
-                        fontFamily: fonts.sans,
-                        fontSize: 14,
-                        color: "#44403c",
-                        height: 44,
-                        borderWidth: 1,
-                        borderColor: INPUT_BORDER,
-                        borderRadius: 10,
-                        paddingRight: 30,
-                      }}
-                    />
-                    <Pressable
-                      onPress={() => {
-                        Keyboard.dismiss();
-                        setCalcRowIndex(i);
-                      }}
-                      hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
-                      accessibilityLabel="Open weight calculator"
-                      style={{ position: "absolute", right: 6, top: 0, bottom: 0, justifyContent: "center" }}
-                    >
-                      <Ionicons name="calculator-outline" size={17} color={colors.primaryOnWhite} />
-                    </Pressable>
+            const state = i < loggedCount ? "logged" : i === loggedCount ? "current" : "upcoming";
+
+            if (state === "logged") {
+              return (
+                <PressFade
+                  key={i}
+                  onPress={() => setLoggedCount(i)}
+                  accessibilityLabel={`Set ${i + 1} logged, tap to edit`}
+                  style={{
+                    marginBottom: 8,
+                    backgroundColor: "#fff",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: OLIVE_BORDER,
+                    borderLeftWidth: 4,
+                    borderLeftColor: OLIVE,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.8, color: "#a8a29e", width: 38 }}>
+                    SET {i + 1}
+                  </Text>
+                  <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "baseline", gap: 3 }}>
+                    <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 21, color: "#44403c" }}>
+                      {row.reps || "–"}
+                    </Text>
+                    <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+                      reps
+                    </Text>
+                    {row.weight ? (
+                      <>
+                        <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 21, color: "#44403c", marginLeft: 8 }}>
+                          {row.weight}
+                        </Text>
+                        <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+                          lb
+                        </Text>
+                      </>
+                    ) : null}
                   </View>
+                  <Ionicons name="checkmark-circle" size={30} color={OLIVE} />
+                </PressFade>
+              );
+            }
+
+            if (state === "upcoming") {
+              const preview = [row.reps ? `${row.reps} reps` : `${item.repScheme?.[i] ?? item.targetReps ?? "–"} reps`, row.weight ? `${row.weight} lb` : null]
+                .filter(Boolean)
+                .join(" | ");
+              return (
+                <View
+                  key={i}
+                  style={{
+                    marginBottom: 8,
+                    opacity: 0.6,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: CARD_BORDER,
+                    paddingHorizontal: 12,
+                    paddingVertical: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.8, color: "#a8a29e", width: 38 }}>
+                    SET {i + 1}
+                  </Text>
+                  <Text maxFontSizeMultiplier={1.15} style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
+                    {preview}
+                    {row.weight ? " | carried over" : ""}
+                  </Text>
                 </View>
-                {histSet ? (
-                  <View className="mt-1.5 items-center">
-                    <View className="rounded-full" style={{ backgroundColor: PILL_BG, paddingVertical: 3, paddingHorizontal: 10 }}>
-                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: PILL_TEXT }}>
-                        Last: {histSet.reps ?? "–"} reps{histSet.weight ? ` @ ${histSet.weight}` : ""}
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
+              );
+            }
+
+            return (
+              <View
+                key={i}
+                style={{
+                  marginBottom: 10,
+                  backgroundColor: "#fff",
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: colors.primary,
+                  paddingHorizontal: 12,
+                  paddingVertical: 12,
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 16,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+                  <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.9, color: "#8a5140" }}>
+                    SET {i + 1} | NOW
+                  </Text>
+                  {histSet ? (
+                    <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: PILL_TEXT, flexShrink: 1 }}>
+                      last: {histSet.reps ?? "–"} reps{histSet.weight ? ` @ ${histSet.weight}` : ""}
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <Stepper
+                    label="Reps"
+                    value={row.reps}
+                    onChange={(v) => updateRow(i, "reps", v)}
+                    onFocusField={() => scrollFieldIntoView(cardRef.current)}
+                  />
+                  <Stepper
+                    label="Weight"
+                    value={row.weight}
+                    step={WEIGHT_STEP}
+                    onChange={(v) => updateRow(i, "weight", v)}
+                    // The calculator moves onto the keyboard bar while a
+                    // weight field is focused (v5, 1d) instead of living as
+                    // a permanent icon inside the field.
+                    onFocusField={() => {
+                      scrollFieldIntoView(cardRef.current);
+                      setAccessoryAction({
+                        key: `${item.id}-w-${i}`,
+                        label: "Calculator",
+                        icon: "calculator-outline",
+                        onPress: () => {
+                          Keyboard.dismiss();
+                          setCalcRowIndex(i);
+                        },
+                      });
+                    }}
+                    onBlurField={() => clearAccessoryAction(`${item.id}-w-${i}`)}
+                  />
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10, marginTop: 12 }}>
+                  <PressFade
+                    onPress={() => setLoggedCount(i + 1)}
+                    disabled={row.reps === "" && row.weight === ""}
+                    accessibilityLabel={`Log set ${i + 1}`}
+                    style={{
+                      flex: 1,
+                      borderRadius: 15,
+                      backgroundColor: colors.primary,
+                      alignItems: "center",
+                      paddingVertical: 14,
+                      opacity: row.reps === "" && row.weight === "" ? 0.5 : 1,
+                    }}
+                  >
+                    <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansBold, fontSize: 14, color: "#fff" }}>
+                      Log set {i + 1}
+                    </Text>
+                  </PressFade>
+                  <RestButton seconds={parseRestSeconds(item.rest)} />
+                </View>
               </View>
             );
           })}
-          <RestTimer />
 
           {showHistory && history?.sets.find((s) => s.notes) ? (
             <Text className="mb-2" style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>

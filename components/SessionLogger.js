@@ -1,12 +1,14 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { getLoggedSetsForDate } from "../lib/programming/memberPlan";
+import { getLoggedSetsForDate, listLastLoggedSessions } from "../lib/programming/memberPlan";
 import {
   listGroupExerciseCompletionsForItems,
   listSpcExerciseCompletionsForItems,
   listOneOffExerciseCompletionsForItems,
 } from "../lib/programming/exerciseCompletions";
+import { PressFade } from "./PressFade";
+import { formatDateMD } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
 import { toastError } from "../lib/toast";
 import { ExerciseCard, targetLineFor } from "./ExerciseCard";
@@ -43,18 +45,18 @@ function summarizeLoggedSets(sets) {
 // collapses back into. Callers that don't opt into completions (e.g. the
 // coach's read-only past-session viewer) keep the original "has any logged
 // data" dot instead, unchanged.
-function GroupIndexRow({ group, summaries, completions, onPress }) {
+function GroupIndexRow({ group, index, summaries, completions, lastSessions, onPress }) {
   const isSuperset = group.length > 1;
   return (
-    <Pressable
+    <PressFade
       onPress={onPress}
       className="mb-2.5 rounded-2xl bg-white px-4 py-3"
-      style={({ pressed }) => [
+      pressedOpacity={0.7}
+      style={
         isSuperset
           ? { borderWidth: 1.5, borderColor: "#a46a57", borderStyle: "dashed" }
-          : { borderWidth: 1, borderColor: CARD_BORDER, shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 },
-        pressed && { opacity: 0.7 },
-      ]}
+          : { borderWidth: 1, borderColor: CARD_BORDER, shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 }
+      }
     >
       {isSuperset ? (
         <Text className="mb-1.5 self-start rounded-full px-2.5 py-0.5" style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#b23a22", backgroundColor: "#fdece5" }}>
@@ -63,24 +65,64 @@ function GroupIndexRow({ group, summaries, completions, onPress }) {
       ) : null}
       {group.map((item, i) => {
         const summary = summaries[item.exercise.id];
+        const last = lastSessions?.get(item.exercise.id);
         return (
           <View
             key={item.id}
-            className="flex-row items-center justify-between"
-            style={{ gap: 12, marginTop: isSuperset && i > 0 ? 8 : 0 }}
+            className="flex-row items-center"
+            style={{ gap: 10, marginTop: isSuperset && i > 0 ? 10 : 0 }}
           >
+            {/* Numbered square (design_handoff_member_mobile_v5, 3a). A
+                superset's members share the group's number and get a/b
+                suffixes, so the count still reads as "exercise 3 of 6"
+                rather than jumping. */}
+            <View
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 7,
+                backgroundColor: "#f5f1ec",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color: "#8a5140" }}>
+                {index + 1}
+                {isSuperset ? String.fromCharCode(97 + i) : ""}
+              </Text>
+            </View>
             <View className="flex-1" style={{ minWidth: 0 }}>
-              <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#44403c" }}>
+              <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#44403c" }}>
                 {item.exercise.name}
               </Text>
               {/* Target (with tempo/rest) always shows — it used to be
                   replaced by the logged summary the instant a set saved,
                   which erased what the coach prescribed mid-session. The
                   logged summary renders as its own second line instead. */}
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", marginTop: 1 }}>{targetLineFor(item)}</Text>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 1 }}>{targetLineFor(item)}</Text>
               {summary?.hasAny && summary?.summaryText ? (
-                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: "#78716c", marginTop: 1 }}>{summary.summaryText}</Text>
+                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: "#78716c", marginTop: 1 }}>{summary.summaryText}</Text>
               ) : null}
+            </View>
+            {/* Last time's top set — the "am I beating it?" reference, the
+                one number worth carrying onto the overview. */}
+            <View style={{ alignItems: "flex-end", flexShrink: 0 }}>
+              {last ? (
+                <>
+                  <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 12, color: "#8a5140" }}>
+                    {last.topSet.reps ?? "–"}
+                    {last.topSet.weight != null ? ` × ${last.topSet.weight}` : ""}
+                  </Text>
+                  <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 10, color: "#c9c4bd", marginTop: 1 }}>
+                    {formatDateMD(last.date)}
+                  </Text>
+                </>
+              ) : (
+                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#c9c4bd" }}>
+                  first time
+                </Text>
+              )}
             </View>
             {completions ? (
               // Same circle icon, same size, same color as the warm-up
@@ -99,7 +141,7 @@ function GroupIndexRow({ group, summaries, completions, onPress }) {
           </View>
         );
       })}
-    </Pressable>
+    </PressFade>
   );
 }
 
@@ -155,6 +197,9 @@ export const SessionLogger = forwardRef(function SessionLogger({
   // viewer) — GroupIndexRow uses that distinction to fall back to its
   // original "has any logged data" dot instead of a real checkbox.
   const [completions, setCompletions] = useState(null);
+  // Map<exerciseId, { date, topSet }> — last time's top set per exercise,
+  // shown on each index row. One batched query for the whole session.
+  const [lastSessions, setLastSessions] = useState(null);
 
   const isFocus = layout === "focus";
 
@@ -205,8 +250,13 @@ export const SessionLogger = forwardRef(function SessionLogger({
   useEffect(() => {
     if (!isFocus) return;
     exercises.forEach((item) => fetchSummaryFor(item.exercise.id));
+    // Own isolated catch — the index rows are still fully usable without
+    // their last-time reference, so a failure here shouldn't blank the list.
+    listLastLoggedSessions(userId, exercises.map((item) => item.exercise.id), datePerformed)
+      .then(setLastSessions)
+      .catch((err) => console.error("Failed to load last-time top sets:", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocus, exerciseIdsKey]);
+  }, [isFocus, exerciseIdsKey, datePerformed]);
 
   // Batched, one round trip for the whole session — parallel to the
   // summaries fetch above, keyed by the join-row id (item.id), not the raw
@@ -261,7 +311,15 @@ export const SessionLogger = forwardRef(function SessionLogger({
     return (
       <View>
         {groups.map((group, i) => (
-          <GroupIndexRow key={group[0].id} group={group} summaries={summaries} completions={completions} onPress={() => handleOpenFocus(i)} />
+          <GroupIndexRow
+            key={group[0].id}
+            group={group}
+            index={i}
+            summaries={summaries}
+            completions={completions}
+            lastSessions={lastSessions}
+            onPress={() => handleOpenFocus(i)}
+          />
         ))}
 
         {!onOpenFocus && (
@@ -284,11 +342,12 @@ export const SessionLogger = forwardRef(function SessionLogger({
         )}
 
         {!hideFinalizeButton && (
-          <Pressable
+          <PressFade
             onPress={handleFinalize}
             disabled={finalizing}
             className="mt-2 items-center justify-center disabled:opacity-50"
-            style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1,
+            pressedOpacity={0.75}
+            style={{
               height: 52,
               borderRadius: 12,
               backgroundColor: isCompleted ? "#4d6142" : colors.primary,
@@ -296,12 +355,12 @@ export const SessionLogger = forwardRef(function SessionLogger({
               shadowOffset: { width: 0, height: 6 },
               shadowOpacity: 0.25,
               shadowRadius: 16,
-            })}
+            }}
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
               {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}
             </Text>
-          </Pressable>
+          </PressFade>
         )}
       </View>
     );
@@ -347,11 +406,12 @@ export const SessionLogger = forwardRef(function SessionLogger({
       )}
 
       {!hideFinalizeButton && (
-        <Pressable
+        <PressFade
           onPress={handleFinalize}
           disabled={finalizing}
           className="mt-2 items-center justify-center disabled:opacity-50"
-          style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1,
+          pressedOpacity={0.75}
+          style={{
             height: 52,
             borderRadius: 12,
             backgroundColor: isCompleted ? "#4d6142" : colors.primary,
@@ -359,12 +419,12 @@ export const SessionLogger = forwardRef(function SessionLogger({
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.25,
             shadowRadius: 16,
-          })}
+          }}
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
             {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}
           </Text>
-        </Pressable>
+        </PressFade>
       )}
     </View>
   );

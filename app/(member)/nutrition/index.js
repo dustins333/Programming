@@ -11,7 +11,7 @@ import { getCheckinForWeek } from "../../../lib/nutrition/checkin";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { getCurrentTarget, deriveCalories } from "../../../lib/nutrition/targets";
-import { getLogForDate, saveDraftLog, finalizeLog } from "../../../lib/nutrition/dailyLog";
+import { getLogForDate, saveDraftLog, finalizeLog, listLogsForDateRange } from "../../../lib/nutrition/dailyLog";
 import { listFocusItems, toggleFocusItem } from "../../../lib/nutrition/coachClient";
 import { listActiveMilestones, listCompletedMilestones, getUnseenCompletedMilestone, acknowledgeMilestone, MILESTONE_COLORS } from "../../../lib/nutrition/milestones";
 import { SegmentedControl } from "../../../components/SegmentedControl";
@@ -19,9 +19,11 @@ import { TodayCardSlider } from "../../../components/nutrition/TodayCardSlider";
 import { MilestoneCongratsModal } from "../../../components/nutrition/MilestoneCongratsModal";
 import { MilestoneDetailModal } from "../../../components/nutrition/MilestoneDetailModal";
 import { CalorieOverrideModal } from "../../../components/nutrition/CalorieOverrideModal";
-import { TargetField } from "../../../components/nutrition/TargetField";
-import { RatingSelect } from "../../../components/nutrition/RatingSelect";
+import { MacroDial } from "../../../components/nutrition/MacroDial";
+import { RatingSquares } from "../../../components/nutrition/RatingSquares";
+import { StatTile } from "../../../components/nutrition/StatTile";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
+import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
@@ -61,23 +63,93 @@ function formatDateWeekday(isoDate) {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-// design_handoff_v2_settings_nutrition — the 3 Daily Log cards need visible
-// separation. First two attempts tinted the whole card body: too subtle at
-// near-white, then too heavy/muddy once saturated enough to actually read,
-// and the saturated version fought with each field's fixed target-pill
-// color (steps' pale blue landing on a tan card looked especially bad, per
-// direct feedback). Landed on tinting only a thin header band instead —
-// same two-tone-header technique My Week's WeekSection cards already use —
-// so the pill colors sit on plain white further down and never clash.
-function DailyLogCard({ color, title, children }) {
+const CARD_BORDER = "#ece7e1";
+const DIVIDER = "#f4efe9";
+const OLIVE = "#4d6142";
+const DASHED_EMPTY = "#ddd6cd";
+
+// design_handoff_member_mobile_v5 (1g) — the three tinted "Log these in the
+// morning / macros / evening" cards are replaced by plain white cards with
+// an eyebrow. The tint was doing the separating work before; hierarchy now
+// comes from the dials and tiles themselves, so the containers get out of
+// the way.
+function LogCard({ eyebrow, aside, children, radius = 18, style }) {
   return (
-    <View className="mb-4 rounded-lg border border-stone-200" style={{ overflow: "hidden" }}>
-      <View style={{ backgroundColor: color, paddingHorizontal: 16, paddingVertical: 10 }}>
-        <Text className="text-xs uppercase text-stone-500" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-          {title}
+    <View
+      style={{
+        backgroundColor: "#fff",
+        borderRadius: radius,
+        borderWidth: 1,
+        borderColor: CARD_BORDER,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        marginBottom: 12,
+        shadowColor: "#44403c",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.045,
+        shadowRadius: 14,
+        elevation: 2,
+        ...style,
+      }}
+    >
+      {eyebrow ? (
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10 }}>
+          <Text
+            maxFontSizeMultiplier={1.1}
+            style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color: "#a8a29e" }}
+          >
+            {eyebrow}
+          </Text>
+          {aside}
+        </View>
+      ) : null}
+      {children}
+    </View>
+  );
+}
+
+// Steps sits in the same card as hunger/energy but reads as a value, not a
+// scale — a bordered box that goes dashed while it's empty, same rule as
+// every other unlogged control on this screen.
+function StepsRow({ value, onChangeText, goal, scrollViewRef, scrollOffsetRef }) {
+  const fieldRef = useRef(null);
+  const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
+  const empty = value === "" || value === null || value === undefined;
+  return (
+    <View ref={fieldRef} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+      <View style={{ flexShrink: 1 }}>
+        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansMedium, fontSize: 13.5, color: "#44403c" }}>
+          Steps
         </Text>
+        {goal ? (
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e", marginTop: 1 }}>
+            goal {goal}
+          </Text>
+        ) : null}
       </View>
-      <View style={{ padding: 16, backgroundColor: "white" }}>{children}</View>
+      <View
+        style={{
+          minWidth: 96,
+          borderRadius: 12,
+          borderWidth: empty ? 1.5 : 1,
+          borderStyle: empty ? "dashed" : "solid",
+          borderColor: empty ? DASHED_EMPTY : "#d9d4cd",
+          paddingHorizontal: 12,
+        }}
+      >
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={() => scrollFieldIntoView(fieldRef.current)}
+          keyboardType="decimal-pad"
+          placeholder="–"
+          placeholderTextColor="#c9c4bd"
+          autoComplete="off"
+          accessibilityLabel="Steps"
+          maxFontSizeMultiplier={1.15}
+          style={{ fontFamily: fonts.display, fontSize: 17, color: empty ? "#c9c4bd" : "#44403c", paddingVertical: 8, textAlign: "right" }}
+        />
+      </View>
     </View>
   );
 }
@@ -166,6 +238,10 @@ export default function NutritionToday() {
   }, [params.date, today]);
 
   const [target, setTarget] = useState(null);
+  // Average weight over the 7 days before the selected date, for the weight
+  // tile's "▼ 1.2 vs last week" line. Its own isolated fetch — a failure
+  // just drops that one line rather than blocking the log itself.
+  const [lastWeekWeight, setLastWeekWeight] = useState(null);
   const [focusItems, setFocusItems] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [completedMilestones, setCompletedMilestones] = useState([]);
@@ -271,6 +347,16 @@ export default function NutritionToday() {
         setLoadError(err.message ?? String(err));
       }
     })();
+    (async () => {
+      try {
+        const priorLogs = await listLogsForDateRange(profile.id, addDays(selectedDate, -7), addDays(selectedDate, -1));
+        const weights = priorLogs.map((l) => l.weight).filter((w) => w !== null && w !== undefined);
+        setLastWeekWeight(weights.length > 0 ? weights.reduce((a, b) => a + Number(b), 0) / weights.length : null);
+      } catch (err) {
+        console.error("Failed to load last week's weight:", err);
+        setLastWeekWeight(null);
+      }
+    })();
   }, [access.status, profile.id, selectedDate, retryKey]);
 
   useEffect(() => {
@@ -324,18 +410,60 @@ export default function NutritionToday() {
   const calorieTarget = target ? Math.round(deriveCalories(target)) : null;
   const isCalorieOverridden = values.calories_override !== "" && values.calories_override !== null && values.calories_override !== undefined;
   const displayedCalories = isCalorieOverridden ? Math.round(Number(values.calories_override)) : calculatedCalories;
+  // The macro card's eyebrow swaps from "tap to enter" to "{n} cal derived"
+  // only once all four macros are in — a partial set would derive a
+  // misleadingly low calorie number.
+  const allMacrosEntered = ["protein_g", "carb_g", "fat_g", "fiber_g"].every((k) => values[k] !== "" && values[k] !== null && values[k] !== undefined);
+  const weightDelta =
+    lastWeekWeight !== null && values.weight !== "" && !Number.isNaN(Number(values.weight))
+      ? Number(values.weight) - lastWeekWeight
+      : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: CANVAS }}>
       <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24, backgroundColor: CANVAS }}>
         <View className="flex-row items-center gap-3">
-          <Text className="mb-1 flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
+          <Text className="flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
             My Nutrition
           </Text>
           <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={10} accessibilityLabel="Settings">
             <Ionicons name="settings-outline" size={22} color="#78716c" />
           </Pressable>
           <Image source={require("../../../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
+        </View>
+        {/* Date + logged-state badge, per the mock. The ‹ › arrows are
+            folded into this row rather than kept as the separate sticky
+            date card they used to live in — two date displays on one screen
+            read as a duplicate, and the badge needs the space. Back-dating
+            still works exactly as before (and My Week's day circles still
+            deep-link straight to a specific date). */}
+        <View className="mb-3 mt-0.5 flex-row items-center justify-between gap-2">
+          <View className="flex-row items-center" style={{ marginLeft: -6 }}>
+            <Pressable onPress={() => setDateOffset((o) => o + 1)} hitSlop={10} className="px-1.5" accessibilityLabel="Previous day">
+              <Ionicons name="chevron-back" size={16} color="#78716c" />
+            </Pressable>
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
+              {formatDateWeekday(selectedDate)}
+              {dateOffset === 0 ? " · Today" : ""}
+            </Text>
+            <Pressable
+              onPress={() => setDateOffset((o) => Math.max(0, o - 1))}
+              disabled={dateOffset === 0}
+              hitSlop={10}
+              className="px-1.5"
+              accessibilityLabel="Next day"
+            >
+              <Ionicons name="chevron-forward" size={16} color={dateOffset === 0 ? "#d6d3d1" : "#78716c"} />
+            </Pressable>
+          </View>
+          <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: finalizedAt ? "#e9f0e1" : "#fdece5" }}>
+            <Text
+              maxFontSizeMultiplier={1.1}
+              style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.7, color: finalizedAt ? "#3f5136" : "#b23a22" }}
+            >
+              {finalizedAt ? "LOGGED" : "NOT LOGGED YET"}
+            </Text>
+          </View>
         </View>
 
         <SegmentedControl
@@ -355,28 +483,6 @@ export default function NutritionToday() {
           </Pressable>
         ) : null}
 
-        {/* Sticky date nav — pinned above the scroll content (not part of
-            it) so it stays visible no matter how far down the form the
-            member scrolls, per explicit ask to make it "always visible".
-            Background matches the segmented tab bar right above it
-            (stone-100, same as SegmentedControl.js) per direct ask, instead
-            of sitting on plain white like a separate, unrelated element. */}
-        <View className="mb-4 flex-row items-center justify-between rounded-xl border border-stone-200 bg-stone-100 px-2 py-2.5">
-          <Pressable onPress={() => setDateOffset((o) => o + 1)} hitSlop={10} className="px-2">
-            <Ionicons name="chevron-back" size={18} color="#57534e" />
-          </Pressable>
-          <View className="items-center">
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15 }}>{formatDateWeekday(selectedDate)}</Text>
-            {dateOffset === 0 ? (
-              <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                Today
-              </Text>
-            ) : null}
-          </View>
-          <Pressable onPress={() => setDateOffset((o) => Math.max(0, o - 1))} disabled={dateOffset === 0} hitSlop={10} className="px-2">
-            <Ionicons name="chevron-forward" size={18} color={dateOffset === 0 ? "#d6d3d1" : "#57534e"} />
-          </Pressable>
-        </View>
       </View>
 
       {loadError ? (
@@ -486,56 +592,79 @@ export default function NutritionToday() {
             ]}
           />
 
-          <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold }}>
-            Daily Log
-          </Text>
-
-          <DailyLogCard color="#eef1e7" title="Log these in the morning">
-            <TargetField label="Weight (lb)" styleKey="weight" value={values.weight} onChangeText={(t) => update("weight", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-            <View className="flex-row gap-3">
-              <TargetField liveCompare label="Sleep (hrs)" styleKey="sleep" current={target?.sleep_hours_goal} flex value={values.sleep_hours} onChangeText={(t) => update("sleep_hours", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-              <RatingSelect label="Sleep quality (1-5)" flex value={values.sleep_quality} onChangeText={(t) => update("sleep_quality", t)} />
+          <LogCard
+            radius={22}
+            eyebrow="Today's macros"
+            aside={
+              <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>
+                {allMacrosEntered ? `${displayedCalories} cal derived` : "tap to enter"}
+              </Text>
+            }
+          >
+            <View className="flex-row" style={{ gap: 6 }}>
+              <MacroDial label="Protein" value={values.protein_g} goal={target?.protein_g} onChangeText={(t) => update("protein_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <MacroDial label="Carb" value={values.carb_g} goal={target?.carb_g} onChangeText={(t) => update("carb_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <MacroDial label="Fat" value={values.fat_g} goal={target?.fat_g} onChangeText={(t) => update("fat_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
+              <MacroDial label="Fiber" value={values.fiber_g} goal={target?.fiber_g} onChangeText={(t) => update("fiber_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
             </View>
-          </DailyLogCard>
-
-          <DailyLogCard color="#fdf6f2" title="Log your macros">
-            <View className="flex-row gap-3">
-              <TargetField liveCompare label="Protein (g)" styleKey="protein" current={target?.protein_g} flex value={values.protein_g} onChangeText={(t) => update("protein_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-              <TargetField liveCompare label="Carb (g)" styleKey="carb" current={target?.carb_g} flex value={values.carb_g} onChangeText={(t) => update("carb_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-            </View>
-            <View className="mb-3 flex-row gap-3">
-              <TargetField liveCompare label="Fat (g)" styleKey="fat" current={target?.fat_g} flex value={values.fat_g} onChangeText={(t) => update("fat_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-              <TargetField liveCompare label="Fiber (g)" styleKey="fiber" current={target?.fiber_g} flex value={values.fiber_g} onChangeText={(t) => update("fiber_g", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-            </View>
-
-            <View className="mb-1.5 flex-row items-center justify-between border-b border-stone-200 pb-2">
-              <View className="flex-row items-center gap-1.5">
-                <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                  {isCalorieOverridden ? "Cronometer Calories" : "Calculated Calories"}
+            {/* The mock folds calories entirely into the eyebrow's "{n} cal
+                derived". Kept as one quiet line so the target stays visible
+                and the Cronometer override (CalorieOverrideModal) is still
+                reachable — it has no other entry point. */}
+            <View
+              className="mt-3.5 flex-row items-center justify-between pt-3"
+              style={{ borderTopWidth: 1, borderTopColor: DIVIDER }}
+            >
+              <Pressable onPress={() => setCalorieModalOpen(true)} hitSlop={8} className="flex-row items-center gap-1.5" accessibilityLabel="About calculated calories">
+                <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c" }}>
+                  {isCalorieOverridden ? "Cronometer calories" : "Calculated"} {displayedCalories}
+                  {calorieTarget ? ` | target ${calorieTarget}` : ""}
                 </Text>
-                <Pressable onPress={() => setCalorieModalOpen(true)} hitSlop={8} accessibilityLabel="About calculated calories">
-                  <Ionicons name="information-circle-outline" size={17} color={colors.primaryOnWhite} />
-                </Pressable>
-              </View>
-              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>{displayedCalories}</Text>
+                <Ionicons name="information-circle-outline" size={15} color={colors.primaryOnWhite} />
+              </Pressable>
             </View>
-            <View className="flex-row items-center justify-between border-b border-stone-200 pb-2">
-              <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                Target Calories
-              </Text>
-              <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                {calorieTarget ?? "—"}
-              </Text>
-            </View>
-          </DailyLogCard>
+          </LogCard>
 
-          <DailyLogCard color="#f4ede3" title="Log these in the evening">
-            <View className="flex-row gap-3">
-              <TargetField liveCompare label="Steps" styleKey="steps" current={target?.step_goal} flex value={values.steps} onChangeText={(t) => update("steps", t)} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-              <RatingSelect label="Hunger (1-5)" flex value={values.hunger} onChangeText={(t) => update("hunger", t)} />
-              <RatingSelect label="Energy (1-5)" flex value={values.energy} onChangeText={(t) => update("energy", t)} />
-            </View>
-          </DailyLogCard>
+          <View className="mb-3 flex-row" style={{ gap: 10 }}>
+            <StatTile
+              eyebrow="Weight"
+              value={values.weight}
+              unit="lb"
+              onChangeText={(t) => update("weight", t)}
+              scrollViewRef={scrollViewRef}
+              scrollOffsetRef={scrollOffsetRef}
+              footer={
+                weightDelta !== null ? (
+                  <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansMedium, fontSize: 10.5, color: weightDelta <= 0 ? OLIVE : "#78716c" }}>
+                    {weightDelta <= 0 ? "▼" : "▲"} {Math.abs(weightDelta).toFixed(1)} vs last week
+                  </Text>
+                ) : null
+              }
+            />
+            <StatTile
+              eyebrow="Sleep"
+              value={values.sleep_hours}
+              unit="hrs"
+              onChangeText={(t) => update("sleep_hours", t)}
+              scrollViewRef={scrollViewRef}
+              scrollOffsetRef={scrollOffsetRef}
+              footer={<RatingSquares compact label="quality" size={20} value={values.sleep_quality} onChangeText={(t) => update("sleep_quality", t)} />}
+            />
+          </View>
+
+          <LogCard>
+            <StepsRow
+              value={values.steps}
+              goal={target?.step_goal}
+              onChangeText={(t) => update("steps", t)}
+              scrollViewRef={scrollViewRef}
+              scrollOffsetRef={scrollOffsetRef}
+            />
+            <View className="my-3" style={{ borderTopWidth: 1, borderTopColor: DIVIDER }} />
+            <RatingSquares label="Hunger" value={values.hunger} onChangeText={(t) => update("hunger", t)} />
+            <View className="my-3" style={{ borderTopWidth: 1, borderTopColor: DIVIDER }} />
+            <RatingSquares label="Energy" value={values.energy} onChangeText={(t) => update("energy", t)} />
+          </LogCard>
 
           <Text className="mb-1 mt-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
             Notes
@@ -563,21 +692,30 @@ export default function NutritionToday() {
               {finalizeError}
             </Text>
           ) : null}
-
-          <Pressable
-            onPress={handleFinalize}
-            disabled={finalizing}
-            className="mb-6 items-center rounded-lg py-3.5 disabled:opacity-50"
-            // Olive once finalized — same completed-state language as the
-            // fitness Finalize button, which used to stay terracotta here.
-            style={({ pressed }) => ({ backgroundColor: finalizedAt ? "#4d6142" : colors.primary, opacity: pressed ? 0.75 : 1 })}
-          >
-            <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-              {finalizing ? "Saving…" : finalizedAt ? "✓ Day finalized" : "Finalize Day"}
-            </Text>
-          </Pressable>
         </ScrollView>
       )}
+      {/* Pinned Finalize (1g) — outside the ScrollView so it stays reachable
+          without scrolling to the bottom of the form. Hidden while the
+          keyboard is up: it would otherwise sit under the keyboard (and
+          under KeyboardDoneButton's floating bar), and there's nothing to
+          finalize mid-keystroke anyway. */}
+      {ready && !loadError && keyboardHeight === 0 ? (
+        <View style={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: 10, backgroundColor: CANVAS, borderTopWidth: 1, borderTopColor: "#f1ece6" }}>
+          <PressFade
+            onPress={handleFinalize}
+            disabled={finalizing}
+            className="items-center rounded-[15px] py-3.5 disabled:opacity-50"
+            // Olive once finalized — same completed-state language as the
+            // fitness Finalize button, which used to stay terracotta here.
+            pressedOpacity={0.75}
+            style={{ backgroundColor: finalizedAt ? "#4d6142" : colors.primary,}}
+          >
+            <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+              {finalizing ? "Saving…" : finalizedAt ? "✓ Day finalized" : "Finalize day"}
+            </Text>
+          </PressFade>
+        </View>
+      ) : null}
       <MilestoneCongratsModal milestone={congratsMilestone} onClose={handleCloseCongrats} />
       <MilestoneDetailModal milestone={selectedMilestone} onClose={() => setSelectedMilestone(null)} />
       <CalorieOverrideModal

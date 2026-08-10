@@ -12,6 +12,7 @@ import {
   unmarkOneOffExerciseComplete,
 } from "../lib/programming/exerciseCompletions";
 import { toastError } from "../lib/toast";
+import { PressFade } from "./PressFade";
 import { fonts, colors } from "../lib/theme";
 import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../lib/scrollToKeyboard";
 
@@ -228,6 +229,15 @@ export function SessionFocusModal({
     }
   };
 
+  // A group counts as done only when every exercise in it is checked —
+  // a superset isn't finished because one half of it is.
+  // localCompletions, not the `completions` prop — the prop only refreshes
+  // once the overlay closes, so reading it here would leave the bar frozen
+  // while the member is actually checking things off.
+  const doneGroupCount = exerciseCompletionType
+    ? groups.filter((group) => group.every((item) => localCompletions.has(item.id))).length
+    : 0;
+
   return (
     // Root-caused via a real simulator build + real taps, not guessed: this
     // overlay was mounting and genuinely doing work (its ExerciseCards were
@@ -287,10 +297,34 @@ export function SessionFocusModal({
               <Ionicons name="chevron-back" size={17} color="#78716c" />
             </Pressable>
 
-            <View className="flex-1 items-center">
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: "#a8a29e" }}>
+            <View className="flex-1 items-center" style={{ gap: 6 }}>
+              <Text
+                maxFontSizeMultiplier={1.1}
+                style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", color: "#a8a29e" }}
+              >
                 Exercise {focusIndex + 1} of {groups.length}
               </Text>
+              {/* Session progress (v5, 1d). The session's identity and timer
+                  already sit in the page header above this overlay — this
+                  adds the one thing that isn't up there: how much of the
+                  session is actually done. */}
+              {exerciseCompletionType ? (
+                <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View style={{ flex: 1, height: 6, borderRadius: 999, backgroundColor: "#f0ddd2", overflow: "hidden" }}>
+                    <View
+                      style={{
+                        width: `${groups.length > 0 ? (doneGroupCount / groups.length) * 100 : 0}%`,
+                        height: "100%",
+                        borderRadius: 999,
+                        backgroundColor: "#4d6142",
+                      }}
+                    />
+                  </View>
+                  <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#78716c" }}>
+                    {doneGroupCount} of {groups.length} done
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             <Pressable
@@ -386,11 +420,12 @@ export function SessionFocusModal({
                     Couldn't save — {finalizeError}
                   </Text>
                 ) : null}
-                <Pressable
+                <PressFade
                   onPress={handleFinalize}
                   disabled={finalizing}
                   className="items-center justify-center disabled:opacity-50"
-                  style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1,
+                  pressedOpacity={0.75}
+                  style={{
                     height: 52,
                     borderRadius: 12,
                     backgroundColor: isCompleted ? "#4d6142" : colors.primary,
@@ -398,12 +433,12 @@ export function SessionFocusModal({
                     shadowOffset: { width: 0, height: 6 },
                     shadowOpacity: 0.25,
                     shadowRadius: 16,
-                  })}
+                  }}
                 >
                   <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
                     {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}
                   </Text>
-                </Pressable>
+                </PressFade>
               </View>
             ) : null}
           </ScrollView>

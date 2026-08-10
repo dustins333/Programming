@@ -37,9 +37,9 @@ function TaskRow({ title, subtitle, done, onPress }) {
       style={{ borderColor: done ? "#4d6142" : "#ece7e1", borderWidth: done ? 2 : 1, backgroundColor: done ? "#f3f6ef" : "white" }}
     >
       <View className="flex-1 flex-row items-center gap-2.5">
-        <Ionicons name={done ? "checkmark-circle" : "ellipse-outline"} size={21} color={done ? "#4d6142" : "#a8a29e"} />
+        <Ionicons name={done ? "checkmark-circle" : "ellipse-outline"} size={26} color={done ? "#4d6142" : "#c9c4bd"} />
         <View className="flex-1">
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15 }}>{title}</Text>
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14.5, color: "#44403c" }}>{title}</Text>
           {subtitle ? (
             <Text className="mt-0.5 text-xs text-stone-500" style={{ fontFamily: fonts.sans }} numberOfLines={2}>
               {subtitle}
@@ -270,6 +270,9 @@ export default function WeeklyCheckin() {
   const photosSatisfied = !photosRequired || photosUploaded || !!skipReason;
   const formSatisfied = questions ? questions.every((q) => (answers[q.id] || "").trim().length > 0) : false;
   const canFinalize = photosSatisfied && (questions?.length === 0 || formSatisfied);
+  // Only count tasks the member actually has: a non-photo week has one.
+  const taskTotal = (photosRequired ? 1 : 0) + (questions?.length > 0 ? 1 : 0);
+  const taskDoneCount = (photosRequired && photosSatisfied ? 1 : 0) + (questions?.length > 0 && formSatisfied ? 1 : 0);
 
   const reopenWeekEnd = reopen ? addDays(reopen.week_start, 6) : null;
   const reopenPhotosRequired = access.client && reopen ? isPhotoRequirementWeek(access.client, reopen.week_start) : false;
@@ -424,11 +427,8 @@ export default function WeeklyCheckin() {
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
-      <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        Nutrition
-      </Text>
-      <Text className="mb-4 text-base text-stone-500" style={{ fontFamily: fonts.sans }}>
-        Week of {formatDateMDY(currentWeek.start)}
+      <Text className="mb-3 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+        My Nutrition
       </Text>
 
       <SegmentedControl
@@ -439,6 +439,36 @@ export default function WeeklyCheckin() {
           if (seg && seg.key !== "checkin") router.push(seg.href);
         }}
       />
+
+      {/* Week band (v5, 5a) — the "N of M done" chip is the whole status of
+          the check-in in one place, rather than making the member infer it
+          from the task rows below. */}
+      <View style={{ backgroundColor: "#33251f", borderRadius: 20, padding: 16, marginBottom: 16 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <Text
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.1}
+            style={{ flexShrink: 1, fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.2, textTransform: "uppercase", color: "#beac95" }}
+          >
+            Week of {formatDateMDY(currentWeek.start)}
+          </Text>
+          <View style={{ backgroundColor: "rgba(198,138,62,0.2)", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
+            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.7, color: "#e0b070" }}>
+              {taskDoneCount} OF {taskTotal} DONE
+            </Text>
+          </View>
+        </View>
+        <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: 26, color: "#f7f3ee", marginTop: 6 }}>
+          Your check-in
+        </Text>
+        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "rgba(247,243,238,0.62)", marginTop: 2 }}>
+          {response
+            ? "Submitted — your coach will review it."
+            : canFinalize
+              ? "Everything's in. Finalize when you're ready."
+              : "Finish both tasks below to finalize."}
+        </Text>
+      </View>
 
       {reopen ? (
         <View className="mb-5 rounded-2xl border px-4 py-3.5" style={{ borderColor: "#b23a22", borderWidth: 1.5, backgroundColor: "#fdf6f2" }}>

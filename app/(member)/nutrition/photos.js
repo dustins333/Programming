@@ -2,13 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { listAllPhotos, isPhotoRequirementWeek, PHOTO_RECENCY_DAYS } from "../../../lib/nutrition/photos";
 import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
 import { todayInBoise, addDays } from "../../../lib/boiseDate";
-import { formatDateMDY } from "../../../lib/formatDate";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { PhotoCompare } from "../../../components/nutrition/PhotoCompare";
 import { SegmentedControl } from "../../../components/SegmentedControl";
@@ -77,11 +77,8 @@ export default function NutritionPhotos() {
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
-      <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        Nutrition
-      </Text>
-      <Text className="mb-4 text-base text-stone-500" style={{ fontFamily: fonts.sans }}>
-        Progress photos
+      <Text className="mb-3 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+        My Nutrition
       </Text>
 
       <SegmentedControl
@@ -105,47 +102,52 @@ export default function NutritionPhotos() {
         const anglesIn = new Set(recent.map((p) => p.angle));
         const ANGLES = ["front", "side", "back"];
         const missing = ANGLES.filter((a) => !anglesIn.has(a));
-        const lastByAngle = {};
-        for (const p of photos) {
-          if (!lastByAngle[p.angle]) lastByAngle[p.angle] = p.date; // listAllPhotos is date-desc
-        }
+        const outstanding = dueThisWeek && missing.length > 0;
+        const satisfied = dueThisWeek && missing.length === 0;
+        // The old "Last uploads — front: …, side: …" line is gone: the
+        // slots below already show what's in and when (v5, 5b).
         return (
           <View
-            className="mb-4 rounded-2xl border px-4 py-3"
+            className="mb-4 rounded-2xl px-4 py-3.5"
             style={
-              dueThisWeek && missing.length > 0
+              outstanding
                 ? { borderColor: "#b23a22", borderWidth: 1.5, backgroundColor: "#fdf6f2" }
                 : { borderColor: "#ece7e1", borderWidth: 1, backgroundColor: "white" }
             }
           >
-            {dueThisWeek ? (
-              missing.length > 0 ? (
-                <Text className="mb-1 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: "#b23a22" }}>
-                  Photos due this week — still needed: {missing.join(", ")}
-                </Text>
-              ) : (
-                <Text className="mb-1 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: "#4d6142" }}>
-                  This week's photos are in ✓
-                </Text>
-              )
-            ) : (
-              <Text className="mb-1 text-sm text-stone-600" style={{ fontFamily: fonts.sansSemiBold }}>
-                No photos due this week
+            <View className="flex-row items-center" style={{ gap: 8 }}>
+              <Ionicons
+                name={satisfied ? "checkmark-circle" : outstanding ? "alert-circle" : "camera-outline"}
+                size={18}
+                color={satisfied ? "#4d6142" : outstanding ? "#b23a22" : "#a8a29e"}
+              />
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: satisfied ? "#4d6142" : outstanding ? "#b23a22" : "#57534e" }}
+              >
+                {outstanding
+                  ? `Photos due this week. ${missing.map((m) => m[0].toUpperCase() + m.slice(1)).join(" and ")} still needed`
+                  : satisfied
+                    ? "This week's photos are in"
+                    : "No photos due this week"}
               </Text>
-            )}
-            <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-              Last uploads — {ANGLES.map((a) => `${a}: ${lastByAngle[a] ? formatDateMDY(lastByAngle[a]) : "never"}`).join(" · ")}
-            </Text>
+            </View>
           </View>
         );
       })()}
 
-      <Text className="mb-2 text-sm" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text
+        maxFontSizeMultiplier={1.1}
+        style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color: "#a8a29e", marginBottom: 10 }}
+      >
         Add today's photos
       </Text>
       <PhotoUpload userId={profile.id} onUploaded={load} />
 
-      <Text className="mb-2 mt-6 text-sm" style={{ fontFamily: fonts.sansSemiBold }}>
+      <Text
+        maxFontSizeMultiplier={1.1}
+        style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color: "#a8a29e", marginTop: 24, marginBottom: 10 }}
+      >
         Compare
       </Text>
       <PhotoCompare photos={photos} />

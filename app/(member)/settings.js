@@ -5,7 +5,6 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { supabase } from "../../lib/supabase/client";
-import { getClient, getCoachRow } from "../../lib/nutrition/clients";
 import { updateOwnNotificationPrefs } from "../../lib/notifications/memberPrefs";
 import { useShowMessageBubble, setShowMessageBubble } from "../../lib/messageBubblePref";
 import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
@@ -23,8 +22,8 @@ const CANVAS = "#faf8f6";
 function Card({ children }) {
   return (
     <View
-      className="mb-5 rounded-xl p-4"
-      style={{ borderWidth: 1, borderColor: "#ece7e1", backgroundColor: "white", shadowColor: "#44403c", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 }}
+      className="mb-4 p-4"
+      style={{ borderRadius: 16, borderWidth: 1, borderColor: "#ece7e1", backgroundColor: "white", shadowColor: "#44403c", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 }}
     >
       {children}
     </View>
@@ -33,7 +32,10 @@ function Card({ children }) {
 
 function CardTitle({ children }) {
   return (
-    <Text className="mb-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+    <Text
+      maxFontSizeMultiplier={1.1}
+      style={{ fontFamily: fonts.sansSemiBold, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#a8a29e", marginBottom: 12 }}
+    >
       {children}
     </Text>
   );
@@ -209,7 +211,6 @@ export default function MemberSettings() {
   const [changingEmail, setChangingEmail] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifValues, setNotifValues] = useState(null);
-  const [coachName, setCoachName] = useState(undefined); // undefined = loading, null = no nutrition client row
   const [deleteOpen, setDeleteOpen] = useState(false);
   const showMessageBubble = useShowMessageBubble();
   // Hidden until confirmed on — same default as every other messaging
@@ -249,20 +250,6 @@ export default function MemberSettings() {
       isMessagingEnabledForUser(profile.id)
         .then(setMessagingOn)
         .catch(() => setMessagingOn(false));
-      (async () => {
-        try {
-          const client = await getClient(profile.id);
-          if (!client) {
-            setCoachName(null);
-            return;
-          }
-          const coach = await getCoachRow(client.coach_id);
-          setCoachName(coach?.name ?? null);
-        } catch (err) {
-          console.error("Failed to load assigned coach:", err);
-          setCoachName(null);
-        }
-      })();
     }, [profile])
   );
 
@@ -322,7 +309,7 @@ export default function MemberSettings() {
       <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)"))} className="mb-3 self-start">
         <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
       </Pressable>
-      <Text className="mb-5 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+      <Text className="mb-5" style={{ fontFamily: fonts.display, fontSize: 25, color: colors.primary }}>
         Settings
       </Text>
 
@@ -395,18 +382,15 @@ export default function MemberSettings() {
         </Card>
       ) : null}
 
-      {coachName ? (
-        <Card>
-          <CardTitle>About</CardTitle>
-          <Row label="Assigned coach" value={coachName} last />
-        </Card>
-      ) : null}
+      {/* The "About / Assigned coach" card was removed in
+          design_handoff_member_mobile_v5 (6a) — an assigned coach only
+          exists for nutrition clients, and it isn't a setting. */}
 
-      <Pressable onPress={signOut} className="mb-5 items-center rounded-lg border border-stone-300 py-3.5">
+      <Pressable onPress={signOut} className="mb-4 items-center border border-stone-300 py-3.5" style={{ borderRadius: 16 }}>
         <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>Sign out</Text>
       </Pressable>
 
-      <View className="rounded-xl p-4" style={{ backgroundColor: "#fdece5", borderWidth: 1, borderColor: "#f5c9b8" }}>
+      <View className="p-4" style={{ borderRadius: 16, backgroundColor: "#fdece5", borderWidth: 1, borderColor: "#f5c9b8" }}>
         <CardTitle>Danger zone</CardTitle>
         <Text className="mb-3 text-sm" style={{ fontFamily: fonts.sans, color: "#b23a22" }}>
           Permanently deletes your account, logs, and photos. This can't be undone.

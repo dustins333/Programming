@@ -1018,6 +1018,120 @@ Five reports in one message, two of which needed real diagnosis rather than a UI
 
 **Not visually verified**: anything inside a real builder against real data — same standing login limitation as everywhere else in this file. The sidebar, connector, row borders, modal ✕ and the archived-parent filter were all screenshot/DOM-verified in isolation, and `npx expo export -p web` is clean. The `vercel.json` rewrites specifically **cannot** be verified without a deploy — worth a real refresh on a deep URL as soon as this ships.
 
+## Member mobile v5 design pass — all 12 screens (2026-08-10)
+
+A full handoff (`design_handoff_member_mobile_v5/` — README + `Kova Member
+Mobile - Directions.dc.html` + per-screen screenshots) drove a visual and
+interaction pass across the **entire member-facing mobile app**: My Week, My
+Fitness (overview + logger), all four My Nutrition tabs, both My History
+views, Settings, and every empty/edge state. Coach web untouched. Same "the
+HTML is a reference, never copied in" rule as every prior handoff.
+
+**The single most important thing to carry forward — a real NativeWind bug
+that invalidates "bundle-checked clean" for a whole class of change:**
+NativeWind v4.2.6's `cssInterop` **drops a `Pressable`'s `style` prop
+entirely on native whenever it's passed as a function**. Confirmed on a real
+simulator build with a four-way A/B: a plain object style renders; the
+function form renders completely unstyled — with or without a `className`
+alongside it, and whether the function returns an object or an array. On
+react-native-web it works fine either way, which is exactly why it survived
+several clean web verifications. Symptoms it produced: a cream CTA button
+vanishing into a dark hero (dark text on dark, button had no background),
+session stripes collapsing to their caption width (`flex: 1` lost), selected
+day chips turning into white text on nothing, rating squares losing all
+backgrounds and borders. **Use `components/PressFade.js` instead** — it
+tracks `pressed` via `onPressIn`/`onPressOut` and always hands `Pressable` a
+plain object. All 15 call sites app-wide were converted; **5 of them were
+pre-existing**, meaning the My Fitness Finalize buttons (`SessionLogger`,
+`SessionFocusModal`, `plan.js`) and the superset index rows had been
+rendering unstyled on native the whole time. There are now zero
+function-style Pressables in the codebase; keep it that way.
+
+Second RNW footgun found the same pass: `flex: 0` compiles to `flex: 0 1 0%`,
+whose 0% basis collapses an explicit width to nothing, and an `<input>`
+won't shrink below its intrinsic content width without an explicit
+`minWidth: 0` (that one pushed the sleep tile's "hrs" unit clean off-screen).
+
+**House rules established by this handoff** (apply to any new member screen):
+dashed = not logged / solid = logged, everywhere; progress rings replace
+count pills, olive **only** when the target is met and clay while in
+progress; nutrition adherence measures against days *elapsed*, not 7; `|` as
+a separator, never an em-dash; empty values render as `–`; olive means good,
+never a neutral count; every tap target ≥44pt; nothing on any screen tells a
+member she's missing a product she isn't enrolled in.
+
+**New shared components**: `PressFade.js`, `ProgressRing.js` (react-native-svg,
+since RN has no conic-gradient), `SessionHeroBar.js`, `nutrition/MacroDial.js`,
+`nutrition/StatTile.js`, `nutrition/RatingSquares.js` (deliberately *not* a
+rewrite of `RatingSelect`, which still has to height-match `TargetField`
+inside the coach's forms). New `lib/keyboardAccessory.js` is a tiny
+module-level store letting a focused field contribute an action to
+`KeyboardDoneButton`'s floating bar — that's how the plate calculator is
+scoped to weight fields in a live session and never appears on nutrition.
+Registration is keyed by token because focusing a sibling input fires the new
+field's `onFocus` before the old one's `onBlur`.
+
+**Deleted after verifying zero references**: `components/RestTimer.js`
+(superseded by ExerciseCard's `RestButton`), `components/SessionInfoBar.js`
+(superseded by `SessionHeroBar`), `listLoggedExercises` in `memberPlan.js`
+(superseded by `getExerciseStats`).
+
+**New data work, no schema change** — everything derives from
+`programming.logs`:
+- `listLastLoggedSessions(userId, exerciseIds, today)` (`memberPlan.js`) —
+  batched last-time top set per exercise, for My Fitness's overview rows.
+  The per-exercise `getLastLoggedSession` still exists for the logger's own
+  full last-session panel.
+- `lib/programming/exerciseStats.js`'s `getExerciseStats()` — one query
+  reduced into per-exercise session series, yielding best, trend, biggest
+  jump and PRs. **PR rule, locked by the handoff**: an exercise needs 3
+  logged sessions before it's PR-eligible, then any increase counts — no
+  margin threshold, no rate limiting, and deliberately no PR counter tile
+  (early on everything would be a PR). Nothing is stored, so there's no
+  "best" column that can drift out of sync with the sets themselves.
+
+**Logger interaction model (1d), worth understanding before touching it**:
+set rows are logged / current / upcoming, driven by a `loggedCount` state
+that the "Log set n" button advances. That is deliberately **separate** from
+whether the fields have values — carry-over prefills the next set *before*
+it's been done, so "has numbers in it" can't stand in for "completed".
+**Persistence is unchanged**: every keystroke still autosaves exactly as
+before, so nothing depends on a member remembering to press Log set; it's
+purely a progression control. Reopening a session restores the position from
+leading fully-filled sets. Per-exercise checkboxes and their auto-advance are
+untouched and coexist — they operate on a different granularity (whole
+exercise vs. one set).
+
+**Deliberate deviations from the handoff, all with reasons:**
+- **No session tabs for group programs.** Which session a member can log is
+  decided by the weekday (`sessionNumberForDate`), so a tab row would offer a
+  switch that isn't real. SPC gets tabs because SPC genuinely has no
+  day-of-week routing; My Week's stripes remain the way into another day.
+- **Per-session titles are gone from My Week's stripes** (the design replaces
+  the titled bubbles with thin day-captioned stripes; the hero carries
+  today's name). This reverses an earlier explicit ask to put those titles
+  back — Terra said "fine for now", so it's still open.
+- **Kept two things the mock drops**, because removing them loses real
+  function: the coach's Focus/Game-plan/milestone slider above the macro
+  card, and a quiet calories line under the dials (the Cronometer override
+  modal has no other entry point).
+- Member Weekly's old `WeekList`/`WeekDayTable` are no longer imported, but
+  the components are untouched and still power the **coach's** Weeks tab.
+
+**Verification status, honestly mixed** — My Week, the fitness overview, the
+logger (tapped through: stepper → Log set → carry-over) and History By Day
+were driven on a real iOS simulator build. Nutrition Today, Weekly, Check-In,
+Photos and Settings are bundle-checked plus visually verified at mobile width
+in the browser, but have **not** been through native. This pass proved twice
+that a clean `expo export` and a clean web render can both hide a native-only
+bug. Also worth remembering: a missing helper left `doneGroupCount` undefined
+and `expo export` still reported clean — Metro doesn't resolve identifiers,
+so "bundle clean" is weaker evidence than it looks.
+
+**Still open**: the coach-side rest field should store integer seconds (the
+handoff calls it a separate ticket; the logger's `parseRestSeconds` stays
+forgiving about `0:20`/`90`/`90s` until then).
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
