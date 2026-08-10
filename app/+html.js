@@ -40,18 +40,27 @@ export default function Root({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Kova Strength" />
 
-        {/* Blue boxes over the nutrition log's number fields on the installed
-            iOS PWA. Every input in the app already renders autocomplete="off"
-            (babel/noAutofillPlugin.js, confirmed in the shipped DOM), so this
-            covers the two things that opt-out doesn't: Safari/Chrome painting
-            their own background on a field they consider autofilled, and the
-            UA focus ring drawn on tap. The :not(:focus-visible) guard keeps
-            the ring for real keyboard tabbing on the coach's desktop web.
-            Not reproducible outside iOS Safari from this environment — the
-            symptom is described, the causes here are the known ones. */}
+        {/* Safari's AutoFill Contact over the member's number fields on the
+            installed iOS PWA — the blue highlight box on the focused field
+            plus an "AutoFill Contact" bar on the keyboard. Safari ignores
+            autocomplete="off" outright, so the real fix is field-level:
+            lib/webAutofillSuppression.js hands those inputs type="search",
+            which Safari classifies as needing no AutoFill. The rules here
+            are the leftovers that CSS can cover — the in-field contacts
+            icon, a browser-painted autofill background, and the UA focus
+            ring on tap (:not(:focus-visible) keeps the ring for real
+            keyboard tabbing on the coach's desktop web). */}
         <style
           dangerouslySetInnerHTML={{
             __html: `
+input[autocomplete="off"]::-webkit-contacts-auto-fill-button,
+input[autocomplete="off"]::-webkit-credentials-auto-fill-button {
+  visibility: hidden;
+  display: none !important;
+  height: 0;
+  width: 0;
+  margin: 0;
+}
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,

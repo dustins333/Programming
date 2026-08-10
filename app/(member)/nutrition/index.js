@@ -29,6 +29,7 @@ import { fonts, colors } from "../../../lib/theme";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useScrollToKeyboard, useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
+import { autofillSuppressedRef } from "../../../lib/webAutofillSuppression";
 
 const AUTOSAVE_DELAY_MS = 900;
 const CANVAS = "#faf8f6";
@@ -140,6 +141,7 @@ function StepsRow({ value, onChangeText, goal, scrollViewRef, scrollOffsetRef })
         }}
       >
         <TextInput
+          ref={autofillSuppressedRef}
           value={value}
           onChangeText={onChangeText}
           onFocus={() => {

@@ -5,6 +5,7 @@ import { AddValueBadge } from "./AddValueBadge";
 import { colorForTarget } from "../../lib/nutrition/weekCycle";
 import { fonts } from "../../lib/theme";
 import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
+import { autofillSuppressedRef } from "../../lib/webAutofillSuppression";
 
 // design_handoff_member_mobile_v5 (1g) — one macro as a dial instead of a
 // labeled text box. House rule 1: dashed ring = not logged yet, solid =
@@ -95,6 +96,7 @@ export function MacroDial({ label, value, goal, unit = "g", onChangeText, readOn
           ) : (
             <>
               <TextInput
+                ref={autofillSuppressedRef}
                 value={value}
                 onChangeText={onChangeText}
                 onFocus={() => {

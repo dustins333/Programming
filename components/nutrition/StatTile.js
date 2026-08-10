@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { View, Text, TextInput } from "react-native";
 import { fonts } from "../../lib/theme";
 import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
+import { autofillSuppressedRef } from "../../lib/webAutofillSuppression";
 import { AddValueBadge } from "./AddValueBadge";
 
 // design_handoff_member_mobile_v5 (1g) — the weight and sleep tiles. Value
@@ -59,6 +60,7 @@ export function StatTile({ eyebrow, value, unit, onChangeText, footer, readOnly,
         ) : (
           <View style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
             <TextInput
+              ref={autofillSuppressedRef}
               value={value}
               onChangeText={onChangeText}
               onFocus={() => {

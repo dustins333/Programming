@@ -5,6 +5,7 @@ import { colorForTarget } from "../../lib/nutrition/weekCycle";
 import { fonts } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
+import { autofillSuppressedRef } from "../../lib/webAutofillSuppression";
 
 // Every control that can sit in a shared flex-row with a TargetField has to
 // render at exactly this height, or the input boxes don't line up across the
@@ -44,6 +45,7 @@ export function TargetField({ label, styleKey, current, pillLabel = "target", un
       </Text>
       <View className="flex-row items-center rounded-lg border border-stone-300 px-4" style={{ minHeight: FIELD_MIN_HEIGHT }}>
         <TextInput
+          ref={autofillSuppressedRef}
           value={value}
           onChangeText={onChangeText}
           onFocus={() => scrollFieldIntoView(fieldRef.current)}

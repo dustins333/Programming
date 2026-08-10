@@ -11,6 +11,7 @@ import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
 import { useShowLastTime, setShowLastTime } from "../lib/lastTimePref";
 import { PressFade } from "./PressFade";
 import { setAccessoryAction, clearAccessoryAction } from "../lib/keyboardAccessory";
+import { mergeAutofillRef } from "../lib/webAutofillSuppression";
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -86,7 +87,7 @@ function Stepper({ label, value, onChange, step = 1, min = 0, onFocusField, onBl
           <Ionicons name="remove" size={19} color="#8a5140" />
         </PressFade>
         <TextInput
-          ref={inputRef}
+          ref={mergeAutofillRef(inputRef)}
           value={value}
           onChangeText={onChange}
           onFocus={onFocusField}
