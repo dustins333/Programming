@@ -42,6 +42,41 @@ import { toastError, toastSuccess } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
+
+const PHASE_LABELS = {
+  questionnaire: "the questionnaire",
+  tracking: "objective tracking",
+  photos: "starting photos",
+};
+
+// Joins a list into readable prose ("a, b and c") rather than a bare comma
+// list, since this lands in a confirm dialog the coach actually reads.
+function joinPhrases(items) {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+// The close-out confirm names only what's genuinely still missing. The old
+// copy was hardcoded to "without completing the questionnaire, tracking, or
+// photos", which read as though the coach were discarding all three — wrong
+// and alarming for the common case where a client finished two of them and
+// stalled on one (Abbi Stauffer: questionnaire + all 5 tracking days done,
+// only photos missing). Nothing is actually discarded either way —
+// bypassOnboarding only stamps the approval and seeds check-in questions.
+export function buildCloseOutMessage(name, phases) {
+  const who = name || "This client";
+  const done = Object.keys(PHASE_LABELS).filter((k) => phases?.[k]).map((k) => PHASE_LABELS[k]);
+  const missing = Object.keys(PHASE_LABELS).filter((k) => !phases?.[k]).map((k) => PHASE_LABELS[k]);
+
+  if (missing.length === 0) {
+    return `${who} has finished every onboarding step. You'll set their target on the next screen.`;
+  }
+  if (done.length === 0) {
+    return `${who} will be approved without ${joinPhrases(missing)}. You'll set their target on the next screen.`;
+  }
+  return `${who} has completed ${joinPhrases(done)}. They will be approved without ${joinPhrases(missing)}, and anything already submitted is kept. You'll set their target on the next screen.`;
+}
+
 const WEEKS_SHOWN = 8;
 const TIMELINE_PAST_WEEKS = 6;
 const TIMELINE_UPCOMING_WEEKS = 3;
@@ -241,9 +276,7 @@ export default function NutritionClientDetail() {
   // only checks whether a target exists yet (not the approval timestamp),
   // so it's already the right screen to land on here.
   const handleBypassOnboarding = async () => {
-    const confirmed = await confirmBypassOnboarding(
-      `${client.name} will be marked approved without completing the questionnaire, tracking, or photos. You'll set their target on the next screen.`
-    );
+    const confirmed = await confirmBypassOnboarding(buildCloseOutMessage(client?.name, onboarding?.phases));
     if (!confirmed) return;
     setBypassing(true);
     try {
@@ -435,15 +468,28 @@ export default function NutritionClientDetail() {
               </Pressable>
             ) : null}
 
-            {/* For a client who won't do the questionnaire/tracking/photos
-                in-app at all — ported from the standalone app's
-                bypassObjectiveTracking (see lib/nutrition/onboarding.js's
-                bypassOnboarding). Available regardless of how far along the
-                3 phases are, since "won't ever log in" isn't something the
-                phase checklist can detect on its own. */}
-            <Pressable onPress={handleBypassOnboarding} disabled={bypassing} hitSlop={8}>
-              <Text style={{ fontFamily: fonts.sansMedium, color: "#a8a29e", fontSize: 13, textDecorationLine: "underline" }}>
-                {bypassing ? "Skipping…" : "Skip in-app onboarding →"}
+            {/* Lets the coach close out onboarding with whatever the client
+                has actually submitted — originally for a client who won't do
+                any of it in-app (ported from the standalone app's
+                bypassObjectiveTracking, see lib/nutrition/onboarding.js's
+                bypassOnboarding), but the far more common case is a client
+                who finished 2 of 3 and stalled on one, where "Approve & Set
+                Targets" is hidden and this is the only way forward.
+                Available regardless of phase progress, since "won't ever
+                finish" isn't something the phase checklist can detect.
+
+                Styled as a real button matching Approve & Set Targets in
+                size and shape, but outlined rather than filled so that when
+                both are on screen the genuine approve stays the primary
+                action instead of two identical buttons competing. */}
+            <Pressable
+              onPress={handleBypassOnboarding}
+              disabled={bypassing}
+              className="items-center self-start rounded-lg px-5 py-3"
+              style={{ borderWidth: 1.5, borderColor: colors.primary, opacity: bypassing ? 0.5 : 1 }}
+            >
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
+                {bypassing ? "Closing out…" : "Close out onboarding →"}
               </Text>
             </Pressable>
           </View>
