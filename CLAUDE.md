@@ -1132,36 +1132,39 @@ so "bundle clean" is weaker evidence than it looks.
 handoff calls it a separate ticket; the logger's `parseRestSeconds` stays
 forgiving about `0:20`/`90`/`90s` until then).
 
-## Safari's "AutoFill Contact" blue boxes on the PWA: no page-level fix exists (2026-08-10)
+## Safari's blue boxes: it was the focus ring all along (2026-08-10)
 
-Do not spend another cycle trying to suppress the blue highlight box +
-"AutoFill Contact" keyboard bar on the member's numeric fields in the
-installed iOS PWA. Three deploys were tested on a real device with three
-completely different field signatures — (1) `type="text"`, no `name`,
-`autocomplete="off"`; (2) `type="search"`, `name="kova-search-1"`; (3)
-`type="search"`, `name="searchfield1"` — and produced pixel-identical UI
-every time. If Safari's field-classification heuristics were the trigger,
-changing every input to the classifier would have changed *something*; it
-didn't. Conclusion: on current iOS this is Safari's own manual-AutoFill
-affordance — Apple's docs describe "tap a blank field... tap AutoFill
-Contact above the keyboard" as the intended flow for arbitrary fields — and
-the blue rounded box is the native fill-target indicator drawn by browser
-chrome *over* the page (which is also why an earlier session saw the boxes
-offset in layout-viewport coordinates while the keyboard shifted the visual
-viewport). DOM attributes and CSS cannot reach that layer, and
-`inputmode="decimal"` picking the numeric keypad doesn't factor into it.
+Took four attempts because the first three chased AutoFill. The decisive
+data point came from Terra testing on **desktop Safari** — identical blue
+box, no keyboard, no AutoFill bar in sight — which ruled out every
+iOS/AutoFill theory at once. The blue rounded box on a focused field is
+**Safari's UA focus ring**, and the reason the very first fix didn't kill
+it is a CSS trap worth remembering: the removal rule was written
+`input:focus:not(:focus-visible) { outline: none }` (guard intended to
+keep the ring for keyboard tabbing), but **per the spec's :focus-visible
+heuristic, a text field matches `:focus-visible` whenever it's focused —
+clicked, tapped, or tabbed, modality never matters for text-entry
+elements** (confirmed empirically against the real export: a real click on
+a text input reports `matches(':focus-visible') === true`; Chromium and
+Safari both implement this). So `:focus:not(:focus-visible)` is dead code
+for exactly the elements it targets. Fixed in `app/+html.js`: input/
+textarea drop the outline **unconditionally** (every text field in this
+app has its own border/caret, so keyboard users still see where they are);
+`<select>` keeps the guarded form, since selects have no caret, the ring
+is their only keyboard indicator, and they genuinely match
+`:focus-visible` only on keyboard focus.
 
-What actually works: Settings → Apps → Safari → AutoFill → turn off "Use
-Contact Info" on the device (applies to the installed PWA too), and the
-native App Store/TestFlight build, which doesn't involve Safari at all. The
-`lib/webAutofillSuppression.js` shims (type="search", dash-free name) are
-left in place — harmless, and they still suppress the older automatic
-contact-dropdown class on other iOS versions — but they demonstrably do not
-remove this bar/box. The one untried hack is readonly-until-focus; odds are
-low for the same reason (the affordance doesn't consult field state), so it
-was deliberately not attempted. The dash lesson stands independently: a
-dash in a `name` attribute makes Safari classify a field as a phone number,
-so never generate dashed name attributes on inputs.
+What the three failed rounds still established, kept for the record: (1)
+the "AutoFill Contact" item on the iOS keyboard bar is an OS-level
+affordance on arbitrary fields (Apple documents it as intended behavior) —
+that part genuinely has no page-level off switch, only the device's
+Settings → Safari → AutoFill → "Use Contact Info" toggle; (2) **never
+generate a dashed `name` attribute on an input** — a dash makes Safari
+classify the field as a phone number and show the contacts dropdown while
+ignoring `autocomplete="off"` (this bit for real: the first suppression
+shim generated `kova-search-1`); (3) `lib/webAutofillSuppression.js`
+(type="search" + dash-free name) stays — it suppresses contact QuickType
+suggestions, just not the focus ring it was mistakenly aimed at.
 
 ## Database migrations
 

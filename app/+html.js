@@ -40,16 +40,30 @@ export default function Root({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Kova Strength" />
 
-        {/* Safari's AutoFill Contact over the member's number fields on the
-            installed iOS PWA — the blue highlight box on the focused field
-            plus an "AutoFill Contact" bar on the keyboard. Safari ignores
-            autocomplete="off" outright, so the real fix is field-level:
-            lib/webAutofillSuppression.js hands those inputs type="search",
-            which Safari classifies as needing no AutoFill. The rules here
-            are the leftovers that CSS can cover — the in-field contacts
-            icon, a browser-painted autofill background, and the UA focus
-            ring on tap (:not(:focus-visible) keeps the ring for real
-            keyboard tabbing on the coach's desktop web). */}
+        {/* The "blue boxes" on focused fields were Safari's UA FOCUS RING all
+            along, not AutoFill — proven when the identical box showed up on
+            desktop Safari with no keyboard (and no AutoFill bar) in sight.
+            The original removal rule here was written as
+            `input:focus:not(:focus-visible)`, which is dead code for text
+            fields: per the CSS spec's :focus-visible heuristic, an element
+            that supports keyboard input matches :focus-visible WHENEVER it
+            is focused — clicked, tapped, or tabbed, the modality never
+            matters for text fields (verified empirically against the real
+            export, not just the spec). So the guard exempted exactly the
+            elements it was written for, and the ring survived everywhere.
+
+            input/textarea now drop the outline unconditionally — every text
+            field in this app carries its own border/background styling and
+            a visible caret, so keyboard-tab users still see where they are.
+            <select> keeps the guarded form: selects have no caret, the
+            focus ring is their only keyboard-nav indicator, and (unlike
+            text fields) they genuinely match :focus-visible only on
+            keyboard focus, so the guard actually works there.
+
+            The AutoFill Contact BAR on the iOS keyboard is a separate,
+            OS-level affordance — that part page code still can't remove.
+            The remaining rules cover the in-field contacts icon and the
+            browser-painted autofill background. */}
         <style
           dangerouslySetInnerHTML={{
             __html: `
@@ -71,8 +85,11 @@ textarea:-webkit-autofill {
   transition: background-color 600000s 0s;
 }
 input, textarea, select { -webkit-tap-highlight-color: transparent; }
-input:focus:not(:focus-visible),
-textarea:focus:not(:focus-visible),
+input:focus,
+textarea:focus {
+  outline: none;
+  outline-style: none;
+}
 select:focus:not(:focus-visible) { outline: none; }
 `,
           }}
