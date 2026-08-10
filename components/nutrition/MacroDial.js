@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { View, Text, TextInput } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import { AddValueBadge } from "./AddValueBadge";
 import { colorForTarget } from "../../lib/nutrition/weekCycle";
 import { fonts } from "../../lib/theme";
 import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
@@ -29,6 +30,7 @@ const DASHED_EMPTY = "#ddd6cd";
 // without making a past day editable in place.
 export function MacroDial({ label, value, goal, unit = "g", onChangeText, readOnly, scrollViewRef, scrollOffsetRef }) {
   const fieldRef = useRef(null);
+  const [focused, setFocused] = useState(false);
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
   const empty = value === "" || value === null || value === undefined;
   const onTrack = !empty && colorForTarget(Number(value), goal) === "green";
@@ -91,25 +93,33 @@ export function MacroDial({ label, value, goal, unit = "g", onChangeText, readOn
               {empty ? "–" : value}
             </Text>
           ) : (
-            <TextInput
-              value={value}
-              onChangeText={onChangeText}
-              onFocus={() => scrollFieldIntoView(fieldRef.current)}
-              keyboardType="decimal-pad"
-              placeholder="–"
-              placeholderTextColor="#c9c4bd"
-              autoComplete="off"
-              accessibilityLabel={`${label}${goal ? `, goal ${goal}${unit}` : ""}`}
-              maxFontSizeMultiplier={1.1}
-              style={{
-                width: INNER - 4,
-                textAlign: "center",
-                fontFamily: fonts.display,
-                fontSize: 16,
-                color: empty ? "#c9c4bd" : color,
-                paddingVertical: 4,
-              }}
-            />
+            <>
+              <TextInput
+                value={value}
+                onChangeText={onChangeText}
+                onFocus={() => {
+                  setFocused(true);
+                  scrollFieldIntoView(fieldRef.current);
+                }}
+                onBlur={() => setFocused(false)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#c9c4bd"
+                autoComplete="off"
+                accessibilityLabel={`${label}${goal ? `, goal ${goal}${unit}` : ""}`}
+                maxFontSizeMultiplier={1.1}
+                style={{
+                  width: INNER - 4,
+                  textAlign: "center",
+                  fontFamily: fonts.display,
+                  fontSize: 16,
+                  color: empty ? "#c9c4bd" : color,
+                  paddingVertical: 4,
+                }}
+              />
+              {empty && !focused ? (
+                <AddValueBadge size={24} style={{ position: "absolute", pointerEvents: "none" }} />
+              ) : null}
+            </>
           )}
         </View>
       </View>

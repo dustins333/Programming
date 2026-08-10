@@ -22,6 +22,7 @@ import { CalorieOverrideModal } from "../../../components/nutrition/CalorieOverr
 import { MacroDial } from "../../../components/nutrition/MacroDial";
 import { RatingSquares } from "../../../components/nutrition/RatingSquares";
 import { StatTile } from "../../../components/nutrition/StatTile";
+import { AddValueBadge } from "../../../components/nutrition/AddValueBadge";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
@@ -113,6 +114,7 @@ function LogCard({ eyebrow, aside, children, radius = 18, style }) {
 // every other unlogged control on this screen.
 function StepsRow({ value, onChangeText, goal, scrollViewRef, scrollOffsetRef }) {
   const fieldRef = useRef(null);
+  const [focused, setFocused] = useState(false);
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
   const empty = value === "" || value === null || value === undefined;
   return (
@@ -140,15 +142,21 @@ function StepsRow({ value, onChangeText, goal, scrollViewRef, scrollOffsetRef })
         <TextInput
           value={value}
           onChangeText={onChangeText}
-          onFocus={() => scrollFieldIntoView(fieldRef.current)}
+          onFocus={() => {
+            setFocused(true);
+            scrollFieldIntoView(fieldRef.current);
+          }}
+          onBlur={() => setFocused(false)}
           keyboardType="decimal-pad"
-          placeholder="–"
           placeholderTextColor="#c9c4bd"
           autoComplete="off"
           accessibilityLabel="Steps"
           maxFontSizeMultiplier={1.15}
-          style={{ fontFamily: fonts.display, fontSize: 17, color: empty ? "#c9c4bd" : "#44403c", paddingVertical: 8, textAlign: "right" }}
+          style={{ fontFamily: fonts.display, fontSize: 17, color: "#44403c", paddingVertical: 8, textAlign: "right" }}
         />
+        {empty && !focused ? (
+          <AddValueBadge size={24} style={{ position: "absolute", right: 10, top: 6, pointerEvents: "none" }} />
+        ) : null}
       </View>
     </View>
   );

@@ -52,7 +52,13 @@ function formatSeconds(total) {
 // standing at a rack without the keyboard, though the value itself is still
 // a real field, so tapping it opens the numeric keypad (both work, per
 // direct ask).
-function Stepper({ label, value, onChange, step = 1, min = 0, onFocusField, onBlurField, inputRef }) {
+// `accessory` renders on the label row, right-aligned over the "+" button —
+// that's where the weight field's plate calculator lives. It used to be
+// reachable *only* from the floating keyboard bar (KeyboardDoneButton),
+// which is iOS-native-only: on the installed web PWA the OS renders
+// Safari's own keyboard toolbar instead, so there was no way to open the
+// calculator at all there.
+function Stepper({ label, value, onChange, step = 1, min = 0, onFocusField, onBlurField, inputRef, accessory }) {
   const numeric = value === "" ? null : Number(value);
   const bump = (delta) => {
     const base = numeric ?? 0;
@@ -61,12 +67,16 @@ function Stepper({ label, value, onChange, step = 1, min = 0, onFocusField, onBl
   };
   return (
     <View style={{ flex: 1 }}>
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1, textTransform: "uppercase", color: "#a8a29e", marginBottom: 5 }}
-      >
-        {label}
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5, minHeight: 16 }}>
+        <Text
+          maxFontSizeMultiplier={1.1}
+          numberOfLines={1}
+          style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1, textTransform: "uppercase", color: "#a8a29e", flexShrink: 1 }}
+        >
+          {label}
+        </Text>
+        {accessory ?? null}
+      </View>
       <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: CANVAS, borderRadius: 14, padding: 5, gap: 5 }}>
         <PressFade
           onPress={() => bump(-step)}
@@ -718,9 +728,26 @@ export function ExerciseCard({
                     value={row.weight}
                     step={WEIGHT_STEP}
                     onChange={(v) => updateRow(i, "weight", v)}
-                    // The calculator moves onto the keyboard bar while a
-                    // weight field is focused (v5, 1d) instead of living as
-                    // a permanent icon inside the field.
+                    // Sits on the label row, above the "+" and outside the
+                    // input box. The keyboard-bar entry point below is kept
+                    // as well (it's the faster one to reach mid-typing on
+                    // native) — this is the one that works everywhere.
+                    accessory={
+                      <PressFade
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setCalcRowIndex(i);
+                        }}
+                        // The glyph is small by design (it rides the label
+                        // row); hitSlop is what gets the real tap target to
+                        // 44pt, same trick as RatingSquares.
+                        hitSlop={{ top: 14, bottom: 14, left: 16, right: 16 }}
+                        accessibilityLabel={`Plate calculator for set ${i + 1}`}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                      >
+                        <Ionicons name="calculator-outline" size={17} color="#8a5140" />
+                      </PressFade>
+                    }
                     onFocusField={() => {
                       scrollFieldIntoView(cardRef.current);
                       setAccessoryAction({

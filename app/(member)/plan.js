@@ -26,9 +26,8 @@ import { SessionFocusModal } from "../../components/SessionFocusModal";
 import { SessionHeroBar } from "../../components/SessionHeroBar";
 import { ProgramPickerModal } from "../../components/ProgramPickerModal";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
-import { PressFade } from "../../components/PressFade";
 import { fonts, colors } from "../../lib/theme";
-import { toastError, toastSuccess } from "../../lib/toast";
+import { toastSuccess } from "../../lib/toast";
 
 // Design tokens from design_handoff_visual_pass_v4/README.md.
 const CANVAS = "#faf8f6";
@@ -136,14 +135,20 @@ export default function MyFitness() {
   const [spcDetailRetryKey, setSpcDetailRetryKey] = useState(0);
   const [oneOffs, setOneOffs] = useState([]);
   const [hasNutrition, setHasNutrition] = useState(false);
-  // Set once the member picks an option from ProgramPickerModal (only shown
-  // when My Fitness is opened with no specific session context and 2+
-  // things are still due this week) — sticks for the rest of this screen's
-  // mounted lifetime, same as a resolved param would, so picking doesn't
-  // need a re-navigation.
+  // Set once the member picks an option from ProgramPickerModal — either the
+  // one auto-shown when My Fitness is opened with no session context and 2+
+  // things are due, or the one they open themselves from the hero's program
+  // chip. Stored with the params it was picked under (see activePick below),
+  // so it doesn't need a re-navigation to take effect and can't outlive the
+  // navigation it belongs to.
   const [pickedFocus, setPickedFocus] = useState(null);
   const [pickerDismissed, setPickerDismissed] = useState(false);
-  const [footerFinalizing, setFooterFinalizing] = useState(false);
+  // Distinct from the auto-shown picker below: this is the member *asking*
+  // for it from the hero's program chip. It has to be its own state because
+  // the auto-shown one is gated on `needsPicker` (nothing resolved yet), and
+  // by definition the chip is only ever tapped once something already is —
+  // so reusing that gate meant the chip did nothing at all.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [timer, setTimer] = useState({ elapsedMs: 0, running: false, startedAt: null });
   const [timerExpanded, setTimerExpanded] = useState(false);
   // The exercise-focus overlay, lifted up from SessionLogger to here so it
@@ -575,8 +580,29 @@ export default function MyFitness() {
       : []),
   ];
 
+  // A pick made from the hero's program chip has to outrank the params that
+  // brought the member here (they arrived on Flagship from My Week and are
+  // now asking for SPC) — but only for the navigation it was made during, or
+  // a later tap on a different My Week session would silently land back on
+  // whatever was picked before. Tying it to the params it was chosen under
+  // gives both: a fresh deep link changes the signature and supersedes it,
+  // re-focusing the tab with the same params keeps it.
+  const paramSignature = [
+    params.session,
+    params.groupProgramId,
+    params.sessionNumber,
+    params.weekNumber,
+    params.oneOffWorkoutId,
+    params.program,
+  ]
+    .map((p) => p ?? "")
+    .join("|");
+  const activePick = pickedFocus?.signature === paramSignature ? pickedFocus.focus : null;
+
   let focus = null;
-  if (explicitGroupTarget) {
+  if (activePick) {
+    focus = activePick;
+  } else if (explicitGroupTarget) {
     focus = { type: "group", groupProgramId: explicitGroupTarget.groupProgramId };
   } else if (explicitSpcTarget) {
     focus = { type: "spc" };
@@ -589,19 +615,18 @@ export default function MyFitness() {
         : validProgramParam === "extras"
           ? { type: "extras" }
           : { type: "group", groupProgramId: validProgramParam };
-  } else if (pickedFocus) {
-    focus = pickedFocus;
   } else if (candidates.length === 1) {
     focus = candidates[0].focus;
   }
   const needsPicker = !focus && candidates.length >= 2;
 
   // Exactly one section is "the" clear focus of the page — alone (no
-  // ambiguity) or explicitly resolved — and that's the one whose Finalize
-  // button gets docked to the bottom of the screen instead of the bottom
-  // of the scrolling content. One-offs are excluded: there can be several
-  // of them at once with no single "the" session, so theirs stay inline on
-  // their own cards.
+  // ambiguity) or explicitly resolved — and that's the one the hero header
+  // describes. One-offs are excluded: there can be several at once with no
+  // single "the" session. Its Finalize button is NOT docked to the bottom
+  // of the screen: it renders inline at the end of that session's own
+  // exercise list (SessionLogger's own button), per direct feedback that a
+  // permanently-stuck bar over the content read as heavy-handed.
   // "{n} exercises | {m} sets" for the hero's meta line — counted off the
   // already-loaded exercise rows, no extra query.
   const describeSession = (exercises) => {
@@ -661,18 +686,6 @@ export default function MyFitness() {
   };
 
   const handleResetTimer = () => setTimer({ elapsedMs: 0, running: false, startedAt: null });
-
-  const handleFooterFinalize = async () => {
-    if (!activeFinalize) return;
-    setFooterFinalizing(true);
-    try {
-      await activeFinalize.onFinalize();
-    } catch (err) {
-      toastError("Couldn't save", err);
-    } finally {
-      setFooterFinalizing(false);
-    }
-  };
 
   if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && spcLoadError) {
     return (
@@ -745,7 +758,7 @@ export default function MyFitness() {
       <View style={{ paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
         <SessionHeroBar
           programLabel={activeFinalize.programLabel}
-          onPickProgram={candidates.length > 1 ? () => setPickerDismissed(false) : null}
+          onPickProgram={candidates.length > 1 ? () => setPickerOpen(true) : null}
           eyebrowDetail={activeFinalize.eyebrowDetail}
           title={activeFinalize.title}
           meta={activeFinalize.meta}
@@ -769,7 +782,7 @@ export default function MyFitness() {
       <View style={{ paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
         <SessionHeroBar
           programLabel="Extras"
-          onPickProgram={candidates.length > 1 ? () => setPickerDismissed(false) : null}
+          onPickProgram={candidates.length > 1 ? () => setPickerOpen(true) : null}
           title={oneOffs.length === 1 ? oneOffs[0].workout.title || "One-off workout" : `${oneOffs.length} one-off workouts`}
           timer={timer}
           timerExpanded={timerExpanded}
@@ -788,7 +801,7 @@ export default function MyFitness() {
       automaticallyAdjustKeyboardInsets
     >
       {needsPicker && pickerDismissed && (
-        <Pressable onPress={() => setPickerDismissed(false)} className="mb-6 items-center self-center" hitSlop={HITSLOP}>
+        <Pressable onPress={() => setPickerOpen(true)} className="mb-6 items-center self-center" hitSlop={HITSLOP}>
           <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Choose a session to log →</Text>
         </Pressable>
       )}
@@ -854,7 +867,6 @@ export default function MyFitness() {
                   exercises={groupEntry.exercises}
                   isCompleted={groupEntry.completed}
                   onFinalize={() => handleFinalizeGroup(groupEntry)}
-                  hideFinalizeButton={activeFinalize?.key === groupEntry.groupProgramId}
                   layout="focus"
                   exerciseCompletionType="group"
                   onOpenFocus={(payload) =>
@@ -936,7 +948,6 @@ export default function MyFitness() {
                     exercises={spcDetail.exercises}
                     isCompleted={spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false}
                     onFinalize={handleFinalizeSpc}
-                    hideFinalizeButton={activeFinalize?.key === "spc"}
                     layout="focus"
                     exerciseCompletionType="spc"
                     weekNumber={spc.weekNumber}
@@ -1027,38 +1038,18 @@ export default function MyFitness() {
     )}
     </View>
 
-    {activeFinalize && (
-      <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: CARD_BORDER, backgroundColor: CANVAS }}>
-        <PressFade
-          onPress={handleFooterFinalize}
-          disabled={footerFinalizing}
-          className="items-center justify-center disabled:opacity-50"
-          pressedOpacity={0.75}
-          style={{
-            height: 52,
-            borderRadius: 12,
-            backgroundColor: activeFinalize.completed ? "#4d6142" : colors.primary,
-            shadowColor: activeFinalize.completed ? "#4d6142" : colors.primary,
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.25,
-            shadowRadius: 16,
-          }}
-        >
-          <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
-            {footerFinalizing ? "Saving…" : activeFinalize.completed ? "✓ Finalized" : "Finalize workout"}
-          </Text>
-        </PressFade>
-      </View>
-    )}
-
     <ProgramPickerModal
-      visible={needsPicker && !pickerDismissed}
+      visible={pickerOpen || (needsPicker && !pickerDismissed)}
       options={candidates}
       onSelect={(selected) => {
-        setPickedFocus(selected);
+        setPickedFocus({ focus: selected, signature: paramSignature });
+        setPickerOpen(false);
         setPickerDismissed(false);
       }}
-      onClose={() => setPickerDismissed(true)}
+      onClose={() => {
+        setPickerOpen(false);
+        setPickerDismissed(true);
+      }}
     />
     </View>
   );

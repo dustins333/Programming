@@ -155,10 +155,11 @@ function GroupIndexRow({ group, index, summaries, completions, lastSessions, onP
 // time with left/right navigation — see SessionFocusModal.js for why every
 // group's ExerciseCard has to mount immediately either way, not lazily per
 // navigation. One Finalize button for the whole session either way.
-// hideFinalizeButton lets a caller take the Finalize button out of the
-// scrolling content entirely (My Fitness docks it in a screen-bottom bar
-// instead, when exactly one session is the page's clear focus) without
-// this component losing its own standalone-usable default.
+// hideFinalizeButton lets a caller drop the Finalize button entirely —
+// used by the coach's read-only past-session viewer, which has nothing to
+// finalize. My Fitness deliberately does NOT pass it: the button belongs
+// inline at the end of the exercise list (it used to be docked to the
+// bottom of the screen, which read as heavy-handed over the content).
 //
 // `onOpenFocus`, when provided, hands control of the whole focus-overlay
 // experience to the caller instead of self-rendering it: tapping a

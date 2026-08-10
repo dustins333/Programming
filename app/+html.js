@@ -39,6 +39,35 @@ export default function Root({ children }) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Kova Strength" />
+
+        {/* Blue boxes over the nutrition log's number fields on the installed
+            iOS PWA. Every input in the app already renders autocomplete="off"
+            (babel/noAutofillPlugin.js, confirmed in the shipped DOM), so this
+            covers the two things that opt-out doesn't: Safari/Chrome painting
+            their own background on a field they consider autofilled, and the
+            UA focus ring drawn on tap. The :not(:focus-visible) guard keeps
+            the ring for real keyboard tabbing on the coach's desktop web.
+            Not reproducible outside iOS Safari from this environment — the
+            symptom is described, the causes here are the known ones. */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset;
+  -webkit-text-fill-color: #44403c;
+  transition: background-color 600000s 0s;
+}
+input, textarea, select { -webkit-tap-highlight-color: transparent; }
+input:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible),
+select:focus:not(:focus-visible) { outline: none; }
+`,
+          }}
+        />
       </head>
       <body>{children}</body>
     </html>
