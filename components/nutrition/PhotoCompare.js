@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, Image, Pressable, Modal, Platform, ActivityIndicator, ScrollView } from "react-native";
+import { View, Text, Image, Pressable, Modal, ActivityIndicator } from "react-native";
 import { getPhotoSignedUrls } from "../../lib/nutrition/photos";
+import { OptionStepper } from "./OptionPicker";
 import { ZoomableImage } from "./ZoomableImage";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
-
-const isWeb = Platform.OS === "web";
 
 const ANGLES = [
   { key: "front", label: "Front" },
@@ -17,76 +16,9 @@ function photoOptionLabel(photo) {
   return `${formatDateMDY(photo.date)}${photo.weight ? ` | ${photo.weight} lb` : ""}`;
 }
 
-// Web: a real <select>. Native: a Pressable that opens a modal list — RN
-// has no native <select> equivalent, same platform split this app already
-// uses elsewhere (e.g. the SPC roster's coach filter).
-function DatePicker({ anglePhotos, selectedDate, onChange }) {
-  const [open, setOpen] = useState(false);
-  const selected = anglePhotos.find((p) => p.date === selectedDate);
-
-  if (isWeb) {
-    return (
-      <select
-        value={selectedDate ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ fontFamily: fonts.sans, fontSize: 12.5, width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #d9d4cd", color: "#44403c", backgroundColor: "white" }}
-      >
-        {anglePhotos.map((p) => (
-          <option key={p.date} value={p.date}>
-            {photoOptionLabel(p)}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  return (
-    <>
-      <Pressable onPress={() => setOpen(true)} className="rounded border border-stone-300 px-2 py-1.5">
-        <Text numberOfLines={1} className="text-center text-xs" style={{ fontFamily: fonts.sansMedium }}>
-          {selected ? photoOptionLabel(selected) : "Pick a date"}
-        </Text>
-      </Pressable>
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable onPress={() => setOpen(false)} className="flex-1 items-center justify-center px-8" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
-          <Pressable onPress={(e) => e.stopPropagation()} className="w-full max-w-xs rounded-2xl bg-white p-2" style={{ maxHeight: "70%" }}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {anglePhotos.map((p) => (
-                <Pressable
-                  key={p.date}
-                  onPress={() => {
-                    onChange(p.date);
-                    setOpen(false);
-                  }}
-                  className="rounded-xl px-4 py-3"
-                  style={p.date === selectedDate ? { backgroundColor: "#fdf6f2" } : undefined}
-                >
-                  <Text style={{ fontFamily: fonts.sansMedium, color: p.date === selectedDate ? colors.primaryOnWhite : "#44403c" }}>{photoOptionLabel(p)}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
-  );
-}
-
 export function DateStepper({ anglePhotos, selectedDate, onChange }) {
-  const index = anglePhotos.findIndex((p) => p.date === selectedDate);
-  return (
-    <View className="flex-row items-center justify-center gap-3">
-      <Pressable onPress={() => index > 0 && onChange(anglePhotos[index - 1].date)} disabled={index <= 0} hitSlop={8}>
-        <Text style={{ color: index <= 0 ? "#d6d3d1" : colors.primaryOnWhite, fontFamily: fonts.sansMedium }}>‹</Text>
-      </Pressable>
-      <View style={{ flex: 1 }}>
-        <DatePicker anglePhotos={anglePhotos} selectedDate={selectedDate} onChange={onChange} />
-      </View>
-      <Pressable onPress={() => index >= 0 && index < anglePhotos.length - 1 && onChange(anglePhotos[index + 1].date)} disabled={index < 0 || index >= anglePhotos.length - 1} hitSlop={8}>
-        <Text style={{ color: index < 0 || index >= anglePhotos.length - 1 ? "#d6d3d1" : colors.primaryOnWhite, fontFamily: fonts.sansMedium }}>›</Text>
-      </Pressable>
-    </View>
-  );
+  const options = anglePhotos.map((p) => ({ value: p.date, label: photoOptionLabel(p) }));
+  return <OptionStepper options={options} value={selectedDate} onChange={onChange} placeholder="Pick a date" />;
 }
 
 function Slot({ photo, url, onPress }) {

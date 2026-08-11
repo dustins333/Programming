@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { toastError } from "../../lib/toast";
 import { Ionicons } from "@expo/vector-icons";
 import { updateClient } from "../../lib/nutrition/clients";
 import { getClientQuestions, addClientQuestion, updateClientQuestion, deleteClientQuestion } from "../../lib/nutrition/checkin";
-import { todayInBoise, addDays } from "../../lib/boiseDate";
+import { addDays } from "../../lib/boiseDate";
+import { formatDateMDY } from "../../lib/formatDate";
+import { CADENCE_WEEKS } from "../../lib/nutrition/photos";
+import { checkinMondayForWeek, weekStartForCheckinMonday, mondayOnOrAfter } from "../../lib/nutrition/weekCycle";
+import { MondayPicker } from "./MondayPicker";
 import { SegmentedControl } from "../SegmentedControl";
 import { QuestionListEditor } from "./QuestionListEditor";
 import { KeyboardDoneButton } from "../KeyboardDoneButton";
@@ -45,12 +49,16 @@ const STATUS_OPTIONS = [
   { key: "archived", label: "Archived" },
 ];
 
+// Keys are the stored photo_frequency values and must not change; the
+// labels spell out the real cadence, since "monthly" actually means every 4
+// weeks here (CADENCE_WEEKS) and "biweekly"/"bimonthly" are ambiguous words
+// for something the coach now picks off a calendar.
 const FREQUENCIES = [
   { key: "off", label: "Off" },
   { key: "weekly", label: "Weekly" },
-  { key: "biweekly", label: "Biweekly" },
-  { key: "monthly", label: "Monthly" },
-  { key: "bimonthly", label: "Bimonthly" },
+  { key: "biweekly", label: "Every 2 weeks" },
+  { key: "monthly", label: "Every 4 weeks" },
+  { key: "bimonthly", label: "Every 8 weeks" },
 ];
 
 // Ports the standalone app's EditClientModal (Name/Phone/Start date/Status/
@@ -66,9 +74,22 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
   const [status, setStatus] = useState("active");
   const [assignedCoachId, setAssignedCoachId] = useState(null);
   const [frequency, setFrequency] = useState("off");
-  const [frequencyStart, setFrequencyStart] = useState("");
+  // Held as the CHECK-IN Monday the coach picks, converted to the stored
+  // week-start (7 days earlier) only on save. See weekCycle.js.
+  const [firstCheckinMonday, setFirstCheckinMonday] = useState(null);
+  const [oneOffMonday, setOneOffMonday] = useState(null);
+  const [pickingOneOff, setPickingOneOff] = useState(false);
   const [saving, setSaving] = useState(false);
   const [questions, setQuestions] = useState([]);
+
+  // The Mondays this cadence will actually land on, dotted on the calendar
+  // so the schedule is visible while picking rather than something the
+  // coach has to work out in her head.
+  const projectedMondays = useMemo(() => {
+    if (frequency === "off" || !firstCheckinMonday) return [];
+    const step = CADENCE_WEEKS[frequency] * 7;
+    return Array.from({ length: 26 }, (_, i) => addDays(firstCheckinMonday, i * step));
+  }, [frequency, firstCheckinMonday]);
 
   // A real dense form (Name/Phone/Start date/Status/Coach/Photo frequency/
   // Frequency start), plus an expandable check-in-question editor and
@@ -82,7 +103,6 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
   const nameFieldRef = useRef(null);
   const phoneFieldRef = useRef(null);
   const startDateFieldRef = useRef(null);
-  const frequencyStartFieldRef = useRef(null);
   const keyboardHeight = useKeyboardHeight();
   const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
 
@@ -103,14 +123,23 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
     setStatus(client.status ?? "active");
     setAssignedCoachId(client.coach_id ?? null);
     setFrequency(client.photo_frequency ?? "off");
-    setFrequencyStart(client.photo_frequency_started_at ?? "");
+    // Legacy anchors were typed free-text and are often not Mondays.
+    // mondayOnOrAfter snaps FORWARD, which is behaviour-identical for the
+    // requirement check (see weekCycle.js) — so showing the coach the real
+    // first required check-in needs no data migration, and simply saving
+    // from this picker normalizes the row.
+    setFirstCheckinMonday(
+      client.photo_frequency_started_at ? checkinMondayForWeek(mondayOnOrAfter(client.photo_frequency_started_at)) : null
+    );
+    setOneOffMonday(client.photo_requirement_next_checkin ? checkinMondayForWeek(client.photo_requirement_next_checkin) : null);
+    setPickingOneOff(false);
     loadQuestions();
   }, [visible, client, loadQuestions]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const freqValue = frequency === "off" ? null : frequency;
+      const freqValue = frequency === "off" || !firstCheckinMonday ? null : frequency;
       await updateClient(userId, {
         name: name.trim(),
         phone: phone.trim() || null,
@@ -118,7 +147,11 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
         status,
         coach_id: assignedCoachId,
         photo_frequency: freqValue,
-        photo_frequency_started_at: freqValue ? frequencyStart : null,
+        // Stored as the week being checked in about, not the check-in Monday
+        // the coach picked — everything downstream (isPhotoRequirementWeek,
+        // checkin_responses.week_start) works in week-start terms.
+        photo_frequency_started_at: freqValue ? weekStartForCheckinMonday(firstCheckinMonday) : null,
+        photo_requirement_next_checkin: oneOffMonday ? weekStartForCheckinMonday(oneOffMonday) : null,
       });
       await onSaved();
       onClose();
@@ -220,9 +253,9 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
             </View>
 
             <Text className="mb-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-              Progress photo frequency
+              Progress photos
             </Text>
-            <View className="mb-4 flex-row flex-wrap gap-2">
+            <View className="mb-3 flex-row flex-wrap gap-2">
               {FREQUENCIES.map((f) => {
                 const active = frequency === f.key;
                 return (
@@ -241,31 +274,56 @@ export function ClientSettingsModal({ visible, userId, coachId, coaches = [], cl
             {frequency !== "off" && (
               <View className="mb-5">
                 <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                  Starting the week of
+                  First check-in photos are due
                 </Text>
-                <TextInput
-                  ref={frequencyStartFieldRef}
-                  value={frequencyStart}
-                  onChangeText={setFrequencyStart}
-                  onFocus={() => scrollFieldIntoView(frequencyStartFieldRef.current)}
-                  placeholder="YYYY-MM-DD"
-                  className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
-                  style={{ fontFamily: fonts.sans }}
-                />
-                <View className="flex-row gap-4">
-                  <Pressable onPress={() => setFrequencyStart(todayInBoise())}>
-                    <Text className="text-xs underline" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                      This week
-                    </Text>
-                  </Pressable>
-                  <Pressable onPress={() => setFrequencyStart(addDays(todayInBoise(), 7))}>
-                    <Text className="text-xs underline" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                      Next week
-                    </Text>
-                  </Pressable>
-                </View>
+                <Text className="mb-2 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                  Pick the Monday you want to see them. Only Mondays can be picked — that's the day a check-in comes in.
+                </Text>
+                <MondayPicker value={firstCheckinMonday} onChange={setFirstCheckinMonday} markedDates={projectedMondays} />
+                {firstCheckinMonday ? (
+                  <Text className="mt-2 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                    Due on every dotted Monday after that. Next few:{" "}
+                    {projectedMondays.slice(0, 3).map((d) => formatDateMDY(d)).join(", ")}
+                  </Text>
+                ) : null}
               </View>
             )}
+
+            <View className="mb-5">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                  Extra one-off week
+                </Text>
+                <Pressable onPress={() => setPickingOneOff((v) => !v)} hitSlop={8}>
+                  <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                    {pickingOneOff ? "Done" : oneOffMonday ? "Change" : "Pick a Monday"}
+                  </Text>
+                </Pressable>
+              </View>
+              <View className="mt-1 flex-row items-center gap-3">
+                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                  {oneOffMonday ? `Also due ${formatDateMDY(oneOffMonday)}` : "None"}
+                </Text>
+                {oneOffMonday ? (
+                  <Pressable
+                    onPress={() => {
+                      setOneOffMonday(null);
+                      setPickingOneOff(false);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text className="text-xs underline" style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>
+                      Clear
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {pickingOneOff ? (
+                <View className="mt-2">
+                  <MondayPicker value={oneOffMonday} onChange={setOneOffMonday} />
+                </View>
+              ) : null}
+            </View>
 
             <View className="my-4 h-px bg-stone-100" />
 

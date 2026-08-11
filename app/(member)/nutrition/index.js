@@ -14,6 +14,7 @@ import { getCurrentTarget, deriveCalories } from "../../../lib/nutrition/targets
 import { getLogForDate, saveDraftLog, finalizeLog, listLogsForDateRange } from "../../../lib/nutrition/dailyLog";
 import { listFocusItems, toggleFocusItem } from "../../../lib/nutrition/coachClient";
 import { listActiveMilestones, listCompletedMilestones, getUnseenCompletedMilestone, acknowledgeMilestone, MILESTONE_COLORS } from "../../../lib/nutrition/milestones";
+import { listPhases } from "../../../lib/nutrition/planPhases";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { TodayCardSlider } from "../../../components/nutrition/TodayCardSlider";
 import { MilestoneCongratsModal } from "../../../components/nutrition/MilestoneCongratsModal";
@@ -254,6 +255,7 @@ export default function NutritionToday() {
   const [lastWeekWeight, setLastWeekWeight] = useState(null);
   const [focusItems, setFocusItems] = useState([]);
   const [milestones, setMilestones] = useState([]);
+  const [phases, setPhases] = useState([]);
   const [completedMilestones, setCompletedMilestones] = useState([]);
   const [selectedMilestone, setSelectedMilestone] = useState(null);
   const [congratsMilestone, setCongratsMilestone] = useState(null);
@@ -290,6 +292,13 @@ export default function NutritionToday() {
       setCompletedMilestones(await listCompletedMilestones(profile.id));
     } catch (err) {
       console.error("Failed to load completed milestones:", err);
+    }
+    // Own try/catch, same reasoning as the two above — migration 0050 may
+    // not be run yet in a given environment.
+    try {
+      setPhases(await listPhases(profile.id));
+    } catch (err) {
+      console.error("Failed to load plan phases:", err);
     }
   };
 
@@ -531,6 +540,39 @@ export default function NutritionToday() {
                           </Text>
                           {focusItems.map((item) => (
                             <FocusRow key={item.id} item={item} onChanged={loadFocus} />
+                          ))}
+                        </View>
+                      ),
+                    },
+                  ]
+                : []),
+              // What the coach has mapped out — top of the list is what
+              // they're on now. Capped at 2 so a long-term plan can't turn
+              // this card into a wall of text; the coach's own page has the
+              // full list.
+              ...(phases.length > 0
+                ? [
+                    {
+                      key: "phases",
+                      content: (
+                        <View className="rounded-lg border border-stone-200 bg-white p-4">
+                          <Text className="mb-1.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+                            What we&apos;re working on
+                          </Text>
+                          {phases.slice(0, 2).map((phase) => (
+                            <View key={phase.id} className="mb-2">
+                              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: colors.primaryOnWhite }}>{phase.title}</Text>
+                              {phase.details ? (
+                                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                                  {phase.details}
+                                </Text>
+                              ) : null}
+                              {phase.items.map((item) => (
+                                <Text key={item.id} className="mt-0.5 text-xs text-stone-600" style={{ fontFamily: fonts.sans }}>
+                                  – {item.text}
+                                </Text>
+                              ))}
+                            </View>
                           ))}
                         </View>
                       ),

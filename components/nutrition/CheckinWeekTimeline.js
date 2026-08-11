@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
-import { computeWeekWindows, enumerateUpcomingWeeks, deriveCheckinStatus } from "../../lib/nutrition/weekCycle";
+import { computeWeekWindows, enumerateUpcomingWeeks, deriveCheckinStatus, checkinMondayForWeek } from "../../lib/nutrition/weekCycle";
 import { enumerateRecentWeeks } from "./WeekList";
-import { isPhotoRequirementWeek, hasAllAngles, requirePhotosNextCheckin, clearPhotosNextCheckin } from "../../lib/nutrition/photos";
+import { isPhotoRequirementWeek, hasAllAngles, photosForRequirementWeek } from "../../lib/nutrition/photos";
 import { reopenCheckin } from "../../lib/nutrition/checkin";
 import { addDays, formatDateTimeInBoise } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
@@ -20,15 +20,19 @@ const STATUS_STYLE = {
   notDue: { label: "Not due yet", color: "#a8a29e" },
 };
 
-function weekLabel(start, end) {
-  return `${formatDateMDY(start)} – ${formatDateMDY(end)}`;
+// Labeled by the Monday the coach picks the check-in up and reviews it, not
+// by the Mon-Sun range it covers. That range is what's stored and what every
+// requirement check works in, but it isn't how a coach thinks about a
+// check-in — and showing two adjacent dates for one check-in was the
+// confusing part. See checkinMondayForWeek in weekCycle.js.
+function weekLabel(start) {
+  return `${formatDateMDY(checkinMondayForWeek(start))} check-in`;
 }
 
 function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coachId, today, reopen, onChanged }) {
   const [busy, setBusy] = useState(false);
   const required = isPhotoRequirementWeek(client, week.start);
-  const isOneOff = client.photo_requirement_next_checkin === week.start;
-  const weekPhotos = photos.filter((p) => p.date >= week.start && p.date <= week.end);
+  const weekPhotos = photosForRequirementWeek(photos, week);
   const photosOk = required ? hasAllAngles(weekPhotos) : null;
   const isMissed = !isCurrent && !isUpcoming && !checkin;
   const reopenActive = !!reopen && reopen.expires_at >= today;
@@ -39,19 +43,6 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coa
     else if (isCurrent) status = STATUS_STYLE.notDue;
     else status = reopenActive ? STATUS_STYLE.reopened : STATUS_STYLE.missed;
   }
-
-  const toggleRequirement = async () => {
-    setBusy(true);
-    try {
-      if (isOneOff) await clearPhotosNextCheckin(userId);
-      else await requirePhotosNextCheckin(userId, week.start);
-      await onChanged();
-    } catch (err) {
-      toastError("Failed to update", err);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const handleReopen = async () => {
     setBusy(true);
@@ -72,8 +63,8 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coa
     >
       <View style={{ flex: 1 }}>
         <Text style={{ fontFamily: isCurrent ? fonts.sansSemiBold : fonts.sans, fontSize: 13 }}>
-          {weekLabel(week.start, week.end)}
-          {isCurrent ? "  · this week" : ""}
+          {weekLabel(week.start)}
+          {isCurrent ? "  · current" : ""}
         </Text>
         {required ? (
           <Text className="mt-0.5" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: photosOk ? "#4d6142" : "#b23a22" }}>
@@ -95,13 +86,7 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coa
         </View>
       ) : null}
 
-      {isCurrent || isUpcoming ? (
-        <Pressable onPress={toggleRequirement} disabled={busy} hitSlop={6}>
-          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: isOneOff ? "#78716c" : colors.primaryOnWhite }}>
-            {busy ? "…" : isOneOff ? "✓ Required — remove" : "+ Require photos"}
-          </Text>
-        </Pressable>
-      ) : isMissed && !reopenActive ? (
+      {isMissed && !reopenActive ? (
         <Pressable onPress={handleReopen} disabled={busy} hitSlop={6}>
           <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: colors.primaryOnWhite }}>{busy ? "…" : "Reopen"}</Text>
         </Pressable>
@@ -150,7 +135,7 @@ export function CheckinWeekTimeline({ userId, coachId, client, checkins, reopens
       ))}
 
       <Text className="mb-1.5 mt-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-        This week
+        Current
       </Text>
       <Row {...rowProps(recent[0], true, false)} />
 

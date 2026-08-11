@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal, View, Text, Pressable, ScrollView } from "react-native";
 import { computeBaseline } from "../../lib/nutrition/onboarding";
+import { deriveCalories } from "../../lib/nutrition/targets";
 import { formatDateMDY } from "../../lib/formatDate";
 import { BaselineSummary } from "./BaselineSummary";
 import { fonts, colors } from "../../lib/theme";
@@ -49,7 +50,7 @@ export function ObjectiveTrackingHistory({ logs }) {
             </View>
             <ScrollView contentContainerStyle={{ padding: 24 }}>
               {sorted.map((log, i) => {
-                const calories = 4 * Number(log.protein_g) + 4 * Number(log.carb_g) + 9 * Number(log.fat_g);
+                const calories = deriveCalories(log);
                 return (
                   <View key={i} className="border-b border-stone-100 py-3">
                     <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }} className="text-stone-700">

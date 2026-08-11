@@ -6,9 +6,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
-import { listAllPhotos, isPhotoRequirementWeek, PHOTO_RECENCY_DAYS } from "../../../lib/nutrition/photos";
+import { listAllPhotos, isPhotoRequirementWeek, photosForRequirementWeek } from "../../../lib/nutrition/photos";
 import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
-import { todayInBoise, addDays } from "../../../lib/boiseDate";
+import { todayInBoise } from "../../../lib/boiseDate";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { PhotoCompare } from "../../../components/nutrition/PhotoCompare";
 import { SegmentedControl } from "../../../components/SegmentedControl";
@@ -93,12 +93,12 @@ export default function NutritionPhotos() {
       {(() => {
         // "What's still needed" status — this tab never said whether photos
         // were due or which angles were missing, even though check-in two
-        // screens over gates on exactly this. Same recency window as
-        // checkin.js's own photosUploaded computation.
+        // screens over gates on exactly this. Same window as checkin.js's
+        // own photosUploaded computation.
         const today = todayInBoise();
         const { currentWeek } = computeWeekWindows(today);
         const dueThisWeek = access.client ? isPhotoRequirementWeek(access.client, currentWeek.start) : false;
-        const recent = photos.filter((p) => p.date >= addDays(today, -PHOTO_RECENCY_DAYS));
+        const recent = photosForRequirementWeek(photos, currentWeek);
         const anglesIn = new Set(recent.map((p) => p.angle));
         const ANGLES = ["front", "side", "back"];
         const missing = ANGLES.filter((a) => !anglesIn.has(a));

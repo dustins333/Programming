@@ -1,10 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
-import { addFocusItem, editFocusItem, toggleFocusItem, deleteFocusItem } from "../../lib/nutrition/coachClient";
+import {
+  addFocusItem,
+  editFocusItem,
+  toggleFocusItem,
+  deleteFocusItem,
+  reorderFocusItems,
+} from "../../lib/nutrition/coachClient";
+import { SortableList } from "../SortableList";
 import { fonts, colors } from "../../lib/theme";
 import { toastError } from "../../lib/toast";
 
-function FocusItemRow({ item, onChanged }) {
+function FocusItemRow({ item, controls, onChanged }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(item.text);
   const [busy, setBusy] = useState(false);
@@ -54,6 +61,7 @@ function FocusItemRow({ item, onChanged }) {
 
   return (
     <View className="mb-1.5 flex-row items-center gap-2">
+      {controls}
       <Pressable onPress={handleToggle} disabled={busy || editing} hitSlop={8}>
         <View
           className="items-center justify-center rounded border"
@@ -95,6 +103,21 @@ function FocusItemRow({ item, onChanged }) {
 export function FocusChecklist({ userId, items, onChanged }) {
   const [newText, setNewText] = useState("");
   const [adding, setAdding] = useState(false);
+  // Local mirror of the incoming list purely so a reorder renders instantly.
+  // Every other mutation here re-reads through the parent's onChanged(), but
+  // that's a full refetch — waiting on it would make a dropped row visibly
+  // snap back to where it started first.
+  const [order, setOrder] = useState(items);
+  useEffect(() => {
+    setOrder(items);
+  }, [items]);
+
+  const handleReorder = (reordered) => {
+    setOrder(reordered);
+    reorderFocusItems(reordered.map((item, i) => ({ id: item.id, position: i + 1 }))).catch((err) =>
+      toastError("Couldn't save the new order", err)
+    );
+  };
 
   const handleAdd = async () => {
     if (!newText.trim()) return;
@@ -112,12 +135,16 @@ export function FocusChecklist({ userId, items, onChanged }) {
 
   return (
     <View>
-      {items.length === 0 ? (
+      {order.length === 0 ? (
         <Text className="mb-2 text-sm text-stone-400" style={{ fontFamily: fonts.sans }}>
           No focus items yet.
         </Text>
       ) : (
-        items.map((item) => <FocusItemRow key={item.id} item={item} onChanged={onChanged} />)
+        <SortableList
+          items={order}
+          onReorder={handleReorder}
+          renderItem={(item, controls) => <FocusItemRow item={item} controls={controls} onChanged={onChanged} />}
+        />
       )}
       <View className="mt-2 flex-row gap-2">
         <TextInput

@@ -1182,6 +1182,148 @@ shim generated `kova-search-1`); (3) `lib/webAutofillSuppression.js`
 (type="search" + dash-free name) stays — it suppresses contact QuickType
 suggestions, just not the focus ring it was mistakenly aimed at.
 
+## Nutrition coach-side pass: reorder, calories, photo scheduling, plan phases (2026-08-11)
+
+Six asks from real coach use, plus one real bug found while investigating them.
+
+**Shared reorder mechanism, built once and used three times.** New
+`components/SortableList.js` + `.web.js` — `@dnd-kit` drag on web (the builders'
+proven pattern: 4px activation distance so rows stay clickable, `pointerWithin`,
+a *separate* small `⠿` handle rather than a whole-row drag), `▲`/`▼` on native
+(`QuestionListEditor`'s pattern), one API: `renderItem(item, controls)` where
+`controls` is a ready-made node the caller drops into its own row. **Nested
+`DndContext` works** — verified by driving both an inner (phase items) and outer
+(whole phases) drag in the same tree. Focus items got it via new
+`reorderFocusItems` (`public.focus_items.position` already existed — verified live
+as `integer NOT NULL`, no migration); `FocusChecklist` had to gain local state
+mirrored from props, since it was purely controlled and a drop would visibly snap
+back while the parent's full refetch resolved.
+
+**Calories.** The Targets-tab modal already had them; the screen actually missing
+them was the onboarding Tracking page (`onboarding/tracking.js`). Four files were
+hand-rolling `4/4/9` — all collapsed onto `deriveCalories`. Week summary
+(`WeekList`) gained **Weight, Calories, Protein, …** (Terra corrected the order
+mid-session — calories second, not first) plus **Quality** after Sleep.
+`sleep_quality` was already averaged by `summarizeWeek` and simply absent from
+`METRIC_COLUMNS`; calories are stamped onto each day inside `summarizeWeek` via new
+`loggedCalories` (distinguishes "logged nothing" from "logged zero", so a
+weight-only row shows `—` instead of `0` and doesn't drag the average down).
+`WeekDayTable` was dead (imported nowhere) and was deleted rather than left to drift.
+
+**Real bug found and fixed first: a late check-in submitted *with* photos rendered
+"⚠ Photos missing" to the coach.** The same requirement was evaluated against two
+different windows — the coach filtered strictly to `week.start..week.end`, the
+member gated on a rolling `today − 5 days`. That rolling window was never as
+generous as it looked: a week only becomes current once it's over, so `today − 5`
+could never reach back before `week.start`; it only clipped the week's own first
+days while letting post-week photos count. By Saturday it had **zero overlap** with
+the week being checked in on, so the client couldn't satisfy the gate with any
+photo from that week, uploaded one dated after it, passed both member and submit
+gates — and the coach's row then said photos were missing. New
+`photosForRequirementWeek(photos, week)` in `photos.js` is now the single
+definition, bounded `week.start … week.end + 6` (the covered week plus the filing
+window it stays current for), used by the coach timeline, both member gates and the
+server-side submit gate. The coach-reopened path is deliberately *not* routed
+through it — it's filed long after its grace period and has its own documented rule.
+
+**Photo scheduling reworked around "pick the Monday."** Coaches think in **check-in
+Mondays** (the Monday they review it); everything stored is keyed to the Monday that
+*starts* the covered week, 7 days earlier. New `checkinMondayForWeek` /
+`weekStartForCheckinMonday` / `mondayOnOrAfter` in `weekCycle.js` convert **at UI
+boundaries only** — nothing stored moves, so all five `isPhotoRequirementWeek` call
+sites were untouched. The raw `YYYY-MM-DD` text field and its two quick-fills are
+replaced by new `components/nutrition/MondayPicker.js`: a Monday-only month grid
+(non-Mondays inert) that **dots every Monday the cadence will land on**, so the
+resulting schedule is visible while picking. The one-off extra week moved into the
+same picker, so `CheckinWeekTimeline`'s per-row "+ Require photos" is gone — with a
+single-date column it silently *moved* the flag off whatever week held it.
+`requirePhotosNextCheckin`/`clearPhotosNextCheckin` deleted with it. Grid math
+extracted to `lib/monthGrid.js`, shared with `DateCalendarPicker`.
+
+**Two corrections worth remembering.** (1) Snapping legacy non-Monday anchors
+*backward* to the containing Monday — my first instinct — would have **shifted every
+biweekly/monthly client's photo weeks by 7 days**. Forward-snap (first Monday on or
+after) is provably a no-op for `floor((week − anchor)/7)`, so `mondayOnOrAfter` runs
+on the picker's **read path** and no data migration was needed. (2) `formatDateMDY`
+emits dashes, not slashes. Both verified by a real Node arithmetic run, not reasoning:
+round-trip exactness, the picked Monday genuinely being the first required check-in at
+all four cadences, the UI's dots exactly matching `isPhotoRequirementWeek`, and
+forward-snap equivalence.
+
+**Relabeling** is exactly two places, changed together because they're reachable from
+the same screen: `CheckinWeekTimeline`'s row label and the Check-In tab's week
+navigator, both now `MM-DD-YYYY check-in`. **Deliberately not relabeled**: `WeekList`,
+member Weekly, `WeeklySnapshot`, and both member check-in labels — those are
+calendar-week/daily-log surfaces (a different week series), where a check-in Monday
+would be actively wrong.
+
+**Notification** — answering "do we need to change it?": the function inserts **one
+shared** announcement row and then loops **individual** pushes, so the photo reminder
+is appended to the per-user push body only, for clients who actually owe photos
+(`_shared/photoRequirement.ts`, the usual hand-synced client/server duplication;
+ports `computeWeekWindows` rather than assuming Sunday, since the send weekday is
+configurable). Editable as `nutrition_checkin_available_photo_line` on Settings →
+Nutrition. **Known asymmetry**: only the push can be personalized — the in-app popup
+keeps the generic body.
+
+**Plan phases** (new) — `programming.nutrition_plan_phases` +
+`nutrition_plan_phase_items` (migration `0050`, **run and verified**). Two levels: a
+phase (title + optional note) holding bullet items. **Deliberately not dated** per
+Terra — `position` *is* the timeline. Named `plan_phases` because "phase" is already
+taken by the derived onboarding phases (`PhaseCard`/`computeOnboardingPhases`). Coach
+UI is a card on the Dashboard tab beside Milestones (fetched in the page's **tier-3
+isolated try/catch**, like milestones/reopens, so an unrun migration can't blank the
+page); members see a "What we're working on" slide on the Today card slider, capped at
+the top 2 phases. No status/completed flag in v1 — delete to retire.
+
+**Everything about the phase card is edited in place — there is no form modal.** The
+first pass used one and Terra rejected it: "+ New phase" now drops a blank card in
+with the name field autofocused, and it becomes a real row the moment the name is
+filled in (bullets need a `phase_id`, so they only appear once it's real). Title sits
+at the very top in `colors.primaryOnWhite`. **Only whole cards drag** — bullets keep a
+`position` as stable insertion order but are deliberately not draggable, so a drag is
+never ambiguous about what it's moving; `reorderPhaseItems` was deleted with that
+decision.
+
+**Two real interaction lessons from this card, worth reusing:** (1) Bullets are added
+via a **"+ Add bullet" button that opens a draft input**, not a permanent empty input
+at the bottom of the list. The permanent-input version shipped first and Terra
+reported it exactly right — "you hit enter, and then it pauses, loses the cursor
+focus, and then it appears and you have to click it again": pressing Enter awaited
+`addPhaseItem` *and* the parent's full refetch while the input was still mounted. The
+draft now closes **before** the await, so nothing sits half-alive waiting on the round
+trip. (2) **Enter fires `onSubmitEditing` and then `onBlur` as the field unmounts**, so
+every save-on-blur field here guards with a `useRef` flag — not state, since both
+handlers run before a `setState` would apply. Without it a single Enter added the
+bullet twice.
+
+`nutrition_plan_phases.label` (an optional free-text timeframe from the first pass) is
+**live but no longer written or read** — the inline rework put the title at the very
+top and left it no home. Kept rather than dropped: nullable, costs nothing, and it's
+exactly the column a "timeframe" field would need if that comes back. Don't assume it
+holds anything.
+
+**Also**: `OptionPicker`/`OptionStepper` extracted (three hand-rolled copies of the
+web-`<select>`/native-modal picker existed) and used for the new **date dropdown in
+"Fix a day's photos"** — previously a bare `‹`/`›` stepper, which with the 282
+imported Google-Sheets photos meant dozens of clicks to reach a date. That editor now
+tracks the selected *date* rather than an index, and its list runs oldest-first so `‹`
+steps back in time.
+
+**Verification**: `npx expo export -p web` clean throughout; `SortableList` (both
+drags, and that a row's own checkbox/edit/delete still work alongside the handle),
+`MondayPicker` (non-Mondays inert, picking shifts the schedule and stores the anchor 7
+days earlier) and `PlanPhases` (one handle per card and none on bullets, inline typing,
+"+ Add bullet" opening a focused draft) all driven and screenshotted via the
+login-screen harness, reverted after each. Phase-card drag specifically was confirmed
+**by Terra in the real app** — the synthetic pointer-event technique reported it as not
+working, which is a known-flaky bit of this tooling, not a code fault; trust a real
+click-through over it. **Not verified**: the
+redeployed Edge Function was never invoked — the smoke test was blocked, and it can't
+be exercised without a real Sunday send. Worth a click-through of the settings modal
+against a real client, and confirming the next Sunday push carries the photo line for
+someone who owes photos and not for someone who doesn't.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -1226,6 +1368,7 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0044_announcement_requires_reload.sql` — **run**, confirmed live via direct schema query. Adds `programming.announcements.requires_reload` (one-tap "Refresh now" button on the in-app announcement popup). See "One-tap 'Refresh now' on announcements, and the nutrition check-in-available notification repointed through it" above.
 - `0045_other_rate_field_config.sql` — **run**, confirmed live via direct schema query 2026-08-09. Adds `payroll.other_rates.has_qty`/`has_notes` (both default `true`) — per-type admin toggles for which fields show on the "Other" entry popup. See "Payroll polish pass" above.
 - `0046_gusto_employee_mapping.sql` — **run**, confirmed live 2026-08-09. Adds `core.users.gusto_employee_uuid` (nullable, unique) — the mapping the `payroll-to-gusto` Claude skill reads; not used by app code.
+- `0050_nutrition_plan_phases.sql` — **run**, confirmed live 2026-08-11 (both tables + all four RLS policies verified by direct query, `NOTIFY pgrst, 'reload schema'` sent). Adds `programming.nutrition_plan_phases` + `nutrition_plan_phase_items` — the coach's undated, drag-ordered "what we're working on" map for a nutrition client, also shown to the member. Items carry no `user_id` of their own; the member read policy resolves ownership through the parent phase. See the section above. (`0048`/`0049` belong to the parallel exercise-library/block-length work, not this pass.)
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.

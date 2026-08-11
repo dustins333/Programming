@@ -66,6 +66,10 @@ const CHECKIN_NOTIF_DEFAULTS = {
   body: "Your weekly check-in is ready for you to fill out.",
   weekday: 0,
   time: "08:00",
+  // Appended to the push only for clients whose photos are due on this
+  // check-in. Push-only by necessity: the in-app announcement is one shared
+  // row for everyone, so it can't be personalized per client.
+  photoLine: "📸 Don't forget your progress photos this week (front, side and back).",
 };
 
 // core.settings is a generic key/value table shared by every admin-facing
@@ -249,14 +253,15 @@ export default function Settings() {
   // on/off flag.
   const loadCheckinNotif = useCallback(async () => {
     try {
-      const [enabled, title, body, weekday, time] = await Promise.all([
+      const [enabled, title, body, weekday, time, photoLine] = await Promise.all([
         getSetting("notify_nutrition_checkin_available", true),
         getSetting("nutrition_checkin_available_title", CHECKIN_NOTIF_DEFAULTS.title),
         getSetting("nutrition_checkin_available_body", CHECKIN_NOTIF_DEFAULTS.body),
         getSetting("nutrition_checkin_available_weekday", CHECKIN_NOTIF_DEFAULTS.weekday),
         getSetting("nutrition_checkin_available_time", CHECKIN_NOTIF_DEFAULTS.time),
+        getSetting("nutrition_checkin_available_photo_line", CHECKIN_NOTIF_DEFAULTS.photoLine),
       ]);
-      setCheckinNotif({ enabled, title, body, weekday, time });
+      setCheckinNotif({ enabled, title, body, weekday, time, photoLine });
     } catch (err) {
       console.error("Failed to load check-in notification settings:", err);
     }
@@ -417,6 +422,7 @@ export default function Settings() {
         updateSetting("nutrition_checkin_available_body", checkinNotif.body),
         updateSetting("nutrition_checkin_available_weekday", checkinNotif.weekday),
         updateSetting("nutrition_checkin_available_time", checkinNotif.time),
+        updateSetting("nutrition_checkin_available_photo_line", checkinNotif.photoLine),
       ]);
       toastSuccess("Saved.");
     } catch (err) {
@@ -879,6 +885,20 @@ export default function Settings() {
               multiline
               inputAccessoryViewID={NUMERIC_DONE_ID}
               className="mb-4 min-h-[70px] rounded-lg border border-stone-300 px-4 py-3"
+              style={{ fontFamily: fonts.sans }}
+            />
+
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Progress-photo reminder
+            </Text>
+            <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Added to the push only for clients whose photos are due on that check-in. It can&apos;t appear in the in-app popup, which is one shared message for everyone.
+            </Text>
+            <TextInput
+              value={checkinNotif.photoLine}
+              onChangeText={(t) => setCheckinNotif((c) => ({ ...c, photoLine: t }))}
+              multiline
+              className="mb-4 min-h-[60px] rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: fonts.sans }}
             />
 

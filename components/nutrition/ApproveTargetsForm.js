@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { approveAndSetTargets } from "../../lib/nutrition/onboarding";
+import { deriveCalories } from "../../lib/nutrition/targets";
 import { fonts, colors } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
@@ -20,7 +21,7 @@ export function ApproveTargetsForm({ userId, coachId, baseline, onApproved }) {
   const protein = Number(form.protein_g) || 0;
   const carb = Number(form.carb_g) || 0;
   const fat = Number(form.fat_g) || 0;
-  const calories = 4 * protein + 4 * carb + 9 * fat;
+  const calories = deriveCalories({ protein_g: protein, carb_g: carb, fat_g: fat });
   const pct = (macroCalories) => (calories > 0 ? `${Math.round((macroCalories / calories) * 100)}%` : "—");
 
   const update = (field, value) => setForm((f) => ({ ...f, [field]: value }));

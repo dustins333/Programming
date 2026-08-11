@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { toastError } from "../../lib/toast";
-import { createTarget } from "../../lib/nutrition/targets";
+import { createTarget, deriveCalories } from "../../lib/nutrition/targets";
 import { todayInBoise, addDays, dayOfWeekInBoise } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
 import { TargetField } from "./TargetField";
@@ -46,7 +46,7 @@ export function NewTargetForm({ userId, setBy, currentTarget, recentAverages, on
   const protein = Number(form.protein_g) || 0;
   const carb = Number(form.carb_g) || 0;
   const fat = Number(form.fat_g) || 0;
-  const calories = 4 * protein + 4 * carb + 9 * fat;
+  const calories = deriveCalories({ protein_g: protein, carb_g: carb, fat_g: fat });
   const pct = (macroCalories) => (calories > 0 ? `${Math.round((macroCalories / calories) * 100)}%` : "—");
 
   const handleSave = async () => {

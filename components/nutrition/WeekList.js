@@ -11,14 +11,19 @@ import { fonts, colors } from "../../lib/theme";
 // target. Mirrors the standalone app's WeekList.js exactly, since this is
 // the one screen Terra asked to keep pixel-for-pixel faithful rather than
 // restyled to Kova's house look.
+// `calories` is stamped onto each day by summarizeWeek rather than being a
+// real daily_logs column; targetKey stays null because targets store macros
+// only, so there is no calorie field to color against.
 const METRIC_COLUMNS = [
   { key: "weight", label: "Weight", width: 62, targetKey: null },
+  { key: "calories", label: "Calories", width: 70, targetKey: null },
   { key: "protein_g", label: "Protein", width: 62, targetKey: "protein_g" },
   { key: "carb_g", label: "Carb", width: 58, targetKey: "carb_g" },
   { key: "fat_g", label: "Fat", width: 52, targetKey: "fat_g" },
   { key: "fiber_g", label: "Fiber", width: 52, targetKey: "fiber_g" },
   { key: "steps", label: "Steps", width: 72, targetKey: "step_goal" },
   { key: "sleep_hours", label: "Sleep", width: 56, targetKey: "sleep_hours_goal" },
+  { key: "sleep_quality", label: "Quality", width: 56, targetKey: null },
   { key: "hunger", label: "Hunger", width: 56, targetKey: null },
   { key: "energy", label: "Energy", width: 56, targetKey: null },
 ];
@@ -203,67 +208,6 @@ export function WeekList({ weeks }) {
               </View>
             )
           )}
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
-
-// design_handoff_v2_settings_nutrition's member Weekly tab wants the
-// current week always shown day-by-day (no click-to-expand — it's the one
-// week a member actually cares about seeing in full), separately from the
-// "Prior weeks" table below it which keeps WeekList's collapsed/expandable
-// rows. Reuses the exact same column set/coloring/day-label logic as
-// WeekList's own expanded rows so the two tables read as one continuous
-// column layout.
-export function WeekDayTable({ week }) {
-  const logByDate = Object.fromEntries(week.summary.days.map((d) => [d.date, d]));
-  const allDates = [];
-  for (let d = week.start; d <= week.end; d = addDays(d, 1)) {
-    allDates.push(d);
-  }
-  const metricsWidth = METRIC_COLUMNS.reduce((sum, c) => sum + c.width, 0) + NOTE_COL_WIDTH;
-
-  return (
-    <View className="flex-row">
-      <View style={{ width: WEEK_COL_WIDTH }}>
-        <View className="border-b border-stone-200 pb-2">
-          <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Day</Text>
-        </View>
-        {allDates.map((date) => (
-          <View key={date} className="border-b border-stone-100 py-1.5">
-            <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5 }}>{dayLabel(date)}</Text>
-          </View>
-        ))}
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator>
-        <View style={{ width: metricsWidth }}>
-          <View className="flex-row border-b border-stone-200 pb-2">
-            {METRIC_COLUMNS.map((c) => (
-              <Text key={c.key} maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: c.width, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>
-                {c.label}
-              </Text>
-            ))}
-            <Text maxFontSizeMultiplier={TABLE_MAX_SCALE} style={{ width: NOTE_COL_WIDTH, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#a8a29e" }}>Note</Text>
-          </View>
-          {allDates.map((date) => {
-            const log = logByDate[date] ?? null;
-            return (
-              <View key={date} className="flex-row items-center border-b border-stone-100 py-1.5">
-                {METRIC_COLUMNS.map((c) => {
-                  const target = c.targetKey ? week.target?.[c.targetKey] : null;
-                  const color = colorForColumn(c.key, log?.[c.key], target);
-                  return (
-                    <Text key={c.key} maxFontSizeMultiplier={TABLE_MAX_SCALE} numberOfLines={1} style={{ width: c.width, fontFamily: fonts.sans, fontSize: 12.5, color: color ? COLOR[color] : "#57534e" }}>
-                      {fmt(log?.[c.key])}
-                    </Text>
-                  );
-                })}
-                <NoteCell note={log?.client_note} />
-              </View>
-            );
-          })}
         </View>
       </ScrollView>
     </View>

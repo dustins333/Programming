@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
 import { getClient, updateClient } from "../../../../../../lib/nutrition/clients";
 import { computeBaseline, addTrackingDate, removeTrackingDate } from "../../../../../../lib/nutrition/onboarding";
+import { deriveCalories } from "../../../../../../lib/nutrition/targets";
 import { listCoaches } from "../../../../../../lib/programming/clients";
 import { supabase } from "../../../../../../lib/supabase/client";
 import { BaselineSummary } from "../../../../../../components/nutrition/BaselineSummary";
@@ -135,7 +136,9 @@ export default function OnboardingTracking() {
                   <View key={d.id} className="mb-1.5 flex-row items-center justify-between border-b border-stone-100 py-2">
                     <Text style={{ fontFamily: fonts.sansMedium }}>{formatDateMDY(d.date)}</Text>
                     <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                      {log ? `P${log.protein_g} C${log.carb_g} F${log.fat_g} Fiber${log.fiber_g}` : "Not logged yet"}
+                      {log
+                        ? `P${log.protein_g} C${log.carb_g} F${log.fat_g} Fiber${log.fiber_g} · ${Math.round(deriveCalories(log))} cal`
+                        : "Not logged yet"}
                     </Text>
                   </View>
                 );

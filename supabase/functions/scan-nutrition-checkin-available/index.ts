@@ -39,6 +39,7 @@
 // Reuses the same CRON_SECRET already set for scan-spc-alerts.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sendPushToUser } from "../_shared/expoPush.ts";
+import { computeCurrentWeek, isPhotoRequirementWeek } from "../_shared/photoRequirement.ts";
 
 const TIMEZONE = "America/Boise";
 
@@ -80,6 +81,7 @@ Deno.serve(async (req) => {
       "nutrition_checkin_available_weekday",
       "nutrition_checkin_available_time",
       "nutrition_checkin_available_last_sent_date",
+      "nutrition_checkin_available_photo_line",
     ]);
   const settingsByKey = Object.fromEntries((settingRows ?? []).map((r) => [r.key, r.value]));
 
@@ -89,12 +91,20 @@ Deno.serve(async (req) => {
   const targetWeekday = Number(settingsByKey.nutrition_checkin_available_weekday ?? 0);
   const targetTime = settingsByKey.nutrition_checkin_available_time ?? "08:00";
   const lastSentDate = settingsByKey.nutrition_checkin_available_last_sent_date ?? null;
+  // Appended to the push body for clients who owe photos this cycle. Only
+  // the per-user push can be personalized — the announcement row below is a
+  // single shared record, so the in-app popup keeps the generic body.
+  const photoLine = settingsByKey.nutrition_checkin_available_photo_line ?? "📸 Don't forget your progress photos this week (front, side and back).";
 
   if (!enabled) {
     return new Response(JSON.stringify({ scanned: 0, pushed: 0, skipped: "disabled", errors: [] }), { status: 200 });
   }
 
   const today = todayInBoise();
+  // The week clients are checking in *about* — computed rather than assumed
+  // to be "the last 7 days", because the send weekday is coach-configurable
+  // and this must stay correct if it ever moves off Sunday.
+  const currentWeek = computeCurrentWeek(today);
 
   if (lastSentDate === today) {
     return new Response(JSON.stringify({ skipped: true, reason: "already sent today" }), { status: 200 });
@@ -109,7 +119,7 @@ Deno.serve(async (req) => {
 
   const { data: clients, error: clientsError } = await admin
     .from("clients")
-    .select("id")
+    .select("id, photo_frequency, photo_frequency_started_at, photo_requirement_next_checkin")
     .eq("status", "active")
     .not("objective_tracking_approved_at", "is", null);
   if (clientsError) {
@@ -154,7 +164,12 @@ Deno.serve(async (req) => {
     try {
       if (prefsByUserId[client.id]?.notify_checkin_available === false) continue;
 
-      const result = await sendPushToUser(admin, client.id, title, body, {
+      // Photo reminder only for the clients who actually owe photos on this
+      // check-in — the whole point is that it doesn't nag everyone. Derived
+      // from the same cadence rule the app enforces, not a separate list.
+      const pushBody = isPhotoRequirementWeek(client, currentWeek.start) ? `${body}\n\n${photoLine}` : body;
+
+      const result = await sendPushToUser(admin, client.id, title, pushBody, {
         type: "announcement",
         announcementId: announcement.id,
         url: "/nutrition/checkin",

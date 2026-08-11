@@ -9,7 +9,7 @@ import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
 import { getClientQuestions, getCheckinForWeek, submitCheckin, getActiveCheckinReopen } from "../../../lib/nutrition/checkin";
-import { listAllPhotos, isPhotoRequirementWeek, hasAllAngles, PHOTO_RECENCY_DAYS } from "../../../lib/nutrition/photos";
+import { listAllPhotos, isPhotoRequirementWeek, hasAllAngles, photosForRequirementWeek } from "../../../lib/nutrition/photos";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { ZoomSchedulerModal } from "../../../components/nutrition/ZoomSchedulerModal";
 import { SegmentedControl } from "../../../components/SegmentedControl";
@@ -261,11 +261,11 @@ export default function WeeklyCheckin() {
   }, [access.status, profile.id, currentWeek.start]);
 
   const photosRequired = access.client ? isPhotoRequirementWeek(access.client, currentWeek.start) : false;
-  // Checked against a rolling recency window (today back PHOTO_RECENCY_DAYS
-  // days), not just "since this calendar week's Monday" — a member who
-  // already uploaded via the Photos tab (independent of Check-In) shouldn't
-  // be asked to do it again just because Check-In didn't know about it.
-  const recentPhotos = useMemo(() => (photos ?? []).filter((p) => p.date >= addDays(today, -PHOTO_RECENCY_DAYS)), [photos, today]);
+  // The week's own photos plus its filing window — see
+  // photosForRequirementWeek. A member who already uploaded via the Photos
+  // tab (independent of Check-In) isn't asked to do it again, and this
+  // matches what the coach's timeline counts exactly.
+  const recentPhotos = useMemo(() => photosForRequirementWeek(photos ?? [], currentWeek), [photos, currentWeek]);
   const photosUploaded = hasAllAngles(recentPhotos);
   const photosSatisfied = !photosRequired || photosUploaded || !!skipReason;
   const formSatisfied = questions ? questions.every((q) => (answers[q.id] || "").trim().length > 0) : false;

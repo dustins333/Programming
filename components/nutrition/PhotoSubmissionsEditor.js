@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, Image, Modal, ActivityIndicator, Platform } from "react-native";
+import { View, Text, TextInput, Pressable, Image, Modal, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getPhotoSignedUrls, updatePhotoSubmission, deletePhoto } from "../../lib/nutrition/photos";
+import { OptionPicker, OptionStepper } from "./OptionPicker";
 import { confirmDeletePhoto } from "../../lib/confirmDialog";
 import { toastError } from "../../lib/toast";
 import { formatDateMDY } from "../../lib/formatDate";
@@ -9,58 +10,9 @@ import { fonts, colors } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 import { KeyboardDoneButton } from "../KeyboardDoneButton";
 
-const isWeb = Platform.OS === "web";
 const ANGLES = ["front", "side", "back"];
 const ANGLE_LABELS = { front: "Front", side: "Side", back: "Back" };
-
-// Web: a real <select>. Native: a Pressable that opens a small option list —
-// same platform split as PhotoCompare.js's DatePicker.
-function AngleDropdown({ value, onChange }) {
-  const [open, setOpen] = useState(false);
-
-  if (isWeb) {
-    return (
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ fontFamily: fonts.sans, fontSize: 12.5, width: "100%", padding: "6px 4px", borderRadius: 6, border: "1px solid #d9d4cd", color: "#44403c", backgroundColor: "white", textAlign: "center" }}
-      >
-        {ANGLES.map((a) => (
-          <option key={a} value={a}>
-            {ANGLE_LABELS[a]}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  return (
-    <>
-      <Pressable onPress={() => setOpen(true)} className="items-center rounded border border-stone-300 py-1.5">
-        <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5 }}>{ANGLE_LABELS[value]} ▾</Text>
-      </Pressable>
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable onPress={() => setOpen(false)} className="flex-1 items-center justify-center px-8" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
-          <Pressable onPress={(e) => e.stopPropagation()} className="w-full max-w-xs rounded-2xl bg-white p-2">
-            {ANGLES.map((a) => (
-              <Pressable
-                key={a}
-                onPress={() => {
-                  onChange(a);
-                  setOpen(false);
-                }}
-                className="rounded-xl px-4 py-3"
-                style={a === value ? { backgroundColor: "#fdf6f2" } : undefined}
-              >
-                <Text style={{ fontFamily: fonts.sansMedium, color: a === value ? colors.primaryOnWhite : "#44403c" }}>{ANGLE_LABELS[a]}</Text>
-              </Pressable>
-            ))}
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
-  );
-}
+const ANGLE_OPTIONS = ANGLES.map((a) => ({ value: a, label: ANGLE_LABELS[a] }));
 
 function DayEditor({ date, photos, onSaved, onDataChanged }) {
   const [rows, setRows] = useState(photos.map((p) => ({ ...p })));
@@ -147,7 +99,7 @@ function DayEditor({ date, photos, onSaved, onDataChanged }) {
               </Pressable>
             </View>
             <View className="mt-1.5">
-              <AngleDropdown value={r.angle} onChange={(a) => setAngle(r.id, a)} />
+              <OptionPicker options={ANGLE_OPTIONS} value={r.angle} onChange={(a) => setAngle(r.id, a)} align="center" />
             </View>
           </View>
         ))}
@@ -191,18 +143,28 @@ function DayEditor({ date, photos, onSaved, onDataChanged }) {
 // groups by upload date (not angle) since a mistagged batch usually needs
 // fixing together. Matches the standalone app's PhotoSubmissionsEditor.
 export function PhotoSubmissionsEditor({ photosByDate, onSaved }) {
-  const dates = Object.keys(photosByDate);
+  // listAllPhotos returns newest-first, so Object.keys is too — but the
+  // picker runs oldest-first so ‹ steps back in time and › steps forward,
+  // matching the order the dates read in the dropdown itself.
+  const dates = Object.keys(photosByDate).slice().sort();
   const [open, setOpen] = useState(false);
-  const [dateIndex, setDateIndex] = useState(0);
+  const [pickedDate, setPickedDate] = useState(null);
 
   if (dates.length === 0) return null;
-  const date = dates[dateIndex];
+  // Tracked by date, not index, so it survives photosByDate changing under
+  // it after a delete. Falls back to the newest day, which is where a coach
+  // almost always wants to start.
+  const date = pickedDate && photosByDate[pickedDate] ? pickedDate : dates[dates.length - 1];
+  const dateOptions = dates.map((d) => ({
+    value: d,
+    label: `${formatDateMDY(d)} (${photosByDate[d].length} photo${photosByDate[d].length === 1 ? "" : "s"})`,
+  }));
 
   return (
     <>
       <Pressable
         onPress={() => {
-          setDateIndex(0);
+          setPickedDate(null);
           setOpen(true);
         }}
         className="self-start rounded border border-stone-300 px-3 py-1.5"
@@ -219,18 +181,14 @@ export function PhotoSubmissionsEditor({ photosByDate, onSaved }) {
               Fix a day's photos
             </Text>
 
-            <View className="mb-4 flex-row items-center gap-2">
-              <Pressable onPress={() => setDateIndex((i) => Math.min(dates.length - 1, i + 1))} disabled={dateIndex >= dates.length - 1} hitSlop={8}>
-                <Text style={{ color: dateIndex >= dates.length - 1 ? "#d6d3d1" : "#57534e" }}>‹</Text>
-              </Pressable>
-              <Text className="flex-1 text-center text-sm" style={{ fontFamily: fonts.sansMedium }}>
-                {formatDateMDY(date)} ({photosByDate[date].length} photo{photosByDate[date].length === 1 ? "" : "s"})
-              </Text>
-              <Pressable onPress={() => setDateIndex((i) => Math.max(0, i - 1))} disabled={dateIndex <= 0} hitSlop={8}>
-                <Text style={{ color: dateIndex <= 0 ? "#d6d3d1" : "#57534e" }}>›</Text>
-              </Pressable>
+            <View className="mb-4">
+              <OptionStepper options={dateOptions} value={date} onChange={setPickedDate} placeholder="Pick a date" align="center" />
             </View>
 
+            {/* Keyed by date, so switching days remounts the editor and
+                discards any unsaved angle/weight edits — deliberate (each
+                day is its own independent set), but the dropdown makes
+                jumping between days easy enough that it's worth knowing. */}
             <DayEditor
               key={date}
               date={date}

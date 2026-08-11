@@ -1,44 +1,8 @@
 import { useMemo, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { fonts, colors } from "../../lib/theme";
-import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
-
-const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
-
-function isLeapYear(year) {
-  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-}
-
-function daysInMonth(year, month) {
-  // month is 1-12
-  return [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
-}
-
-function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
-// Pure calendar-grid math on plain year/month integers — deliberately never
-// touches a Date object for anything beyond dayOfWeekInBoise's own internal
-// noon-anchored parse, matching this app's standing "never trust device
-// local time for date math" rule (lib/boiseDate.js).
-function buildMonthGrid(year, month) {
-  const monthStart = `${year}-${pad2(month)}-01`;
-  const firstWeekday = dayOfWeekInBoise(monthStart); // 0=Sun
-  const total = daysInMonth(year, month);
-
-  const cells = [];
-  for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let day = 1; day <= total; day++) cells.push(`${year}-${pad2(month)}-${pad2(day)}`);
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  return cells;
-}
-
-const MONTH_LABELS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+import { todayInBoise } from "../../lib/boiseDate";
+import { WEEKDAY_LABELS, MONTH_LABELS, buildMonthGrid, stepMonth } from "../../lib/monthGrid";
 
 const WIDTH = 280;
 
@@ -61,15 +25,7 @@ export function DateCalendarPicker({ assignedDates, onAssign, onUnassign }) {
   const assignedByDate = useMemo(() => new Map(assignedDates.map((d) => [d.date, d.id])), [assignedDates]);
 
   const goMonth = (delta) => {
-    let m = viewMonth + delta;
-    let y = viewYear;
-    if (m < 1) {
-      m = 12;
-      y -= 1;
-    } else if (m > 12) {
-      m = 1;
-      y += 1;
-    }
+    const { year: y, month: m } = stepMonth(viewYear, viewMonth, delta);
     setViewMonth(m);
     setViewYear(y);
   };

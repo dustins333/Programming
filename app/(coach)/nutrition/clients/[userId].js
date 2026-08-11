@@ -13,7 +13,7 @@ import { getCheckinForWeek, finalizeCheckin, listCheckinsSince, listCheckinReope
 import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
 import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
-import { computeWeekWindows, currentCalendarWeek, summarizeWeek } from "../../../../lib/nutrition/weekCycle";
+import { computeWeekWindows, currentCalendarWeek, summarizeWeek, checkinMondayForWeek } from "../../../../lib/nutrition/weekCycle";
 import { OnboardingStepper } from "../../../../components/nutrition/OnboardingStepper";
 import { PhaseCard } from "../../../../components/nutrition/PhaseCard";
 import { WeekList, enumerateRecentWeeks } from "../../../../components/nutrition/WeekList";
@@ -25,11 +25,13 @@ import { MacroPills } from "../../../../components/nutrition/MacroPills";
 import { FocusChecklist } from "../../../../components/nutrition/FocusChecklist";
 import { GamePlan } from "../../../../components/nutrition/GamePlan";
 import { MilestoneSlots } from "../../../../components/nutrition/MilestoneSlots";
+import { PlanPhases } from "../../../../components/nutrition/PlanPhases";
+import { listPhases } from "../../../../lib/nutrition/planPhases";
 import { TargetsHistory } from "../../../../components/nutrition/TargetsHistory";
 import { ObjectiveTrackingHistory } from "../../../../components/nutrition/ObjectiveTrackingHistory";
 import { NewTargetForm } from "../../../../components/nutrition/NewTargetForm";
 import { HighlightableAnswer } from "../../../../components/nutrition/HighlightableAnswer";
-import { listAllPhotos } from "../../../../lib/nutrition/photos";
+import { listAllPhotos, photosForRequirementWeek } from "../../../../lib/nutrition/photos";
 import { PhotoCompare } from "../../../../components/nutrition/PhotoCompare";
 import { PhotoSubmissionsEditor } from "../../../../components/nutrition/PhotoSubmissionsEditor";
 import { PhotoUpload } from "../../../../components/nutrition/PhotoUpload";
@@ -169,6 +171,7 @@ export default function NutritionClientDetail() {
   const [logs, setLogs] = useState(null);
   const [focusItems, setFocusItems] = useState([]);
   const [milestones, setMilestones] = useState([]);
+  const [phases, setPhases] = useState([]);
   const [onboarding, setOnboarding] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -249,6 +252,13 @@ export default function NutritionClientDetail() {
       setCheckinReopens(await listCheckinReopensSince(userId, addDays(today, -7 * TIMELINE_PAST_WEEKS)));
     } catch (err) {
       console.error("Failed to load check-in reopens:", err);
+    }
+
+    // Same isolation, migration 0050 (plan phases).
+    try {
+      setPhases(await listPhases(userId));
+    } catch (err) {
+      console.error("Failed to load plan phases:", err);
     }
     setWeekPaging(false);
   }, [userId, selectedWeek.start]);
@@ -549,7 +559,7 @@ export default function NutritionClientDetail() {
   // Backs the top-of-page Finalize button's photo indicator — whether the
   // currently-loaded check-in week (selectedWeek, same week the button
   // itself finalizes) has any progress photos in yet.
-  const weekPhotos = photos.filter((p) => p.date >= selectedWeek.start && p.date <= selectedWeek.end);
+  const weekPhotos = photosForRequirementWeek(photos, selectedWeek);
 
   return (
     <CoachShell>
@@ -646,6 +656,10 @@ export default function NutritionClientDetail() {
               <MilestoneSlots userId={userId} coachId={profile.id} milestones={milestones} onChanged={load} />
             </SectionCard>
 
+            <SectionCard title="Phases">
+              <PlanPhases userId={userId} coachId={profile.id} phases={phases} onChanged={load} />
+            </SectionCard>
+
             <SectionCard title="This week at a glance">
               <TrendTiles thisWeek={thisWeekSummary} lastWeek={lastWeekSummary} />
             </SectionCard>
@@ -721,8 +735,13 @@ export default function NutritionClientDetail() {
                 <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Prior week</Text>
               </Pressable>
               <View className="flex-row items-center gap-2">
+                {/* Labeled by the check-in Monday, matching the timeline in
+                    Client Settings — these two are reachable from the same
+                    screen, so labeling one by its covered week and the other
+                    by its check-in date would show two different dates for
+                    the same check-in. */}
                 <Text style={{ fontFamily: fonts.sansSemiBold }}>
-                  Week of {formatDateMDY(selectedWeek.start)}
+                  {formatDateMDY(checkinMondayForWeek(selectedWeek.start))} check-in
                 </Text>
                 {weekPaging ? <ActivityIndicator size="small" color={colors.primary} /> : null}
               </View>
