@@ -4,13 +4,21 @@ import { colors } from "../../lib/theme";
 
 const MIN_HEIGHT = 120;
 
-// Swipeable carousel for the nutrition Today tab's "Focus / Notes /
+// Swipeable carousel for the nutrition Today tab's "Focus / Notes / Phase /
 // Milestone" cards — replaces what used to be one stacked box. Each slide
 // is full-width; the ScrollView's own height tracks the tallest slide
 // measured so far (a plain horizontal ScrollView collapses to 0 height on
 // its own otherwise) so switching slides never clips content or needs an
 // internal scroll, matching the "no static scroll box" rule the Focus/Notes
 // cards themselves follow.
+//
+// alignItems:"flex-start" is what makes that measurement honest, and is not
+// cosmetic. A flex row stretches its children to the container's cross-axis
+// size by default, so each slide was being handed the ScrollView's current
+// height — and onLayout then reported exactly that back. The height could
+// never grow beyond whatever it already was, which clipped any card taller
+// than the first measurement (long coach notes, in practice). Sizing each
+// slide to its own content breaks the loop.
 export function TodayCardSlider({ slides }) {
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
@@ -27,6 +35,7 @@ export function TodayCardSlider({ slides }) {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         style={{ height: maxHeight }}
+        contentContainerStyle={{ alignItems: "flex-start" }}
         onScroll={(e) => {
           if (!width) return;
           const i = Math.round(e.nativeEvent.contentOffset.x / width);

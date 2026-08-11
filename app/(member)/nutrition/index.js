@@ -546,11 +546,26 @@ export default function NutritionToday() {
                     },
                   ]
                 : []),
-              // One slide per phase, same as milestones below — stacking
-              // several into a single card didn't read at this width. Top
-              // three only: the coach's list is the full plan, this is just
-              // what's near-term, and the slider is already sharing space
-              // with focus, notes and milestones.
+              ...(access.client?.game_plan
+                ? [
+                    {
+                      key: "notes",
+                      content: (
+                        <View className="rounded-lg border border-stone-200 bg-white p-4">
+                          <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+                            Notes
+                          </Text>
+                          <Text style={{ fontFamily: fonts.sans }}>{access.client.game_plan}</Text>
+                        </View>
+                      ),
+                    },
+                  ]
+                : []),
+              // One slide per phase, same as the milestone slides below —
+              // stacking several into a single card didn't read at this
+              // width. Top three only: the coach's list is the full plan,
+              // this is just what's near-term, and the slider is already
+              // sharing space with focus, notes and milestones.
               ...phases.slice(0, 3).map((phase) => ({
                 key: `phase-${phase.id}`,
                 content: (
@@ -570,21 +585,6 @@ export default function NutritionToday() {
                   </View>
                 ),
               })),
-              ...(access.client?.game_plan
-                ? [
-                    {
-                      key: "notes",
-                      content: (
-                        <View className="rounded-lg border border-stone-200 bg-white p-4">
-                          <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-                            Notes
-                          </Text>
-                          <Text style={{ fontFamily: fonts.sans }}>{access.client.game_plan}</Text>
-                        </View>
-                      ),
-                    },
-                  ]
-                : []),
               ...milestones.map((m) => {
                 const palette = MILESTONE_COLORS[m.color_index % MILESTONE_COLORS.length];
                 return {
