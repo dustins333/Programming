@@ -7,18 +7,17 @@ import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
 import { getCoachDashboardStats, computeAttentionItems, filterDismissedItems } from "../../lib/programming/coachDashboard";
 import { listDismissals, dismissAttentionItem } from "../../lib/programming/dashboardDismissals";
 import { STATUS_LABELS as SPC_STATUS_LABELS, STATUS_TONES as SPC_STATUS_TONES, STATUS_ORDER as SPC_STATUS_ORDER } from "../../lib/programming/spcStatus";
+import {
+  NUTRITION_STATUS_META,
+  NUTRITION_STATUS_ORDER,
+  nutritionRosterRoute,
+  spcRosterRoute,
+} from "../../lib/programming/dashboardStatusTiles";
+import { AttentionTile, AttentionModal } from "../../components/AttentionAlerts";
 import { fonts, colors, statusColors } from "../../lib/theme";
 import { ActivityFeed } from "../../components/ActivityFeed";
 
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
-
-const NUTRITION_STATUS_META = {
-  notSetUp: { label: "Not set up yet", tone: "needsAction" },
-  pendingCheckin: { label: "Pending check-in", tone: "needsAction" },
-  readyForCheckin: { label: "Ready for check-in", tone: "needsAction" },
-  checkinCompleted: { label: "Check-in completed", tone: "onTrack" },
-};
-const NUTRITION_STATUS_ORDER = ["notSetUp", "pendingCheckin", "readyForCheckin", "checkinCompleted"];
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -34,28 +33,6 @@ function SectionLabel({ children }) {
     <Text className="mb-2.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
       {children}
     </Text>
-  );
-}
-
-function AttentionCard({ title, subtitle, onPress, onDismiss }) {
-  return (
-    <View
-      className="mb-2.5 flex-row items-center rounded-2xl px-4 py-3.5"
-      style={{ backgroundColor: "#fdece5", borderWidth: 1, borderColor: "#f0d4c9" }}
-    >
-      <Pressable onPress={onPress} className="flex-1 flex-row items-center pr-2">
-        <View className="flex-1 pr-2">
-          <Text style={{ fontFamily: fonts.sansBold, color: "#8a3a24", fontSize: 13.5 }}>{title}</Text>
-          <Text className="mt-0.5" style={{ fontFamily: fonts.sans, color: "#a8574a", fontSize: 12 }}>
-            {subtitle}
-          </Text>
-        </View>
-        <Text style={{ color: "#c2543a", fontSize: 15 }}>›</Text>
-      </Pressable>
-      <Pressable onPress={onDismiss} hitSlop={8} className="ml-2 items-center justify-center rounded-full" style={{ width: 22, height: 22 }}>
-        <Text style={{ color: "#c2543a", fontSize: 15, fontFamily: fonts.sansBold }}>×</Text>
-      </Pressable>
-    </View>
   );
 }
 
@@ -76,10 +53,13 @@ function StatTile({ value, label, onPress }) {
   );
 }
 
-function StatusRow({ label, value, tone }) {
+// Each row deep-links to its own roster, already filtered to the same
+// people it just counted (shared with the web dashboard via
+// lib/programming/dashboardStatusTiles.js).
+function StatusRow({ label, value, tone, onPress }) {
   const toneColors = tone ? statusColors[tone] : null;
   return (
-    <View className="flex-row items-center justify-between py-2.5" style={{ borderTopWidth: 1, borderTopColor: "#f0ede8" }}>
+    <Pressable onPress={onPress} className="flex-row items-center justify-between py-2.5" style={{ borderTopWidth: 1, borderTopColor: "#f0ede8" }}>
       <Text className="text-stone-700" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
         {label}
       </Text>
@@ -91,7 +71,7 @@ function StatusRow({ label, value, tone }) {
           {value}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -121,6 +101,7 @@ export default function CoachHome() {
   const insets = useSafeAreaInsets();
   const [stats, setStats] = useState(null);
   const [dismissals, setDismissals] = useState({});
+  const [attentionOpen, setAttentionOpen] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
@@ -211,20 +192,9 @@ export default function CoachHome() {
 
       <ActivityFeed />
 
-      {attentionItems.length > 0 && (
-        <View className="mb-6">
-          <SectionLabel>Needs your attention</SectionLabel>
-          {attentionItems.map((item) => (
-            <AttentionCard
-              key={item.key}
-              title={item.title}
-              subtitle={item.subtitle}
-              onPress={item.onPress}
-              onDismiss={() => handleDismiss(item)}
-            />
-          ))}
-        </View>
-      )}
+      <View className="mb-6">
+        <AttentionTile count={attentionItems.length} onPress={() => setAttentionOpen(true)} style={CARD_SHADOW} />
+      </View>
 
       <View className="mb-6">
         <SectionLabel>Roster</SectionLabel>
@@ -247,7 +217,7 @@ export default function CoachHome() {
       </View>
 
       <View className="mb-4">
-        <Card onPress={() => router.push("/(coach)/nutrition")}>
+        <Card>
           <CardHeader title="Nutrition" onPress={() => router.push("/(coach)/nutrition")} />
           <Text className="mb-1 text-stone-700" style={{ fontFamily: fonts.sansBold, fontSize: 24 }}>
             {stats.nutritionBreakdown.active}
@@ -257,13 +227,19 @@ export default function CoachHome() {
             </Text>
           </Text>
           {NUTRITION_STATUS_ORDER.map((key) => (
-            <StatusRow key={key} label={NUTRITION_STATUS_META[key].label} value={stats.nutritionBreakdown[key]} tone={NUTRITION_STATUS_META[key].tone} />
+            <StatusRow
+              key={key}
+              label={NUTRITION_STATUS_META[key].label}
+              value={stats.nutritionBreakdown[key]}
+              tone={NUTRITION_STATUS_META[key].tone}
+              onPress={() => router.push(nutritionRosterRoute(key))}
+            />
           ))}
         </Card>
       </View>
 
       <View className="mb-4">
-        <Card onPress={() => router.push("/(coach)/spc")}>
+        <Card>
           <CardHeader title="SPC" onPress={() => router.push("/(coach)/spc")} />
           <Text className="mb-1 text-stone-700" style={{ fontFamily: fonts.sansBold, fontSize: 24 }}>
             {stats.spcCount}
@@ -273,7 +249,13 @@ export default function CoachHome() {
             </Text>
           </Text>
           {SPC_STATUS_ORDER.map((key) => (
-            <StatusRow key={key} label={SPC_STATUS_LABELS[key]} value={stats.spcByStatus[key] ?? 0} tone={SPC_STATUS_TONES[key]} />
+            <StatusRow
+              key={key}
+              label={SPC_STATUS_LABELS[key]}
+              value={stats.spcByStatus[key] ?? 0}
+              tone={SPC_STATUS_TONES[key]}
+              onPress={() => router.push(spcRosterRoute(key))}
+            />
           ))}
         </Card>
       </View>
@@ -321,6 +303,17 @@ export default function CoachHome() {
           )}
         </Card>
       </View>
+
+      <AttentionModal
+        visible={attentionOpen}
+        items={attentionItems}
+        onClose={() => setAttentionOpen(false)}
+        onDismiss={handleDismiss}
+        onSelect={(item) => {
+          setAttentionOpen(false);
+          item.onPress();
+        }}
+      />
     </ScrollView>
   );
 }

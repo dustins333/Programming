@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
-import { Link } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   DndContext,
@@ -55,7 +55,7 @@ function initials(name) {
 // status; clicking the already-active tile clears it. Drag-hover and
 // active-filter get visually distinct treatments (rust vs. olive) so a
 // coach mid-drag can't confuse "drop here" with "currently filtering".
-function StatusTile({ status, count, active, onToggle }) {
+function StatusTile({ status, count, active, onToggle, fullWidth }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const style = active
     ? { borderWidth: 2, borderColor: "#4d6142", backgroundColor: "#f5f8f1" }
@@ -63,9 +63,12 @@ function StatusTile({ status, count, active, onToggle }) {
       ? { borderWidth: 2, borderColor: colors.primaryOnWhite, backgroundColor: "#fdf6f2" }
       : { borderWidth: 1, borderColor: "#ece7e1", backgroundColor: "white" };
   return (
-    <div ref={setNodeRef} onClick={() => onToggle(status)} style={{ cursor: "pointer" }}>
-      <View className="rounded-xl px-3.5 py-3" style={{ width: 176, ...style }}>
-        <StatusBadge tone={STATUS_TONES[status]} label={STATUS_LABELS[status]} />
+    <div ref={setNodeRef} onClick={() => onToggle(status)} style={{ cursor: "pointer", ...(fullWidth ? { flexGrow: 1, flexBasis: "47%" } : {}) }}>
+      {/* 176px is two-per-row on a desktop card but ~5px too wide for a
+          375pt phone, which dropped them to one per row and pushed the
+          client list off the bottom of the screen. */}
+      <View className="rounded-xl px-3.5 py-3" style={{ width: fullWidth ? undefined : 176, ...style }}>
+        <StatusBadge tone={STATUS_TONES[status]} label={STATUS_LABELS[status]} lines={fullWidth ? 2 : 1} />
         <Text className="mt-2 text-xs" style={{ fontFamily: fonts.sans, color: active ? "#4d6142" : "#a8a29e", fontWeight: active ? "600" : "400" }}>
           {count} client{count === 1 ? "" : "s"}
           {active ? " · filtering" : ""}
@@ -130,7 +133,10 @@ function ClientRow({ client }) {
   );
 }
 
-function CoachSelect({ value, coaches, onChange }) {
+// `grow` lets the raw <select> flex on a phone — at a fixed width the
+// coach/due-soon/sort trio overflowed the viewport and Sort was
+// half off-screen with no way to reach it.
+function CoachSelect({ value, coaches, onChange, grow }) {
   return (
     <select
       value={value ?? ""}
@@ -144,6 +150,7 @@ function CoachSelect({ value, coaches, onChange }) {
         border: "1px solid #d9d4cd",
         color: "#44403c",
         backgroundColor: "white",
+        ...(grow ? { flex: "1 1 130px", minWidth: 0 } : {}),
       }}
     >
       <option value="">All coaches</option>
@@ -156,7 +163,7 @@ function CoachSelect({ value, coaches, onChange }) {
   );
 }
 
-function SortSelect({ value, onChange }) {
+function SortSelect({ value, onChange, grow }) {
   return (
     <select
       value={value}
@@ -170,6 +177,7 @@ function SortSelect({ value, onChange }) {
         border: "1px solid #d9d4cd",
         color: "#44403c",
         backgroundColor: "white",
+        ...(grow ? { flex: "1 1 130px", minWidth: 0 } : {}),
       }}
     >
       {SORT_OPTIONS.map((opt) => (
@@ -185,6 +193,46 @@ function SortSelect({ value, onChange }) {
 // per-column widths (not CSS grid) mirror the design reference exactly and
 // match how every other column-aligned list in this app (e.g. the Clients
 // page) is already built.
+// Same breakpoint CoachShell switches its sidebar to a drawer at — below
+// it this is a phone (in practice the installed PWA), where the grid's
+// fixed columns add up to more than the viewport and collapse into each
+// other. See ClientMobileRow below.
+const MOBILE_BREAKPOINT = 768;
+
+// Phone layout: name, badge and details stacked, nothing fixed-width.
+function ClientMobileRow({ client }) {
+  return (
+    <Link href={`/(coach)/spc/${client.userId}`} asChild>
+      <Pressable style={{ borderBottomWidth: 1, borderBottomColor: "#ece7e1", paddingHorizontal: 14, paddingVertical: 12 }}>
+        <View className="flex-row items-center gap-3">
+          <View className="items-center justify-center rounded-full" style={{ width: 34, height: 34, backgroundColor: "#fdf6f2", flexShrink: 0 }}>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>{initials(client.name)}</Text>
+          </View>
+          <View className="flex-1" style={{ minWidth: 0 }}>
+            <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }} className="text-stone-700">
+              {client.name}
+            </Text>
+            <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
+              {client.coachName} · {client.sessionsPerWeek}x/wk
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={15} color="#c9c4bd" style={{ flexShrink: 0 }} />
+        </View>
+        <View className="mt-2 flex-row flex-wrap items-center gap-2">
+          <StatusBadge tone={STATUS_TONES[client.status]} label={STATUS_LABELS[client.status]} />
+          {client.currentBlock ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c" }}>
+              Block ends {formatDateMDY(client.currentBlock.block_end_date)}
+            </Text>
+          ) : (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#c9c4bd", fontStyle: "italic" }}>No block yet</Text>
+          )}
+        </View>
+      </Pressable>
+    </Link>
+  );
+}
+
 function ClientGridRow({ client, isHeader }) {
   const content = (
     <View className="flex-row items-center gap-2.5" style={{ paddingHorizontal: 18, paddingVertical: isHeader ? 10 : 14 }}>
@@ -255,10 +303,26 @@ export default function SpcDashboardWeb() {
   const [loadError, setLoadError] = useState(null);
   const [filterCoach, setFilterCoach] = useState(null);
   const [filterDueSoon, setFilterDueSoon] = useState(false);
-  const [statusFilter, setStatusFilter] = useState(null);
+  // Seeded from ?status= so the dashboard's SPC rows can land here already
+  // filtered ("SPC needs printed" → this page, showing only those).
+  const params = useLocalSearchParams();
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < MOBILE_BREAKPOINT;
+  const [statusFilter, setStatusFilter] = useState(typeof params.status === "string" && params.status ? params.status : null);
   const [view, setView] = useState("all");
   const [sort, setSort] = useState("blockEnds");
   const [activeClient, setActiveClient] = useState(null);
+
+  // See the nutrition roster's note — the mount-only initializer above
+  // misses a second arrival from the dashboard on a kept-mounted screen.
+  const appliedStatusParamRef = useRef(typeof params.status === "string" ? params.status : "");
+  useEffect(() => {
+    const raw = typeof params.status === "string" ? params.status : "";
+    if (appliedStatusParamRef.current === raw) return;
+    appliedStatusParamRef.current = raw;
+    setStatusFilter(raw || null);
+  }, [params.status]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -317,8 +381,15 @@ export default function SpcDashboardWeb() {
     return counts;
   }, [baseFiltered]);
 
+  // Mirrored into the URL the same way the nutrition roster does it, so
+  // working a filtered queue survives the round trip into a client page
+  // and back.
   const toggleStatusFilter = (status) => {
-    setStatusFilter((prev) => (prev === status ? null : status));
+    setStatusFilter((prev) => {
+      const next = prev === status ? null : status;
+      router.setParams({ status: next ?? "" });
+      return next;
+    });
   };
 
   const handleDragStart = (event) => {
@@ -379,12 +450,13 @@ export default function SpcDashboardWeb() {
         <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }}>
           <View
             style={{
-              position: "sticky",
+              // Sticky only on desktop — see the nutrition roster's note.
+              position: isMobile ? "relative" : "sticky",
               top: 0,
               zIndex: 20,
               backgroundColor: "#faf8f6",
-              paddingHorizontal: 40,
-              paddingTop: 36,
+              paddingHorizontal: isMobile ? 14 : 40,
+              paddingTop: isMobile ? 16 : 36,
               paddingBottom: 16,
               borderBottomWidth: 1,
               borderBottomColor: "#e7e5e4",
@@ -419,8 +491,8 @@ export default function SpcDashboardWeb() {
                     );
                   })}
                 </View>
-                <View className="flex-row flex-wrap items-center gap-2.5">
-                  <CoachSelect value={filterCoach} coaches={coaches} onChange={setFilterCoach} />
+                <View className="flex-row flex-wrap items-center gap-2.5" style={isMobile ? { width: "100%" } : undefined}>
+                  <CoachSelect value={filterCoach} coaches={coaches} onChange={setFilterCoach} grow={isMobile} />
                   <Pressable
                     onPress={() => setFilterDueSoon((v) => !v)}
                     className={`rounded-full border px-3.5 py-2 ${filterDueSoon ? "border-primary bg-primary" : "border-stone-300"}`}
@@ -429,7 +501,7 @@ export default function SpcDashboardWeb() {
                       Due soon
                     </Text>
                   </Pressable>
-                  {view === "all" && <SortSelect value={sort} onChange={setSort} />}
+                  {view === "all" && <SortSelect value={sort} onChange={setSort} grow={isMobile} />}
                 </View>
               </View>
             )}
@@ -441,13 +513,13 @@ export default function SpcDashboardWeb() {
             ) : (
               <View className="flex-row flex-wrap gap-2.5">
                 {STATUS_ORDER.map((status) => (
-                  <StatusTile key={status} status={status} count={countByStatus[status] ?? 0} active={statusFilter === status} onToggle={toggleStatusFilter} />
+                  <StatusTile key={status} status={status} count={countByStatus[status] ?? 0} active={statusFilter === status} onToggle={toggleStatusFilter} fullWidth={isMobile} />
                 ))}
               </View>
             )}
           </View>
 
-          <View style={{ paddingHorizontal: 40, paddingTop: 20, paddingBottom: 40 }}>
+          <View style={{ paddingHorizontal: isMobile ? 14 : 40, paddingTop: 20, paddingBottom: 40 }}>
             {view === "all" ? (
               <View className="rounded-2xl border bg-white" style={{ borderColor: "#ece7e1", maxWidth: 900, overflow: "hidden" }}>
                 {sortedFlat.length === 0 ? (
@@ -456,10 +528,14 @@ export default function SpcDashboardWeb() {
                   </Text>
                 ) : (
                   <>
-                    <ClientGridRow isHeader />
-                    {sortedFlat.map((client) => (
-                      <ClientGridRow key={client.userId} client={client} />
-                    ))}
+                    {!isMobile && <ClientGridRow isHeader />}
+                    {sortedFlat.map((client) =>
+                      isMobile ? (
+                        <ClientMobileRow key={client.userId} client={client} />
+                      ) : (
+                        <ClientGridRow key={client.userId} client={client} />
+                      )
+                    )}
                   </>
                 )}
               </View>

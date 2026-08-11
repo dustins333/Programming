@@ -6,19 +6,18 @@ import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
 import { getCoachDashboardStats, computeAttentionItems, filterDismissedItems } from "../../lib/programming/coachDashboard";
 import { listDismissals, dismissAttentionItem } from "../../lib/programming/dashboardDismissals";
 import { STATUS_LABELS as SPC_STATUS_LABELS, STATUS_TONES as SPC_STATUS_TONES, STATUS_ORDER as SPC_STATUS_ORDER } from "../../lib/programming/spcStatus";
+import {
+  NUTRITION_STATUS_META,
+  NUTRITION_STATUS_ORDER,
+  nutritionRosterRoute,
+  spcRosterRoute,
+} from "../../lib/programming/dashboardStatusTiles";
+import { AttentionTile, AttentionModal } from "../../components/AttentionAlerts";
 import { CoachShell } from "../../components/CoachShell";
 import { fonts, colors, statusColors } from "../../lib/theme";
 import { ActivityFeed } from "../../components/ActivityFeed";
 
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
-
-const NUTRITION_STATUS_META = {
-  notSetUp: { label: "Not set up yet", tone: "needsAction" },
-  pendingCheckin: { label: "Pending check-in", tone: "needsAction" },
-  readyForCheckin: { label: "Ready for check-in", tone: "needsAction" },
-  checkinCompleted: { label: "Check-in completed", tone: "onTrack" },
-};
-const NUTRITION_STATUS_ORDER = ["notSetUp", "pendingCheckin", "readyForCheckin", "checkinCompleted"];
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -43,28 +42,6 @@ function Panel({ title, children, style }) {
   );
 }
 
-function AttentionRow({ title, subtitle, onPress, onDismiss }) {
-  return (
-    <View
-      className="mb-2 flex-row items-center rounded-xl px-4 py-3.5"
-      style={{ backgroundColor: "#fdece5", borderWidth: 1, borderColor: "#f0d4c9" }}
-    >
-      <Pressable onPress={onPress} className="flex-1 flex-row items-center pr-2">
-        <View className="flex-1 pr-2">
-          <Text style={{ fontFamily: fonts.sansBold, color: "#8a3a24", fontSize: 13.5 }}>{title}</Text>
-          <Text className="mt-0.5" style={{ fontFamily: fonts.sans, color: "#a8574a", fontSize: 12 }}>
-            {subtitle}
-          </Text>
-        </View>
-        <Text style={{ color: "#c2543a", fontSize: 15 }}>›</Text>
-      </Pressable>
-      <Pressable onPress={onDismiss} hitSlop={8} className="ml-2 items-center justify-center rounded-full" style={{ width: 22, height: 22 }}>
-        <Text style={{ color: "#c2543a", fontSize: 15, fontFamily: fonts.sansBold }}>×</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 function StatTile({ value, label, onPress }) {
   return (
     <Pressable
@@ -82,31 +59,12 @@ function StatTile({ value, label, onPress }) {
   );
 }
 
-function ClickableTile({ title, onPress, children }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className="flex-1 rounded-2xl border bg-white px-5 py-[18px]"
-      style={[{ borderColor: "#ece7e1", minWidth: 260 }, CARD_SHADOW]}
-    >
-      <View className="mb-3.5 flex-row items-center justify-between">
-        <Text
-          className="text-xs uppercase text-stone-400"
-          style={{ fontFamily: fonts.sansBold, letterSpacing: 0.6, fontSize: 11 }}
-        >
-          {title}
-        </Text>
-        <Text style={{ color: "#c9c4bd", fontSize: 14 }}>›</Text>
-      </View>
-      {children}
-    </Pressable>
-  );
-}
-
-// Non-pressable version of the same card, for GroupTile — its rows each
-// need their own navigation target (deep-linking to that specific
-// program), so the outer card can't also be one big Pressable the way
-// Nutrition/SPC's tiles are.
+// Every summary tile's rows now carry their own navigation target (a
+// specific program, or a roster filtered to that status), so the card
+// itself is never one big Pressable — a Pressable row nested inside a
+// Pressable card double-fires on web, where the click bubbles, and the
+// outer plain-page navigation would win over the row's filtered one.
+// TileHeader is what still navigates to the unfiltered page.
 function TileCard({ children }) {
   return (
     <View className="flex-1 rounded-2xl border bg-white px-5 py-[18px]" style={[{ borderColor: "#ece7e1", minWidth: 260 }, CARD_SHADOW]}>
@@ -126,10 +84,13 @@ function TileHeader({ title, onPress }) {
   );
 }
 
-function StatusRow({ label, value, tone }) {
+// Each row deep-links to its own roster, already filtered to the same
+// people it just counted — a count you can't act on is a dead end.
+function StatusRow({ label, value, tone, onPress }) {
   const toneColors = tone ? statusColors[tone] : null;
   return (
-    <View
+    <Pressable
+      onPress={onPress}
       className="flex-row items-center justify-between py-2.5"
       style={{ borderTopWidth: 1, borderTopColor: "#f0ede8" }}
     >
@@ -149,14 +110,15 @@ function StatusRow({ label, value, tone }) {
           {value}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 function NutritionTile({ stats, router }) {
   const b = stats.nutritionBreakdown;
   return (
-    <ClickableTile title="Nutrition" onPress={() => router.push("/(coach)/nutrition")}>
+    <TileCard>
+      <TileHeader title="Nutrition" onPress={() => router.push("/(coach)/nutrition")} />
       <Text className="mb-1 text-stone-700" style={{ fontFamily: fonts.sansBold, fontSize: 26 }}>
         {b.active}
         <Text className="text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
@@ -165,15 +127,22 @@ function NutritionTile({ stats, router }) {
         </Text>
       </Text>
       {NUTRITION_STATUS_ORDER.map((key) => (
-        <StatusRow key={key} label={NUTRITION_STATUS_META[key].label} value={b[key]} tone={NUTRITION_STATUS_META[key].tone} />
+        <StatusRow
+          key={key}
+          label={NUTRITION_STATUS_META[key].label}
+          value={b[key]}
+          tone={NUTRITION_STATUS_META[key].tone}
+          onPress={() => router.push(nutritionRosterRoute(key))}
+        />
       ))}
-    </ClickableTile>
+    </TileCard>
   );
 }
 
 function SpcTile({ stats, router }) {
   return (
-    <ClickableTile title="SPC" onPress={() => router.push("/(coach)/spc")}>
+    <TileCard>
+      <TileHeader title="SPC" onPress={() => router.push("/(coach)/spc")} />
       <Text className="mb-1 text-stone-700" style={{ fontFamily: fonts.sansBold, fontSize: 26 }}>
         {stats.spcCount}
         <Text className="text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
@@ -187,9 +156,10 @@ function SpcTile({ stats, router }) {
           label={SPC_STATUS_LABELS[key]}
           value={stats.spcByStatus[key] ?? 0}
           tone={SPC_STATUS_TONES[key]}
+          onPress={() => router.push(spcRosterRoute(key))}
         />
       ))}
-    </ClickableTile>
+    </TileCard>
   );
 }
 
@@ -244,6 +214,7 @@ export default function CoachHomeWeb() {
   const router = useRouter();
   const [stats, setStats] = useState(null);
   const [dismissals, setDismissals] = useState({});
+  const [attentionOpen, setAttentionOpen] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
@@ -329,26 +300,14 @@ export default function CoachHomeWeb() {
           <ActivityFeed />
         </View>
 
-        <View className="flex-row gap-4" style={{ maxWidth: 1180 }}>
-          <Panel title="Needs your attention" style={{ flex: 1.1 }}>
-            {attentionItems.length === 0 ? (
-              <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
-                Nothing needs attention right now — you're all caught up.
-              </Text>
-            ) : (
-              attentionItems.map((item) => (
-                <AttentionRow
-                  key={item.key}
-                  title={item.title}
-                  subtitle={item.subtitle}
-                  onPress={item.onPress}
-                  onDismiss={() => handleDismiss(item)}
-                />
-              ))
-            )}
-          </Panel>
+        <View className="flex-row flex-wrap gap-4" style={{ maxWidth: 1180 }}>
+          <AttentionTile
+            count={attentionItems.length}
+            onPress={() => setAttentionOpen(true)}
+            style={{ minWidth: 240, flexGrow: 1, flexBasis: 240, ...CARD_SHADOW }}
+          />
 
-          <Panel title="Roster" style={{ flex: 1.4 }}>
+          <Panel title="Roster" style={{ flex: 3, minWidth: 320 }}>
             <View className="flex-row flex-wrap gap-2.5">
               <StatTile value={stats.totalMembers} label="Total clients" onPress={() => goToClients(null)} />
               <StatTile
@@ -373,6 +332,17 @@ export default function CoachHomeWeb() {
           <SpcTile stats={stats} router={router} />
           <GroupTile stats={stats} router={router} />
         </View>
+
+        <AttentionModal
+          visible={attentionOpen}
+          items={attentionItems}
+          onClose={() => setAttentionOpen(false)}
+          onDismiss={handleDismiss}
+          onSelect={(item) => {
+            setAttentionOpen(false);
+            item.onPress();
+          }}
+        />
       </ScrollView>
     </CoachShell>
   );

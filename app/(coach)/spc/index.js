@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
-import { Link, useFocusEffect } from "expo-router";
+import { Link, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { getSpcRoster, checkAndAutoDraft } from "../../../lib/programming/spcDashboard";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { CoachShell } from "../../../components/CoachShell";
@@ -13,6 +13,19 @@ export default function SpcDashboard() {
   const [loadError, setLoadError] = useState(null);
   const [filterCoach, setFilterCoach] = useState(null);
   const [filterDueSoon, setFilterDueSoon] = useState(false);
+  // The dashboard's SPC rows link here with ?status= ("Needs Printed" →
+  // this page showing only those). This screen is a native tab and stays
+  // mounted, so the initializer alone would miss a second arrival with a
+  // different status.
+  const params = useLocalSearchParams();
+  const [statusFilter, setStatusFilter] = useState(typeof params.status === "string" && params.status ? params.status : null);
+  const appliedStatusParamRef = useRef(typeof params.status === "string" ? params.status : "");
+  useEffect(() => {
+    const raw = typeof params.status === "string" ? params.status : "";
+    if (appliedStatusParamRef.current === raw) return;
+    appliedStatusParamRef.current = raw;
+    setStatusFilter(raw || null);
+  }, [params.status]);
 
   const load = useCallback(async () => {
     try {
@@ -50,11 +63,13 @@ export default function SpcDashboard() {
   // a coach scanning the roster cares more about "who needs a program
   // printed today" than "which of my clients are which."
   const grouped = useMemo(() => {
-    return STATUS_ORDER.map((status) => ({
-      status,
-      clients: filtered.filter((c) => c.status === status),
-    })).filter((g) => g.clients.length > 0);
-  }, [filtered]);
+    return STATUS_ORDER.filter((status) => !statusFilter || status === statusFilter)
+      .map((status) => ({
+        status,
+        clients: filtered.filter((c) => c.status === status),
+      }))
+      .filter((g) => g.clients.length > 0);
+  }, [filtered, statusFilter]);
 
   if (loadError) {
     return (
@@ -131,6 +146,26 @@ export default function SpcDashboard() {
             </Pressable>
           </View>
         )}
+
+        {statusFilter ? (
+          <View className="mb-4 flex-row flex-wrap items-center gap-2">
+            <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Filtered: <Text style={{ fontFamily: fonts.sansSemiBold, color: "#4d6142" }}>{STATUS_LABELS[statusFilter]}</Text>
+            </Text>
+            <Text style={{ color: "#d6d3d1" }}>·</Text>
+            <Pressable onPress={() => setStatusFilter(null)} hitSlop={8}>
+              <Text className="text-sm" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                Clear filter
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {grouped.length === 0 ? (
+          <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
+            No clients match your filters.
+          </Text>
+        ) : null}
 
         {grouped.map(({ status, clients }) => (
           <View key={status} className="mb-6">

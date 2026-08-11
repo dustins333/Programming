@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Link, useFocusEffect } from "expo-router";
+import { Link, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { getNutritionRoster } from "../../../lib/nutrition/dashboard";
 import { STATUS_META, STATUS_ORDER } from "../../../lib/nutrition/rosterStatus";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -32,7 +32,22 @@ export default function NutritionDashboard() {
   const insets = useSafeAreaInsets();
   const [roster, setRoster] = useState(null);
   const [loadError, setLoadError] = useState(null);
-  const [filter, setFilter] = useState(null);
+  const params = useLocalSearchParams();
+  // An array, not one key: the dashboard's "Not set up yet" row counts one
+  // bucket this roster splits across four statuses, so it arrives as
+  // ?status=a,b,c,d. Empty = no filter.
+  const [filter, setFilter] = useState(() =>
+    typeof params.status === "string" && params.status ? params.status.split(",").filter(Boolean) : []
+  );
+  // This screen is a native tab and stays mounted, so the initializer above
+  // misses a second arrival from the dashboard with a different status.
+  const appliedStatusParamRef = useRef(typeof params.status === "string" ? params.status : "");
+  useEffect(() => {
+    const raw = typeof params.status === "string" ? params.status : "";
+    if (appliedStatusParamRef.current === raw) return;
+    appliedStatusParamRef.current = raw;
+    setFilter(raw ? raw.split(",").filter(Boolean) : []);
+  }, [params.status]);
 
   const load = useCallback(async () => {
     try {
@@ -57,7 +72,7 @@ export default function NutritionDashboard() {
 
   const filtered = useMemo(() => {
     if (!roster) return [];
-    const scoped = filter ? roster.filter((c) => c.rosterStatus === filter) : roster;
+    const scoped = filter.length ? roster.filter((c) => filter.includes(c.rosterStatus)) : roster;
     return [...scoped].sort((a, b) => a.name.localeCompare(b.name));
   }, [roster, filter]);
 
@@ -127,24 +142,24 @@ export default function NutritionDashboard() {
         <>
           <View className="mb-5 flex-row flex-wrap justify-between">
             <Pressable
-              onPress={() => setFilter(null)}
-              className={`mb-2 items-center justify-center rounded-xl border px-2 py-2.5 ${!filter ? "border-primary bg-primary" : "border-stone-300"}`}
+              onPress={() => setFilter([])}
+              className={`mb-2 items-center justify-center rounded-xl border px-2 py-2.5 ${!filter.length ? "border-primary bg-primary" : "border-stone-300"}`}
               style={{ width: "31%" }}
             >
-              <Text numberOfLines={2} className={`text-center ${!filter ? "text-white" : "text-stone-700"}`} style={{ fontFamily: fonts.sans, fontSize: 12.5 }}>
+              <Text numberOfLines={2} className={`text-center ${!filter.length ? "text-white" : "text-stone-700"}`} style={{ fontFamily: fonts.sans, fontSize: 12.5 }}>
                 All ({roster.length})
               </Text>
             </Pressable>
             {FILTER_ORDER.filter((key) => counts[key] > 0).map((key) => (
               <Pressable
                 key={key}
-                onPress={() => setFilter(key)}
-                className={`mb-2 items-center justify-center rounded-xl border px-2 py-2.5 ${filter === key ? "border-primary bg-primary" : "border-stone-300"}`}
+                onPress={() => setFilter([key])}
+                className={`mb-2 items-center justify-center rounded-xl border px-2 py-2.5 ${filter.includes(key) ? "border-primary bg-primary" : "border-stone-300"}`}
                 style={{ width: "31%" }}
               >
                 <Text
                   numberOfLines={2}
-                  className={`text-center ${filter === key ? "text-white" : "text-stone-700"}`}
+                  className={`text-center ${filter.includes(key) ? "text-white" : "text-stone-700"}`}
                   style={{ fontFamily: fonts.sans, fontSize: 12.5 }}
                 >
                   {STATUS_META[key].label} ({counts[key]})
