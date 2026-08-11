@@ -113,7 +113,11 @@ export function SessionRow({ userId, session, title, onOpenClient }) {
 // aggregate completion checkmarks/flags existed, never the numbers). No
 // migration needed: "staff can read session completions" (0007) and
 // "staff manage logs" (0004) already permit this.
-export function RecentSessionsCard({ userId, sessions }) {
+// Capped at `initialCount` so this sits level with the Upcoming card
+// beside it rather than running a dozen rows longer than its neighbour.
+export function RecentSessionsCard({ userId, sessions, initialCount = 3 }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (sessions.length === 0) {
     return (
       <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
@@ -121,11 +125,22 @@ export function RecentSessionsCard({ userId, sessions }) {
       </Text>
     );
   }
+
+  const shown = expanded ? sessions : sessions.slice(0, initialCount);
+  const hidden = sessions.length - shown.length;
+
   return (
     <View>
-      {sessions.map((session) => (
+      {shown.map((session) => (
         <SessionRow key={session.id} userId={userId} session={session} />
       ))}
+      {hidden > 0 || expanded ? (
+        <Pressable onPress={() => setExpanded((prev) => !prev)} className="pt-3" hitSlop={8}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+            {expanded ? "Show fewer" : `Show ${hidden} more`}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

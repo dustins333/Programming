@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
-import { currentWeekNumber } from "../../lib/programming/schedule";
+import { currentWeekNumber, blockLengthWeeks } from "../../lib/programming/schedule";
 import {
   listMyAssignments,
   getCurrentBlock,
@@ -69,7 +69,7 @@ export default function PlanBlock() {
 
         const workouts = await listPublishedWorkoutsForBlock(block.id);
         const completions = await listGroupCompletionDetailsForWorkouts(profile.id, workouts.map((w) => w.id));
-        const week = currentWeekNumber(block.block_start_date, program.block_length_weeks, todayInBoise());
+        const week = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), todayInBoise());
         // logs.source predates multi-membership and only special-cases
         // Flagship/BWA by name — any other program tags with the generic
         // 'group' value, same rule plan.js's own load() uses.
@@ -97,7 +97,7 @@ export default function PlanBlock() {
 
   const weeksInBlock = useMemo(() => {
     if (state.status !== "ready") return [];
-    return Array.from({ length: state.program.block_length_weeks }, (_, i) => i + 1);
+    return Array.from({ length: blockLengthWeeks(state.block, state.program) }, (_, i) => i + 1);
   }, [state]);
 
   const openSession = async (workout) => {

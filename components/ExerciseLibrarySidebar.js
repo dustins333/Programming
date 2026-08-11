@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { MUSCLE_GROUPS, MOVEMENT_PATTERNS, groupExercisesByParent } from "../lib/programming/exercises";
+import { MUSCLE_GROUPS, MOVEMENT_PATTERNS, groupExercisesByParent, parentMuscleGroup, muscleGroupLabel } from "../lib/programming/exercises";
 import { fonts } from "../lib/theme";
 
 // The left-hand library column shared by all three web builders (group,
@@ -109,7 +109,16 @@ function GroupByToggle({ value, onChange }) {
   );
 }
 
-export function ExerciseLibrarySidebar({ library, search, onSearchChange, onNewExercise, onInsertLift, onInsertWarmup }) {
+export function ExerciseLibrarySidebar({
+  library,
+  search,
+  onSearchChange,
+  onNewExercise,
+  onInsertLift,
+  onInsertWarmup,
+  onBack,
+  backLabel = "‹ Back",
+}) {
   const [groupBy, setGroupBy] = useState("muscle");
   // Tracked as the *expanded* set, not the collapsed one, so "everything
   // starts closed" is just an empty set — with a real library this column
@@ -161,8 +170,9 @@ export function ExerciseLibrarySidebar({ library, search, onSearchChange, onNewE
   // "no {grouping}" bucket rather than silently vanishing from the sidebar
   // — a real risk for movement_pattern, which is optional on the form.
   const sections = useMemo(() => {
-    const keys = groupBy === "muscle" ? MUSCLE_GROUPS : MOVEMENT_PATTERNS;
-    const field = groupBy === "muscle" ? "muscle_group" : "movement_pattern";
+    const isMuscle = groupBy === "muscle";
+    const keys = isMuscle ? MUSCLE_GROUPS : MOVEMENT_PATTERNS;
+    const field = isMuscle ? "muscle_group" : "movement_pattern";
     const buckets = new Map(keys.map((k) => [k, []]));
     const ungrouped = [];
 
@@ -173,7 +183,19 @@ export function ExerciseLibrarySidebar({ library, search, onSearchChange, onNewE
         ungrouped.push(e);
         return;
       }
-      values.forEach((v) => {
+      // Muscle sub-groups roll up to their top-level section here rather
+      // than each becoming its own bucket — ~23 sections would make this
+      // column unscannable, which is the whole reason it collapses. The
+      // dedupe matters: an exercise tagged both "chest" and "upper_chest"
+      // maps to "chest" twice and would otherwise list twice in it.
+      const bucketKeys = isMuscle
+        ? [...new Set(values.map(parentMuscleGroup).filter(Boolean))]
+        : values;
+      if (isMuscle && bucketKeys.length === 0) {
+        ungrouped.push(e);
+        return;
+      }
+      bucketKeys.forEach((v) => {
         if (!buckets.has(v)) buckets.set(v, []);
         buckets.get(v).push(e);
       });
@@ -181,7 +203,7 @@ export function ExerciseLibrarySidebar({ library, search, onSearchChange, onNewE
 
     const out = [...buckets.entries()]
       .filter(([, items]) => items.length > 0)
-      .map(([key, items]) => ({ key, title: key.replace(/_/g, " "), items }));
+      .map(([key, items]) => ({ key, title: isMuscle ? muscleGroupLabel(key) : key.replace(/_/g, " "), items }));
     if (ungrouped.length) {
       out.push({ key: UNGROUPED_KEY, title: groupBy === "muscle" ? "no muscle group" : "no movement pattern", items: ungrouped });
     }
@@ -194,6 +216,15 @@ export function ExerciseLibrarySidebar({ library, search, onSearchChange, onNewE
       style={{ width: 288, flexGrow: 0, flexShrink: 0, height: "100%", minHeight: 0 }}
     >
       <View className="px-4 pb-3 pt-6">
+        {/* Back lives here, in the sidebar's fixed header, rather than atop
+            the content column — over there it sat above the client/week
+            heading and scrolled out of reach the moment a coach started
+            working down a session. This column never scrolls. */}
+        {onBack ? (
+          <Pressable onPress={onBack} className="mb-3 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>{backLabel}</Text>
+          </Pressable>
+        ) : null}
         <Text className="mb-3 text-lg text-primary" style={{ fontFamily: fonts.sansSemiBold }}>
           Exercise Library
         </Text>

@@ -5,7 +5,7 @@ import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
-import { currentWeekNumber, sessionNumberForDate } from "../../lib/programming/schedule";
+import { currentWeekNumber, sessionNumberForDate, blockLengthWeeks } from "../../lib/programming/schedule";
 import { listMyAssignments, getCurrentBlock, getWorkout, listWorkoutsForWeek } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
@@ -221,7 +221,7 @@ export default function MyFitness() {
             const block = await getCurrentBlock(program.id, today);
             if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };
 
-            const weekNumber = currentWeekNumber(block.block_start_date, program.block_length_weeks, today);
+            const weekNumber = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), today);
 
             // An explicit deep link from My Week (tapping a specific
             // bubble's preview → "Log/Update session") always wins for its

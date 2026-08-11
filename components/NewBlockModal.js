@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable } from "react-native";
 import { todayInBoise } from "../lib/boiseDate";
+import { WeeksStepper } from "./WeeksStepper";
 
 export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
   const [groupProgramId, setGroupProgramId] = useState(null);
@@ -9,7 +10,13 @@ export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
   // group blocks used to always be born empty, restarting every cycle's
   // programming from zero.
   const [copyFromLatest, setCopyFromLatest] = useState(true);
+  // Seeded from the selected program's default but editable per block
+  // (migration 0049) — a one-off longer cycle no longer means editing the
+  // program's default and changing every future block along with it.
+  const [lengthWeeks, setLengthWeeks] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const selectedProgram = (programs ?? []).find((p) => p.id === groupProgramId) ?? null;
 
   useEffect(() => {
     if (visible) {
@@ -19,10 +26,19 @@ export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
     }
   }, [visible, programs]);
 
+  // Follows whichever program is selected, including a switch mid-dialog,
+  // so the number on screen is always that program's own default until the
+  // coach deliberately changes it.
+  useEffect(() => {
+    if (selectedProgram) setLengthWeeks(String(selectedProgram.block_length_weeks));
+  }, [selectedProgram?.id, selectedProgram?.block_length_weeks]);
+
+  const lengthValid = Number(lengthWeeks) >= 1;
+
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      await onSubmit({ groupProgramId, startDate, copyFromLatest });
+      await onSubmit({ groupProgramId, startDate, copyFromLatest, lengthWeeks: Number(lengthWeeks) });
       onClose();
     } finally {
       setSaving(false);
@@ -80,6 +96,13 @@ export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
           </View>
 
           <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+            Length
+          </Text>
+          <View className="mb-4">
+            <WeeksStepper value={lengthWeeks} onChange={setLengthWeeks} />
+          </View>
+
+          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
             Start date (YYYY-MM-DD)
           </Text>
           <TextInput
@@ -96,7 +119,7 @@ export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
             </Pressable>
             <Pressable
               onPress={handleSubmit}
-              disabled={saving || !groupProgramId || !startDate}
+              disabled={saving || !groupProgramId || !startDate || !lengthValid}
               className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
             >
               <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>

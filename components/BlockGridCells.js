@@ -6,8 +6,14 @@ import { fonts } from "../lib/theme";
 // labels stay aligned), just with a different data source per program vs.
 // per client. Extracted once both screens needed pixel-identical versions.
 export const SESSION_COL_WIDTH = 168;
-export const CELL_MIN_HEIGHT = 122;
+// Bumped from 122 when the session-title slot was added below "Wk N", so a
+// full five-exercise cell still fits inside the minimum instead of growing
+// past it and leaving rows unevenly tall.
+export const CELL_MIN_HEIGHT = 140;
 export const CELL_GAP = 12; // matches className="gap-3"
+
+// Reserved height for the title line — see the slot in SessionCell.
+const TITLE_SLOT_HEIGHT = 16;
 
 // Published/draft reads straight off the cell's own background now — a
 // subtle green tint (same tone as the app's other "on track"/"logged"
@@ -96,11 +102,22 @@ export function SessionCell({ workout, weekNum, exerciseNames, onPress, highligh
           ) : null}
           <Text
             style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: copyRole === "source" ? RUST_TEXT : undefined }}
-            className={copyRole === "source" ? "mb-1.5" : "mb-1.5 text-stone-500"}
+            className={copyRole === "source" ? "mb-0.5" : "mb-0.5 text-stone-500"}
           >
             Wk {weekNum}
             {copyRole === "source" ? " · copying" : ""}
           </Text>
+          {/* Fixed-height slot, rendered whether or not this session has a
+              title — a bare conditional line would push the exercise list
+              down in titled cells only, so a row mixing titled and
+              untitled sessions would sit visibly out of line with itself. */}
+          <View style={{ height: TITLE_SLOT_HEIGHT, justifyContent: "center" }} className="mb-1">
+            {workout.title ? (
+              <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#57534e" }}>
+                {workout.title}
+              </Text>
+            ) : null}
+          </View>
           {shown.length === 0 ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 11 }} className="text-stone-300">
               Empty
@@ -142,8 +159,28 @@ export function PlaceholderCell() {
 // partway through the visible window.
 // onStart is optional — omit it (native's "no programming from the app"
 // policy) to render the gap as plain status text with no creation button.
-export function GapSlot({ rowCount, groupWidth, onStart, starting }) {
+//
+// rolling: the block immediately before this gap extends itself, so the
+// space will fill in on its own, one week at a time as that block nears
+// its end. Offering "Start new block" here would be wrong twice over —
+// it reads as "nothing is happening" when something is, and acting on it
+// would queue a second block right where the rolling one is about to grow.
+export function GapSlot({ rowCount, groupWidth, onStart, starting, rolling }) {
   const height = rowCount * CELL_MIN_HEIGHT + (rowCount - 1) * CELL_GAP;
+
+  if (rolling) {
+    return (
+      <View
+        style={{ width: groupWidth, height, marginBottom: CELL_GAP, borderColor: "#dbe8cf", backgroundColor: "#f7faf4" }}
+        className="items-center justify-center rounded-xl border border-dashed px-6"
+      >
+        <Text className="text-center" style={{ fontFamily: fonts.sansSemiBold, color: "#4d6142", fontSize: 13.5 }}>
+          Rolling block
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View
       style={{ width: groupWidth, height, marginBottom: CELL_GAP }}

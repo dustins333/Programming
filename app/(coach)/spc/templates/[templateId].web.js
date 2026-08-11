@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
-import { Link, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { DndContext, PointerSensor, useSensor, useSensors, pointerWithin } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -136,6 +136,7 @@ function SortableExerciseRow({ item, onChange, onRemove }) {
 // tally (no block/siblings concept for a standalone template).
 export default function TemplateBuilderWeb() {
   const { templateId } = useLocalSearchParams();
+  const router = useRouter();
   const { profile } = useAuth();
 
   const [template, setTemplate] = useState(null);
@@ -276,12 +277,11 @@ export default function TemplateBuilderWeb() {
           onNewExercise={() => setNewExerciseModalVisible(true)}
           onInsertLift={handleInsertExercise}
           onInsertWarmup={handleAddWarmup}
+          onBack={() => router.push("/(coach)/spc/templates")}
+          backLabel="‹ Back to templates"
         />
 
         <ScrollView className="flex-1 px-8 py-6">
-          <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: "#8a5140", marginBottom: 12 }}>
-            ‹ Back to templates
-          </Link>
           <Text className="text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
             {template.name}
           </Text>

@@ -13,7 +13,7 @@ import {
 } from "../../../lib/programming/spcBlocks";
 import { listSpcWorkoutExercisesForWorkouts, copyLastBlockContent, copySpcWorkoutContent, setSpcWorkoutStatusBulk } from "../../../lib/programming/spcWorkouts";
 import { currentWeekNumber } from "../../../lib/programming/schedule";
-import { WEEK_OFFSETS, groupRows } from "../../../lib/programming/gridRows";
+import { WEEK_OFFSETS, groupRows, blockPrecedingGap } from "../../../lib/programming/gridRows";
 import { SessionCell, PlaceholderCell, GapSlot, SESSION_COL_WIDTH, CELL_MIN_HEIGHT, CELL_GAP } from "../../../components/BlockGridCells";
 import { getSetting } from "../../../lib/settings";
 import { todayInBoise } from "../../../lib/boiseDate";
@@ -286,13 +286,13 @@ export default function SpcClientDetail() {
   };
 
   // Start date is always computed, never typed — day after whichever block
-  // is currently latest, or today if this client has never had one. "Copy
-  // last block" reuses that block's own length; "Start blank" uses the
-  // program-wide default.
-  const handleCreateBlockChoice = async (mode) => {
+  // is currently latest, or today if this client has never had one. Length
+  // now comes from the dialog, which seeds it the way this used to force
+  // it (the last block's length when copying, the program default when
+  // blank) but lets the coach override it per block.
+  const handleCreateBlockChoice = async (mode, lengthWeeks) => {
     const latest = blocks[0] ?? null;
     const startDate = latest ? addDays(latest.block_end_date, 1) : todayInBoise();
-    const lengthWeeks = mode === "copy" && latest ? latest.block_length_weeks : defaultLengthWeeks;
     try {
       const newBlock = await createSpcBlock({
         spcClientId: userId,
@@ -545,12 +545,26 @@ export default function SpcClientDetail() {
               className="rounded-lg border px-4 py-2.5"
               style={{ borderColor: "#d9d4cd" }}
             >
+              {/* Not "History"/"Past blocks" — this page manages the live
+                  block too (length, Extend, rolling), and a past-tense
+                  label sent coaches looking for those elsewhere. */}
               <Text className="text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
-                History
+                SPC blocks
               </Text>
             </Pressable>
           </View>
         </View>
+
+        {blocks[0]?.auto_extend ? (
+          <View
+            className="mb-4 rounded-xl border px-4 py-3"
+            style={{ maxWidth: 900, borderColor: "#dbe8cf", backgroundColor: "#f7faf4" }}
+          >
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#4d6142" }}>
+              This client has a rolling block.
+            </Text>
+          </View>
+        ) : null}
 
         {!gridRows ? (
           <ActivityIndicator color={colors.primary} />
@@ -637,13 +651,20 @@ export default function SpcClientDetail() {
                         })}
                       </View>
                     ) : (
-                      <GapSlot
-                        key={`gap-${idx}`}
-                        rowCount={group.rows.length}
-                        groupWidth={columns * SESSION_COL_WIDTH + (columns - 1) * CELL_GAP}
-                        onStart={isWeb ? () => handleStartGapBlock(group.rows) : undefined}
-                        starting={startingGap}
-                      />
+                      (() => {
+                        // A rolling block fills its own gap — see GapSlot.
+                        const rolling = Boolean(blockPrecedingGap(blocks, group.rows)?.auto_extend);
+                        return (
+                          <GapSlot
+                            key={`gap-${idx}`}
+                            rowCount={group.rows.length}
+                            groupWidth={columns * SESSION_COL_WIDTH + (columns - 1) * CELL_GAP}
+                            onStart={isWeb && !rolling ? () => handleStartGapBlock(group.rows) : undefined}
+                            starting={startingGap}
+                            rolling={rolling}
+                          />
+                        );
+                      })()
                     )
                   )}
                 </View>
@@ -690,6 +711,8 @@ export default function SpcClientDetail() {
           latestBlockLabel={labeledBlocks[0]?.label ?? null}
           weeksAgo={labeledBlocks[0] ? weeksSince(labeledBlocks[0].block_end_date, today) : 0}
           preview={latestBlockPreview}
+          defaultLengthWeeks={defaultLengthWeeks}
+          lastBlockLengthWeeks={blocks[0]?.block_length_weeks}
           onClose={() => setModalVisible(false)}
           onSubmit={handleCreateBlockChoice}
         />

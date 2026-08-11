@@ -1,19 +1,19 @@
 import { useCallback, useRef, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Platform, useWindowDimensions } from "react-native";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase, core } from "../../../lib/supabase/client";
 import { getUser, listCoaches, listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../../lib/programming/clients";
 import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { getCurrentBlock } from "../../../lib/programming/memberPlan";
-import { currentWeekNumber } from "../../../lib/programming/schedule";
+import { currentWeekNumber, blockLengthWeeks } from "../../../lib/programming/schedule";
 import { getMissedSessionFlagsByUser } from "../../../lib/programming/flags";
 import { getSpcClient, assignSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
 import { getClient as getNutritionClient, createOrReactivateClient, setClientStatus as setNutritionStatus } from "../../../lib/nutrition/clients";
 import { listTemplates } from "../../../lib/programming/templates";
 import { listOneOffWorkoutsForUser, createOneOffFromTemplate, deleteOneOffWorkout } from "../../../lib/programming/oneOffWorkouts";
 import { listCompletedOneOffWorkoutIds } from "../../../lib/programming/sessionCompletions";
-import { listRecentSessionsForUser } from "../../../lib/programming/coachLogs";
+import { listRecentSessionsForUser, listUpcomingSessionsForUser } from "../../../lib/programming/coachLogs";
 import { listMessages, sendStaffMessage } from "../../../lib/programming/messages";
 import { getMessagingSettings, deriveMessagingScopes, matchesMessagingAudience } from "../../../lib/programming/messagingSettings";
 import { sendPush } from "../../../lib/notifications/sendPush";
@@ -22,6 +22,7 @@ import { StatusBadge } from "../../../components/StatusBadge";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { AssignOneOffModal } from "../../../components/AssignOneOffModal";
 import { RecentSessionsCard } from "../../../components/RecentSessionsCard";
+import { UpcomingSessionsCard } from "../../../components/UpcomingSessionsCard";
 import { MessageThread } from "../../../components/MessageThread";
 import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CoachShell } from "../../../components/CoachShell";
@@ -144,6 +145,8 @@ export default function ClientProfile() {
   const { userId } = useLocalSearchParams();
   const { profile } = useAuth();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const sideBySide = isWeb && width >= 768;
   const [member, setMember] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [programs, setPrograms] = useState([]);
@@ -162,6 +165,8 @@ export default function ClientProfile() {
   const [completedOneOffIds, setCompletedOneOffIds] = useState(new Set());
   const [templates, setTemplates] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
+  const [upcomingSessions, setUpcomingSessions] = useState([]);
+  const [upcomingErrors, setUpcomingErrors] = useState([]);
   const [messages, setMessages] = useState(null);
   const [messagesError, setMessagesError] = useState(null);
   const [messagingSettings, setMessagingSettings] = useState(null);
@@ -246,6 +251,18 @@ export default function ClientProfile() {
         setRecentSessions(await listRecentSessionsForUser(userId));
       } catch {
         setRecentSessions([]);
+      }
+
+      // Same isolation — Upcoming is derived live from every membership's
+      // current block, so it touches more moving parts than any other
+      // fetch on this page and must not be able to take the page down.
+      try {
+        const upcoming = await listUpcomingSessionsForUser(userId);
+        setUpcomingSessions(upcoming.sessions);
+        setUpcomingErrors(upcoming.errors);
+      } catch (err) {
+        setUpcomingSessions([]);
+        setUpcomingErrors([{ module: "Upcoming sessions", message: err.message ?? String(err) }]);
       }
 
       try {
@@ -473,7 +490,7 @@ export default function ClientProfile() {
     .map((a) => {
       const block = currentBlocksByProgramId[a.group_program_id];
       if (!block) return null;
-      const totalWeeks = a.group_programs?.block_length_weeks ?? 1;
+      const totalWeeks = blockLengthWeeks(block, a.group_programs) ?? 1;
       return {
         programId: a.group_program_id,
         programName: a.group_programs?.name ?? "Group program",
@@ -711,9 +728,24 @@ export default function ClientProfile() {
           </Pressable>
         </SettingsCard>
 
-        <SettingsCard icon="stats-chart-outline" title="Recent sessions">
-          <RecentSessionsCard userId={userId} sessions={recentSessions} />
-        </SettingsCard>
+        {/* Done and due, side by side where there's room for two columns.
+            Gated on real width, not just platform — the installed PWA is a
+            web build on a phone screen, where two columns would be
+            unreadable. Same 768 breakpoint CoachShell's own mobile nav
+            uses. Both cards cap at three rows with their own expander, so
+            neither runs away from the other. */}
+        <View style={sideBySide ? { flexDirection: "row", gap: 16 } : undefined}>
+          <View style={sideBySide ? { flex: 1 } : undefined}>
+            <SettingsCard icon="stats-chart-outline" title="Recent sessions">
+              <RecentSessionsCard userId={userId} sessions={recentSessions} />
+            </SettingsCard>
+          </View>
+          <View style={sideBySide ? { flex: 1 } : undefined}>
+            <SettingsCard icon="calendar-outline" title="Upcoming sessions">
+              <UpcomingSessionsCard sessions={upcomingSessions} errors={upcomingErrors} />
+            </SettingsCard>
+          </View>
+        </View>
 
         {messagingEnabled ? (
           <SettingsCard icon="chatbubble-outline" title="Messages">

@@ -3,8 +3,8 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { listGroupPrograms, createGroupProgram, updateGroupProgram, createBlock, listWorkoutsForBlock, listBlocksForProgram, addDays } from "../../../lib/programming/blocks";
 import { listWorkoutExercisesForWorkouts, copyWorkoutContent, setWorkoutStatusBulk, copyLastGroupBlockContent } from "../../../lib/programming/workouts";
-import { currentWeekNumber } from "../../../lib/programming/schedule";
-import { WEEK_OFFSETS, groupRows } from "../../../lib/programming/gridRows";
+import { currentWeekNumber, blockLengthWeeks } from "../../../lib/programming/schedule";
+import { WEEK_OFFSETS, groupRows, blockPrecedingGap } from "../../../lib/programming/gridRows";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
 import { confirmOverwrite, confirmBulkPublish } from "../../../lib/confirmDialog";
@@ -40,7 +40,7 @@ async function loadProgramData(program) {
   const rows = WEEK_OFFSETS.map(({ offset, label }) => {
     const weekDate = addDays(today, offset * 7);
     const block = allBlocks.find((b) => b.block_start_date <= weekDate && weekDate <= b.block_end_date) ?? null;
-    const weekNum = block ? currentWeekNumber(block.block_start_date, program.block_length_weeks, weekDate) : null;
+    const weekNum = block ? currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), weekDate) : null;
     return { offset, label, weekDate, block, weekNum, sessions: [] };
   });
 
@@ -124,7 +124,7 @@ export default function Blocks() {
     cancelCopy();
   }, [selectedProgramId, cancelCopy]);
 
-  const handleCreate = async ({ groupProgramId, startDate, copyFromLatest }) => {
+  const handleCreate = async ({ groupProgramId, startDate, copyFromLatest, lengthWeeks }) => {
     try {
       // Resolve the source block BEFORE creating — the new block would
       // otherwise be its own "latest". listBlocksForProgram is oldest-first.
@@ -133,7 +133,7 @@ export default function Blocks() {
         const existing = await listBlocksForProgram(groupProgramId);
         sourceBlock = existing[existing.length - 1] ?? null;
       }
-      const newBlock = await createBlock({ groupProgramId, startDate, createdBy: profile.id });
+      const newBlock = await createBlock({ groupProgramId, startDate, createdBy: profile.id, lengthWeeks });
       if (sourceBlock) await copyLastGroupBlockContent(sourceBlock.id, newBlock.id);
       await load();
     } catch (err) {
@@ -249,8 +249,11 @@ export default function Blocks() {
               className="rounded-lg border px-4 py-2.5"
               style={{ borderColor: "#d9d4cd", opacity: selectedProgramId ? 1 : 0.5 }}
             >
+              {/* Not "History" — this page manages the live block too
+                  (length, Extend, rolling), so a past-tense label sent
+                  coaches looking for those controls somewhere else. */}
               <Text className="text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
-                History
+                {selected ? `${selected.program.name} blocks` : "All blocks"}
               </Text>
             </Pressable>
             {isWeb && (
@@ -425,13 +428,20 @@ export default function Blocks() {
                               })}
                             </View>
                           ) : (
-                            <GapSlot
-                              key={`gap-${idx}`}
-                              rowCount={group.rows.length}
-                              groupWidth={groupWidth}
-                              onStart={isWeb ? () => handleStartGapBlock(program, group.rows, allBlocks) : undefined}
-                              starting={startingProgramId === program.id}
-                            />
+                            (() => {
+                              // A rolling block fills its own gap — see GapSlot.
+                              const rolling = Boolean(blockPrecedingGap(allBlocks, group.rows)?.auto_extend);
+                              return (
+                                <GapSlot
+                                  key={`gap-${idx}`}
+                                  rowCount={group.rows.length}
+                                  groupWidth={groupWidth}
+                                  onStart={isWeb && !rolling ? () => handleStartGapBlock(program, group.rows, allBlocks) : undefined}
+                                  starting={startingProgramId === program.id}
+                                  rolling={rolling}
+                                />
+                              );
+                            })()
                           )
                         )}
                       </View>

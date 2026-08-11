@@ -9,6 +9,8 @@ import {
   setExerciseActive,
   getExerciseUsageCount,
   MUSCLE_GROUPS,
+  parentMuscleGroup,
+  muscleGroupLabel,
 } from "../../../lib/programming/exercises";
 import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { CoachShell } from "../../../components/CoachShell";
@@ -61,7 +63,15 @@ export default function Exercises() {
     return exercises.filter((ex) => {
       if (showArchived ? ex.is_active : !ex.is_active) return false;
       if ((ex.type ?? "lift") !== typeFilter) return false;
-      if (typeFilter === "lift" && muscleFilter && !ex.muscle_group?.includes(muscleFilter)) return false;
+      // Matched through parentMuscleGroup, not a bare includes — the chips
+      // are the eight top-level groups, so "Back" has to also catch an
+      // exercise tagged only "lats".
+      if (
+        typeFilter === "lift" &&
+        muscleFilter &&
+        !ex.muscle_group?.some((mg) => parentMuscleGroup(mg) === muscleFilter)
+      )
+        return false;
       if (search && !ex.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -201,7 +211,7 @@ export default function Exercises() {
                   style={{ backgroundColor: active ? colors.primary : "white", borderWidth: active ? 0 : 1, borderColor: "#d9d4cd" }}
                 >
                   <Text style={{ fontFamily: active ? fonts.sansBold : fonts.sansSemiBold, color: active ? "white" : "#57534e", fontSize: 12.5 }}>
-                    {mg.replace("_", " ")}
+                    {muscleGroupLabel(mg)}
                   </Text>
                 </Pressable>
               );
@@ -246,7 +256,7 @@ export default function Exercises() {
                         </View>
                       ) : (
                         <Text className="text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 12 }}>
-                          {item.muscle_group?.map((mg) => mg.replace("_", " ")).join(", ")}
+                          {item.muscle_group?.map(muscleGroupLabel).join(", ")}
                           {item.movement_pattern?.length
                             ? ` · ${item.movement_pattern.map((mp) => mp.replace("_", " ")).join(", ")}`
                             : ""}

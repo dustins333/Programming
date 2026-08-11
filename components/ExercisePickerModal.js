@@ -1,8 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, FlatList } from "react-native";
+import { muscleGroupLabel } from "../lib/programming/exercises";
 
 export function ExercisePickerModal({ visible, library, onClose, onPick }) {
   const [search, setSearch] = useState("");
+
+  // The Modal stays mounted between opens, so without this the last
+  // search a coach typed is still sitting in the box (and still filtering
+  // the list) the next time they hit "+ Insert exercise" — every insert
+  // after the first started pre-filtered to the wrong movement.
+  useEffect(() => {
+    if (visible) setSearch("");
+  }, [visible]);
 
   const filtered = useMemo(() => {
     if (!search) return library;
@@ -37,7 +46,7 @@ export function ExercisePickerModal({ visible, library, onClose, onPick }) {
               >
                 <Text style={{ fontFamily: "Montserrat_500Medium" }}>{item.name}</Text>
                 <Text className="text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
-                  {item.type === "warmup" ? "warm-up" : item.muscle_group?.map((mg) => mg.replace("_", " ")).join(", ") ?? ""}
+                  {item.type === "warmup" ? "warm-up" : item.muscle_group?.map(muscleGroupLabel).join(", ") ?? ""}
                 </Text>
               </Pressable>
             )}

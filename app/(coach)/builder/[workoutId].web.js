@@ -17,7 +17,7 @@ import {
   updateWorkoutExercise,
   removeWorkoutExercise,
   reorderWorkoutExercises,
-  getSiblingPatterns,
+  getSiblingLifts,
   setWorkoutStatus,
   setWorkoutTitle,
 } from "../../../lib/programming/workouts";
@@ -184,7 +184,7 @@ export default function WorkoutBuilderWeb() {
   const [warmups, setWarmups] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [library, setLibrary] = useState([]);
-  const [siblingPatterns, setSiblingPatterns] = useState([]);
+  const [siblingLifts, setSiblingLifts] = useState([]);
   const [search, setSearch] = useState("");
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
@@ -205,13 +205,13 @@ export default function WorkoutBuilderWeb() {
         listWarmups(workoutId),
         listWorkoutExercises(workoutId),
         listExercises(),
-        getSiblingPatterns(w.group_blocks.id, w.week_number, workoutId),
+        getSiblingLifts(w.group_blocks.id, w.week_number, workoutId),
         listWorkoutsForBlock(w.group_blocks.id),
       ]);
       setWarmups(warmupRows);
       setExercises(exerciseRows);
       setLibrary(libraryRows);
-      setSiblingPatterns(siblings);
+      setSiblingLifts(siblings);
       setBlockWorkouts(allBlockWorkouts);
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -375,7 +375,7 @@ export default function WorkoutBuilderWeb() {
     );
   }
 
-  const currentPatterns = exercises.flatMap((e) => e.exercises?.movement_pattern ?? []);
+  const currentLifts = exercises.map((e) => ({ name: e.exercises?.name ?? "Unknown exercise", patterns: e.exercises?.movement_pattern ?? [] }));
 
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
@@ -387,18 +387,12 @@ export default function WorkoutBuilderWeb() {
           onNewExercise={() => setNewExerciseModalVisible(true)}
           onInsertLift={handleInsertExercise}
           onInsertWarmup={handleAddWarmup}
+          onBack={() =>
+            router.canGoBack() ? router.back() : router.push(`/(coach)/blocks?program=${workout.group_blocks.group_program_id}`)
+          }
         />
 
         <ScrollView className="flex-1 px-8 py-6">
-          <Pressable
-            onPress={() =>
-              router.canGoBack() ? router.back() : router.push(`/(coach)/blocks?program=${workout.group_blocks.group_program_id}`)
-            }
-            className="mb-3 self-start"
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={{ fontFamily: "Montserrat_500Medium", color: "#8a5140" }}>‹ Back</Text>
-          </Pressable>
           <View className="mb-6 flex-row items-center justify-between">
             <View>
               <Text className="text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
@@ -558,7 +552,7 @@ export default function WorkoutBuilderWeb() {
           </View>
 
           <View className="mb-6">
-            <PatternTally currentPatterns={currentPatterns} siblingPatterns={siblingPatterns} />
+            <PatternTally currentLifts={currentLifts} siblingLifts={siblingLifts} />
           </View>
 
           <CommentThread groupBlockId={workout.group_blocks.id} />

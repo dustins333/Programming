@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { MUSCLE_GROUPS, MOVEMENT_PATTERNS } from "../lib/programming/exercises";
+import { MUSCLE_GROUPS, MUSCLE_SUB_GROUPS, MOVEMENT_PATTERNS, muscleGroupLabel } from "../lib/programming/exercises";
 import { fonts, colors } from "../lib/theme";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { KeyboardDoneButton } from "./KeyboardDoneButton";
@@ -75,6 +75,90 @@ function ParentExercisePicker({ value, options, onChange }) {
         </Pressable>
       </Modal>
     </>
+  );
+}
+
+// One collapsed row per top-level group, opening to that group's own
+// options. A flat wall of every muscle value would be ~23 chips with no
+// structure; this keeps the closed state to eight scannable rows while
+// still showing, on each row, what's already picked underneath it.
+//
+// The first chip in a section is always the top-level group itself, so
+// "just chest" stays a valid answer — that's what everything tagged before
+// sub-groups existed holds, and it's a legitimate choice for an exercise
+// that genuinely doesn't split.
+function MuscleGroupPicker({ selected, onToggle }) {
+  const [expanded, setExpanded] = useState(() => new Set());
+
+  const toggleSection = (key) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  return (
+    <View className="overflow-hidden rounded-xl border" style={{ borderColor: "#e0dcd6" }}>
+      {MUSCLE_GROUPS.map((section, i) => {
+        const subs = MUSCLE_SUB_GROUPS[section];
+        const options = [section, ...subs];
+        const picked = options.filter((o) => selected.includes(o));
+        const isOpen = expanded.has(section);
+        return (
+          <View key={section} style={i > 0 ? { borderTopWidth: 1, borderTopColor: "#f0ece6" } : undefined}>
+            <Pressable
+              onPress={() => toggleSection(section)}
+              className="flex-row items-center justify-between px-3 py-2.5"
+              accessibilityLabel={`${muscleGroupLabel(section)} options`}
+            >
+              <View className="flex-1 pr-2">
+                <Text
+                  className="text-xs uppercase"
+                  style={{
+                    fontFamily: fonts.sansBold,
+                    letterSpacing: 0.4,
+                    color: picked.length ? colors.primaryOnWhite : "#78716c",
+                  }}
+                >
+                  {muscleGroupLabel(section)}
+                </Text>
+                {picked.length ? (
+                  <Text numberOfLines={1} className="text-xs" style={{ fontFamily: fonts.sans, color: "#78716c" }}>
+                    {picked.map(muscleGroupLabel).join(", ")}
+                  </Text>
+                ) : null}
+              </View>
+              <Ionicons name={isOpen ? "chevron-down" : "chevron-forward"} size={16} color="#a8a29e" />
+            </Pressable>
+            {isOpen ? (
+              <View className="flex-row flex-wrap gap-2 px-3 pb-3">
+                {options.map((o) => {
+                  const active = selected.includes(o);
+                  const isSectionItself = o === section;
+                  return (
+                    <Pressable
+                      key={o}
+                      onPress={() => onToggle(o)}
+                      className={`rounded-full border px-3 py-2 ${active ? "border-primary bg-primary" : "border-stone-300"}`}
+                    >
+                      <Text
+                        className={active ? "text-white" : "text-stone-700"}
+                        style={{ fontFamily: fonts.sans, fontSize: 13 }}
+                      >
+                        {isSectionItself && subs.length > 0
+                          ? `${muscleGroupLabel(section)} (general)`
+                          : muscleGroupLabel(o)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -289,21 +373,11 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
                 <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
                   Muscle group (select all that apply)
                 </Text>
-                <View className="mb-1 flex-row flex-wrap gap-2">
-                  {MUSCLE_GROUPS.map((mg) => {
-                    const active = form.muscleGroups.includes(mg);
-                    return (
-                      <Pressable
-                        key={mg}
-                        onPress={() => toggleInArray("muscleGroups", mg)}
-                        className={`rounded-full border px-3.5 py-2.5 ${active ? "border-primary bg-primary" : "border-stone-300"}`}
-                      >
-                        <Text className={active ? "text-white" : "text-stone-700"} style={{ fontFamily: "Montserrat_400Regular" }}>
-                          {mg.replace("_", " ")}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                <View className="mb-1">
+                  <MuscleGroupPicker
+                    selected={form.muscleGroups}
+                    onToggle={(value) => toggleInArray("muscleGroups", value)}
+                  />
                 </View>
                 {noMuscleGroupSelected ? (
                   <Text className="mb-4 text-xs" style={{ fontFamily: fonts.sans, color: "#b23a22" }}>

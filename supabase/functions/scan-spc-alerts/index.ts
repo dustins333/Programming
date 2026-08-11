@@ -16,6 +16,7 @@
 // and the same value pasted into the cron.schedule() call in the migration.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sendPushToUser } from "../_shared/expoPush.ts";
+import { extendBlockByOneWeek, GROUP_BLOCK_KIND, SPC_BLOCK_KIND } from "../_shared/extendBlock.ts";
 
 const TIMEZONE = "America/Boise";
 
@@ -81,7 +82,13 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: clientsError.message }), { status: 500 });
   }
 
-  const results = { scanned: clients?.length ?? 0, drafted: 0, pushed: 0, errors: [] as string[] };
+  const results = {
+    scanned: clients?.length ?? 0,
+    drafted: 0,
+    pushed: 0,
+    extended: 0,
+    errors: [] as string[],
+  };
 
   for (const client of clients ?? []) {
     try {
@@ -97,6 +104,17 @@ Deno.serve(async (req) => {
 
       const daysUntilEnd = daysBetween(today, latest.block_end_date);
       if (daysUntilEnd > leadTimeDays) continue;
+
+      // A rolling block grows instead of ending, so it must NEVER also get
+      // a successor drafted behind it — that's the duplicate-block churn
+      // this whole feature exists to remove. Extending and drafting are
+      // deliberately mutually exclusive, decided here in one place.
+      if (latest.auto_extend) {
+        const outcome = await extendBlockByOneWeek(programming, SPC_BLOCK_KIND, latest);
+        if (outcome.extended) results.extended += 1;
+        else if (outcome.reason) results.errors.push(`${client.user_id}: not extended (${outcome.reason})`);
+        continue;
+      }
 
       const startDate = addDays(latest.block_end_date, 1);
       const lengthWeeks = latest.block_length_weeks;
@@ -167,6 +185,32 @@ Deno.serve(async (req) => {
       }
     } catch (err) {
       results.errors.push(`${client.user_id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // Group blocks marked rolling, handled in the same daily pass rather
+  // than a second cron job. Group has no scan of its own, and standing up
+  // one more Edge Function + pg_cron entry to run the identical
+  // "is this block nearly over" check on the identical schedule would be
+  // two things to keep in step instead of one. Unlike SPC there's no
+  // auto-draft on this side, so there's nothing to be mutually exclusive
+  // with — a group block either rolls or it ends.
+  const { data: rollingGroupBlocks, error: rollingError } = await programming
+    .from("group_blocks")
+    .select("*")
+    .eq("auto_extend", true);
+  if (rollingError) {
+    results.errors.push(`group rolling blocks: ${rollingError.message}`);
+  } else {
+    for (const block of rollingGroupBlocks ?? []) {
+      try {
+        if (daysBetween(today, block.block_end_date) > leadTimeDays) continue;
+        const outcome = await extendBlockByOneWeek(programming, GROUP_BLOCK_KIND, block);
+        if (outcome.extended) results.extended += 1;
+        else if (outcome.reason) results.errors.push(`group block ${block.id}: not extended (${outcome.reason})`);
+      } catch (err) {
+        results.errors.push(`group block ${block.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
 

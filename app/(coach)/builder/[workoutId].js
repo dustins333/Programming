@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { getWorkout, listWarmups, listWorkoutExercises, getSiblingPatterns } from "../../../lib/programming/workouts";
+import { getWorkout, listWarmups, listWorkoutExercises, getSiblingLifts } from "../../../lib/programming/workouts";
 import { summarizeRepScheme } from "../../../lib/programming/exercises";
 import { PatternTally } from "../../../components/PatternTally";
 import { CommentThread } from "../../../components/CommentThread";
@@ -22,7 +22,7 @@ export default function WorkoutBuilderNative() {
   const [workout, setWorkout] = useState(null);
   const [warmups, setWarmups] = useState([]);
   const [exercises, setExercises] = useState([]);
-  const [siblingPatterns, setSiblingPatterns] = useState([]);
+  const [siblingLifts, setSiblingLifts] = useState([]);
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
@@ -33,11 +33,11 @@ export default function WorkoutBuilderNative() {
       const [warmupRows, exerciseRows, siblings] = await Promise.all([
         listWarmups(workoutId),
         listWorkoutExercises(workoutId),
-        getSiblingPatterns(w.group_blocks.id, w.week_number, workoutId),
+        getSiblingLifts(w.group_blocks.id, w.week_number, workoutId),
       ]);
       setWarmups(warmupRows);
       setExercises(exerciseRows);
-      setSiblingPatterns(siblings);
+      setSiblingLifts(siblings);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -68,7 +68,7 @@ export default function WorkoutBuilderNative() {
     );
   }
 
-  const currentPatterns = exercises.flatMap((e) => e.exercises?.movement_pattern ?? []);
+  const currentLifts = exercises.map((e) => ({ name: e.exercises?.name ?? "Unknown exercise", patterns: e.exercises?.movement_pattern ?? [] }));
 
   return (
     <ScrollView
@@ -163,7 +163,7 @@ export default function WorkoutBuilderNative() {
       )}
 
       <View className="mb-6 mt-3">
-        <PatternTally currentPatterns={currentPatterns} siblingPatterns={siblingPatterns} />
+        <PatternTally currentLifts={currentLifts} siblingLifts={siblingLifts} />
       </View>
 
       <CommentThread groupBlockId={workout.group_blocks.id} />

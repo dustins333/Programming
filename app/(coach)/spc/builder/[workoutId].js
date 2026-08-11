@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from "r
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getUser } from "../../../../lib/programming/clients";
-import { getSpcWorkout, listSpcWarmups, listSpcWorkoutExercises, getSpcSiblingPatterns } from "../../../../lib/programming/spcWorkouts";
+import { getSpcWorkout, listSpcWarmups, listSpcWorkoutExercises, getSpcSiblingLifts } from "../../../../lib/programming/spcWorkouts";
 import { summarizeRepScheme } from "../../../../lib/programming/exercises";
 import { CommentThread } from "../../../../components/CommentThread";
 import { PatternTally } from "../../../../components/PatternTally";
@@ -23,7 +23,7 @@ export default function SpcWorkoutBuilderNative() {
   const [member, setMember] = useState(null);
   const [warmups, setWarmups] = useState([]);
   const [exercises, setExercises] = useState([]);
-  const [siblingPatterns, setSiblingPatterns] = useState([]);
+  const [siblingLifts, setSiblingLifts] = useState([]);
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
@@ -35,12 +35,12 @@ export default function SpcWorkoutBuilderNative() {
         getUser(w.spc_blocks.spc_client_id),
         listSpcWarmups(workoutId),
         listSpcWorkoutExercises(workoutId),
-        getSpcSiblingPatterns(w.spc_blocks.id, w.week_number, workoutId),
+        getSpcSiblingLifts(w.spc_blocks.id, w.week_number, workoutId),
       ]);
       setMember(memberRow);
       setWarmups(warmupRows);
       setExercises(exerciseRows);
-      setSiblingPatterns(siblings);
+      setSiblingLifts(siblings);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -71,7 +71,7 @@ export default function SpcWorkoutBuilderNative() {
     );
   }
 
-  const currentPatterns = exercises.flatMap((e) => e.exercises?.movement_pattern ?? []);
+  const currentLifts = exercises.map((e) => ({ name: e.exercises?.name ?? "Unknown exercise", patterns: e.exercises?.movement_pattern ?? [] }));
 
   return (
     <ScrollView
@@ -167,7 +167,7 @@ export default function SpcWorkoutBuilderNative() {
       )}
 
       <View className="mb-6 mt-3">
-        <PatternTally currentPatterns={currentPatterns} siblingPatterns={siblingPatterns} />
+        <PatternTally currentLifts={currentLifts} siblingLifts={siblingLifts} />
       </View>
 
       <CommentThread spcBlockId={workout.spc_blocks.id} />

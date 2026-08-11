@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, View, Text, Pressable } from "react-native";
 import { fonts, colors } from "../lib/theme";
+import { WeeksStepper } from "./WeeksStepper";
 
 // Replaces the old manual start-date/length-weeks entry — the new block's
 // start date is always computed the same gap-free way the calendar's own
@@ -8,15 +9,37 @@ import { fonts, colors } from "../lib/theme";
 // last, or today if there's none), so all that's left for the coach to
 // decide is content: reuse the last block's warm-ups/exercises/weekly
 // numbers verbatim, or start from nothing.
-export function NewSpcBlockChoiceModal({ visible, nextLabel, latestBlockLabel, weeksAgo, preview, onClose, onSubmit }) {
+export function NewSpcBlockChoiceModal({
+  visible,
+  nextLabel,
+  latestBlockLabel,
+  weeksAgo,
+  preview,
+  defaultLengthWeeks,
+  lastBlockLengthWeeks,
+  onClose,
+  onSubmit,
+}) {
   const [mode, setMode] = useState("blank");
+  // Length is now the coach's call rather than implied by the mode. It
+  // still SEEDS from what the mode used to force — the last block's own
+  // length when copying, the program default when starting blank — so
+  // leaving it alone reproduces the previous behaviour exactly.
+  const [lengthWeeks, setLengthWeeks] = useState("");
   const [saving, setSaving] = useState(false);
   const hasLastBlock = Boolean(latestBlockLabel);
+  const lengthValid = Number(lengthWeeks) >= 1;
+
+  useEffect(() => {
+    if (!visible) return;
+    const seed = mode === "copy" && hasLastBlock ? lastBlockLengthWeeks : defaultLengthWeeks;
+    setLengthWeeks(String(seed ?? defaultLengthWeeks ?? 4));
+  }, [visible, mode, hasLastBlock, lastBlockLengthWeeks, defaultLengthWeeks]);
 
   const handleCreate = async () => {
     setSaving(true);
     try {
-      await onSubmit(hasLastBlock ? mode : "blank");
+      await onSubmit(hasLastBlock ? mode : "blank", Number(lengthWeeks));
       onClose();
     } finally {
       setSaving(false);
@@ -89,13 +112,20 @@ export function NewSpcBlockChoiceModal({ visible, nextLabel, latestBlockLabel, w
             </Pressable>
           </View>
 
+          <View className="mt-5">
+            <Text className="mb-1.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+              Length
+            </Text>
+            <WeeksStepper value={lengthWeeks} onChange={setLengthWeeks} />
+          </View>
+
           <View className="mt-5 flex-row justify-end gap-2.5">
             <Pressable onPress={onClose} className="rounded-lg border border-stone-300 px-4 py-2.5">
               <Text className="text-stone-600" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
                 Cancel
               </Text>
             </Pressable>
-            <Pressable onPress={handleCreate} disabled={saving} className="rounded-lg px-[18px] py-2.5 disabled:opacity-50" style={{ backgroundColor: colors.primary }}>
+            <Pressable onPress={handleCreate} disabled={saving || !lengthValid} className="rounded-lg px-[18px] py-2.5 disabled:opacity-50" style={{ backgroundColor: colors.primary }}>
               <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 13 }}>
                 {saving ? "Creating…" : `Create ${nextLabel}`}
               </Text>

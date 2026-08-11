@@ -3,13 +3,21 @@ import { View, Text, Pressable, FlatList, ActivityIndicator, Platform } from "re
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { getUser } from "../../../../lib/programming/clients";
-import { listBlocksForSpcClient, labelBlocks, deleteSpcBlock, listSpcWorkoutsForBlock } from "../../../../lib/programming/spcBlocks";
+import {
+  listBlocksForSpcClient,
+  labelBlocks,
+  deleteSpcBlock,
+  listSpcWorkoutsForBlock,
+  extendSpcBlock,
+  setSpcBlockAutoExtend,
+} from "../../../../lib/programming/spcBlocks";
 import { todayInBoise } from "../../../../lib/boiseDate";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { confirmDelete } from "../../../../lib/confirmDialog";
 import { toastError } from "../../../../lib/toast";
 import { getBlockStatus } from "../../../../lib/programming/blockStatus";
 import { CoachShell } from "../../../../components/CoachShell";
+import { BlockExtendControls } from "../../../../components/BlockExtendControls";
 import { PrintSessionPickerModal } from "../../../../components/PrintSessionPickerModal";
 import { fonts, colors } from "../../../../lib/theme";
 
@@ -46,6 +54,16 @@ export default function SpcClientHistory() {
   }, [load]);
 
   const isAdmin = profile?.role === "admin";
+
+  const handleExtend = async (block, options) => {
+    await extendSpcBlock(block.id, options);
+    await load();
+  };
+
+  const handleToggleAutoExtend = async (block, next) => {
+    await setSpcBlockAutoExtend(block.id, next);
+    await load();
+  };
 
   const handleDelete = async (block) => {
     const proceed = await confirmDelete("This permanently deletes this block and every session in it. This can't be undone. Continue?");
@@ -89,16 +107,16 @@ export default function SpcClientHistory() {
           ‹ Back to {member?.name ?? "client"}
         </Link>
         <Text className="mb-1 text-2xl" style={{ fontFamily: "ProtestStrike_400Regular", color: "#a46a57" }}>
-          Block History
+          SPC blocks
         </Text>
         <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
-          Every block for this client — past, current, and upcoming.
+          Every block for this client — past, current, and upcoming. Extend a block here, or set it rolling so it keeps going on its own.
         </Text>
 
         {loadError ? (
           <View className="items-start">
             <Text className="mb-2 text-red-600" style={{ fontFamily: fonts.sans }}>
-              Couldn't load history: {loadError}
+              Couldn't load blocks: {loadError}
             </Text>
             <Pressable onPress={load}>
               <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
@@ -112,7 +130,7 @@ export default function SpcClientHistory() {
             keyExtractor={(item) => item.id}
             ListEmptyComponent={
               <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
-                No past blocks yet — finished blocks land here once their end date passes.
+                No blocks yet for this client.
               </Text>
             }
             renderItem={({ item }) => {
@@ -120,33 +138,51 @@ export default function SpcClientHistory() {
               const status = getBlockStatus(item, today);
               const isFuture = item.block_start_date > today;
               const canPrint = status.key !== "past" && Platform.OS === "web";
+              // Extending a block that already ended would quietly move
+              // its end date back into the future — offer it only where
+              // "keep this going" actually means something.
+              const canExtend = status.key !== "past";
               return (
-                <View className="flex-row items-center justify-between border-b border-stone-100 py-3.5">
-                  <Pressable onPress={() => router.push(`/(coach)/spc/blocks/${item.id}`)} className="flex-1 flex-row items-center gap-2.5">
-                    <Text style={{ fontFamily: fonts.sansMedium, fontSize: 14 }} className="text-stone-700">
-                      {item.label}
-                    </Text>
-                    <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                      {formatDateMDY(item.block_start_date)} → {formatDateMDY(item.block_end_date)}
-                    </Text>
-                    <Text style={{ fontFamily: fonts.sansBold, fontSize: 11, color: status.color, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                      · {status.label}
-                    </Text>
-                  </Pressable>
-                  <View className="flex-row items-center gap-3">
-                    {isAdmin && isFuture ? (
-                      <Pressable onPress={() => handleDelete(item)} disabled={deletingId === item.id} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#b23a22" }}>
-                          {deletingId === item.id ? "Deleting…" : "Delete"}
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                    {canPrint ? (
-                      <Pressable onPress={() => handlePrintClick(item.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Print</Text>
-                      </Pressable>
-                    ) : null}
+                <View className="border-b border-stone-100 py-3.5">
+                  <View className="flex-row items-center justify-between">
+                    <Pressable onPress={() => router.push(`/(coach)/spc/blocks/${item.id}`)} className="flex-1 flex-row items-center gap-2.5">
+                      <Text style={{ fontFamily: fonts.sansMedium, fontSize: 14 }} className="text-stone-700">
+                        {item.label}
+                      </Text>
+                      <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                        {formatDateMDY(item.block_start_date)} → {formatDateMDY(item.block_end_date)}
+                      </Text>
+                      <Text style={{ fontFamily: fonts.sansBold, fontSize: 11, color: status.color, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                        · {status.label}
+                      </Text>
+                      <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                        {item.block_length_weeks} wk
+                      </Text>
+                    </Pressable>
+                    <View className="flex-row items-center gap-3">
+                      {isAdmin && isFuture ? (
+                        <Pressable onPress={() => handleDelete(item)} disabled={deletingId === item.id} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#b23a22" }}>
+                            {deletingId === item.id ? "Deleting…" : "Delete"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                      {canPrint ? (
+                        <Pressable onPress={() => handlePrintClick(item.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Print</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
                   </View>
+                  {canExtend ? (
+                    <View className="mt-2.5">
+                      <BlockExtendControls
+                        block={item}
+                        onExtend={(options) => handleExtend(item, options)}
+                        onToggleAutoExtend={(next) => handleToggleAutoExtend(item, next)}
+                      />
+                    </View>
+                  ) : null}
                 </View>
               );
             }}
