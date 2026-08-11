@@ -1273,8 +1273,10 @@ Terra — `position` *is* the timeline. Named `plan_phases` because "phase" is a
 taken by the derived onboarding phases (`PhaseCard`/`computeOnboardingPhases`). Coach
 UI is a card on the Dashboard tab beside Milestones (fetched in the page's **tier-3
 isolated try/catch**, like milestones/reopens, so an unrun migration can't blank the
-page); members see a "What we're working on" slide on the Today card slider, capped at
-the top 2 phases. No status/completed flag in v1 — delete to retire.
+page); members see them on the Today card slider as **one "What we're working on" card
+per phase, top three only** — stacking several into a single card didn't read at phone
+width, so they follow the same one-slide-each shape as the milestone cards below them.
+No status/completed flag in v1 — delete to retire.
 
 **Everything about the phase card is edited in place — there is no form modal.** The
 first pass used one and Terra rejected it: "+ New phase" now drops a blank card in
@@ -1296,6 +1298,18 @@ trip. (2) **Enter fires `onSubmitEditing` and then `onBlur` as the field unmount
 every save-on-blur field here guards with a `useRef` flag — not state, since both
 handlers run before a `setState` would apply. Without it a single Enter added the
 bullet twice.
+
+**Real bug fixed in `TodayCardSlider` while adding those cards — worth knowing, because
+the measurement was silently measuring its own output.** The slider sets its height to
+the tallest slide measured via `onLayout`, but a flex row stretches children to the
+container's cross-axis size by default, so each slide was being handed the ScrollView's
+*current* height and `onLayout` reported exactly that straight back. The height could
+therefore never grow past its first measurement, clipping any card taller than it — long
+coach notes in practice, which is how Terra found it. Fixed with
+`contentContainerStyle={{ alignItems: "flex-start" }}` so each slide sizes to its own
+content; that one line is load-bearing, not cosmetic. Verified with a long note (height
+grows from the 120 floor to the real content height, short cards keep their natural
+height). Slide order is now focus → notes → phases → milestones → completed milestones.
 
 `nutrition_plan_phases.label` (an optional free-text timeframe from the first pass) is
 **live but no longer written or read** — the inline rework put the title at the very
