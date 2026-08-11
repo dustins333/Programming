@@ -546,39 +546,30 @@ export default function NutritionToday() {
                     },
                   ]
                 : []),
-              // What the coach has mapped out — top of the list is what
-              // they're on now. Capped at 2 so a long-term plan can't turn
-              // this card into a wall of text; the coach's own page has the
-              // full list.
-              ...(phases.length > 0
-                ? [
-                    {
-                      key: "phases",
-                      content: (
-                        <View className="rounded-lg border border-stone-200 bg-white p-4">
-                          <Text className="mb-1.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-                            What we&apos;re working on
-                          </Text>
-                          {phases.slice(0, 2).map((phase) => (
-                            <View key={phase.id} className="mb-2">
-                              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: colors.primaryOnWhite }}>{phase.title}</Text>
-                              {phase.details ? (
-                                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                                  {phase.details}
-                                </Text>
-                              ) : null}
-                              {phase.items.map((item) => (
-                                <Text key={item.id} className="mt-0.5 text-xs text-stone-600" style={{ fontFamily: fonts.sans }}>
-                                  – {item.text}
-                                </Text>
-                              ))}
-                            </View>
-                          ))}
-                        </View>
-                      ),
-                    },
-                  ]
-                : []),
+              // One slide per phase, same as milestones below — stacking
+              // several into a single card didn't read at this width. Top
+              // three only: the coach's list is the full plan, this is just
+              // what's near-term, and the slider is already sharing space
+              // with focus, notes and milestones.
+              ...phases.slice(0, 3).map((phase) => ({
+                key: `phase-${phase.id}`,
+                content: (
+                  <View className="rounded-lg p-4" style={{ borderWidth: 1, borderColor: "#f0ddd2", backgroundColor: "#fdf6f2" }}>
+                    <Text className="mb-1 text-xs uppercase" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5, color: colors.primaryOnWhite }}>
+                      What we&apos;re working on
+                    </Text>
+                    <Text className="mb-1" style={{ fontFamily: fonts.sansBold, fontSize: 15, color: colors.primaryOnWhite }}>
+                      {phase.title}
+                    </Text>
+                    {phase.details ? <Text style={{ fontFamily: fonts.sans, color: "#57534e" }}>{phase.details}</Text> : null}
+                    {phase.items.map((item) => (
+                      <Text key={item.id} className="mt-1 text-xs" style={{ fontFamily: fonts.sans, color: "#57534e" }}>
+                        – {item.text}
+                      </Text>
+                    ))}
+                  </View>
+                ),
+              })),
               ...(access.client?.game_plan
                 ? [
                     {
