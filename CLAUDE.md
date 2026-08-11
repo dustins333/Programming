@@ -1338,6 +1338,64 @@ be exercised without a real Sunday send. Worth a click-through of the settings m
 against a real client, and confirming the next Sunday push carries the photo line for
 someone who owes photos and not for someone who doesn't.
 
+## Check-in answer highlighting: three real selection bugs (2026-08-11)
+
+Reported as "we lost our ability to highlight text" on the coach's Check-In tab.
+Nothing had actually been removed — `components/nutrition/HighlightableAnswer.web.js`
+was intact, correctly resolved as the `.web.js` variant, present in the **deployed**
+bundle (checked by curling `app.kovastrength.com`'s real entry bundle and reading the
+compiled function, not assuming), and the writes were landing — 8 of 11 rows in the
+most recent check-in week had non-null highlights, and `public.checkin_responses`'
+coach policy is a plain `is_coach()`, so RLS was never the gate either. Ruling those
+four out first is what turned this from "something broke" into "the selection reader
+has always had holes." All three fixes are in that one file; no schema, no deploy step.
+
+1. **Releasing the drag past the end of the text did nothing** — the most likely thing
+   Terra was actually hitting, and the reason it reads as a total loss rather than a
+   quirk. `onMouseUp` was on the answer's own container `View`, but a mouse event fires
+   on whatever is under the pointer **when the button is released** — drag across a
+   sentence and let go a few pixels past the last word (or drift onto the next line)
+   and the release target is the card, not the answer, so the handler never ran at all.
+   Now a `document`-level `mouseup` listener; safe because every offset it computes is
+   already clamped to this container's own text, so a global listener can't leak into a
+   neighbouring answer (verified: a drag past answer 2's last word highlighted only
+   answer 2).
+2. **Highlighting over an existing highlight wiped it.** A drag starting *and* ending
+   inside one already-highlighted `<span>` fires `mouseup` (adds the range) and then
+   `click` on that span (removes it) — net effect, the highlight vanished. So the more
+   an answer was already marked up, the more highlighting felt broken. A
+   `justSelectedRef` set on a completed drag and cleared on the next `mousedown` makes
+   the remove-click ignore the click that's merely the tail of a drag. (A drag that
+   *crosses* spans never had this — the click event targets the common ancestor, so the
+   span's own handler doesn't fire.)
+3. **A boundary landing outside the answer bailed instead of clamping.** Starting the
+   drag on the question label above, or ending it in the whitespace to the right, put
+   one boundary on a neighbouring node and the old all-or-nothing `contains()` check did
+   nothing. Now it tests intersection via `compareBoundaryPoints` and clamps the outside
+   boundary to `0` / `text.length`.
+
+**`compareBoundaryPoints`' constant names read source-to-this, and I got them backwards
+first** — `END_TO_START` compares *this* range's **start** against the source's **end**;
+`START_TO_END` compares this range's **end** against the source's **start**. Swapping
+them made every in-text drag silently bail, which the harness caught immediately. Worth
+re-deriving from the spec rather than from the name if this is ever touched again.
+
+`textOffset` also switched from a hand-rolled `TreeWalker` to measuring a range from the
+container's start to the boundary — same result on text nodes (verified: identical
+offsets before and after), but it also handles an element-node boundary, which is what a
+drag ending on whitespace produces.
+
+**Verified by driving real mouse drags**, not reasoning: the check-in answers section was
+mounted on the login screen with the real `CoachShell`/`ScrollView`/`SectionCard`
+ancestors (standing harness technique, reverted after) and all four cases exercised with
+the browser tool's actual drag — normal drag, release-past-the-end, re-drag inside an
+existing highlight, and click-to-remove. `expo export -p web` clean. **Terra confirmed
+working in the real app.**
+
+**Still unexplained if it recurs**: no case was ever found where the text wouldn't
+*visibly* select at all. If that specific symptom comes back, it's a different problem —
+get browser and device before digging, since none of the above would cause it.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
