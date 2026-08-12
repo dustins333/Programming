@@ -1490,6 +1490,225 @@ the Browser pane for this reason** — the card's own spring also appeared "stuc
 mid-animation" across several screenshots before settling.) Also unverified: the
 autosave/submit round-trip against real data, and the Requests page with real requests.
 
+## Coach web v2 design pass — phases 1 and 2, screens 01-09 (2026-08-12)
+
+A new handoff (`design_handoff_coach_web_v2/` — README + `Kova Coach Web -
+Dashboard.dc.html` + 25 screenshots) redesigns the **whole coach web app**, not
+just its paint. Same "the HTML is a reference, never copied in" rule as every
+prior handoff. **This session covered screens 01-09 only** (launchpad,
+programming). Screens 10-25 — payroll close, settings matrix, clients, client
+detail, the three SPC screens, and the nine nutrition-record tabs — are
+untouched and are the next session's work; see "Still to do" at the end of this
+section.
+
+**The one idea**: the dashboard stopped being a report and became a launchpad.
+Terra programs in the gaps between clients, so every screen answers *where was
+I* before it answers anything else. Everything below follows from that.
+
+**Confirmed with Terra before building**: weight is never prescribed (loads are
+shown as history only, "because the girls need to know what they did last
+time"); no session-duration estimate anywhere (the mock shows "~52 MIN" on the
+builder but the README's own "No timing" decision wins, and nothing in the app
+shows one today); **coach-scoping deliberately left alone** — the README wants
+alerts scoped to a coach's own clients, but nothing in this app is coach-scoped
+today and she chose not to open that up yet, so Needs You still shows every
+coach the same list.
+
+### Launchpad (01-03) — `app/(coach)/index.web.js` rebuilt
+
+Resume card first, then permission-generated launch cards, then Needs You as a
+real actionable list, then Today in the Gym, with the roster counts that used to
+open the page demoted to one clickable strip at the bottom.
+
+- **New `lib/programming/resume.js`** — the most recently edited group or SPC
+  session by *this* coach, plus the rest of that block's unbuilt queue beside
+  it. A nutrition-only coach with nothing programmed resumes into the check-in
+  queue instead. Deliberately **not** filtered to drafts: a published session
+  stays editable, and filtering would drop a coach to an empty state the moment
+  they hit Publish, which is the opposite of resuming. Also deliberately does
+  **not** reproduce the mock's "you drafted a carb change and didn't send it" —
+  nothing stores a draft reply, and that line would be the screen lying.
+- **New `lib/programming/launchpad.js`** — the card model. Cards are scored
+  twice: `priority` decides what survives the cap of four (Pay always does),
+  `order` decides how survivors read left to right. Produces exactly the three
+  designed outcomes (admin: Program/Ship/Pay/Run-the-gym; coach+SPC:
+  Program/Ship/Pay/SPC; nutrition coach: Review/Pay only).
+  - **One real inference, flagged**: there is deliberately no
+    `can_view_programs` flag (the README is explicit that seeing the grid isn't
+    having a job in it), so the programming cards gate on
+    `can_view_spc || can_view_exercise_library`. A coach who can manage neither
+    is not the person building sessions. `programsSessions()` in that file is
+    the single line to change if it reads wrong for a real coach.
+- **New `lib/programming/gymToday.js`** — sessions logged, nutrition logged /
+  active, new PRs, unread messages, quiet-7-days. Every figure is its own
+  try/catch and **falls back to null, never 0** — a broken query must not be
+  able to say "0 sessions logged", which is a number a coach would act on. The
+  UI renders an em-dash for null.
+- **New `countPersonalRecordsOn(date)`** in `exerciseStats.js` rather than in
+  gymToday, specifically so it shares `PR_MIN_SESSIONS`/`topSetOf` with
+  `getExerciseStats` — the member app and the coach dashboard must never
+  disagree about what counts as a PR.
+- Needs You reuses the existing `computeAttentionItems`/`filterDismissedItems`
+  untouched; `decorateAttentionItems` only adds the per-row verb and severity
+  ordering. Native's dashboard (`index.js`) is unchanged.
+
+### Group Programs grid + finalize preflight (04-05)
+
+**New `app/(coach)/blocks/index.web.js`** — native keeps the previous read-only
+panel grid (`index.js`), same web/native split precedent as clients and SPC.
+
+- Underline program tabs carrying roster counts (the pill row gave no sense of
+  size and stopped reading as navigation past two programs).
+- Block band with a stacked readiness bar. **`empty` beats `draft`** in the
+  bucketing, because a published-but-empty session is worse than an unpublished
+  full one and must not hide inside the published segment.
+- Cells state title / lift count / superset count / warm-up / status, with
+  "Draft · you were here" when this coach last touched it.
+- **Multi-select with a bulk bar** (Publish, Duplicate into…, Clear lifts, "Esc
+  to deselect" — and Esc genuinely works, there's a real keydown listener).
+  Replaces the old click-source-then-click-targets copy mode, which only ever
+  did one thing. "Duplicate into…" only lights up at exactly one selection —
+  duplicating *from* several sources has no meaning.
+- **New `components/FinalizeBlockModal.js`** — must-fix separated from worth-a-
+  look, every line jumps to its own fix, the button names the consequence
+  ("Publish 4 and finalize") or what's blocking it ("Fix 1 first").
+  **Deliberately does not claim finalizing "locks the block's dates"** the way
+  the mock's footnote does — nothing in this schema locks a block, and a button
+  that said so would be lying. Finalize = publish every remaining draft.
+- **New `lib/programming/blockReadiness.js`** — `getBlockReadiness`,
+  `listActiveBlockReadiness`, and `buildFinalizeChecks`. The checks are
+  arithmetic only, never a judgement about whether the programming is any good:
+  empty sessions (blocker), untitled sessions, sessions well below the block's
+  own **median** lift count (a fixed threshold would nag forever in whichever
+  program it doesn't suit), and one movement pattern dominating a week.
+- **New `listSessionSummaries(workoutIds)`** and `clearWorkoutContent(ids)` in
+  `workouts.js`. The lighter `listWorkoutExercisesForWorkouts` stays as-is —
+  native's grid and SPC still use it.
+
+### Session builder (06) — `builder/[workoutId].web.js` rebuilt
+
+One dense line per lift; only the lift being touched expands, so the shape of
+the session stays visible while editing a detail of it. Replaces the previous
+layout where six lifts meant scrolling past forty permanently-open form fields.
+
+- Per-set reps table with a `+` in its header; **rest as chips**; tempo as four
+  single-digit boxes instead of a free string; note-to-member; superset
+  link/break as one toggle. Warm-up is a fixed **2×3 grid of six slots** rather
+  than a growing list — the empty slots are the prompt.
+- Right rail: pattern balance for the week (current session + siblings) and
+  **last week's version of this same session** with a copy-in, so a coach
+  programs against what they wrote rather than from memory. New
+  `getSameSessionLastWeek()` in `workouts.js`.
+- Header carries a real **save-state light** (Saved / Saving… / Not saved) —
+  every write here is optimistic-then-persist, so that light is the only thing
+  telling a coach the round trip landed.
+- **Rest stays a `text` column, deliberately.** README data-note 1 asks for
+  integer seconds; converting the column across all four exercise tables would
+  have to reinterpret years of free-text ("60-90s", "2 min"). Instead every
+  write from this screen is a canonical seconds string, which is exactly what
+  the member timer's `parseRestSeconds` already parses — and legacy values keep
+  working. `formatRest` shows 60s/90s/2:00/3:00 (seconds under two minutes,
+  clock notation only for whole minutes from 2:00 up) because that's how
+  coaches say it.
+- **Kept, though the mock drops it**: `CommentThread` at the bottom of the right
+  rail. Block notes are coach-to-coach and the *native* builder still shows
+  them, so removing it here would mean a note written on a phone is invisible on
+  the platform where the work actually happens.
+
+### Exercise library, merge, duplicate check (07-09)
+
+- **New `app/(coach)/exercises/index.web.js`** — table with usage counts, video
+  coverage (Linked / **Missing** in red when the exercise is actually used /
+  None when it isn't), DUPLICATE? flags on the lesser-used half of each pair,
+  filter chips including No video / Never used / Archived, and the duplicate
+  banner as a doorway. Native keeps the existing card list (`index.js`).
+  **Deliberately no EQUIPMENT column**: the mock has one and
+  `programming.exercises` has no equipment field. Rendering an empty column for
+  every entry would be worse than omitting it; adding one is a real feature
+  (migration + form field + tagging the whole library), not a design pass.
+- **New `app/(coach)/exercises/merge.js`** — merge any two by name (typeahead,
+  not a `<select>` of the whole library), worked suggestions below, dismissed
+  pairs listed at the bottom with Undo. Direction is never guessed: the entry
+  with more history survives, and the page says which before you commit.
+- **New `lib/programming/exerciseMerge.js`** — `mergeExercises` repoints all
+  nine reference tables plus `parent_exercise_id`, then **archives** the retired
+  entry rather than deleting it. Sequential plain writes, not a transaction
+  (this repo's standing convention); every step is idempotent, so a partial
+  merge is finished by re-running it rather than corrupting anything.
+  `REFERENCE_TABLES` is deliberately colocated with the merge — a future
+  feature that adds a reference and forgets this list would silently orphan
+  rows.
+
+**The duplicate detector's first rule was wrong, and testing against the real
+library is what caught it.** Substring containment ("one name contains the
+other") is the obvious rule and produced **35 suggestions from 83 real
+exercises**, nearly all genuinely different lifts: Goblet Squat vs Squat,
+Inverted Row vs Row, Split Squat vs Squat, Barbell Bench Press vs Bench Press. A
+merge page that mostly suggests wrong merges is worse than no merge page — one
+accepted suggestion silently folds a real lift's history into another. Rewritten
+to identical-after-normalisation / same-words-reordered / one-small-edit
+(similarity ≥ 0.88), with an abbreviation expansion table (db→dumbbell,
+rdl→romanian deadlift, …) so the motivating case still works. Re-run against the
+real library: **1 pair, and it's real — there are two rows both named "Glute
+Bridge"**. A ten-case should/shouldn't-match test all passes (script left in the
+session scratchpad; the cases are worth re-testing if this rule is ever
+loosened). Note this means the README's own example dismissal (Standing Calf
+Raise / Seated Calf Raise) is never even suggested now.
+
+- **`components/ExerciseFormModal.js`**: the live duplicate check already
+  existed but was passive grey text ("Possibly the same as: X") — it told you
+  about the problem without giving you a way out of it. Now a real card with the
+  match's usage and video status plus **"Use that one"** (new optional
+  `onUseExisting` prop) and **"Keep both"**. "Keep both" is per-open state, not
+  stored — pairs worth remembering forever get dismissed on the Merge page,
+  which has a real table behind it.
+
+### Migrations (both run and verified)
+
+- **`0052_workout_edit_tracking.sql`** — `last_edited_by` on `group_workouts`
+  and `spc_workouts`, plus triggers. Done as **triggers rather than app-side
+  writes** on purpose: the ~10 mutating functions in `workouts.js`/
+  `spcWorkouts.js` don't receive the editing coach's id, threading it through
+  every one is churn a future function could forget, and a trigger can't be
+  forgotten. `updated_at` previously only moved on status/title changes — adding
+  or reordering a lift left it untouched, so a session someone spent twenty
+  minutes on still read as last-touched at creation. **No backfill**:
+  `last_edited_by` starts null everywhere, which honestly means "no resume
+  target yet" — so **the resume card reads "Start where the gaps are" for
+  everyone until each coach edits one session.**
+- **`0053_exercise_merge_dismissals.sql`** — pairs kept separate. Stored in
+  canonical id order (CHECK + unique index) so a pair can't be dismissed twice
+  by being named the other way round.
+
+### Verification
+
+Every screen was screenshot-verified against the mock via the standing
+login-screen harness technique (mounted, screenshotted, reverted each time —
+`git status` confirmed clean after each). `npx expo export -p web` clean after
+every phase. The duplicate detector was tested against **real** exercise data
+pulled from the live DB, which is what caught the containment bug. **Not
+verified**: any of it behind a real login — same standing limitation as
+everywhere else in this file. Worth Terra's click-through, especially the grid's
+bulk bar, the builder's expand/collapse and rest chips, and a real merge.
+
+### Still to do — screens 10-25, plus one carried-over item
+
+**The SPC builder has not been ported.** `app/(coach)/spc/builder/[workoutId].web.js`
+is still the old permanently-expanded-cards layout while the group builder is
+now one-line-per-lift. That's a real inconsistency between two screens a coach
+uses interchangeably, and it's the first thing to fix next session. The group
+builder is the reference implementation; the SPC one needs the same treatment
+(collapsed rows, set table, rest chips, tempo digits, warm-up grid, balance +
+last-week rail) adapted for SPC's per-week workout rows. `spc/templates/[templateId].web.js`
+is a third copy of the same old layout and should follow.
+
+Not started at all: **10** payroll close (needs new approve/send-back state —
+today's model is only finalize/reopen), **11** settings permission matrix,
+**12-16** clients / client detail / SPC roster / SPC client block / SPC session
+read-out, **17-25** the nine nutrition-record tabs (note the Photos tab has a
+real perf requirement: never bulk-load thumbnails, a weekly client passes 150
+images inside a year).
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -1536,6 +1755,8 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0046_gusto_employee_mapping.sql` — **run**, confirmed live 2026-08-09. Adds `core.users.gusto_employee_uuid` (nullable, unique) — the mapping the `payroll-to-gusto` Claude skill reads; not used by app code.
 - `0050_nutrition_plan_phases.sql` — **run**, confirmed live 2026-08-11 (both tables + all four RLS policies verified by direct query, `NOTIFY pgrst, 'reload schema'` sent). Adds `programming.nutrition_plan_phases` + `nutrition_plan_phase_items` — the coach's undated, drag-ordered "what we're working on" map for a nutrition client, also shown to the member. Items carry no `user_id` of their own; the member read policy resolves ownership through the parent phase. See the section above. (`0048`/`0049` belong to the parallel exercise-library/block-length work, not this pass.)
 - `0051_payroll_day_submissions.sql` — **run**, confirmed live 2026-08-11 (columns, both FKs, the `unique (user_id, entry_date)` the upsert's `onConflict` depends on, all 4 RLS policies, grants, and a real REST call returning `200 []` rather than PGRST205, `NOTIFY pgrst, 'reload schema'` sent). Adds `payroll.day_submissions` — one row per (coach, date) recording that the coach tapped Submit for that day on the payroll entry screen. See "Payroll entry: day-level submit" above for why it's deliberately leaner than `payroll.finalizations`.
+- `0052_workout_edit_tracking.sql` — **run**, confirmed live 2026-08-12 (all six triggers verified in `pg_trigger`, and a rolled-back test UPDATE confirmed `updated_at` moves). Adds `last_edited_by` to `group_workouts`/`spc_workouts` plus BEFORE-UPDATE stamping and AFTER-INSERT/UPDATE/DELETE parent-touch triggers on the four content child tables. Backs the coach-web launchpad's resume card and the grid's "you were here" — see the coach web v2 section above for why this is triggers rather than app-side writes, and why there's no backfill.
+- `0053_exercise_merge_dismissals.sql` — **run**, confirmed live 2026-08-12. Adds `programming.exercise_merge_dismissals` (pairs a coach has deliberately kept separate, canonical id order, reversible) behind the same `core.can_access_exercise_library()` gate as managing the library itself.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.

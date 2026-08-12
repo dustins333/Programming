@@ -167,9 +167,13 @@ function MuscleGroupPicker({ selected, onToggle }) {
 // reflects the exercise's own stored type regardless of which tab it was
 // opened from. allExercises: the full current library, used to build the
 // "Variation of" picker's options.
-export function ExerciseFormModal({ visible, initialExercise, initialType = "lift", allExercises = [], onClose, onSubmit }) {
+export function ExerciseFormModal({ visible, initialExercise, initialType = "lift", allExercises = [], usage, onUseExisting, onClose, onSubmit }) {
   const [form, setForm] = useState(emptyForm(initialType));
   const [saving, setSaving] = useState(false);
+  // "Keep both" is a per-open decision, not stored — the pairs a coach
+  // wants remembered forever are dismissed on the Merge page, which has a
+  // real table behind it.
+  const [duplicateAccepted, setDuplicateAccepted] = useState(false);
 
   // Real risk here: Cues and Video link sit near the bottom of a dense
   // form inside a fixed max-h-[85vh] Modal — no automatic keyboard
@@ -205,6 +209,7 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
             }
           : emptyForm(initialType)
       );
+      setDuplicateAccepted(false);
     }
   }, [visible, initialExercise, initialType]);
 
@@ -317,14 +322,48 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               className="rounded-lg border border-stone-300 px-4 py-3"
               style={{ fontFamily: "Montserrat_400Regular" }}
             />
-            {likelyDuplicates.length > 0 ? (
-              <Text className="mb-4 mt-1 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
-                Possibly the same as:{" "}
-                {likelyDuplicates
-                  .slice(0, 2)
-                  .map((m) => m.exercise.name)
-                  .join(", ")}
-              </Text>
+            {/* Live duplicate check, right under the name field rather
+                than after you submit (design_handoff_coach_web_v2, 1p).
+                It's actionable now: the old version listed the near-match
+                as grey text, which told you about the problem without
+                giving you either way out of it. */}
+            {likelyDuplicates.length > 0 && !duplicateAccepted ? (
+              <View
+                className="mb-4 mt-1 rounded-xl p-3.5"
+                style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#eddcd2" }}
+              >
+                <Text className="text-xs" style={{ fontFamily: fonts.sans, color: "#8a5140" }}>
+                  Close to{" "}
+                  <Text style={{ fontFamily: fonts.sansBold }}>&ldquo;{likelyDuplicates[0].exercise.name}&rdquo;</Text>
+                </Text>
+                <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
+                  {(() => {
+                    const match = likelyDuplicates[0].exercise;
+                    const uses = usage?.[match.id];
+                    const usePart = uses == null ? null : uses === 0 ? "never used" : `${uses} use${uses === 1 ? "" : "s"}`;
+                    return [usePart, match.video_url ? "video linked" : "no video"].filter(Boolean).join(" · ");
+                  })()}
+                </Text>
+                <View className="mt-2.5 flex-row items-center gap-4">
+                  {onUseExisting ? (
+                    <Pressable
+                      onPress={() => {
+                        onUseExisting(likelyDuplicates[0].exercise);
+                        onClose();
+                      }}
+                    >
+                      <Text className="text-xs" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
+                        Use that one
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable onPress={() => setDuplicateAccepted(true)}>
+                    <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: "#78716c" }}>
+                      Keep both
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
             ) : (
               <View className="mb-4" />
             )}
