@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linking } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { DndContext, PointerSensor, useSensor, useSensors, pointerWithin, MeasuringStrategy } from "@dnd-kit/core";
-import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { DndContext, PointerSensor, useSensor, useSensors, pointerWithin } from "@dnd-kit/core";
+import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
-import { listExercises, createExercise, summarizeRepScheme } from "../../../../lib/programming/exercises";
+import { listExercises, createExercise } from "../../../../lib/programming/exercises";
 import { getUser } from "../../../../lib/programming/clients";
 import {
   getSpcWorkout,
@@ -19,6 +18,8 @@ import {
   removeSpcWorkoutExercise,
   reorderSpcWorkoutExercises,
   getSpcSiblingLifts,
+  getSpcSameSessionLastWeek,
+  copySpcWorkoutContent,
   setSpcWorkoutStatus,
   setSpcWorkoutTitle,
 } from "../../../../lib/programming/spcWorkouts";
@@ -26,139 +27,40 @@ import { listSpcWorkoutsForBlock } from "../../../../lib/programming/spcBlocks";
 import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
 import { ExerciseLibrarySidebar } from "../../../../components/ExerciseLibrarySidebar";
-import { SupersetConnector } from "../../../../components/SupersetConnector";
+import { SessionPreviewModal } from "../../../../components/SessionPreviewModal";
 import { CommentThread } from "../../../../components/CommentThread";
-import { PatternTally } from "../../../../components/PatternTally";
+import { PressFade } from "../../../../components/PressFade";
+import {
+  BUILDER_CANVAS,
+  BUILDER_CARD_BORDER,
+  Eyebrow,
+  SaveLight,
+  WarmupGrid,
+  SortableLift,
+  BalanceRail,
+  LastWeekRail,
+  schemeLabel,
+  supersetLettersFor,
+  patternCountsFor,
+  balanceNoteFor,
+} from "../../../../components/builder/SessionBuilderParts";
+import { confirmOverwrite } from "../../../../lib/confirmDialog";
+import { toastError, toastSuccess } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
-import { toastError } from "../../../../lib/toast";
 
-function RepSchemeRows({ item, onChange }) {
-  const scheme = item.rep_scheme?.length ? item.rep_scheme : [item.reps ?? ""];
-
-  const commit = (next) => {
-    onChange(item.id, { rep_scheme: next, sets: next.length, reps: summarizeRepScheme(next) });
-  };
-
-  return (
-    <View className="mt-2">
-      {scheme.map((reps, i) => (
-        <View key={i} className="mb-1.5 flex-row items-center gap-2">
-          <Text className="w-12 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-            Set {i + 1}
-          </Text>
-          <TextInput
-            value={reps ?? ""}
-            onChangeText={(v) => commit(scheme.map((r, idx) => (idx === i ? v : r)))}
-            placeholder="reps (e.g. 10-12)"
-            className="flex-1 rounded-lg border border-stone-300 px-3 py-2.5"
-            style={{ fontFamily: fonts.sans }}
-          />
-          {scheme.length > 1 ? (
-            <Pressable
-              onPress={() => commit(scheme.filter((_, idx) => idx !== i))}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel={`Remove set ${i + 1}`}
-            >
-              <Text className="text-stone-400">✕</Text>
-            </Pressable>
-          ) : (
-            <View style={{ width: 18 }} />
-          )}
-        </View>
-      ))}
-      <Pressable onPress={() => commit([...scheme, scheme[scheme.length - 1] ?? ""])} className="self-start">
-        <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: "#8a5140" }}>
-          + Add set
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function SpcExerciseRow({ item, onChange, onRemove, onLinkSuperset, onUnlinkSuperset, isLastRow, linkedToNext }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
-
-  // Matches the group builder: 2px warm border on every lift so each reads
-  // as its own card, full terracotta + peach fill for a superset.
-  const inSuperset = Boolean(item.superset_group_id);
-
-  return (
-    <div ref={setNodeRef} style={style}>
-      <View
-        className="rounded-lg px-3 py-2.5"
-        style={{
-          borderWidth: 2,
-          borderColor: inSuperset ? "#a46a57" : "#dcc9bf",
-          backgroundColor: inSuperset ? "#fdf6f2" : "#ffffff",
-        }}
-      >
-        <View className="flex-row items-center gap-3">
-          <div {...attributes} {...listeners} style={{ cursor: "grab", padding: 4 }}>
-            ⠿
-          </div>
-          <View className="flex-1">
-            <Text style={{ fontFamily: fonts.sansMedium }}>{item.exercises?.name}</Text>
-            {item.exercises?.video_url ? (
-              <Pressable
-                onPress={() => Linking.openURL(item.exercises.video_url)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityLabel={`Watch video for ${item.exercises.name}`}
-              >
-                <Text className="text-xs" style={{ fontFamily: fonts.sans, color: "#8a5140" }}>
-                  ▶ video
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-          {item.superset_group_id ? (
-            <Pressable
-              onPress={() => onUnlinkSuperset(item)}
-              className="flex-row items-center gap-1 rounded-full px-2.5 py-1"
-              style={{ backgroundColor: "#fdece5" }}
-              accessibilityLabel="Unlink superset"
-            >
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#b23a22" }}>⚭ Superset</Text>
-              <Text style={{ fontSize: 11, color: "#b23a22" }}>✕</Text>
-            </Pressable>
-          ) : null}
-          <Pressable
-            onPress={() => onRemove(item.id)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityLabel={`Remove ${item.exercises?.name ?? "exercise"}`}
-          >
-            <Text className="text-stone-400">✕</Text>
-          </Pressable>
-        </View>
-
-        <RepSchemeRows item={item} onChange={onChange} />
-
-        <View className="mt-2 flex-row gap-2">
-          <TextInput
-            value={item.rest ?? ""}
-            onChangeText={(v) => onChange(item.id, { rest: v })}
-            placeholder="rest"
-            className="w-20 rounded-lg border border-stone-300 px-2 py-2.5 text-center"
-            style={{ fontFamily: fonts.sans }}
-          />
-          <TextInput
-            value={item.notes ?? ""}
-            onChangeText={(v) => onChange(item.id, { notes: v })}
-            placeholder="notes"
-            className="flex-1 rounded-lg border border-stone-300 px-2 py-2.5"
-            style={{ fontFamily: fonts.sans }}
-          />
-        </View>
-      </View>
-
-      {!isLastRow ? (
-        <SupersetConnector linked={linkedToNext} onLink={onLinkSuperset} onUnlink={() => onUnlinkSuperset(item)} />
-      ) : (
-        <View style={{ height: 4 }} />
-      )}
-    </div>
-  );
-}
+// SPC session builder, coach web (design_handoff_coach_web_v2, screen 06).
+//
+// Structurally the same screen as the group builder — they share every piece
+// through components/builder/SessionBuilderParts. That is deliberate: a coach
+// moves between a group session and an SPC session interchangeably, and the
+// previous split (group rebuilt to the v2 layout, SPC left on permanently
+// expanded cards) was a real inconsistency between two screens doing the
+// same job.
+//
+// What's genuinely different here is only the shape of the thing being
+// programmed: an SPC block belongs to one client rather than a shared
+// program, so the header names her and the back link goes to her block
+// rather than to a program grid.
 
 export default function SpcWorkoutBuilderWeb() {
   const { workoutId } = useLocalSearchParams();
@@ -172,14 +74,18 @@ export default function SpcWorkoutBuilderWeb() {
   const [exercises, setExercises] = useState([]);
   const [library, setLibrary] = useState([]);
   const [siblingLifts, setSiblingLifts] = useState([]);
+  const [lastWeek, setLastWeek] = useState(null);
+  const [blockWorkouts, setBlockWorkouts] = useState([]);
   const [search, setSearch] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  // Every session in this block (week/session order) — powers the prev/next
-  // arrows so programming sessions in sequence doesn't bounce through the grid.
-  const [blockWorkouts, setBlockWorkouts] = useState([]);
+  const [copyingLastWeek, setCopyingLastWeek] = useState(false);
+  const [saveState, setSaveState] = useState("saved"); // saved | saving | error
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const load = useCallback(async () => {
@@ -187,13 +93,14 @@ export default function SpcWorkoutBuilderWeb() {
       setLoadError(null);
       const w = await getSpcWorkout(workoutId);
       setWorkout(w);
-      const [memberRow, warmupRows, exerciseRows, libraryRows, siblings, allBlockWorkouts] = await Promise.all([
+      const [memberRow, warmupRows, exerciseRows, libraryRows, siblings, allBlockWorkouts, previousWeek] = await Promise.all([
         getUser(w.spc_blocks.spc_client_id),
         listSpcWarmups(workoutId),
         listSpcWorkoutExercises(workoutId),
         listExercises(),
         getSpcSiblingLifts(w.spc_blocks.id, w.week_number, workoutId),
         listSpcWorkoutsForBlock(w.spc_blocks.id),
+        getSpcSameSessionLastWeek(w.spc_blocks.id, w.week_number, w.session_number).catch(() => null),
       ]);
       setMember(memberRow);
       setWarmups(warmupRows);
@@ -201,6 +108,7 @@ export default function SpcWorkoutBuilderWeb() {
       setLibrary(libraryRows);
       setSiblingLifts(siblings);
       setBlockWorkouts(allBlockWorkouts);
+      setLastWeek(previousWeek);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -210,8 +118,21 @@ export default function SpcWorkoutBuilderWeb() {
     load();
   }, [load]);
 
+  // Every write here is optimistic-then-persist, so the header's "Saved"
+  // light is the only thing telling a coach the round trip landed.
+  const track = (promise, message) => {
+    setSaveState("saving");
+    return promise
+      .then(() => setSaveState("saved"))
+      .catch((err) => {
+        setSaveState("error");
+        toastError(message, err);
+      });
+  };
+
   const handleInsertExercise = async (exercise) => {
     try {
+      setSaveState("saving");
       const created = await addSpcWorkoutExercise({
         workoutId,
         exerciseId: exercise.id,
@@ -219,46 +140,66 @@ export default function SpcWorkoutBuilderWeb() {
         userId: workout.spc_blocks.spc_client_id,
       });
       setExercises((prev) => [...prev, created]);
+      setExpandedId(created.id);
+      setSaveState("saved");
     } catch (err) {
+      setSaveState("error");
       toastError("Couldn't add exercise", err);
     }
   };
 
   const handleExerciseChange = (id, fields) => {
     setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...fields } : e)));
-    updateSpcWorkoutExercise(id, fields).catch((err) => toastError("Couldn't save change", err));
+    track(updateSpcWorkoutExercise(id, fields), "Couldn't save change");
   };
 
   const handleRemoveExercise = async (id) => {
     const removed = exercises.find((e) => e.id === id);
     const removedIndex = exercises.findIndex((e) => e.id === id);
     setExercises((prev) => prev.filter((e) => e.id !== id));
+    if (expandedId === id) setExpandedId(null);
     try {
+      setSaveState("saving");
       await removeSpcWorkoutExercise(id);
+      setSaveState("saved");
     } catch (err) {
+      setSaveState("error");
       toastError("Couldn't remove exercise", err);
       if (removed) setExercises((prev) => [...prev.slice(0, removedIndex), removed, ...prev.slice(removedIndex)]);
     }
   };
 
-  const handleLinkSuperset = (itemId, nextItemId) => {
+  // One tap does both directions: link this lift to the next one, or break
+  // whichever pairing it's already in. Single-owner semantics — no triples,
+  // just clean re-pairing — same as the group builder.
+  const handleToggleSuperset = (item) => {
+    if (item.superset_group_id) {
+      const partner = exercises.find((e) => e.id !== item.id && e.superset_group_id === item.superset_group_id);
+      setExercises((prev) => prev.map((e) => (e.id === item.id || e.id === partner?.id ? { ...e, superset_group_id: null } : e)));
+      track(
+        Promise.all([
+          updateSpcWorkoutExercise(item.id, { superset_group_id: null }),
+          partner ? updateSpcWorkoutExercise(partner.id, { superset_group_id: null }) : Promise.resolve(),
+        ]),
+        "Couldn't unlink superset"
+      );
+      return;
+    }
+    const index = exercises.findIndex((e) => e.id === item.id);
+    const next = exercises[index + 1];
+    if (!next) {
+      toastError("Nothing to superset with", "This is the last lift in the session");
+      return;
+    }
     const groupId = crypto.randomUUID();
-    setExercises((prev) => prev.map((e) => (e.id === itemId || e.id === nextItemId ? { ...e, superset_group_id: groupId } : e)));
-    Promise.all([
-      updateSpcWorkoutExercise(itemId, { superset_group_id: groupId }),
-      updateSpcWorkoutExercise(nextItemId, { superset_group_id: groupId }),
-    ]).catch((err) => toastError("Couldn't link superset", err));
-  };
-
-  const handleUnlinkSuperset = (item) => {
-    const partner = exercises.find((e) => e.id !== item.id && e.superset_group_id === item.superset_group_id);
-    setExercises((prev) =>
-      prev.map((e) => (e.id === item.id || e.id === partner?.id ? { ...e, superset_group_id: null } : e))
+    setExercises((prev) => prev.map((e) => (e.id === item.id || e.id === next.id ? { ...e, superset_group_id: groupId } : e)));
+    track(
+      Promise.all([
+        updateSpcWorkoutExercise(item.id, { superset_group_id: groupId }),
+        updateSpcWorkoutExercise(next.id, { superset_group_id: groupId }),
+      ]),
+      "Couldn't link superset"
     );
-    Promise.all([
-      updateSpcWorkoutExercise(item.id, { superset_group_id: null }),
-      partner ? updateSpcWorkoutExercise(partner.id, { superset_group_id: null }) : Promise.resolve(),
-    ]).catch((err) => toastError("Couldn't unlink superset", err));
   };
 
   const handleNewExerciseCreated = async (form) => {
@@ -271,26 +212,23 @@ export default function SpcWorkoutBuilderWeb() {
     }
   };
 
-  // Only reordering already-placed exercises uses drag now (SortableContext
-  // below) — inserting from the library is click-only, see
-  // components/ExerciseLibrarySidebar.js.
   const handleDragEnd = (event) => {
     const { active, over } = event;
-    if (!over) return;
-    if (active.id !== over.id) {
-      const oldIndex = exercises.findIndex((e) => e.id === active.id);
-      const newIndex = exercises.findIndex((e) => e.id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return;
-      const reordered = arrayMove(exercises, oldIndex, newIndex);
-      setExercises(reordered);
-      reorderSpcWorkoutExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 }))).catch((err) =>
-        toastError("Couldn't save reorder", err)
-      );
-    }
+    if (!over || active.id === over.id) return;
+    const oldIndex = exercises.findIndex((e) => e.id === active.id);
+    const newIndex = exercises.findIndex((e) => e.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(exercises, oldIndex, newIndex);
+    setExercises(reordered);
+    track(
+      reorderSpcWorkoutExercises(reordered.map((item, i) => ({ id: item.id, position: i + 1 }))),
+      "Couldn't save reorder"
+    );
   };
 
   const handleAddWarmup = async (exercise) => {
     try {
+      setSaveState("saving");
       const created = await addSpcWarmup({
         workoutId,
         exerciseId: exercise.id,
@@ -299,14 +237,16 @@ export default function SpcWorkoutBuilderWeb() {
         reps: exercise.default_reps || undefined,
       });
       setWarmups((prev) => [...prev, created]);
+      setSaveState("saved");
     } catch (err) {
+      setSaveState("error");
       toastError("Couldn't add warm-up", err);
     }
   };
 
   const handleWarmupChange = (id, fields) => {
     setWarmups((prev) => prev.map((w) => (w.id === id ? { ...w, ...fields } : w)));
-    updateSpcWarmup(id, fields).catch((err) => toastError("Couldn't save change", err));
+    track(updateSpcWarmup(id, fields), "Couldn't save change");
   };
 
   const handleRemoveWarmup = async (id) => {
@@ -327,6 +267,7 @@ export default function SpcWorkoutBuilderWeb() {
       const next = workout.status === "published" ? "draft" : "published";
       await setSpcWorkoutStatus(workoutId, next);
       setWorkout((w) => ({ ...w, status: next }));
+      toastSuccess(next === "published" ? "Published — she can see it now" : "Unpublished");
     } catch (err) {
       toastError("Couldn't publish", err);
     } finally {
@@ -336,17 +277,36 @@ export default function SpcWorkoutBuilderWeb() {
 
   const handleTitleChange = (title) => {
     setWorkout((w) => ({ ...w, title }));
-    setSpcWorkoutTitle(workoutId, title).catch((err) => toastError("Couldn't save title", err));
+    track(setSpcWorkoutTitle(workoutId, title), "Couldn't save title");
   };
+
+  const handleCopyLastWeek = async () => {
+    if (!lastWeek) return;
+    if (exercises.length > 0 && !(await confirmOverwrite(1))) return;
+    setCopyingLastWeek(true);
+    try {
+      await copySpcWorkoutContent(lastWeek.workout.id, workoutId);
+      await load();
+      toastSuccess("Copied last week's session in");
+    } catch (err) {
+      toastError("Couldn't copy last week", err);
+    } finally {
+      setCopyingLastWeek(false);
+    }
+  };
+
+  const supersetLetters = useMemo(() => supersetLettersFor(exercises), [exercises]);
+  const patternCounts = useMemo(() => patternCountsFor(exercises, siblingLifts), [exercises, siblingLifts]);
+  const balanceNote = useMemo(() => balanceNoteFor(patternCounts), [patternCounts]);
 
   if (loadError) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff", padding: 24 }}>
+        <Text style={{ fontFamily: fonts.sans, color: "#b23a22", textAlign: "center", marginBottom: 12 }}>
           Couldn't load this workout: {loadError}
         </Text>
         <Pressable onPress={load}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5140" }}>Retry</Text>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
         </Pressable>
       </View>
     );
@@ -354,22 +314,20 @@ export default function SpcWorkoutBuilderWeb() {
 
   if (!workout || !member) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" }}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
-  const currentLifts = exercises.map((e) => ({ name: e.exercises?.name ?? "Unknown exercise", patterns: e.exercises?.movement_pattern ?? [] }));
+  const idx = blockWorkouts.findIndex((w) => w.id === workout.id);
+  const prev = idx > 0 ? blockWorkouts[idx - 1] : null;
+  const next = idx >= 0 && idx < blockWorkouts.length - 1 ? blockWorkouts[idx + 1] : null;
+  const published = workout.status === "published";
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={pointerWithin}
-      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-      onDragEnd={handleDragEnd}
-    >
-      <View className="flex-1 flex-row bg-white">
+    <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
+      <View style={{ flex: 1, flexDirection: "row", backgroundColor: BUILDER_CANVAS }}>
         <ExerciseLibrarySidebar
           library={library}
           search={search}
@@ -378,172 +336,166 @@ export default function SpcWorkoutBuilderWeb() {
           onInsertLift={handleInsertExercise}
           onInsertWarmup={handleAddWarmup}
           onBack={() =>
-            router.canGoBack() ? router.back() : router.push(`/(coach)/spc/blocks/${workout.spc_blocks.id}`)
+            router.canGoBack() ? router.back() : router.push(`/(coach)/spc/${workout.spc_blocks.spc_client_id}`)
           }
         />
 
-        <ScrollView className="flex-1 px-8 py-6">
-          <View className="mb-6 flex-row items-center justify-between">
-            <View>
-              <Text className="text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
-                {member.name} — Week {workout.week_number}, Session {workout.session_number}
-              </Text>
-              <Text
-                className="text-xs"
-                style={{ fontFamily: fonts.sansMedium, color: workout.status === "published" ? "#8a5140" : "#a8a29e" }}
-              >
-                {workout.status === "published" ? "Published" : "Draft"}
+        <View style={{ flex: 1 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 14,
+              paddingHorizontal: 26,
+              paddingVertical: 14,
+              backgroundColor: "#fff",
+              borderBottomWidth: 1,
+              borderBottomColor: BUILDER_CARD_BORDER,
+            }}
+          >
+            <View style={{ minWidth: 0 }}>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>{member.name} · SPC</Text>
+              <Text style={{ fontFamily: fonts.display, fontSize: 22, color: "#2a211c" }}>
+                Week {workout.week_number}, Session {workout.session_number}
               </Text>
             </View>
-            <View className="flex-row items-center gap-2.5">
-              {(() => {
-                // Prev/next through the block in week/session order — same
-                // affordance as the group web builder.
-                const idx = blockWorkouts.findIndex((w) => w.id === workout.id);
-                const prev = idx > 0 ? blockWorkouts[idx - 1] : null;
-                const next = idx >= 0 && idx < blockWorkouts.length - 1 ? blockWorkouts[idx + 1] : null;
-                const NavArrow = ({ target, isPrev }) =>
-                  target ? (
-                    <Pressable
-                      onPress={() => router.push(`/(coach)/spc/builder/${target.id}`)}
-                      className="rounded-lg border px-3 py-2.5"
-                      style={{ borderColor: "#d9d4cd" }}
-                      accessibilityLabel={`${isPrev ? "Previous" : "Next"} session: Week ${target.week_number}, Session ${target.session_number}`}
-                    >
-                      <Text className="text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5 }}>
-                        {isPrev ? `‹ Wk${target.week_number} · S${target.session_number}` : `Wk${target.week_number} · S${target.session_number} ›`}
-                      </Text>
-                    </Pressable>
-                  ) : null;
-                return (
-                  <>
-                    <NavArrow target={prev} isPrev />
-                    <NavArrow target={next} />
-                  </>
-                );
-              })()}
-              <Pressable onPress={handleTogglePublish} disabled={publishing} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
-                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                  {workout.status === "published" ? "Unpublish" : "Publish"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
 
-          <TextInput
-            value={workout.title ?? ""}
-            onChangeText={handleTitleChange}
-            placeholder="Session title (e.g. Back & Bis) — shown to the member"
-            className="mb-6 w-96 rounded-lg border border-stone-300 px-4 py-3"
-            style={{ fontFamily: fonts.sans }}
-          />
-
-          <View className="mb-6 rounded-xl p-2.5">
-            <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
-              Warm-up
-            </Text>
-            {warmups.length > 0 && (
-              <View className="mb-2 rounded-xl px-3.5" style={{ backgroundColor: "#faf7f4", borderWidth: 1, borderColor: "#f0ebe6" }}>
-                {warmups.map((w, i) => (
-                  <View
-                    key={w.id}
-                    className="flex-row items-center gap-2 py-2.5"
-                    style={i < warmups.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f0ebe6" } : undefined}
-                  >
-                    <Text className="w-5 text-xs text-stone-400">{i + 1}.</Text>
-                    <Text className="flex-1 text-stone-700" style={{ fontFamily: fonts.sansMedium, fontSize: 14 }}>
-                      {w.exercises?.name ?? w.label}
-                    </Text>
-                    <TextInput
-                      value={w.sets ?? ""}
-                      onChangeText={(v) => handleWarmupChange(w.id, { sets: v })}
-                      placeholder="sets"
-                      className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-3"
-                      style={{ fontFamily: fonts.sans }}
-                    />
-                    <TextInput
-                      value={w.reps ?? ""}
-                      onChangeText={(v) => handleWarmupChange(w.id, { reps: v })}
-                      placeholder="reps"
-                      className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-3"
-                      style={{ fontFamily: fonts.sans }}
-                    />
-                    <TextInput
-                      value={w.notes ?? ""}
-                      onChangeText={(v) => handleWarmupChange(w.id, { notes: v })}
-                      placeholder="notes"
-                      className="w-28 rounded-lg border border-stone-300 bg-white px-2 py-3"
-                      style={{ fontFamily: fonts.sans }}
-                    />
-                    <Pressable
-                      onPress={() => handleRemoveWarmup(w.id)}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      accessibilityLabel={`Remove warm-up exercise ${w.exercises?.name ?? w.label ?? i + 1}`}
-                    >
-                      <Text className="text-stone-400">✕</Text>
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            )}
-            <Pressable onPress={() => setWarmupPickerVisible(true)} className="rounded-lg border border-primary px-3 py-2.5">
-              <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
-                + Insert warm-up exercise
-              </Text>
-            </Pressable>
-            <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-              Max 5-6 movements.
-            </Text>
-          </View>
-
-          <View className="mb-6 rounded-xl p-2.5" style={{ minHeight: 160 }}>
-            <Text className="mb-2 text-xs uppercase text-stone-700" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>
-              Main Session
-            </Text>
-
-            <SortableContext items={exercises.map((e) => e.id)} strategy={verticalListSortingStrategy}>
-              {exercises.length === 0 ? (
-                <View
-                  className="items-center justify-center rounded-lg px-4"
-                  style={{ minHeight: 96, borderWidth: 1, borderStyle: "dashed", borderColor: "#d6d3d1" }}
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              {[
+                [prev, "‹"],
+                [next, "›"],
+              ].map(([target, glyph]) => (
+                <Pressable
+                  key={glyph}
+                  onPress={target ? () => router.push(`/(coach)/spc/builder/${target.id}`) : undefined}
+                  accessibilityLabel={glyph === "‹" ? "Previous session" : "Next session"}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: BUILDER_CARD_BORDER,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: target ? 1 : 0.35,
+                  }}
                 >
-                  <Text className="text-center" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
-                    Click an exercise in the library to add it.
-                  </Text>
-                </View>
-              ) : (
-                exercises.map((item, i) => (
-                  <SpcExerciseRow
-                    key={item.id}
-                    item={item}
-                    onChange={handleExerciseChange}
-                    onRemove={handleRemoveExercise}
-                    onLinkSuperset={() => handleLinkSuperset(item.id, exercises[i + 1].id)}
-                    onUnlinkSuperset={handleUnlinkSuperset}
-                    isLastRow={i === exercises.length - 1}
-                    linkedToNext={Boolean(
-                      item.superset_group_id && item.superset_group_id === exercises[i + 1]?.superset_group_id
-                    )}
-                  />
-                ))
-              )}
-            </SortableContext>
-            <Pressable
-              onPress={() => setExercisePickerVisible(true)}
-              className="mt-2.5 rounded-lg border border-primary px-3 py-2.5"
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: "#57534e" }}>{glyph}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={{ flex: 1 }} />
+
+            <SaveLight state={saveState} />
+
+            <View style={{ backgroundColor: published ? "#e3ead9" : "#fdf6ec", borderRadius: 99, paddingVertical: 4, paddingHorizontal: 10 }}>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.8, color: published ? "#4d6142" : "#8a6320" }}>
+                {published ? "PUBLISHED" : "DRAFT"}
+              </Text>
+            </View>
+
+            <PressFade
+              onPress={() => setPreviewOpen(true)}
+              style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 16, backgroundColor: "#fff" }}
             >
-              <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: "#8a5140" }}>
-                + Insert exercise
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Preview</Text>
+            </PressFade>
+            <Pressable
+              onPress={publishing ? undefined : handleTogglePublish}
+              style={{
+                backgroundColor: published ? "#fff" : colors.primary,
+                borderWidth: published ? 1 : 0,
+                borderColor: "#d9d4cd",
+                borderRadius: 9,
+                paddingVertical: 9,
+                paddingHorizontal: 18,
+                opacity: publishing ? 0.6 : 1,
+              }}
+            >
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: published ? "#44403c" : "#fff" }}>
+                {published ? "Unpublish" : "Publish"}
               </Text>
             </Pressable>
           </View>
 
-          <View className="mb-6">
-            <PatternTally currentLifts={currentLifts} siblingLifts={siblingLifts} />
-          </View>
+          <View style={{ flex: 1, flexDirection: "row" }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 26, paddingVertical: 22, paddingBottom: 60 }}>
+              <TextInput
+                value={workout.title ?? ""}
+                onChangeText={handleTitleChange}
+                placeholder="Name this session…"
+                style={{
+                  fontFamily: fonts.display,
+                  fontSize: 26,
+                  color: workout.title ? "#2a211c" : "#c9c4bd",
+                  paddingBottom: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#ece7e1",
+                  marginBottom: 20,
+                }}
+              />
 
-          <CommentThread spcBlockId={workout.spc_blocks.id} />
-        </ScrollView>
+              <WarmupGrid
+                warmups={warmups}
+                onChange={handleWarmupChange}
+                onRemove={handleRemoveWarmup}
+                onAdd={() => setWarmupPickerVisible(true)}
+              />
+
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 26, marginBottom: 9 }}>
+                <Eyebrow>
+                  MAIN SESSION · {exercises.length} LIFT{exercises.length === 1 ? "" : "S"}
+                </Eyebrow>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#c9c4bd" }}>Click a lift to edit</Text>
+              </View>
+
+              <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: BUILDER_CARD_BORDER, borderRadius: 12, overflow: "hidden" }}>
+                <SortableContext items={exercises.map((e) => e.id)} strategy={verticalListSortingStrategy}>
+                  {exercises.length === 0 ? (
+                    <View style={{ padding: 26 }}>
+                      <Text style={{ textAlign: "center", fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e" }}>
+                        Click an exercise in the library to add it.
+                      </Text>
+                    </View>
+                  ) : (
+                    exercises.map((item, i) => (
+                      <SortableLift
+                        key={item.id}
+                        item={item}
+                        index={i}
+                        expanded={expandedId === item.id}
+                        onExpand={setExpandedId}
+                        onChange={handleExerciseChange}
+                        onRemove={handleRemoveExercise}
+                        onToggleSuperset={handleToggleSuperset}
+                        supersetLetter={item.superset_group_id ? supersetLetters[item.superset_group_id] : null}
+                      />
+                    ))
+                  )}
+                </SortableContext>
+                <Pressable onPress={() => setExercisePickerVisible(true)} style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#f4f1ec" }}>
+                  <Text style={{ textAlign: "center", fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>
+                    + Insert exercise
+                  </Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+
+            <ScrollView
+              style={{ width: 268, flexGrow: 0, flexShrink: 0, borderLeftWidth: 1, borderLeftColor: BUILDER_CARD_BORDER, backgroundColor: "#faf8f6" }}
+              contentContainerStyle={{ padding: 18, flexGrow: 1 }}
+            >
+              <BalanceRail counts={patternCounts} note={balanceNote} />
+              <LastWeekRail lastWeek={lastWeek} onCopy={handleCopyLastWeek} copying={copyingLastWeek} />
+              {/* Same reasoning as the group builder: block notes are
+                  coach-to-coach and the native builder still shows them. */}
+              <View style={{ marginTop: 26 }}>
+                <CommentThread spcBlockId={workout.spc_blocks.id} />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
       </View>
 
       <ExerciseFormModal
@@ -553,19 +505,29 @@ export default function SpcWorkoutBuilderWeb() {
         onClose={() => setNewExerciseModalVisible(false)}
         onSubmit={handleNewExerciseCreated}
       />
-
       <ExercisePickerModal
         visible={warmupPickerVisible}
         library={library.filter((e) => e.type === "warmup")}
         onClose={() => setWarmupPickerVisible(false)}
         onPick={handleAddWarmup}
       />
-
       <ExercisePickerModal
         visible={exercisePickerVisible}
         library={library.filter((e) => e.type !== "warmup")}
         onClose={() => setExercisePickerVisible(false)}
         onPick={handleInsertExercise}
+      />
+      <SessionPreviewModal
+        visible={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title={workout.title || `Week ${workout.week_number}, Session ${workout.session_number}`}
+        subtitle="Exactly what she sees"
+        warmups={warmups.map((w) => w.exercises?.name ?? w.label ?? "Warm-up")}
+        exercises={exercises.map((e) => ({
+          id: e.id,
+          name: e.exercises?.name ?? "Exercise",
+          detail: schemeLabel(e),
+        }))}
       />
     </DndContext>
   );

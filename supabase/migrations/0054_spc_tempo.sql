@@ -1,0 +1,17 @@
+-- Tempo on SPC lifts.
+--
+-- 0016 gave spc_workout_exercises a flat prescription (sets/reps/rest/notes)
+-- and deliberately left tempo off, on the reasoning that "SPC/templates/
+-- one-offs have always used rest, group uses tempo, different program
+-- families, no need for them to match column-for-column."
+--
+-- That reasoning has since eroded from both ends: 0047 added `rest` to
+-- group_workout_exercises (so group carries both), and the coach web v2
+-- handoff's SPC session read-out (screen 16) shows tempo on an SPC lift
+-- explicitly — "Tempo 3-1-1-0 · rest 2:00". Tempo arguably matters more in
+-- 1:1 programming than it does in a shared group session, so rather than
+-- drop it from the design, SPC gets the column.
+--
+-- Purely additive: nullable, no default, no backfill. Every existing row
+-- reads as "no tempo prescribed", which is exactly what it was.
+alter table programming.spc_workout_exercises add column tempo text;
