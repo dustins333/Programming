@@ -1,45 +1,45 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import {
-  DndContext,
-  DragOverlay,
-  useDraggable,
-  useDroppable,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  pointerWithin,
-} from "@dnd-kit/core";
-import { getSpcRoster, checkAndAutoDraft } from "../../../lib/programming/spcDashboard";
-import { setSpcStatus } from "../../../lib/programming/spcClients";
-import { StatusBadge } from "../../../components/StatusBadge";
+import { useCallback, useMemo, useState } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { getSpcRosterDetail, describeLastSession } from "../../../lib/programming/spcRoster";
+import { checkAndAutoDraft } from "../../../lib/programming/spcDashboard";
 import { CoachShell } from "../../../components/CoachShell";
+import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES, STATUS_ORDER } from "../../../lib/programming/spcStatus";
-import { formatDateMDY } from "../../../lib/formatDate";
-import { toastError } from "../../../lib/toast";
+import { formatDateMD } from "../../../lib/formatDate";
 
-const SORT_OPTIONS = [
-  { value: "blockEnds", label: "Sort: Block ends" },
-  { value: "name", label: "Sort: Name" },
-  { value: "status", label: "Sort: Status" },
-  { value: "coach", label: "Sort: Coach" },
-];
+// SPC roster, coach web (design_handoff_coach_web_v2, screen 14).
+//
+// Sorted by time remaining, because that's the only ordering that puts the
+// client you have to act on today at the top. The previous version defaulted
+// to a flat grid with a sort dropdown and status-tile filters, which meant
+// the answer to "who runs out first" was always one interaction away.
+//
+// The coverage column is the real change: a status pill says what state a
+// coach last set by hand, and coverage says what is actually in the block.
+// Those disagree often enough — a block marked Printed & Ready with two
+// empty sessions in it — that showing only the pill was hiding work.
+//
+// Coach filter defaults to All for everyone, per the handoff: any coach can
+// see the whole roster (covering for someone shouldn't need an admin). It's
+// the alerts that stay scoped, not the visibility.
 
-function compareClients(a, b, sort) {
-  if (sort === "name") return a.name.localeCompare(b.name);
-  if (sort === "status") return STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || a.name.localeCompare(b.name);
-  if (sort === "coach") return a.coachName.localeCompare(b.coachName) || a.name.localeCompare(b.name);
-  // blockEnds — soonest-ending first, clients with no block yet sort last.
-  const ae = a.currentBlock?.block_end_date;
-  const be = b.currentBlock?.block_end_date;
-  if (!ae && !be) return a.name.localeCompare(b.name);
-  if (!ae) return 1;
-  if (!be) return -1;
-  return ae < be ? -1 : ae > be ? 1 : a.name.localeCompare(b.name);
-}
+const CARD_BORDER = "#ece7e1";
+const CANVAS = "#faf8f6";
+
+const TONE_STYLES = {
+  urgent: { bg: "#fdece5", text: "#b23a22", bar: "#b23a22" },
+  needsAction: { bg: "#fdf3e3", text: "#8a6320", bar: "#8a6320" },
+  onTrack: { bg: "#e3ead9", text: "#4d6142", bar: "#4d6142" },
+  paused: { bg: "#f1efec", text: "#78716c", bar: "#c9c4bd" },
+};
+
+const NEXT_STEP_STYLES = {
+  urgent: { bg: colors.primary, border: colors.primary, text: "#fff" },
+  needsAction: { bg: "#fff", border: "#d9d4cd", text: "#44403c" },
+  quiet: { bg: "#fff", border: "#d9d4cd", text: "#78716c" },
+};
 
 function initials(name) {
   return (name ?? "")
@@ -50,389 +50,265 @@ function initials(name) {
     .join("");
 }
 
-// Doubles as a drag-drop target (unchanged from before) AND a filter chip —
-// clicking toggles filtering the roster (in either view) down to this one
-// status; clicking the already-active tile clears it. Drag-hover and
-// active-filter get visually distinct treatments (rust vs. olive) so a
-// coach mid-drag can't confuse "drop here" with "currently filtering".
-function StatusTile({ status, count, active, onToggle, fullWidth }) {
-  const { setNodeRef, isOver } = useDroppable({ id: status });
-  const style = active
-    ? { borderWidth: 2, borderColor: "#4d6142", backgroundColor: "#f5f8f1" }
-    : isOver
-      ? { borderWidth: 2, borderColor: colors.primaryOnWhite, backgroundColor: "#fdf6f2" }
-      : { borderWidth: 1, borderColor: "#ece7e1", backgroundColor: "white" };
+function Eyebrow({ children, style }) {
   return (
-    <div ref={setNodeRef} onClick={() => onToggle(status)} style={{ cursor: "pointer", ...(fullWidth ? { flexGrow: 1, flexBasis: "47%" } : {}) }}>
-      {/* 176px is two-per-row on a desktop card but ~5px too wide for a
-          375pt phone, which dropped them to one per row and pushed the
-          client list off the bottom of the screen. */}
-      <View className="rounded-xl px-3.5 py-3" style={{ width: fullWidth ? undefined : 176, ...style }}>
-        <StatusBadge tone={STATUS_TONES[status]} label={STATUS_LABELS[status]} lines={fullWidth ? 2 : 1} />
-        <Text className="mt-2 text-xs" style={{ fontFamily: fonts.sans, color: active ? "#4d6142" : "#a8a29e", fontWeight: active ? "600" : "400" }}>
-          {count} client{count === 1 ? "" : "s"}
-          {active ? " · filtering" : ""}
-        </Text>
-      </View>
-    </div>
+    <Text style={[{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, color: "#a8a29e" }, style]}>
+      {children}
+    </Text>
   );
 }
 
-// Shared row markup for both the real (draggable) row and the DragOverlay
-// preview that follows the pointer.
-function ClientCard({ client }) {
-  const urgent = client.dueSoon || client.status === "new_program_asap";
-  return (
-    <View
-      className="mb-2 rounded-xl bg-white px-4 py-3.5"
-      style={
-        urgent
-          ? { borderWidth: 1, borderColor: "#e9d3c6", borderLeftWidth: 3, borderLeftColor: "#c2543a" }
-          : { borderWidth: 1, borderColor: "#e7e5e4" }
-      }
-    >
-      <View className="flex-row items-center justify-between">
-        <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
-          {client.name}
-        </Text>
-        <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-          {client.coachName}
-        </Text>
-      </View>
-      <Text className="mt-0.5 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-        {client.sessionsPerWeek}x/week
-        {client.currentBlock
-          ? ` · block ends ${formatDateMDY(client.currentBlock.block_end_date)}${client.dueSoon ? " · due soon" : ""}`
-          : " · no block yet"}
-      </Text>
-    </View>
-  );
-}
+// One stacked bar per client: how much of the current block is actually
+// finished. Same mutually-exclusive buckets as the Group Programs block
+// band, so the two screens can't disagree about what "covered" means.
+function CoverageBar({ coverage, tone }) {
+  const total = coverage.total || 1;
+  const seg = (n, color) =>
+    n > 0 ? <View key={color} style={{ width: `${(n / total) * 100}%`, height: 6, backgroundColor: color }} /> : null;
 
-// Drag source that's also a plain click target — same dual click-or-drag
-// pattern as LibraryExercise in builder/[workoutId].web.js: drag listeners
-// live on the outer <div>, the click handler on the inner Pressable. A short
-// activationConstraint distance means a plain click still fires normally and
-// only a real drag (pointer moves >=4px before release) starts a drag. The
-// dragged row itself just fades out — the moving visual is the DragOverlay,
-// so there's no manual translate3d fighting with dnd-kit's own positioning.
-function ClientRow({ client }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `client-${client.userId}`,
-    data: { type: "client", userId: client.userId, status: client.status },
-  });
-
-  return (
-    <div ref={setNodeRef} style={{ opacity: isDragging ? 0.35 : 1 }} {...listeners} {...attributes}>
-      <Link href={`/(coach)/spc/${client.userId}`} asChild>
-        <Pressable className="cursor-grab active:opacity-70">
-          <ClientCard client={client} />
-        </Pressable>
-      </Link>
-    </div>
-  );
-}
-
-// `grow` lets the raw <select> flex on a phone — at a fixed width the
-// coach/due-soon/sort trio overflowed the viewport and Sort was
-// half off-screen with no way to reach it.
-function CoachSelect({ value, coaches, onChange, grow }) {
-  return (
-    <select
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value || null)}
-      style={{
-        fontFamily: fonts.sans,
-        fontSize: 13,
-        height: 38,
-        padding: "0 14px",
-        borderRadius: 8,
-        border: "1px solid #d9d4cd",
-        color: "#44403c",
-        backgroundColor: "white",
-        ...(grow ? { flex: "1 1 130px", minWidth: 0 } : {}),
-      }}
-    >
-      <option value="">All coaches</option>
-      {coaches.map((name) => (
-        <option key={name} value={name}>
-          {name}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function SortSelect({ value, onChange, grow }) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        fontFamily: fonts.sans,
-        fontSize: 13,
-        height: 38,
-        padding: "0 14px",
-        borderRadius: 8,
-        border: "1px solid #d9d4cd",
-        color: "#44403c",
-        backgroundColor: "white",
-        ...(grow ? { flex: "1 1 130px", minWidth: 0 } : {}),
-      }}
-    >
-      {SORT_OPTIONS.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-// The flat, sortable "All clients" grid — the new default view. Fixed
-// per-column widths (not CSS grid) mirror the design reference exactly and
-// match how every other column-aligned list in this app (e.g. the Clients
-// page) is already built.
-// Same breakpoint CoachShell switches its sidebar to a drawer at — below
-// it this is a phone (in practice the installed PWA), where the grid's
-// fixed columns add up to more than the viewport and collapse into each
-// other. See ClientMobileRow below.
-const MOBILE_BREAKPOINT = 768;
-
-// Phone layout: name, badge and details stacked, nothing fixed-width.
-function ClientMobileRow({ client }) {
-  return (
-    <Link href={`/(coach)/spc/${client.userId}`} asChild>
-      <Pressable style={{ borderBottomWidth: 1, borderBottomColor: "#ece7e1", paddingHorizontal: 14, paddingVertical: 12 }}>
-        <View className="flex-row items-center gap-3">
-          <View className="items-center justify-center rounded-full" style={{ width: 34, height: 34, backgroundColor: "#fdf6f2", flexShrink: 0 }}>
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>{initials(client.name)}</Text>
-          </View>
-          <View className="flex-1" style={{ minWidth: 0 }}>
-            <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }} className="text-stone-700">
-              {client.name}
-            </Text>
-            <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
-              {client.coachName} · {client.sessionsPerWeek}x/wk
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={15} color="#c9c4bd" style={{ flexShrink: 0 }} />
-        </View>
-        <View className="mt-2 flex-row flex-wrap items-center gap-2">
-          <StatusBadge tone={STATUS_TONES[client.status]} label={STATUS_LABELS[client.status]} />
-          {client.currentBlock ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c" }}>
-              Block ends {formatDateMDY(client.currentBlock.block_end_date)}
-            </Text>
-          ) : (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#c9c4bd", fontStyle: "italic" }}>No block yet</Text>
-          )}
-        </View>
-      </Pressable>
-    </Link>
-  );
-}
-
-function ClientGridRow({ client, isHeader }) {
-  const content = (
-    <View className="flex-row items-center gap-2.5" style={{ paddingHorizontal: 18, paddingVertical: isHeader ? 10 : 14 }}>
-      <View className="flex-1 flex-row items-center gap-3" style={{ minWidth: 0 }}>
-        {isHeader ? (
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
-            Client
-          </Text>
-        ) : (
-          <>
-            <View className="items-center justify-center rounded-full" style={{ width: 34, height: 34, backgroundColor: "#fdf6f2", flexShrink: 0 }}>
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: colors.primaryOnWhite }}>{initials(client.name)}</Text>
-            </View>
-            <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }} className="text-stone-700">
-              {client.name}
-            </Text>
-          </>
-        )}
-      </View>
-      <View style={{ width: 150 }}>
-        {isHeader ? (
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
-            Status
-          </Text>
-        ) : (
-          <StatusBadge tone={STATUS_TONES[client.status]} label={STATUS_LABELS[client.status]} />
-        )}
-      </View>
-      <View style={{ width: 90 }}>
-        <Text style={{ fontFamily: isHeader ? fonts.sansBold : fonts.sans, fontSize: isHeader ? 10.5 : 12.5, color: isHeader ? "#a8a29e" : "#57534e", textTransform: isHeader ? "uppercase" : "none", letterSpacing: isHeader ? 0.5 : 0 }}>
-          {isHeader ? "Freq." : `${client.sessionsPerWeek}x/wk`}
-        </Text>
-      </View>
-      <View style={{ width: 110 }}>
-        {isHeader ? (
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
-            Block ends
-          </Text>
-        ) : client.currentBlock ? (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#57534e" }}>{formatDateMDY(client.currentBlock.block_end_date)}</Text>
-        ) : (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#c9c4bd", fontStyle: "italic" }}>No block yet</Text>
-        )}
-      </View>
-      <View style={{ width: 90 }}>
-        <Text numberOfLines={1} style={{ fontFamily: isHeader ? fonts.sansBold : fonts.sans, fontSize: isHeader ? 10.5 : 12.5, color: isHeader ? "#a8a29e" : "#78716c", textTransform: isHeader ? "uppercase" : "none", letterSpacing: isHeader ? 0.5 : 0 }}>
-          {isHeader ? "Coach" : client.coachName}
-        </Text>
-      </View>
-      <View style={{ width: 16 }}>{!isHeader && <Ionicons name="chevron-forward" size={15} color="#c9c4bd" />}</View>
-    </View>
-  );
-
-  if (isHeader) {
-    return (
-      <View style={{ backgroundColor: "#faf8f6", borderBottomWidth: 1, borderBottomColor: "#ece7e1" }}>{content}</View>
-    );
+  if (coverage.total === 0) {
+    return <View style={{ height: 6, borderRadius: 99, backgroundColor: "#ece7e1" }} />;
   }
   return (
-    <Link href={`/(coach)/spc/${client.userId}`} asChild>
-      <Pressable style={{ borderBottomWidth: 1, borderBottomColor: "#ece7e1" }}>{content}</Pressable>
-    </Link>
+    <View style={{ flexDirection: "row", height: 6, borderRadius: 99, overflow: "hidden", backgroundColor: "#ece7e1" }}>
+      {seg(coverage.published, TONE_STYLES[tone]?.bar ?? "#4d6142")}
+      {seg(coverage.draft, "#d8c9a8")}
+      {seg(coverage.empty, "#efe9e2")}
+    </View>
   );
 }
 
-export default function SpcDashboardWeb() {
-  const [roster, setRoster] = useState(null);
-  const [loadError, setLoadError] = useState(null);
-  const [filterCoach, setFilterCoach] = useState(null);
-  const [filterDueSoon, setFilterDueSoon] = useState(false);
-  // Seeded from ?status= so the dashboard's SPC rows can land here already
-  // filtered ("SPC needs printed" → this page, showing only those).
-  const params = useLocalSearchParams();
+function StatusChip({ label, count, active, tone, onPress }) {
+  const style = TONE_STYLES[tone] ?? TONE_STYLES.paused;
+  return (
+    <PressFade
+      onPress={onPress}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 7,
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 99,
+        backgroundColor: active ? "#33251f" : style.bg,
+        borderWidth: 1,
+        borderColor: active ? "#33251f" : "transparent",
+      }}
+    >
+      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: active ? "#f7f3ee" : style.text }}>{label}</Text>
+      <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: active ? "#f7f3ee" : style.text, opacity: 0.75 }}>
+        {count}
+      </Text>
+    </PressFade>
+  );
+}
+
+function HeaderCell({ children, width, flex, align = "left" }) {
+  return (
+    <View style={{ width, flex, paddingHorizontal: 10 }}>
+      <Eyebrow style={{ textAlign: align }}>{children}</Eyebrow>
+    </View>
+  );
+}
+
+function ClientRow({ row, onOpen, onNextStep, last }) {
+  const tone = STATUS_TONES[row.status] ?? "paused";
+  const toneStyle = TONE_STYLES[tone];
+  const step = row.nextStep;
+
+  return (
+    <PressFade
+      onPress={() => onOpen(row.userId)}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 14,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: "#f4f1ec",
+      }}
+    >
+      {/* Client */}
+      <View style={{ flex: 1.6, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 10, minWidth: 0 }}>
+        <View
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 99,
+            backgroundColor: toneStyle.bg,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: toneStyle.text }}>{initials(row.name)}</Text>
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: "#2a211c" }} numberOfLines={1}>
+            {row.name}
+          </Text>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }} numberOfLines={1}>
+            Coach: {row.coachName} · {row.sessionsPerWeek}× a week
+          </Text>
+        </View>
+      </View>
+
+      {/* Current block */}
+      <View style={{ flex: 1.2, paddingHorizontal: 10, minWidth: 0 }}>
+        {row.status === "paused" ? (
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#a8a29e" }}>Paused</Text>
+        ) : row.block ? (
+          <>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c" }} numberOfLines={1}>
+              {row.blockLabel} · wk {row.weekNumber} of {row.blockLengthWeeks}
+            </Text>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+              Ends {formatDateMD(row.block.block_end_date)}
+            </Text>
+          </>
+        ) : (
+          <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e" }}>—</Text>
+        )}
+      </View>
+
+      {/* Coverage */}
+      <View style={{ flex: 1.9, paddingHorizontal: 10, minWidth: 0 }}>
+        <CoverageBar coverage={row.coverage} tone={tone} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
+          <View style={{ backgroundColor: toneStyle.bg, borderRadius: 99, paddingVertical: 3, paddingHorizontal: 9 }}>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.6, color: toneStyle.text }}>
+              {(STATUS_LABELS[row.status] ?? row.status).toUpperCase()}
+            </Text>
+          </View>
+          <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", minWidth: 0 }} numberOfLines={1}>
+            {row.reason}
+          </Text>
+        </View>
+      </View>
+
+      {/* Last session */}
+      <View style={{ width: 116, paddingHorizontal: 10 }}>
+        <Text
+          style={{
+            fontFamily: fonts.sans,
+            fontSize: 12.5,
+            color: row.lastSessionAt ? "#57534e" : "#c9c4bd",
+          }}
+          numberOfLines={1}
+        >
+          {describeLastSession(row.lastSessionAt)}
+        </Text>
+      </View>
+
+      {/* Next step */}
+      <View style={{ width: 172, paddingHorizontal: 10, alignItems: "flex-end" }}>
+        {step ? (
+          <PressFade
+            onPress={() => onNextStep(row)}
+            style={{
+              backgroundColor: NEXT_STEP_STYLES[step.tone].bg,
+              borderWidth: 1,
+              borderColor: NEXT_STEP_STYLES[step.tone].border,
+              borderRadius: 9,
+              paddingVertical: 8,
+              paddingHorizontal: 13,
+            }}
+          >
+            <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: NEXT_STEP_STYLES[step.tone].text }}>
+              {step.label}
+            </Text>
+          </PressFade>
+        ) : (
+          <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#d6d1ca" }}>—</Text>
+        )}
+      </View>
+    </PressFade>
+  );
+}
+
+export default function SpcRosterWeb() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isMobile = width < MOBILE_BREAKPOINT;
-  const [statusFilter, setStatusFilter] = useState(typeof params.status === "string" && params.status ? params.status : null);
-  const [view, setView] = useState("all");
-  const [sort, setSort] = useState("blockEnds");
-  const [activeClient, setActiveClient] = useState(null);
-
-  // See the nutrition roster's note — the mount-only initializer above
-  // misses a second arrival from the dashboard on a kept-mounted screen.
-  const appliedStatusParamRef = useRef(typeof params.status === "string" ? params.status : "");
-  useEffect(() => {
-    const raw = typeof params.status === "string" ? params.status : "";
-    if (appliedStatusParamRef.current === raw) return;
-    appliedStatusParamRef.current = raw;
-    setStatusFilter(raw || null);
-  }, [params.status]);
-
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const params = useLocalSearchParams();
+  const [rows, setRows] = useState([]);
+  const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(params.status ?? null);
+  const [coachFilter, setCoachFilter] = useState("all");
 
   const load = useCallback(async () => {
     try {
-      await checkAndAutoDraft();
-      setRoster(await getSpcRoster());
+      setLoadError(null);
+      // Same client-side stand-in for the nightly scan as before — harmless
+      // if it fails, so it must not take the roster down with it.
+      await checkAndAutoDraft().catch(() => {});
+      setRows(await getSpcRosterDetail());
     } catch (err) {
       setLoadError(err.message ?? String(err));
+    } finally {
+      setReady(true);
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const coaches = useMemo(() => {
-    if (!roster) return [];
-    return [...new Set(roster.map((c) => c.coachName))].sort();
-  }, [roster]);
-
-  // Coach/due-soon filters only — status counts on the tiles below read off
-  // this, not the status-filtered set, so toggling one status tile doesn't
-  // zero out the others' counts.
-  const baseFiltered = useMemo(() => {
-    if (!roster) return [];
-    return roster.filter((c) => {
-      if (filterCoach && c.coachName !== filterCoach) return false;
-      if (filterDueSoon && !c.dueSoon) return false;
-      return true;
-    });
-  }, [roster, filterCoach, filterDueSoon]);
-
-  const filtered = useMemo(
-    () => baseFiltered.filter((c) => !statusFilter || c.status === statusFilter),
-    [baseFiltered, statusFilter]
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
   );
 
-  const sortedFlat = useMemo(() => [...filtered].sort((a, b) => compareClients(a, b, sort)), [filtered, sort]);
+  const coaches = useMemo(() => {
+    const seen = new Map();
+    for (const r of rows) if (r.coachId && !seen.has(r.coachId)) seen.set(r.coachId, r.coachName);
+    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows]);
 
-  // Status-grouped sections, same shape as the native page — a header with
-  // the status badge sits over each group instead of repeating the badge on
-  // every row.
-  const grouped = useMemo(() => {
-    return STATUS_ORDER.map((status) => ({
-      status,
-      clients: filtered.filter((c) => c.status === status).sort((a, b) => a.name.localeCompare(b.name)),
-    })).filter((g) => g.clients.length > 0);
-  }, [filtered]);
+  const byCoach = useMemo(
+    () => (coachFilter === "all" ? rows : rows.filter((r) => r.coachId === coachFilter)),
+    [rows, coachFilter]
+  );
 
-  const countByStatus = useMemo(() => {
-    const counts = {};
-    baseFiltered.forEach((c) => {
-      counts[c.status] = (counts[c.status] ?? 0) + 1;
-    });
-    return counts;
-  }, [baseFiltered]);
+  // Counts are of the coach-filtered set, so the chips always describe what
+  // you're actually looking at rather than the whole gym.
+  const counts = useMemo(() => {
+    const c = {};
+    for (const r of byCoach) c[r.status] = (c[r.status] ?? 0) + 1;
+    return c;
+  }, [byCoach]);
 
-  // Mirrored into the URL the same way the nutrition roster does it, so
-  // working a filtered queue survives the round trip into a client page
-  // and back.
-  const toggleStatusFilter = (status) => {
-    setStatusFilter((prev) => {
-      const next = prev === status ? null : status;
-      router.setParams({ status: next ?? "" });
-      return next;
-    });
+  const visible = useMemo(
+    () => (statusFilter ? byCoach.filter((r) => r.status === statusFilter) : byCoach),
+    [byCoach, statusFilter]
+  );
+
+  const runningOutThisWeek = useMemo(
+    () => byCoach.filter((r) => r.status !== "paused" && r.daysLeft != null && r.daysLeft <= 7).length,
+    [byCoach]
+  );
+
+  const handleNextStep = (row) => {
+    // Every next step lands on the client's own block page — that's where
+    // building, finishing a draft and resuming all actually happen. The
+    // button names the job; the page is where it gets done.
+    router.push(`/(coach)/spc/${row.userId}`);
   };
 
-  const handleDragStart = (event) => {
-    const userId = event.active.data.current?.userId;
-    setActiveClient(filtered.find((c) => c.userId === userId) ?? null);
-  };
-
-  const handleDragEnd = async (event) => {
-    setActiveClient(null);
-    const { active, over } = event;
-    if (!over) return;
-    const { userId, status: fromStatus } = active.data.current ?? {};
-    const toStatus = over.id;
-    if (!userId || !STATUS_ORDER.includes(toStatus) || toStatus === fromStatus) return;
-    try {
-      await setSpcStatus(userId, toStatus);
-      await load();
-    } catch (err) {
-      toastError("Couldn't update status", err);
-    }
-  };
-
-  if (loadError) {
+  if (!ready) {
     return (
       <CoachShell>
-        <View className="flex-1 items-center justify-center bg-white px-6">
-          <><Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-            Something went wrong loading the SPC roster: {loadError}
-          </Text>
-        <Pressable onPress={load} style={{ marginTop: 12, alignSelf: "center" }}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
-        </Pressable>
-      </>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={colors.primary} />
         </View>
       </CoachShell>
     );
   }
 
-  if (!roster) {
+  if (loadError) {
     return (
       <CoachShell>
-        <View className="flex-1 items-center justify-center bg-white">
-          <ActivityIndicator color={colors.primary} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <Text style={{ fontFamily: fonts.sans, color: "#b23a22", textAlign: "center", marginBottom: 12 }}>
+            Couldn't load the SPC roster: {loadError}
+          </Text>
+          <Pressable onPress={load}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
         </View>
       </CoachShell>
     );
@@ -440,125 +316,114 @@ export default function SpcDashboardWeb() {
 
   return (
     <CoachShell>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={pointerWithin}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragCancel={() => setActiveClient(null)}
-      >
-        <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }}>
+      <ScrollView style={{ flex: 1, backgroundColor: CANVAS }} contentContainerStyle={{ padding: 26, paddingBottom: 60 }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+          <View style={{ flex: 1, minWidth: 240 }}>
+            <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primaryOnWhite }}>SPC</Text>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#78716c", marginTop: 2 }}>
+              {byCoach.length} client{byCoach.length === 1 ? "" : "s"}
+              {runningOutThisWeek > 0 ? ` · ${runningOutThisWeek} run out this week` : ""}
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <PressFade
+              onPress={() => router.push("/(coach)/spc/templates")}
+              style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 16, backgroundColor: "#fff" }}
+            >
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Templates</Text>
+            </PressFade>
+          </View>
+        </View>
+
+        {/* Status chips — All first, then the five real statuses in urgency
+            order. Clicking the active one clears the filter. */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+          <StatusChip
+            label="All"
+            count={byCoach.length}
+            active={statusFilter === null}
+            tone="paused"
+            onPress={() => setStatusFilter(null)}
+          />
+          {STATUS_ORDER.map((status) => (
+            <StatusChip
+              key={status}
+              label={STATUS_LABELS[status]}
+              count={counts[status] ?? 0}
+              active={statusFilter === status}
+              tone={STATUS_TONES[status]}
+              onPress={() => setStatusFilter(statusFilter === status ? null : status)}
+            />
+          ))}
+
+          <View style={{ width: 1, height: 26, backgroundColor: "#e7e2db", marginHorizontal: 4 }} />
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#78716c" }}>Coach:</Text>
+            <select
+              value={coachFilter}
+              onChange={(e) => setCoachFilter(e.target.value)}
+              style={{
+                fontFamily: fonts.sansSemiBold,
+                fontSize: 13,
+                color: "#44403c",
+                padding: "7px 10px",
+                borderRadius: 8,
+                border: "1px solid #d9d4cd",
+                background: "#fff",
+              }}
+            >
+              <option value="all">All</option>
+              {coaches.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </View>
+        </View>
+
+        <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, overflow: "hidden" }}>
           <View
             style={{
-              // Sticky only on desktop — see the nutrition roster's note.
-              position: isMobile ? "relative" : "sticky",
-              top: 0,
-              zIndex: 20,
+              flexDirection: "row",
+              alignItems: "center",
+              paddingVertical: 11,
               backgroundColor: "#faf8f6",
-              paddingHorizontal: isMobile ? 14 : 40,
-              paddingTop: isMobile ? 16 : 36,
-              paddingBottom: 16,
               borderBottomWidth: 1,
-              borderBottomColor: "#e7e5e4",
+              borderBottomColor: CARD_BORDER,
             }}
           >
-            <View className="mb-4 flex-row items-center justify-between">
-              <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 24 }}>SPC</Text>
-              <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>
-                Templates →
-              </Link>
-            </View>
+            <HeaderCell flex={1.6}>CLIENT</HeaderCell>
+            <HeaderCell flex={1.2}>CURRENT BLOCK</HeaderCell>
+            <HeaderCell flex={1.9}>COVERAGE</HeaderCell>
+            <HeaderCell width={116}>LAST SESSION</HeaderCell>
+            <HeaderCell width={172} align="right">
+              NEXT STEP
+            </HeaderCell>
+          </View>
 
-            {roster.length > 0 && (
-              <View className="mb-[18px] flex-row flex-wrap items-center justify-between gap-3">
-                <View className="flex-row overflow-hidden rounded-full" style={{ borderWidth: 1, borderColor: colors.primary }}>
-                  {[
-                    { key: "grouped", label: "Grouped" },
-                    { key: "all", label: "All clients" },
-                  ].map((opt) => {
-                    const active = view === opt.key;
-                    return (
-                      <Pressable
-                        key={opt.key}
-                        onPress={() => setView(opt.key)}
-                        className="px-4 py-2"
-                        style={{ backgroundColor: active ? colors.primary : "transparent" }}
-                      >
-                        <Text style={{ fontFamily: active ? fonts.sansBold : fonts.sansSemiBold, color: active ? "white" : colors.primaryOnWhite, fontSize: 12.5 }}>
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <View className="flex-row flex-wrap items-center gap-2.5" style={isMobile ? { width: "100%" } : undefined}>
-                  <CoachSelect value={filterCoach} coaches={coaches} onChange={setFilterCoach} grow={isMobile} />
-                  <Pressable
-                    onPress={() => setFilterDueSoon((v) => !v)}
-                    className={`rounded-full border px-3.5 py-2 ${filterDueSoon ? "border-primary bg-primary" : "border-stone-300"}`}
-                  >
-                    <Text className={filterDueSoon ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans, fontSize: 13 }}>
-                      Due soon
-                    </Text>
-                  </Pressable>
-                  {view === "all" && <SortSelect value={sort} onChange={setSort} grow={isMobile} />}
-                </View>
-              </View>
-            )}
-
-            {roster.length === 0 ? (
-              <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
-                No SPC clients yet — assign one from the Clients page.
+          {visible.length === 0 ? (
+            <View style={{ padding: 34, alignItems: "center" }}>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#a8a29e", textAlign: "center" }}>
+                {rows.length === 0
+                  ? "Nobody is on SPC yet. Turn it on from a client's profile to get started."
+                  : "No clients match these filters."}
               </Text>
-            ) : (
-              <View className="flex-row flex-wrap gap-2.5">
-                {STATUS_ORDER.map((status) => (
-                  <StatusTile key={status} status={status} count={countByStatus[status] ?? 0} active={statusFilter === status} onToggle={toggleStatusFilter} fullWidth={isMobile} />
-                ))}
-              </View>
-            )}
-          </View>
-
-          <View style={{ paddingHorizontal: isMobile ? 14 : 40, paddingTop: 20, paddingBottom: 40 }}>
-            {view === "all" ? (
-              <View className="rounded-2xl border bg-white" style={{ borderColor: "#ece7e1", maxWidth: 900, overflow: "hidden" }}>
-                {sortedFlat.length === 0 ? (
-                  <Text className="p-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
-                    No clients match your filters.
-                  </Text>
-                ) : (
-                  <>
-                    {!isMobile && <ClientGridRow isHeader />}
-                    {sortedFlat.map((client) =>
-                      isMobile ? (
-                        <ClientMobileRow key={client.userId} client={client} />
-                      ) : (
-                        <ClientGridRow key={client.userId} client={client} />
-                      )
-                    )}
-                  </>
-                )}
-              </View>
-            ) : (
-              grouped.map(({ status, clients }) => (
-                <View key={status} className="mb-8">
-                  <View className="mb-3 flex-row items-center gap-2">
-                    <StatusBadge tone={STATUS_TONES[status]} label={STATUS_LABELS[status]} />
-                    <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                      {clients.length}
-                    </Text>
-                  </View>
-                  {clients.map((client) => (
-                    <ClientRow key={client.userId} client={client} />
-                  ))}
-                </View>
-              ))
-            )}
-          </View>
-        </ScrollView>
-
-        <DragOverlay>{activeClient ? <View style={{ width: 320 }}><ClientCard client={activeClient} /></View> : null}</DragOverlay>
-      </DndContext>
+            </View>
+          ) : (
+            visible.map((row, i) => (
+              <ClientRow
+                key={row.userId}
+                row={row}
+                last={i === visible.length - 1}
+                onOpen={(userId) => router.push(`/(coach)/spc/${userId}`)}
+                onNextStep={handleNextStep}
+              />
+            ))
+          )}
+        </View>
+      </ScrollView>
     </CoachShell>
   );
 }
