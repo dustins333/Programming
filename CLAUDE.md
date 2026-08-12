@@ -1691,23 +1691,97 @@ verified**: any of it behind a real login — same standing limitation as
 everywhere else in this file. Worth Terra's click-through, especially the grid's
 bulk bar, the builder's expand/collapse and rest chips, and a real merge.
 
-### Still to do — screens 10-25, plus one carried-over item
+### Still to do — screens 10-13 and 17-25
 
-**The SPC builder has not been ported.** `app/(coach)/spc/builder/[workoutId].web.js`
-is still the old permanently-expanded-cards layout while the group builder is
-now one-line-per-lift. That's a real inconsistency between two screens a coach
-uses interchangeably, and it's the first thing to fix next session. The group
-builder is the reference implementation; the SPC one needs the same treatment
-(collapsed rows, set table, rest chips, tempo digits, warm-up grid, balance +
-last-week rail) adapted for SPC's per-week workout rows. `spc/templates/[templateId].web.js`
-is a third copy of the same old layout and should follow.
-
-Not started at all: **10** payroll close (needs new approve/send-back state —
+Not started: **10** payroll close (needs new approve/send-back state —
 today's model is only finalize/reopen), **11** settings permission matrix,
-**12-16** clients / client detail / SPC roster / SPC client block / SPC session
-read-out, **17-25** the nine nutrition-record tabs (note the Photos tab has a
-real perf requirement: never bulk-load thumbnails, a weekly client passes 150
-images inside a year).
+**12-13** clients roster / client detail, **17-25** the nine nutrition-record
+tabs (note the Photos tab has a real perf requirement: never bulk-load
+thumbnails, a weekly client passes 150 images inside a year).
+
+## Coach web v2 — phase 3, the SPC screens (2026-08-12)
+
+Screens **14-16** plus the carried-over builder port. Two commits: `7e72092`
+(builders) and `f61f981` (screens).
+
+**A stale note in this file, corrected.** The previous section said SPC needed
+the builder "adapted for SPC's per-week workout rows … progression lives in
+`spc_exercise_weeks` columns". That table was **dropped in migration 0016** —
+SPC was rearchitected then to one `spc_workouts` row per (block, week, session)
+with a flat prescription on the exercise row, structurally identical to
+`group_workout_exercises`. Verified against the live schema, not just the
+migration. The port was therefore near 1:1, not an adaptation.
+
+**All three builders now share one implementation.** Rather than port the v2
+layout twice more, the pieces moved into `components/builder/SessionBuilderParts.js`
+(warm-up grid, set table, tempo digits, rest chips, the sortable lift row,
+balance/last-week rails, `formatRest`/`schemeLabel`/superset-letter helpers) and
+group, SPC and templates compose them. Same reasoning as `ExerciseLibrarySidebar`,
+extracted out of the same three files for the same reason. The group builder's
+refactor is a pure move — no behaviour change. **What differs is passed in, not
+forked**: `showTempo`, `showSuperset`, and the warm-up grid's `editable` flag.
+Templates switch off all three (no member visibility, supersets deliberately
+excluded from templates in 0030, and `template_warmups` has no sets/reps columns
+at all).
+
+**Migration `0054_spc_tempo.sql` — additive, nullable, no backfill.** 0016
+deliberately left tempo off SPC ("different program families"), but that
+reasoning eroded from both ends: 0047 gave group a `rest` column, and the v2
+handoff's session read-out shows tempo on an SPC lift explicitly. **The SPC
+builder writes this column, so it must be run before tempo works there** —
+everything else on the screen is unaffected.
+
+**Also found**: `updateTemplateWarmup` was imported by the template web builder
+but never exported from `lib/programming/templates.js`. It resolved to
+`undefined` and nothing ever called it — a dead import, not a live bug. Gone
+now. Separately, `coach_initials`/`touched_date` (added to
+`spc_workout_exercises` by 0016) **are not in the live schema** — checked
+directly. Nothing in the app references them, so this is harmless, but don't
+trust 0016's text on those two columns.
+
+**New data layers.** `lib/programming/spcRoster.js`'s `getSpcRosterDetail()` —
+one batched pass giving each client their current block, coverage, last session
+and a single derived next step. `lib/programming/spcBlockDetail.js`'s
+`getSpcBlockDetail()` + `buildSessionReadout()` — shared by screens 15 and 16 so
+the grid's set counts and the read-out's own can't disagree.
+
+**The known join gap, worth understanding before trusting any set count**:
+`programming.logs` has no workout id. A log row records (user, exercise, date,
+set) and nothing about which session it belonged to, so a logged session's sets
+are matched by **the date it was finalized on** — the same simplification
+`lib/history.js`'s day timeline already documents. It's safe here in a way it
+isn't everywhere: SPC clients train 1-4× a week and two SPC sessions finalized
+on one calendar day is rare. If that stops being true, `logs` needs a real
+session reference — not a smarter query.
+
+**Two things deliberately not built as drawn.** (1) The mock shows "Paused ·
+Since Jul 14" — `spc_clients` records `status` but never when it changed (only
+`created_at` exists, verified live), and dating a pause from the row's creation
+would be wrong. It would need a real `status_changed_at` column to be true, so
+it's left out rather than faked; the coach's own note carries the why. (2)
+Status / assigned coach / sessions-per-week aren't in the v2 mock at all (it
+shows them as plain text) but have no other home on web, so they stay editable
+in the client page's Notes rail rather than being dropped from the redesign.
+
+**Screen 15's SPC-specific state model**: five cell states, and the distinction
+that matters is between "she hasn't done it yet" and "she isn't going to" — a
+published session whose week has *fully* passed without a completion is
+`skipped`, not pending. Adherence is measured against what has actually come
+due, not the whole block, so a block in week 2 of 6 isn't 33% adherent.
+
+**Verification is real for the rendering, not bundle-checked-only.** The
+read-out, roster rows, block band and all six cell states were rendered against
+fake data via the standing login-screen harness (`ClientRow`/`BlockBand`/
+`SessionCell` temporarily exported, reverted after; `git diff` on `login.js`
+confirmed clean). The read-out's arithmetic was checked against the actual
+output — 16 sets, 18,890 lb volume, 15 of 16 sets hitting target, all correct by
+hand. **That caught two real bugs a clean bundle did not**: rest rendering as
+raw `120` where the builder formats it `2:00`, and "Build next block" wrapping
+to two lines in a column 3px too narrow (measured via `getBoundingClientRect`,
+not eyeballed). **Not verified**: any of it against real data behind a login —
+standing limitation. Worth Terra's click-through, especially the roster's
+coverage column against a real block and the read-out opened from a real logged
+session.
 
 ## Database migrations
 
@@ -1757,6 +1831,7 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0051_payroll_day_submissions.sql` — **run**, confirmed live 2026-08-11 (columns, both FKs, the `unique (user_id, entry_date)` the upsert's `onConflict` depends on, all 4 RLS policies, grants, and a real REST call returning `200 []` rather than PGRST205, `NOTIFY pgrst, 'reload schema'` sent). Adds `payroll.day_submissions` — one row per (coach, date) recording that the coach tapped Submit for that day on the payroll entry screen. See "Payroll entry: day-level submit" above for why it's deliberately leaner than `payroll.finalizations`.
 - `0052_workout_edit_tracking.sql` — **run**, confirmed live 2026-08-12 (all six triggers verified in `pg_trigger`, and a rolled-back test UPDATE confirmed `updated_at` moves). Adds `last_edited_by` to `group_workouts`/`spc_workouts` plus BEFORE-UPDATE stamping and AFTER-INSERT/UPDATE/DELETE parent-touch triggers on the four content child tables. Backs the coach-web launchpad's resume card and the grid's "you were here" — see the coach web v2 section above for why this is triggers rather than app-side writes, and why there's no backfill.
 - `0053_exercise_merge_dismissals.sql` — **run**, confirmed live 2026-08-12. Adds `programming.exercise_merge_dismissals` (pairs a coach has deliberately kept separate, canonical id order, reversible) behind the same `core.can_access_exercise_library()` gate as managing the library itself.
+- `0054_spc_tempo.sql` — **NOT YET RUN as of 2026-08-12.** Adds `tempo` (text, nullable) to `programming.spc_workout_exercises`. Additive, no backfill, nothing depends on it existing except the SPC session builder's own tempo field and the session read-out's tempo line. See the coach web v2 phase 3 section above for why 0016's "SPC doesn't get tempo" decision was reversed.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.
