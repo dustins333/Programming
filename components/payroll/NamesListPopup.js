@@ -1,8 +1,9 @@
-// Welcome/Strategy tiles' checkmark opens this — one name box per session
-// counted on the tile (count comes from that tile's own pending counter,
-// not stored separately). Names are joined newline-separated into the
-// core row's welcome_notes/strategy_notes column, same free-text
-// convention spc_notes already used.
+// Opened from the "+ Add names" line under the Welcome/Strategy/Programs
+// Written counters — one name box per session counted on the tile (count
+// comes from that tile's own counter, not stored separately). Names are
+// joined newline-separated into the core row's welcome_notes/
+// strategy_notes/program_notes column, same free-text convention spc_notes
+// already used.
 import { useEffect, useState } from "react";
 import { View, Text, TextInput } from "react-native";
 import { fonts } from "../../lib/theme";

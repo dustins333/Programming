@@ -15,23 +15,28 @@
 // that opening a popup just to type a number felt like an unnecessary
 // detour: a type with a quantity gets an inline field right in this row
 // (expands the moment a type with has_qty is picked, no popup involved at
-// all) — but a type with notes still waits for the checkmark tap to open
+// all) — but a type with notes still waits for the Add tap to open
 // OtherItemPopup for that, since a free-text note genuinely benefits from
-// the bigger popup and this flow already worked fine. Confirming (the
-// checkmark) skips the popup entirely for a type with no notes at all —
-// there'd be nothing left for the popup to collect once qty's already been
-// typed here.
+// the bigger popup and this flow already worked fine. Adding skips the
+// popup entirely for a type with no notes at all — there'd be nothing left
+// for the popup to collect once qty's already been typed here.
+//
+// The "add this line item" action is an explicit Add button, not the
+// checkmark it used to be: since the day-submit rework the checkmark means
+// one thing everywhere on this screen — hollow once entered, solid once the
+// whole day has been submitted — so it can't double as this row's own
+// action button.
 import { useState, useEffect } from "react";
-import { View, Text, TextInput, Platform } from "react-native";
-import { fonts } from "../../lib/theme";
-import { TileBadge, TileCheckmark } from "./PayrollTile";
+import { View, Text, TextInput, Pressable, Platform } from "react-native";
+import { fonts, colors } from "../../lib/theme";
+import { TileBadge, TileCheckmark, TILE_BG, TILE_BORDER } from "./PayrollTile";
 import { NativePickerField } from "../NativePickerField";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 import { toastError } from "../../lib/toast";
 
 const isWeb = Platform.OS === "web";
 
-export function PayrollOtherRow({ otherRates, items, onOpenNewItem, onViewList }) {
+export function PayrollOtherRow({ otherRates, items, onOpenNewItem, onViewList, submitted = false }) {
   const [selectedType, setSelectedType] = useState("");
   const [qty, setQty] = useState("1");
 
@@ -55,19 +60,21 @@ export function PayrollOtherRow({ otherRates, items, onOpenNewItem, onViewList }
     setSelectedType("");
   };
 
+  const hasItems = items.length > 0;
+
   return (
     <View
       style={{
         position: "relative",
-        borderWidth: items.length > 0 ? 2 : 1,
-        borderColor: items.length > 0 ? "#4d6142" : "#f0ddd2",
+        borderWidth: submitted ? 2 : 1,
+        borderColor: submitted ? TILE_BORDER.solid : TILE_BORDER.idle,
         borderRadius: 18,
-        backgroundColor: items.length > 0 ? "#eef1e7" : "#fdf6f2",
+        backgroundColor: submitted ? TILE_BG.solid : TILE_BG.idle,
         padding: 16,
-        paddingBottom: selectedType ? 30 : 16,
+        paddingBottom: hasItems ? 28 : 16,
       }}
     >
-      {items.length > 0 ? <TileBadge count={items.length} onPress={onViewList} /> : null}
+      {hasItems ? <TileBadge count={items.length} onPress={onViewList} /> : null}
       <Text className="mb-2 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
         Other
       </Text>
@@ -107,7 +114,22 @@ export function PayrollOtherRow({ otherRates, items, onOpenNewItem, onViewList }
           />
         </View>
       ) : null}
-      {selectedType ? <TileCheckmark solid={false} onPress={handleConfirm} /> : null}
+      {selectedType ? (
+        <Pressable onPress={handleConfirm} className="mt-3 items-center rounded-xl px-4 py-2.5" style={{ backgroundColor: colors.primary }}>
+          <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }}>
+            Add
+          </Text>
+        </Pressable>
+      ) : null}
+      {/* The badge already says how many are logged — this is only here to
+          make it obvious you can add more than one, same reasoning as the
+          SPC tile's caption. */}
+      {hasItems ? (
+        <Text className="mt-2 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+          Pick another type above to add another
+        </Text>
+      ) : null}
+      {hasItems ? <TileCheckmark solid={submitted} /> : null}
     </View>
   );
 }

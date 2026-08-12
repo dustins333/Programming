@@ -10,8 +10,8 @@ const CHECK_COLOR = "#4d6142";
 // Peach (unconfirmed) / sage (confirmed) — the same two soft card tones
 // already established elsewhere in the app (the peach "selected session"
 // banner and statusColors.onTrack, respectively), not new colors.
-const TILE_BG = { idle: "#fdf6f2", solid: "#eef1e7" };
-const TILE_BORDER = { idle: "#f0ddd2", solid: CHECK_COLOR };
+export const TILE_BG = { idle: "#fdf6f2", solid: "#eef1e7" };
+export const TILE_BORDER = { idle: "#f0ddd2", solid: CHECK_COLOR };
 
 // Every grid tile (Group/SPC/Programs Written/Welcome/Strategy/Admin/Ops)
 // used to size itself off its own content (minHeight only) — fine in
@@ -35,30 +35,42 @@ export const TILE_HEIGHT = 136;
 // it, rather than trying to precisely color-match two different
 // backgrounds (the tile's own fill above the line, the page canvas below
 // it) with one flat circle.
+//
+// onPress is optional and usually absent: on the entry grid this is a pure
+// status indicator (hollow = entered, solid = the whole day has been
+// submitted via the sticky footer button), not a per-tile save button as it
+// originally was. Rendering a non-interactive View in that case matters —
+// a Pressable that visibly does nothing when tapped reads as broken.
 export function TileCheckmark({ solid, onPress }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }}
-      accessibilityLabel={solid ? "Saved — tap to edit" : "Tap to save"}
-      style={{ position: "absolute", bottom: -20, left: 0, right: 0, alignItems: "center", zIndex: 2 }}
+  const icon = (
+    <View
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: "white",
+        alignItems: "center",
+        justifyContent: "center",
+        shadowColor: "#44403c",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.12,
+        shadowRadius: 3,
+      }}
     >
-      <View
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          backgroundColor: "white",
-          alignItems: "center",
-          justifyContent: "center",
-          shadowColor: "#44403c",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.12,
-          shadowRadius: 3,
-        }}
-      >
-        <Ionicons name={solid ? "checkmark-circle" : "checkmark-circle-outline"} size={34} color={CHECK_COLOR} />
+      <Ionicons name={solid ? "checkmark-circle" : "checkmark-circle-outline"} size={34} color={CHECK_COLOR} />
+    </View>
+  );
+  const position = { position: "absolute", bottom: -20, left: 0, right: 0, alignItems: "center", zIndex: 2 };
+  if (!onPress) {
+    return (
+      <View pointerEvents="none" style={position} accessibilityLabel={solid ? "Submitted" : "Entered — not submitted yet"}>
+        {icon}
       </View>
+    );
+  }
+  return (
+    <Pressable onPress={onPress} hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }} style={position}>
+      {icon}
     </Pressable>
   );
 }
@@ -93,11 +105,11 @@ export function TileBadge({ count, onPress }) {
   );
 }
 
-// checkState: "none" (no data yet, no checkmark at all) | "hollow"
-// (data present but not yet confirmed/saved) | "solid" (saved). Solid also
-// switches the tile's own border to the same olive — border-only
-// "completed" convention already used app-wide (My Fitness), not a
-// background fill.
+// checkState: "none" (nothing entered, no checkmark at all) | "hollow"
+// (entered and saved, but the day hasn't been submitted yet) | "solid" (the
+// day has been submitted). Solid also switches the tile's own border to the
+// same olive — border-only "completed" convention already used app-wide (My
+// Fitness), not a background fill.
 export function PayrollTile({ children, checkState = "none", onCheckPress, badgeCount, onBadgePress, style, onPress, height = TILE_HEIGHT }) {
   const solid = checkState === "solid";
   const content = (
@@ -109,8 +121,19 @@ export function PayrollTile({ children, checkState = "none", onCheckPress, badge
           borderColor: solid ? TILE_BORDER.solid : TILE_BORDER.idle,
           borderRadius: 18,
           backgroundColor: solid ? TILE_BG.solid : TILE_BG.idle,
-          padding: 16,
-          paddingBottom: checkState !== "none" ? 28 : 16,
+          // Horizontal padding is tighter than the vertical: two tiles side
+          // by side on a 375pt phone leave ~113pt of text width at 16, and
+          // captions like "Add another session" measured 114 — truncating by
+          // under a pixel. 12 buys the headroom without the tiles reading as
+          // cramped.
+          paddingHorizontal: 12,
+          paddingTop: 16,
+          // Always reserves the checkmark's space, even when there's no
+          // checkmark to show. A tile that skipped it got a taller inner
+          // box, so its centered content sat lower than the tile beside it
+          // — the same "these don't line up" problem the fixed TILE_HEIGHT
+          // above was added to solve, just via padding instead.
+          paddingBottom: 28,
           height,
           shadowColor: "#44403c",
           shadowOffset: { width: 0, height: 1 },

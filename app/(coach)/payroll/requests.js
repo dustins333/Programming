@@ -1,4 +1,14 @@
-import { useState, useCallback, useContext, useRef } from "react";
+// The one and only home for custom pay, per direct ask — the entry screen's
+// Custom tile is gone, so anything outside the standard rates starts as a
+// request here and only becomes real money when an admin approves it
+// (which writes the linked pay_entries row directly; see
+// lib/payroll/requests.js's approveRequest).
+//
+// Laid out as collapsible cards because this is read on a phone and the
+// lists are usually short or empty: submit a request, see what's pending,
+// see what's been approved, without scrolling past three empty sections to
+// get there.
+import { useState, useCallback, useContext, useMemo, useRef } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
@@ -11,20 +21,85 @@ import { confirmDelete } from "../../../lib/confirmDialog";
 import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { PayrollTabBar } from "../../../components/PayrollTabBar";
+import { ExpandableCard } from "../../../components/payroll/ExpandableCard";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
-const STATUS_TONE = {
-  pending: { bg: "#f4ede3", text: "#8a5a2e" },
-  approved: { bg: "#eef1e7", text: "#4d6142" },
-  denied: { bg: "#fdece5", text: "#b23a22" },
-};
+function money(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
 
-function StatusPill({ status }) {
-  const tone = STATUS_TONE[status] || STATUS_TONE.pending;
+function EmptyLine({ children }) {
   return (
-    <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: tone.bg }}>
-      <Text style={{ fontFamily: fonts.sansMedium, color: tone.text, fontSize: 11 }}>{status}</Text>
+    <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+      {children}
+    </Text>
+  );
+}
+
+// One of the requester's own requests. Status isn't repeated as a pill —
+// the card it's sitting in already says Pending/Approved/Denied.
+function OwnRequestRow({ request, onCancel }) {
+  const approved = request.status === "approved";
+  return (
+    <View className="mb-2 rounded-xl px-3.5 py-3" style={{ borderWidth: 1, borderColor: "#ece7e1" }}>
+      <View className="flex-row items-start justify-between">
+        <Text className="flex-1 pr-3" style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
+          {request.description}
+        </Text>
+        <Text style={{ fontFamily: fonts.sansBold, color: approved ? "#4d6142" : colors.primaryOnWhite }}>
+          {money(approved ? request.approved_amount : request.amount_requested)}
+        </Text>
+      </View>
+      <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+        Requested {formatDateMDY(request.created_at?.slice(0, 10))}
+        {approved && Number(request.approved_amount) !== Number(request.amount_requested)
+          ? ` · asked ${money(request.amount_requested)}`
+          : ""}
+      </Text>
+      {request.admin_notes ? (
+        <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+          Note: {request.admin_notes}
+        </Text>
+      ) : null}
+      {onCancel ? (
+        <Pressable onPress={onCancel} hitSlop={6} className="mt-2 self-start">
+          <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>
+            Cancel request
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+// Admin's approval queue row — buttons stack full-width rather than sitting
+// side by side, so neither is a cramped tap target on a phone.
+function ApprovalRow({ request, busy, onApprove, onDeny }) {
+  return (
+    <View className="mb-2 rounded-xl px-3.5 py-3" style={{ borderWidth: 1, borderColor: "#ece7e1" }}>
+      <View className="flex-row items-start justify-between">
+        <View className="flex-1 pr-3">
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{request.staff_name}</Text>
+          <Text className="mt-0.5 text-sm text-stone-600" style={{ fontFamily: fonts.sans }}>
+            {request.description}
+          </Text>
+        </View>
+        <Text style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>{money(request.amount_requested)}</Text>
+      </View>
+      <Pressable
+        onPress={onApprove}
+        disabled={busy}
+        className="mt-3 items-center rounded-lg px-4 py-2.5"
+        style={{ backgroundColor: colors.primary, opacity: busy ? 0.6 : 1 }}
+      >
+        <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
+          Approve {money(request.amount_requested)}
+        </Text>
+      </Pressable>
+      <Pressable onPress={onDeny} disabled={busy} className="mt-2 items-center rounded-lg border border-stone-300 px-4 py-2.5">
+        <Text style={{ fontFamily: fonts.sansMedium, color: "#78716c", fontSize: 13 }}>Deny</Text>
+      </Pressable>
     </View>
   );
 }
@@ -45,11 +120,12 @@ export default function PayrollRequests() {
   const [submitting, setSubmitting] = useState(false);
   const [decidingId, setDecidingId] = useState(null);
 
-  // The "Request a custom amount" card sits below Pending requests (admin
-  // only) and above Your requests — for a non-admin with no requests yet,
-  // that card can end up close to the end of the scrollable content, so
-  // there's not always enough room to scroll a focused field above the
-  // keyboard without the extra padding below.
+  // Explicit overrides only — anything not toggled falls back to the
+  // section's own default (see isOpen below), so a coach with one pending
+  // request lands with exactly that section already open.
+  const [openSections, setOpenSections] = useState({});
+  const toggle = (key) => setOpenSections((s) => ({ ...s, [key]: !isOpen(key) }));
+
   const scrollViewRef = useRef(null);
   const scrollOffsetRef = useRef(0);
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
@@ -87,6 +163,21 @@ export default function PayrollRequests() {
 
   const closed = isPeriodClosed(period);
 
+  const myPending = useMemo(() => ownRequests.filter((r) => r.status === "pending"), [ownRequests]);
+  const myApproved = useMemo(() => ownRequests.filter((r) => r.status === "approved"), [ownRequests]);
+  const myDenied = useMemo(() => ownRequests.filter((r) => r.status === "denied"), [ownRequests]);
+
+  const defaultOpen = {
+    new: ownRequests.length === 0,
+    approvals: pendingRequests.length > 0,
+    pending: myPending.length > 0,
+    approved: false,
+    denied: false,
+  };
+  function isOpen(key) {
+    return openSections[key] ?? defaultOpen[key] ?? false;
+  }
+
   const handleSubmit = async () => {
     const amt = Number(amount);
     if (!description.trim() || !Number.isFinite(amt) || amt <= 0) {
@@ -99,6 +190,7 @@ export default function PayrollRequests() {
       toastSuccess("Request submitted");
       setDescription("");
       setAmount("");
+      setOpenSections((s) => ({ ...s, new: false, pending: true }));
       await load();
     } catch (err) {
       toastError("Failed to submit request", err);
@@ -121,7 +213,7 @@ export default function PayrollRequests() {
     setDecidingId(request.id);
     try {
       await approveRequest(request, request.amount_requested, profile.id);
-      toastSuccess(`Approved — $${Number(request.amount_requested).toFixed(2)} added to their payroll`);
+      toastSuccess(`Approved — ${money(request.amount_requested)} added to their payroll`);
       await load();
     } catch (err) {
       toastError("Failed to approve", err);
@@ -170,133 +262,115 @@ export default function PayrollRequests() {
           <ActivityIndicator color={colors.primary} />
         ) : (
           <>
-            {isAdmin ? (
-              <View className="mb-8">
-                <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-                  Pending requests
-                </Text>
-                {pendingRequests.length === 0 ? (
-                  <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                    Nothing pending.
+            <Text className="mb-4 max-w-xl text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Anything outside the standard rates — reimbursements, bonuses, one-offs. Submit it here and it's added to your
+              pay once an admin approves it.
+            </Text>
+
+            <ExpandableCard title="New request" open={isOpen("new")} onToggle={() => toggle("new")}>
+              {closed ? (
+                <EmptyLine>This pay period is closed — new requests will apply to the next open period.</EmptyLine>
+              ) : (
+                <View ref={requestCardRef}>
+                  <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                    Description
                   </Text>
+                  <TextInput
+                    value={description}
+                    onChangeText={setDescription}
+                    onFocus={() => scrollFieldIntoView(requestCardRef.current)}
+                    placeholder="e.g. CPR training reimbursement"
+                    className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
+                    style={{ fontFamily: fonts.sans }}
+                  />
+                  <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                    Amount ($)
+                  </Text>
+                  <TextInput
+                    value={amount}
+                    onChangeText={setAmount}
+                    onFocus={() => scrollFieldIntoView(requestCardRef.current)}
+                    placeholder="0.00"
+                    keyboardType="decimal-pad"
+                    inputAccessoryViewID={NUMERIC_DONE_ID}
+                    className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
+                    style={{ fontFamily: fonts.sans }}
+                  />
+                  <Pressable
+                    onPress={handleSubmit}
+                    disabled={submitting}
+                    className="items-center rounded-lg px-5 py-3"
+                    style={{ backgroundColor: colors.primary, opacity: submitting ? 0.6 : 1 }}
+                  >
+                    <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                      {submitting ? "Submitting…" : "Submit request"}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </ExpandableCard>
+
+            {isAdmin ? (
+              <ExpandableCard
+                title="Awaiting your approval"
+                count={pendingRequests.length}
+                tone="attention"
+                subtitle="Everyone's requests, across the team"
+                open={isOpen("approvals")}
+                onToggle={() => toggle("approvals")}
+              >
+                {pendingRequests.length === 0 ? (
+                  <EmptyLine>Nothing pending.</EmptyLine>
                 ) : (
                   pendingRequests.map((r) => (
-                    <View key={r.id} className="mb-2 max-w-xl rounded-xl border border-stone-200 p-4">
-                      <View className="mb-2 flex-row items-start justify-between">
-                        <View className="flex-1 pr-3">
-                          <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{r.staff_name}</Text>
-                          <Text className="mt-0.5 text-sm text-stone-600" style={{ fontFamily: fonts.sans }}>
-                            {r.description}
-                          </Text>
-                        </View>
-                        <Text style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>${Number(r.amount_requested).toFixed(2)}</Text>
-                      </View>
-                      <View className="flex-row gap-2">
-                        <Pressable
-                          onPress={() => handleApprove(r)}
-                          disabled={decidingId === r.id}
-                          className="rounded-lg px-4 py-2"
-                          style={{ backgroundColor: colors.primary, opacity: decidingId === r.id ? 0.6 : 1 }}
-                        >
-                          <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
-                            Approve ${Number(r.amount_requested).toFixed(2)}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleDeny(r)}
-                          disabled={decidingId === r.id}
-                          className="rounded-lg border border-stone-300 px-4 py-2"
-                        >
-                          <Text style={{ fontFamily: fonts.sansMedium, color: "#78716c", fontSize: 13 }}>Deny</Text>
-                        </Pressable>
-                      </View>
-                    </View>
+                    <ApprovalRow
+                      key={r.id}
+                      request={r}
+                      busy={decidingId === r.id}
+                      onApprove={() => handleApprove(r)}
+                      onDeny={() => handleDeny(r)}
+                    />
                   ))
                 )}
-              </View>
+              </ExpandableCard>
             ) : null}
 
-            <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-              Request a custom amount
-            </Text>
-            {closed ? (
-              <Text className="mb-6 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                This pay period is closed — new requests will apply to the next open period.
-              </Text>
-            ) : (
-              <View ref={requestCardRef} className="mb-8 max-w-xl rounded-2xl border border-stone-200 p-5">
-                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                  Description
-                </Text>
-                <TextInput
-                  value={description}
-                  onChangeText={setDescription}
-                  onFocus={() => scrollFieldIntoView(requestCardRef.current)}
-                  placeholder="e.g. CPR training reimbursement"
-                  className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
-                  style={{ fontFamily: fonts.sans }}
-                />
-                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                  Amount ($)
-                </Text>
-                <TextInput
-                  value={amount}
-                  onChangeText={setAmount}
-                  onFocus={() => scrollFieldIntoView(requestCardRef.current)}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                  inputAccessoryViewID={NUMERIC_DONE_ID}
-                  className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
-                  style={{ fontFamily: fonts.sans }}
-                />
-                <Pressable
-                  onPress={handleSubmit}
-                  disabled={submitting}
-                  className="items-center rounded-lg px-5 py-3"
-                  style={{ backgroundColor: colors.primary, opacity: submitting ? 0.6 : 1 }}
-                >
-                  <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                    {submitting ? "Submitting…" : "Submit request"}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
+            <ExpandableCard
+              title="Your pending requests"
+              count={myPending.length}
+              tone="attention"
+              open={isOpen("pending")}
+              onToggle={() => toggle("pending")}
+            >
+              {myPending.length === 0 ? (
+                <EmptyLine>Nothing waiting on an admin right now.</EmptyLine>
+              ) : (
+                myPending.map((r) => <OwnRequestRow key={r.id} request={r} onCancel={() => handleCancel(r.id)} />)
+              )}
+            </ExpandableCard>
 
-            <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-              Your requests
-            </Text>
-            {ownRequests.length === 0 ? (
-              <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                No requests yet — submit one above when you have a custom payroll item.
-              </Text>
-            ) : (
-              ownRequests.map((r) => (
-                <View key={r.id} className="mb-2 max-w-xl flex-row items-start justify-between rounded-xl border border-stone-200 p-4">
-                  <View className="flex-1 pr-3">
-                    <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{r.description}</Text>
-                    <Text className="mt-0.5 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                      Requested {formatDateMDY(r.created_at?.slice(0, 10))} · ${Number(r.amount_requested).toFixed(2)}
-                      {r.status === "approved" ? ` · Paid $${Number(r.approved_amount).toFixed(2)}` : ""}
-                    </Text>
-                    {r.admin_notes ? (
-                      <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                        Note: {r.admin_notes}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View className="items-end gap-1.5">
-                    <StatusPill status={r.status} />
-                    {r.status === "pending" ? (
-                      <Pressable onPress={() => handleCancel(r.id)}>
-                        <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                          Cancel
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                </View>
-              ))
-            )}
+            <ExpandableCard
+              title="Approved"
+              count={myApproved.length}
+              tone="done"
+              subtitle="Already added to your pay"
+              open={isOpen("approved")}
+              onToggle={() => toggle("approved")}
+            >
+              {myApproved.length === 0 ? (
+                <EmptyLine>Nothing approved yet.</EmptyLine>
+              ) : (
+                myApproved.map((r) => <OwnRequestRow key={r.id} request={r} />)
+              )}
+            </ExpandableCard>
+
+            {myDenied.length > 0 ? (
+              <ExpandableCard title="Denied" count={myDenied.length} open={isOpen("denied")} onToggle={() => toggle("denied")}>
+                {myDenied.map((r) => (
+                  <OwnRequestRow key={r.id} request={r} />
+                ))}
+              </ExpandableCard>
+            ) : null}
           </>
         )}
       </ScrollView>

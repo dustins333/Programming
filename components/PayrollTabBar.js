@@ -15,7 +15,10 @@ const ALL_TABS = [
   { key: "entries", label: "My Entries", href: "/(coach)/payroll/entries" },
   { key: "requests", label: "Requests", href: "/(coach)/payroll/requests" },
   { key: "nutrition", label: "1:1 Nutrition", href: "/(coach)/payroll/nutrition", permission: "can_view_nutrition" },
-  { key: "report", label: "Report", href: "/(coach)/payroll/report" },
+  // Route stays /payroll/report — only the label changed, per direct ask.
+  // Admin View's own all-employee Report tab is a different thing and keeps
+  // its name.
+  { key: "report", label: "Pay Stubs", href: "/(coach)/payroll/report" },
 ];
 
 function stripGroups(href) {

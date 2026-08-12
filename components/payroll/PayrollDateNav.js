@@ -10,12 +10,13 @@ import { formatDateMDY } from "../../lib/formatDate";
 import { addDays } from "../../lib/boiseDate";
 import { PayrollDatePicker } from "./PayrollDatePicker";
 
-export function PayrollDateNav({ selectedDate, onSelectDate, periodStart, periodEnd, datesWithEntries }) {
+export function PayrollDateNav({ selectedDate, onSelectDate, periodStart, periodEnd, datesWithEntries, submittedDates }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const canGoPrev = selectedDate > periodStart;
   const canGoNext = selectedDate < periodEnd;
   const hasEntriesToday = datesWithEntries.has(selectedDate);
+  const submittedToday = submittedDates?.has(selectedDate) ?? false;
 
   return (
     <View className="mb-6 items-center">
@@ -33,10 +34,19 @@ export function PayrollDateNav({ selectedDate, onSelectDate, periodStart, period
         <Pressable
           onPress={() => setPickerOpen(true)}
           className="items-center justify-center rounded-2xl"
-          style={{ width: 150, height: 72, backgroundColor: "white", borderWidth: hasEntriesToday ? 2 : 1, borderColor: hasEntriesToday ? "#4d6142" : "#ece7e1" }}
+          style={{ width: 150, height: 72, backgroundColor: "white", borderWidth: submittedToday ? 2 : 1, borderColor: submittedToday ? "#4d6142" : "#ece7e1" }}
         >
           <Ionicons name="calendar-outline" size={14} color="#a8a29e" style={{ marginBottom: 3 }} />
           <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>{formatDateMDY(selectedDate)}</Text>
+          {submittedToday ? (
+            <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sansMedium, color: "#4d6142" }}>
+              Submitted
+            </Text>
+          ) : hasEntriesToday ? (
+            <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
+              Not submitted
+            </Text>
+          ) : null}
         </Pressable>
 
         <Pressable
