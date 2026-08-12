@@ -1727,9 +1727,8 @@ at all).
 **Migration `0054_spc_tempo.sql` — additive, nullable, no backfill.** 0016
 deliberately left tempo off SPC ("different program families"), but that
 reasoning eroded from both ends: 0047 gave group a `rest` column, and the v2
-handoff's session read-out shows tempo on an SPC lift explicitly. **The SPC
-builder writes this column, so it must be run before tempo works there** —
-everything else on the screen is unaffected.
+handoff's session read-out shows tempo on an SPC lift explicitly. **Run and
+verified live this session.**
 
 **Also found**: `updateTemplateWarmup` was imported by the template web builder
 but never exported from `lib/programming/templates.js`. It resolved to
@@ -1831,7 +1830,7 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0051_payroll_day_submissions.sql` — **run**, confirmed live 2026-08-11 (columns, both FKs, the `unique (user_id, entry_date)` the upsert's `onConflict` depends on, all 4 RLS policies, grants, and a real REST call returning `200 []` rather than PGRST205, `NOTIFY pgrst, 'reload schema'` sent). Adds `payroll.day_submissions` — one row per (coach, date) recording that the coach tapped Submit for that day on the payroll entry screen. See "Payroll entry: day-level submit" above for why it's deliberately leaner than `payroll.finalizations`.
 - `0052_workout_edit_tracking.sql` — **run**, confirmed live 2026-08-12 (all six triggers verified in `pg_trigger`, and a rolled-back test UPDATE confirmed `updated_at` moves). Adds `last_edited_by` to `group_workouts`/`spc_workouts` plus BEFORE-UPDATE stamping and AFTER-INSERT/UPDATE/DELETE parent-touch triggers on the four content child tables. Backs the coach-web launchpad's resume card and the grid's "you were here" — see the coach web v2 section above for why this is triggers rather than app-side writes, and why there's no backfill.
 - `0053_exercise_merge_dismissals.sql` — **run**, confirmed live 2026-08-12. Adds `programming.exercise_merge_dismissals` (pairs a coach has deliberately kept separate, canonical id order, reversible) behind the same `core.can_access_exercise_library()` gate as managing the library itself.
-- `0054_spc_tempo.sql` — **NOT YET RUN as of 2026-08-12.** Adds `tempo` (text, nullable) to `programming.spc_workout_exercises`. Additive, no backfill, nothing depends on it existing except the SPC session builder's own tempo field and the session read-out's tempo line. See the coach web v2 phase 3 section above for why 0016's "SPC doesn't get tempo" decision was reversed.
+- `0054_spc_tempo.sql` — **run**, confirmed live 2026-08-12 (column verified by direct query, `NOTIFY pgrst, 'reload schema'` sent). Adds `tempo` (text, nullable) to `programming.spc_workout_exercises`. See the coach web v2 phase 3 section above for why 0016's "SPC doesn't get tempo" decision was reversed.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.
