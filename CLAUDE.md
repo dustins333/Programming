@@ -848,7 +848,7 @@ Direct follow-up to the "Payroll module" build above — confirmed via Terra cli
 
 **"My Entries" rebuilt as a date-scoped tile grid**, replacing the old single flat form entirely (`app/(coach)/payroll/entries.js` is the new screen; `app/(coach)/payroll/index.js` — the old My Entries route — is repurposed as the admin mode picker below, so this isn't a rename, the two files' jobs diverged). A centered date tile at the top (MM-DD-YYYY) flanked by day-step arrows, tap the tile to open a bounded month calendar (forked from `components/nutrition/DateCalendarPicker.js`'s grid math rather than overloading its assign/unassign semantics — this one's semantics are "select an in-range date and close," with dates outside the current pay period disabled and a dot marking dates that already have entries) — dates are freely reopenable, no locking, no page-level Submit. Below: Group/Programs Written are plain +/- counters; Welcome/Strategy use the same counter but tapping the checkmark opens a names popup with N boxes (N = the counter's value); Admin/Ops Hours open an hour:minute stepper (15-minute steps, converted to decimal on save); SPC and Other are independently **repeatable per date** — each Save creates a new row rather than overwriting one, with a small numbered badge (top-right of the tile) opening a list of everything logged so far to review/edit; Custom stays single-per-date.
 
-**Every tile's checkmark is the save action itself** — hollow while a value is uncommitted, tapping it (or, for popup-driven tiles, the popup's own Save button) commits immediately and fills it solid. No bulk "Submit" anywhere; this is what makes free date-reopening possible without a half-saved-state concept. **Data model, and why zero migration was needed for the repeatable SPC/Other case**: `payroll.pay_entries` already allowed one row to hold just the SPC or Other fields with everything else null, and `computeTotals` already summed across however many rows share a date — so "log a second SPC session for the same day" is simply a second row, no schema change, just a different UI flow creating multiple rows instead of one. New `lib/payroll/dayEntries.js` (`upsertCoreEntryFields`/`createSpcSession`/`createOtherItem`/`upsertCustomForDate`, all thin wrappers over the existing `createEntry`/`updateEntry`) and `lib/payroll/calc.js`'s new `partitionDayEntries(rows)` (splits one date's full row set into `{core, spcSessions, otherItems, custom}` by elimination — `core` is whichever row has null `spc_session`/`other_type`/`custom_amt`) are the only new data-access surface this needed. One real schema addition: `strategy_notes text` on `pay_entries`, mirroring the already-existing-but-previously-unused `welcome_notes` column — both now actually get written (newline-joined names) by the Welcome/Strategy popups.
+**Every tile's checkmark is the save action itself** — hollow while a value is uncommitted, tapping it (or, for popup-driven tiles, the popup's own Save button) commits immediately and fills it solid. No bulk "Submit" anywhere; this is what makes free date-reopening possible without a half-saved-state concept. **Superseded 2026-08-11** — the checkmark is now a pure status indicator and a single sticky Submit button per day fills them all in; `upsertCustomForDate` and the Custom tile are gone too. See "Payroll entry: day-level submit, custom pay moved entirely to Requests" below. The `pay_entries`/`partitionDayEntries` data model described in the rest of this paragraph is unchanged. **Data model, and why zero migration was needed for the repeatable SPC/Other case**: `payroll.pay_entries` already allowed one row to hold just the SPC or Other fields with everything else null, and `computeTotals` already summed across however many rows share a date — so "log a second SPC session for the same day" is simply a second row, no schema change, just a different UI flow creating multiple rows instead of one. New `lib/payroll/dayEntries.js` (`upsertCoreEntryFields`/`createSpcSession`/`createOtherItem`/`upsertCustomForDate`, all thin wrappers over the existing `createEntry`/`updateEntry`) and `lib/payroll/calc.js`'s new `partitionDayEntries(rows)` (splits one date's full row set into `{core, spcSessions, otherItems, custom}` by elimination — `core` is whichever row has null `spc_session`/`other_type`/`custom_amt`) are the only new data-access surface this needed. One real schema addition: `strategy_notes text` on `pay_entries`, mirroring the already-existing-but-previously-unused `welcome_notes` column — both now actually get written (newline-joined names) by the Welcome/Strategy popups.
 
 **Visual**: `lib/theme.js` gained `colors.canvas = "#faf8f6"` (a real token now, not just an inline hex repeated in bottom sheets) as the background on every payroll screen. Tiles are soft peach (`#fdf6f2`/`#f0ddd2` border) while unconfirmed, sage (`#eef1e7`/`#4d6142` border) once confirmed — reusing the app's own existing peach-card and `statusColors.onTrack` tones, not new colors, per explicit "soft, matching" feedback. The checkmark itself is the exact round olive icon already shipped on My Fitness's exercise-completion cards, repositioned to half-overlap the tile's bottom edge — this needed its own small white circular backdrop behind the icon (`components/payroll/PayrollTile.js`'s `TileCheckmark`), or the tile's own border line visibly cut straight through the middle of it, caught and fixed from direct feedback ("looks ugly... needs to be behind the checkmark"). Finalize was originally a small link in the header; moved to a full-width button at the bottom of the tile grid per direct ask ("its weird where it is").
 
@@ -896,7 +896,7 @@ Real click-through feedback on the payroll redesign from the section above, plus
 - **SPC (and Other) sessions are independently repeatable per date with no +/- counter to "delete by decrementing"** — there was genuinely no way to remove one. `EntryListPopup` (the badge-count "logged so far" list, shared by SPC and Other) gained a trash icon per row wired to the pre-existing-but-unused `deleteEntry`/`deleteDayEntry` (`lib/payroll/entries.js`/`dayEntries.js` — the function existed, nothing called it), behind a new `confirmDeletePayrollEntry()` in `lib/confirmDialog.js`. Also added a lighter "Delete this session/item" text button directly inside `SpcSessionPopup`/`OtherItemPopup`'s own edit view (new `SheetDeleteButton` in `PayrollBottomSheet.js`) so deleting doesn't require backing out to the list first.
 - **Programs Written now matches Welcome/Strategy's names-popup pattern** — its checkmark used to just save the raw count with no names captured at all. Now opens the same `NamesListPopup` (one name box per unit counted), written to `pay_entries.program_notes` — a column that already existed in the `0036` schema (mirroring `welcome_notes`/`strategy_notes`) but was dead/unused until now.
 - **"Other" line items: removed the pay rate from the type dropdown** (`PayrollOtherRow.js` — both the web `<select>` and native `NativePickerField` options used to show `"Type ($X.XX/unit)"`) per direct ask: a staff member can already see rates on their own Report tab, repeating them on the entry form was noise. **New per-type Quantity/Notes toggles** — migration `0045_other_rate_field_config.sql` (**not yet run**) adds `payroll.other_rates.has_qty`/`has_notes` (both default `true`, so every existing type keeps behaving exactly as before until an admin explicitly turns one off). Editable from two new inline checkboxes per row on Payroll → Admin → Settings' Other section (`FieldToggle` in `admin/settings.js`). `OtherItemPopup` now reads the matching `other_rates` row (passed in as a new `config` prop from `entries.js`, matched by `other_type`) and conditionally renders the Quantity field / Notes field — a type with `has_qty: false` always saves `qty: 1` without ever showing the field.
-- **Custom tile's empty-state copy**: "Tap to add a custom amount" → "Tap to add a custom payroll request", per direct ask.
+- **Custom tile's empty-state copy**: "Tap to add a custom amount" → "Tap to add a custom payroll request", per direct ask. (**Superseded 2026-08-11** — the Custom tile is deleted entirely; custom pay lives only on Requests now.)
 - **Real functional bug: the "Finalize" button on My Entries actually finalized (locked) the pay period** — Terra's own words, "I was thinking that button was more of a save button." Every tile already autosaves the instant its own checkmark is tapped, so there was never anything left to "save" at the page level — removed the button and its `FinalizeModal` entirely from `entries.js` (replaced with a plain line pointing at the Report tab), leaving Finalize exclusively on the Report page's own already-existing Finalize button (`report.js`/`report.web.js`, unchanged) — which is what Terra explicitly wants: a coach has to look at the full period breakdown before finalizing, not just tap a button from the daily entry screen. **Deliberately did not add** the page-level "turns the whole background muted olive" save-confirmation Terra floated mid-message — she hedged it herself ("that might look weird though") and every tile already gives its own per-item olive-border/checkmark confirmation the instant it saves, which already covers "some sort of visual cue that says we got it." Worth revisiting if she still wants a page-wide cue after seeing this.
 - **Unrelated but caught in the same pass: the "Messages" nav item flashed in and then disappeared on every single page load whenever an admin had messaging turned off.** Root cause: `CoachShell.js`'s sidebar/drawer and `app/(coach)/more.js`'s native row both defaulted `messagingEnabled` to `true` (intentionally, to avoid a flash for the common enabled case) and flipped to the real value once `getMessagingSettings()` resolved — but since `CoachShell` remounts fresh on every web page navigation, that meant the nav item genuinely appeared then vanished on every page load for anyone with it off, exactly as reported ("driving me nuts"). Fixed by defaulting both to `false` instead — same "hidden until confirmed" convention `FloatingMessageBubble`/`CoachMessageBubble`/My Week's own header chat icon already use. The one-off `app/(coach)/messages/index.js` route (shown only if the nav item's own link is followed, or a stale bookmark) still defaults `true` for its "off" message — left as-is since it's not reachable via a hidden nav item and wasn't the reported symptom.
 
@@ -1396,6 +1396,100 @@ working in the real app.**
 *visibly* select at all. If that specific symptom comes back, it's a different problem —
 get browser and device before digging, since none of the above would cause it.
 
+## Payroll entry: day-level submit, custom pay moved entirely to Requests (2026-08-11)
+
+Five asks from real use of the tile-based entry screen built in the "Payroll redesign"
+section above. The rate formula, `payroll` schema and historical import are untouched;
+this is the entry/requests UI and one new table.
+
+**The checkmark stopped being a save button.** It used to be per-tile: tap the checkmark,
+that tile writes its row. Now data autosaves as it's entered (counter tiles debounce
+~600ms after the last +/- tap; the popup-driven tiles still save on their own Save), and
+**every checkmark stays hollow until one sticky Submit button at the bottom of the page
+fills them all in at once**. The three states are now uniform across the whole screen:
+`none` = nothing entered, `hollow` = entered and saved, `solid` = the day has been
+submitted. Editing anything on a day that was already submitted clears the submission
+again, so a solid checkmark always describes exactly what's saved *right now* rather than
+"something here was submitted at some point."
+
+**New `payroll.day_submissions`** (migration `0051`, **run and verified live** — table,
+both FKs, `unique (user_id, entry_date)`, all 4 policies, grants, and a real REST call
+returning `200 []` rather than PGRST205). One row per (coach, date); its presence is the
+whole signal. Deliberately leaner than the sibling `payroll.finalizations` despite looking
+similar: no `staff_name`/`staff_email` snapshot and `on delete cascade` rather than
+`on delete set null` (0036's convention #3 exists because pay entries/requests/
+finalizations are permanent audit data — a day submission is transient entry-screen state
+that gets cleared again on the next edit, and `finalizations` remains the actual audit
+record), and coaches write it directly rather than through a security-definer RPC
+(`finalizations` needs one so a coach can't set their own `reopened_at`; this table has no
+column a coach shouldn't be able to set). Guarded on closed periods only, not on
+finalization — the grid is already hidden once a coach finalizes.
+
+**The counter autosave is the fiddly part, and the traps are worth knowing before touching
+it.** `lib/payroll/daySubmissions.js` + `entries.js`:
+- The debounce effect **never cancels its timer in a cleanup** — a cleanup fires on every
+  dep change, which would silently drop a change rather than save it. The scheduled write
+  carries its own date/period/core-row, so it still lands on the right day even if the
+  screen has moved on; a separate effect flushes the previous day's pending write when the
+  date changes, and `useFocusEffect`'s cleanup flushes on leaving the screen.
+- `counterDate` is **state, not a ref** — on the render right after a date change the four
+  counters still hold the *previous* date's values while `partition.core` is already the
+  new date's, so the diff is briefly bogus. A ref set by the resync effect flips too early
+  (same commit) to guard against that; state flips in the same batch as the counters do.
+- `coreRowRef` tracks the freshest core row outside render state, so a debounced write
+  landing between renders can't read a stale "no core row yet" and insert a **second** core
+  row for the same date. Two core rows would double-count that day's pay, since
+  `computeTotals` sums every row.
+- `persistDay` deliberately rethrows rather than toasting — every popup calling into it
+  already reports its own failure and stays open with the user's input intact. The two
+  non-popup callers add their own catch.
+
+**Other changes, all from the same feedback round:**
+- SPC caption is **"Add another session"**, not "N sessions logged" — the badge already
+  carries the count, and repeating it buried the one thing that wasn't obvious: a day can
+  hold more than one. Same treatment on the Other row ("Pick another type above to add
+  another"), whose confirm control became an explicit **Add button**, since the checkmark
+  can only mean one thing on this screen now.
+- The names popups (Welcome/Strategy/Programs Written) moved off the checkmark onto a
+  **"+ Add names"** line that also shows what's already entered — a better affordance than
+  the checkmark ever was, since it says what it opens.
+- **New `components/payroll/DaySubmittedCelebration.js`** — spring-in checkmark, 18
+  brand-coloured confetti pieces, a rotating message ("Locked in.", "That's in the books.",
+  …), the date and the day's total, auto-dismissing after 2.6s. Built on react-native's own
+  `Animated` (this app's first use of it — the only other animation, `ZoomableImage`, uses
+  reanimated); each confetti piece owns its own `Animated.Value` via a child component
+  since hooks can't be created in a loop. Per the explicit ask: payroll's whole worry is
+  not being sure your hours landed, and a toast wasn't enough of an answer.
+- **Custom pay is off the entry screen entirely** — `PayrollCustomRow.js`,
+  `CustomEntryPopup.js` and `upsertCustomForDate` are deleted. Requests is now its only
+  home, so a custom amount and the money it turns into can't be entered in two places.
+  Requests rebuilt as phone-friendly collapsible cards (new
+  `components/payroll/ExpandableCard.js`): New request / Awaiting your approval (admin) /
+  Your pending / Approved / Denied, each with a count pill, defaulting open only where
+  there's something to see. `hasDayData` on the entry screen counts only what its own tiles
+  collect, so an approved request landing on today's date doesn't light up "Submit this
+  day" for a day the coach logged nothing on.
+- **"Report" tab relabelled "Pay Stubs"** — label only, route stays `/payroll/report`.
+  Admin View's own all-employee Report tab keeps its name.
+
+**Two layout bugs caught by screenshotting at phone width, which the clean bundle did
+not**: tiles with a caption sat lower than tiles without one, so labels and counters
+didn't line up across a row (fixed with a shared `TileLayout` pinning label to the top,
+control centred, caption to a fixed-height bottom slot — same fix as My Week's
+`SessionBubble`; `PayrollTile` also now always reserves the checkmark's `paddingBottom`
+whether or not it draws one); and "Add another session" measured **114px in a 113.5px
+box**, truncating by half a pixel — fixed by tightening tile horizontal padding from 16 to
+12 rather than shortening the copy. Both were found by measuring real
+`getBoundingClientRect()`/`scrollWidth` in the browser, not by eyeballing the screenshot.
+
+**Not verified**: the confetti actually moving. The preview pane runs hidden, so
+`requestAnimationFrame` never fires and every animation sits frozen at frame 0 — confirmed
+the 18 pieces render with the right colours and that the interpolations are wired up, but
+not that they fall. (Worth remembering generally: **any animation is unverifiable through
+the Browser pane for this reason** — the card's own spring also appeared "stuck
+mid-animation" across several screenshots before settling.) Also unverified: the
+autosave/submit round-trip against real data, and the Requests page with real requests.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -1441,6 +1535,7 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0045_other_rate_field_config.sql` — **run**, confirmed live via direct schema query 2026-08-09. Adds `payroll.other_rates.has_qty`/`has_notes` (both default `true`) — per-type admin toggles for which fields show on the "Other" entry popup. See "Payroll polish pass" above.
 - `0046_gusto_employee_mapping.sql` — **run**, confirmed live 2026-08-09. Adds `core.users.gusto_employee_uuid` (nullable, unique) — the mapping the `payroll-to-gusto` Claude skill reads; not used by app code.
 - `0050_nutrition_plan_phases.sql` — **run**, confirmed live 2026-08-11 (both tables + all four RLS policies verified by direct query, `NOTIFY pgrst, 'reload schema'` sent). Adds `programming.nutrition_plan_phases` + `nutrition_plan_phase_items` — the coach's undated, drag-ordered "what we're working on" map for a nutrition client, also shown to the member. Items carry no `user_id` of their own; the member read policy resolves ownership through the parent phase. See the section above. (`0048`/`0049` belong to the parallel exercise-library/block-length work, not this pass.)
+- `0051_payroll_day_submissions.sql` — **run**, confirmed live 2026-08-11 (columns, both FKs, the `unique (user_id, entry_date)` the upsert's `onConflict` depends on, all 4 RLS policies, grants, and a real REST call returning `200 []` rather than PGRST205, `NOTIFY pgrst, 'reload schema'` sent). Adds `payroll.day_submissions` — one row per (coach, date) recording that the coach tapped Submit for that day on the payroll entry screen. See "Payroll entry: day-level submit" above for why it's deliberately leaner than `payroll.finalizations`.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.
