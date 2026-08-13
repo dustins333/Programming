@@ -29,6 +29,10 @@ export default function BlockHistory() {
   const [deletingId, setDeletingId] = useState(null);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const [rows, programs] = await Promise.all([listBlocks(), listGroupPrograms()]);
       const filtered = rows.filter((b) => b.group_program_id === programId).sort((a, b) => (a.block_start_date < b.block_start_date ? 1 : -1));

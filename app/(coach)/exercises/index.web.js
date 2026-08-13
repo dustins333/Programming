@@ -10,6 +10,7 @@ import {
   setExerciseActive,
   getExerciseUsageCount,
   MOVEMENT_PATTERNS,
+  MUSCLE_GROUPS,
   parentMuscleGroup,
   muscleGroupLabel,
 } from "../../../lib/programming/exercises";
@@ -245,6 +246,20 @@ export default function ExercisesWeb() {
 
   const warmupCount = useMemo(() => active.filter((e) => (e.type ?? "lift") === "warmup").length, [active]);
 
+  // The filter.kind === "muscle" branch below has always existed but nothing
+  // ever emitted it, so the desktop build — where the library is actually
+  // curated — had no muscle-group filter while the phone did.
+  const muscleCounts = useMemo(() => {
+    const counts = {};
+    for (const e of active) {
+      if ((e.type ?? "lift") === "warmup") continue;
+      for (const g of new Set((e.muscle_group ?? []).map(parentMuscleGroup).filter(Boolean))) {
+        counts[g] = (counts[g] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [active]);
+
   const filtered = useMemo(() => {
     if (!exercises) return [];
     return exercises.filter((ex) => {
@@ -389,6 +404,16 @@ export default function ExercisesWeb() {
               <Chip label="Warm-up" count={warmupCount} active={is("warmup")} onPress={() => set("warmup")} />
             ) : null}
             <View style={{ width: 1, height: 24, backgroundColor: CARD_BORDER, marginHorizontal: 4 }} />
+            {MUSCLE_GROUPS.filter((g) => muscleCounts[g]).map((g) => (
+              <Chip
+                key={g}
+                label={muscleGroupLabel(g)}
+                count={muscleCounts[g]}
+                active={is("muscle", g)}
+                onPress={() => set("muscle", g)}
+              />
+            ))}
+            <View style={{ width: 1, height: 24, backgroundColor: CARD_BORDER, marginHorizontal: 4 }} />
             <Chip label="No video" count={noVideoCount} active={is("novideo")} onPress={() => set("novideo")} tone="warn" />
             <Chip label="Never used" count={neverUsedCount} active={is("neverused")} onPress={() => set("neverused")} tone="warn" />
             <Chip label="Archived" active={is("archived")} onPress={() => set("archived")} />
@@ -457,6 +482,11 @@ export default function ExercisesWeb() {
           initialExercise={editing}
           allExercises={exercises}
           usage={usage}
+          // "Use that one" abandons the new exercise and reopens the form
+          // on the existing one — previously this affordance rendered only
+          // if a caller passed the handler, and none did, so a coach warned
+          // about a duplicate could only keep both or cancel.
+          onUseExisting={(match) => setEditing(match)}
           onClose={() => setModalVisible(false)}
           onSubmit={handleSubmit}
         />

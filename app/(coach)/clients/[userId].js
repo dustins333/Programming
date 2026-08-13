@@ -43,7 +43,7 @@ import { getClientNutritionSnapshot } from "../../../lib/nutrition/clientSnapsho
 import { getExerciseStats } from "../../../lib/programming/exerciseStats";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../lib/toast";
-import { confirmRemoveOneOff, confirmArchiveNutritionClient, confirmDelete } from "../../../lib/confirmDialog";
+import { confirmRemoveOneOff, confirmArchiveNutritionClient, confirmDelete, confirmRemoveGroupMembership } from "../../../lib/confirmDialog";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { todayInBoise, addDays, dayOfWeekInBoise } from "../../../lib/boiseDate";
 import { fonts, colors } from "../../../lib/theme";
@@ -53,8 +53,11 @@ const NUTRITION_STATUS_LABELS = { active: "Active", paused: "Paused", archived: 
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
 const isWeb = Platform.OS === "web";
 
+// (name ?? "") — a core.users row linked by an admin can genuinely have a
+// null name until that person registers, and an unguarded .trim() here
+// white-screened the whole row/page.
 function initials(name) {
-  return name
+  return (name ?? "")
     .trim()
     .split(/\s+/)
     .slice(0, 2)
@@ -312,6 +315,10 @@ export default function ClientProfile() {
   }, [userId]);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       // SPC and Nutrition are fetched via allSettled, isolated from the core
       // programming fetches — a failure in one module (e.g. an unrun
@@ -460,7 +467,8 @@ export default function ClientProfile() {
   // a specialty program), so this toggles one specific program's
   // membership on/off rather than picking a single mutually-exclusive
   // program.
-  const handleToggleMembership = async (groupProgramId, enrolled) => {
+  const handleToggleMembership = async (groupProgramId, enrolled, programName) => {
+    if (!enrolled && !(await confirmRemoveGroupMembership(programName))) return;
     try {
       if (enrolled) {
         await addGroupMembership(userId, groupProgramId);
@@ -879,7 +887,7 @@ export default function ClientProfile() {
                     <View className="flex-row items-center gap-2.5">
                       <Switch
                         value={enrolled}
-                        onValueChange={(v) => handleToggleMembership(program.id, v)}
+                        onValueChange={(v) => handleToggleMembership(program.id, v, program.name)}
                         trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
                         thumbColor="#ffffff"
                       />

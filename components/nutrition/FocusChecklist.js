@@ -10,6 +10,7 @@ import {
 import { SortableList } from "../SortableList";
 import { fonts, colors } from "../../lib/theme";
 import { toastError } from "../../lib/toast";
+import { confirmRemoveFocusItem } from "../../lib/confirmDialog";
 
 function FocusItemRow({ item, controls, onChanged }) {
   const [editing, setEditing] = useState(false);
@@ -48,6 +49,7 @@ function FocusItemRow({ item, controls, onChanged }) {
   };
 
   const handleDelete = async () => {
+    if (!(await confirmRemoveFocusItem(item.text))) return;
     setBusy(true);
     try {
       await deleteFocusItem(item.id);

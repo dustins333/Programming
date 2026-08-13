@@ -485,7 +485,12 @@ export default function BlocksWeb() {
       const w = allVisibleWorkouts.find((x) => x.id === id);
       return w && w.status !== "published";
     });
-    if (ids.length === 0) return;
+    if (ids.length === 0) {
+      // Silent return read as "the button is broken" — say why nothing
+      // happened rather than nothing at all.
+      toastSuccess("Those sessions are already published");
+      return;
+    }
     if (!(await confirmBulkPublish(ids.length))) return;
     setBusy(true);
     try {

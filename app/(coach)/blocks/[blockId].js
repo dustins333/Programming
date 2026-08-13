@@ -31,6 +31,10 @@ export default function BlockDetail() {
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const [blockRow, workoutRows] = await Promise.all([getBlock(blockId), listWorkoutsForBlock(blockId)]);
       setBlock(blockRow);

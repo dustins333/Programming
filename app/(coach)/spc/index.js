@@ -28,8 +28,15 @@ export default function SpcDashboard() {
   }, [params.status]);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
-      await checkAndAutoDraft();
+      // .catch, matching the web sibling: auto-drafting is a background
+      // convenience and a failed write (RLS, an unrun migration) must not
+      // take the whole roster down with it.
+      await checkAndAutoDraft().catch(() => {});
       setRoster(await getSpcRoster());
     } catch (err) {
       setLoadError(err.message ?? String(err));

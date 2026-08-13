@@ -11,7 +11,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kovastrength.mobile",
-      "associatedDomains": ["applinks:app.kovastrength.com"],
+      "associatedDomains": [
+        "applinks:app.kovastrength.com"
+      ],
       "infoPlist": {
         "UIApplicationSceneManifest": {
           "UIApplicationSupportsMultipleScenes": false
@@ -38,11 +40,19 @@
       "expo-status-bar",
       "expo-secure-store",
       "expo-font",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#f0ebe3"
+        }
+      ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#a46a57"
         }
       ],
@@ -60,6 +70,11 @@
         "projectId": "2f6a5da8-3f8c-4b8e-ab41-82dc26336219"
       }
     },
-    "owner": "kova-strength"
+    "owner": "kova-strength",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f0ebe3"
+    }
   }
 }

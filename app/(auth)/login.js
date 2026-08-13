@@ -23,13 +23,22 @@ export default function Login() {
     if (!email || !password) return;
     setErrorMessage(null);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      setErrorMessage(error.message);
-      return;
+    // try/finally, not a bare await: these calls normally resolve with an
+    // { error }, but a network failure (and anything going through
+    // functions.invoke) rejects instead — and setLoading(false) never ran,
+    // so the button spun forever with nothing on screen to explain it.
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+      router.replace("/");
+    } catch (err) {
+      setErrorMessage(err.message ?? String(err));
+    } finally {
+      setLoading(false);
     }
-    router.replace("/");
   };
 
   return (

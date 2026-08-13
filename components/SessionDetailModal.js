@@ -3,6 +3,7 @@ import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator, KeyboardAv
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 import { SessionLogger } from "./SessionLogger";
+import { KeyboardDoneButton } from "./KeyboardDoneButton";
 import { NativePickerField } from "./NativePickerField";
 import { todayInBoise, addDays, dayOfWeekInBoise } from "../lib/boiseDate";
 import { formatDateMDY } from "../lib/formatDate";
@@ -71,6 +72,8 @@ export function SessionDetailModal({
   completed,
   completedDateLabel,
   loading,
+  error,
+  onRetry,
   warmups,
   userId,
   datePerformed,
@@ -129,6 +132,17 @@ export function SessionDetailModal({
           {loading ? (
             <View className="items-center py-8">
               <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : error ? (
+            <View className="items-center py-6">
+              <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
+                Couldn't load this session.
+              </Text>
+              {onRetry ? (
+                <Pressable onPress={onRetry} hitSlop={8}>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Try again</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -225,6 +239,12 @@ export function SessionDetailModal({
         </Pressable>
       </Pressable>
       </KeyboardAvoidingView>
+      {/* Its own copy, per KeyboardDoneButton's own rule: a floating overlay
+          can't cross a native Modal's window boundary, so the one mounted at
+          the app root never reaches the reps/weight fields in here. They're
+          decimal-pad, which has no Return key on iOS — without this there is
+          no way to dismiss the keyboard except guessing to tap outside. */}
+      <KeyboardDoneButton />
     </Modal>
   );
 }

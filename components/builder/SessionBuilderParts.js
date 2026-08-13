@@ -327,6 +327,10 @@ export function SortableLift({
   onRemove,
   onToggleSuperset,
   supersetLetter,
+  // True when the lift directly below is the other half of this superset.
+  // Was passed by the group builder and never destructured here, so the
+  // "these two are joined" cue never rendered at all.
+  linkedToNext = false,
   showTempo = true,
   showSuperset = true,
 }) {
@@ -463,6 +467,15 @@ export function SortableLift({
           </View>
         ) : null}
       </View>
+      {/* Visual joiner between the two halves of a superset. Rendered
+          outside the card so it can't be clipped by its overflow:hidden,
+          and only when both are collapsed — an expanded card already has
+          its own margin and shadow separating it. */}
+      {linkedToNext && !expanded ? (
+        <View style={{ height: 8, justifyContent: "center", paddingLeft: 18 }}>
+          <View style={{ width: 2, height: 8, backgroundColor: colors.primary, borderRadius: 1 }} />
+        </View>
+      ) : null}
     </div>
   );
 }

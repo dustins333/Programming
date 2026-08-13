@@ -329,6 +329,11 @@ export default function Exercises() {
           initialExercise={editing}
           initialType={typeFilter}
           allExercises={exercises ?? []}
+          // "Use that one" abandons the new exercise and reopens the form
+          // on the existing one — previously this affordance rendered only
+          // if a caller passed the handler, and none did, so a coach warned
+          // about a duplicate could only keep both or cancel.
+          onUseExisting={(match) => setEditing(match)}
           onClose={() => setModalVisible(false)}
           onSubmit={handleSubmit}
         />

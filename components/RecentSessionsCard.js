@@ -42,6 +42,9 @@ export function SessionRow({ userId, session, title, onOpenClient }) {
     }
     setOpen(true);
     if (logs) return;
+    // Cleared first so re-opening after a failed fetch retries cleanly
+    // rather than showing the stale error alongside freshly-loaded rows.
+    setLoadError(null);
     try {
       setLogs(await listLogsForDate(userId, session.date));
     } catch (err) {

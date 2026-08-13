@@ -6,7 +6,7 @@ import { fonts, colors } from "../lib/theme";
 // warmups/exercises into plain label/detail strings so this component
 // stays shape-agnostic between group's {sets, reps, tempo} and SPC's
 // per-week {sets, reps, rest} exercise rows.
-export function SessionPreviewModal({ visible, onClose, title, subtitle, loading, warmups, exercises, completed, onLogPress }) {
+export function SessionPreviewModal({ visible, onClose, title, subtitle, loading, error, onRetry, warmups, exercises, completed, onLogPress }) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable onPress={onClose} className="flex-1 items-center justify-center bg-black/40 px-4">
@@ -33,6 +33,19 @@ export function SessionPreviewModal({ visible, onClose, title, subtitle, loading
           {loading ? (
             <View className="items-center py-8">
               <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : error ? (
+            /* Without this the fetch failing left the spinner up forever and
+               the Log button hidden, so the backdrop was the only way out. */
+            <View className="items-center py-6">
+              <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
+                Couldn't load this session.
+              </Text>
+              {onRetry ? (
+                <Pressable onPress={onRetry} hitSlop={8}>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Try again</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : (
             <ScrollView>

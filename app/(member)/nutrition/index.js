@@ -31,6 +31,7 @@ import { toastError, toastSuccess } from "../../../lib/toast";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useScrollToKeyboard, useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 import { autofillSuppressedRef } from "../../../lib/webAutofillSuppression";
+import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
 const AUTOSAVE_DELAY_MS = 900;
 const CANVAS = "#faf8f6";
@@ -194,6 +195,10 @@ function FocusRow({ item, onChanged }) {
 }
 
 export default function NutritionToday() {
+  // Tabs keep this screen mounted, so a mount-only load never re-runs
+  // on a return visit — see lib/useRefreshOnFocus.js.
+  const focusKey = useRefreshOnFocus();
+
   const { profile } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -376,7 +381,7 @@ export default function NutritionToday() {
         setLastWeekWeight(null);
       }
     })();
-  }, [access.status, profile.id, selectedDate, retryKey]);
+  }, [access.status, profile.id, selectedDate, retryKey, focusKey]);
 
   useEffect(() => {
     if (!ready) return;

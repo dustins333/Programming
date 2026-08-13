@@ -43,6 +43,7 @@ export default function PlanSpcBlock() {
   const [sessionContent, setSessionContent] = useState({}); // workoutId -> { warmups, exerciseRows }
   const [modalWorkoutId, setModalWorkoutId] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState(null);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -94,12 +95,19 @@ export default function PlanSpcBlock() {
     setModalWorkoutId(workout.id);
     if (sessionContent[workout.id]) return;
     setModalLoading(true);
-    const [warmups, exerciseRows] = await Promise.all([listSpcWarmups(workout.id), listSpcWorkoutExercises(workout.id)]);
-    setSessionContent((prev) => ({
-      ...prev,
-      [workout.id]: { warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean), exerciseRows },
-    }));
-    setModalLoading(false);
+    setModalError(null);
+    try {
+      const [warmups, exerciseRows] = await Promise.all([listSpcWarmups(workout.id), listSpcWorkoutExercises(workout.id)]);
+      setSessionContent((prev) => ({
+        ...prev,
+        [workout.id]: { warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean), exerciseRows },
+      }));
+    } catch (err) {
+      // See plan-block.js — same permanent-spinner failure otherwise.
+      setModalError(err.message ?? String(err));
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const closeModal = () => setModalWorkoutId(null);
@@ -110,7 +118,11 @@ export default function PlanSpcBlock() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
       throw new Error("Enter the date as YYYY-MM-DD.");
     }
-    const completedAt = new Date(`${logDate}T12:00:00`).toISOString();
+    // 18:00Z, not device-local noon: parsing without a zone used the
+    // member's own timezone, so from UTC+7 or later a back-logged
+    // session was stored (and read back) on the wrong Boise day.
+    // 18:00Z is 12:00 MDT / 11:00 MST — mid-day in Boise either way.
+    const completedAt = new Date(`${logDate}T18:00:00Z`).toISOString();
     await finalizeSpcSession(profile.id, workout.id, workout.week_number, completedAt);
     setState((prev) => {
       if (prev.status !== "ready") return prev;
@@ -235,7 +247,9 @@ export default function PlanSpcBlock() {
         title={modalTitle}
         completed={!!modalCompletedAt}
         completedDateLabel={modalCompletedAt ? formatDateMDY(dateInBoise(new Date(modalCompletedAt))) : null}
-        loading={modalLoading || !modalRaw}
+        loading={modalLoading || (!modalError && !modalRaw)}
+        error={modalError}
+        onRetry={() => modalWorkout && openSession(modalWorkout)}
         warmups={modalRaw?.warmups}
         userId={profile.id}
         datePerformed={modalCompletedAt ? dateInBoise(new Date(modalCompletedAt)) : null}

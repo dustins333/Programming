@@ -12,15 +12,21 @@ export default function ResetPassword() {
   const handleReset = async () => {
     setErrorMessage(null);
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://app.kovastrength.com/set-password",
-    });
-    setLoading(false);
-    if (error) {
-      setErrorMessage(error.message);
-      return;
+    // See login.js — a rejection here used to leave the button spinning.
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: "https://app.kovastrength.com/set-password",
+      });
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+      setSent(true);
+    } catch (err) {
+      setErrorMessage(err.message ?? String(err));
+    } finally {
+      setLoading(false);
     }
-    setSent(true);
   };
 
   return (
@@ -71,6 +77,15 @@ export default function ResetPassword() {
                 Send reset link
               </Text>
             )}
+          </Pressable>
+          {/* The sent branch above already offers this; the entry branch had
+              no way out at all. (auth)/_layout.js is a bare <Slot/> with no
+              Stack and native runs headerShown:false, so there's no back
+              gesture either. */}
+          <Pressable onPress={() => router.replace("/login")} className="mt-6 items-center">
+            <Text className="text-sm" style={{ fontFamily: "Montserrat_600SemiBold", color: "#8a5140" }}>
+              ‹ Back to sign in
+            </Text>
           </Pressable>
         </>
       )}

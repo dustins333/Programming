@@ -6,6 +6,7 @@ import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bo
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listAllRates, updateCoreRate, updateSpcTier, updateOtherRate, createOtherRate } from "../../../../lib/payroll/rates";
 import { toastError, toastSuccess } from "../../../../lib/toast";
+import { confirmArchiveOtherRate } from "../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
 import { AdminPayrollTabBar } from "../../../../components/AdminPayrollTabBar";
@@ -145,6 +146,10 @@ export default function AdminPayrollSettings() {
   const occludedHeight = keyboardHeight > 0 ? keyboardHeight + DONE_BAR_HEIGHT : 0;
   const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
 
+  // Every rate mutation on this page goes through here. They were all bare
+  // `await x(); await load();` — a write blocked by RLS became an unhandled
+  // rejection, the toggle silently snapped back on the next reload, and
+  // nothing on screen said why.
   const load = useCallback(async () => {
     try {
       setRates(await listAllRates());
@@ -154,6 +159,18 @@ export default function AdminPayrollSettings() {
       setLoading(false);
     }
   }, []);
+
+  const saveRate = useCallback(
+    async (write) => {
+      try {
+        await write();
+        await load();
+      } catch (err) {
+        toastError("Failed to save", err);
+      }
+    },
+    [load]
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -213,10 +230,7 @@ export default function AdminPayrollSettings() {
                   label={CORE_LABELS[r.work_type] || r.work_type}
                   unit={r.unit}
                   value={r.rate}
-                  onSave={async (n) => {
-                    await updateCoreRate(r.work_type, n);
-                    await load();
-                  }}
+                  onSave={(n) => saveRate(() => updateCoreRate(r.work_type, n))}
                 />
               ))}
             </View>
@@ -231,10 +245,7 @@ export default function AdminPayrollSettings() {
                   label={`${t.attendees} attendee${t.attendees === 1 ? "" : "s"}`}
                   unit="session"
                   value={t.rate_per_session}
-                  onSave={async (n) => {
-                    await updateSpcTier(t.attendees, n);
-                    await load();
-                  }}
+                  onSave={(n) => saveRate(() => updateSpcTier(t.attendees, n))}
                 />
               ))}
             </View>
@@ -256,16 +267,13 @@ export default function AdminPayrollSettings() {
                         label={r.other_type}
                         unit={r.unit}
                         value={r.rate}
-                        onSave={async (n) => {
-                          await updateOtherRate(r.other_type, { rate: n });
-                          await load();
-                        }}
+                        onSave={(n) => saveRate(() => updateOtherRate(r.other_type, { rate: n }))}
                       />
                     </View>
                     <Pressable
                       onPress={async () => {
-                        await updateOtherRate(r.other_type, { active: false });
-                        await load();
+                        if (!(await confirmArchiveOtherRate(r.other_type))) return;
+                        await saveRate(() => updateOtherRate(r.other_type, { active: false }));
                       }}
                     >
                       <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#a8a29e" }}>
@@ -277,18 +285,12 @@ export default function AdminPayrollSettings() {
                     <FieldToggle
                       label="Quantity"
                       value={r.has_qty}
-                      onToggle={async () => {
-                        await updateOtherRate(r.other_type, { has_qty: !r.has_qty });
-                        await load();
-                      }}
+                      onToggle={() => saveRate(() => updateOtherRate(r.other_type, { has_qty: !r.has_qty }))}
                     />
                     <FieldToggle
                       label="Notes"
                       value={r.has_notes}
-                      onToggle={async () => {
-                        await updateOtherRate(r.other_type, { has_notes: !r.has_notes });
-                        await load();
-                      }}
+                      onToggle={() => saveRate(() => updateOtherRate(r.other_type, { has_notes: !r.has_notes }))}
                     />
                   </View>
                 </View>
@@ -310,12 +312,7 @@ export default function AdminPayrollSettings() {
                         ${Number(r.rate).toFixed(2)} per {r.unit}
                       </Text>
                     </View>
-                    <Pressable
-                      onPress={async () => {
-                        await updateOtherRate(r.other_type, { active: true });
-                        await load();
-                      }}
-                    >
+                    <Pressable onPress={() => saveRate(() => updateOtherRate(r.other_type, { active: true }))}>
                       <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
                         Restore
                       </Text>

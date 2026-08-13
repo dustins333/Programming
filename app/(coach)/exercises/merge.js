@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listExercises, listExerciseUsageCounts } from "../../../lib/programming/exercises";
@@ -16,6 +16,7 @@ import { PressFade } from "../../../components/PressFade";
 import { confirmMergeExercises } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { formatDateMD } from "../../../lib/formatDate";
+import { dateInBoise } from "../../../lib/boiseDate";
 import { fonts, colors } from "../../../lib/theme";
 
 // Merge exercises (design_handoff_coach_web_v2, 1o).
@@ -31,7 +32,6 @@ import { fonts, colors } from "../../../lib/theme";
 
 const CANVAS = "#faf8f6";
 const CARD_BORDER = "#ece7e1";
-const isWeb = Platform.OS === "web";
 
 function describeExercise(exercise, uses) {
   const bits = [uses === 0 ? "never used" : `${uses} use${uses === 1 ? "" : "s"}`];
@@ -432,7 +432,7 @@ export default function MergeExercises() {
                         <Text style={{ fontFamily: fonts.sansSemiBold, color: "#2a211c" }}>{b?.name ?? "Removed exercise"}</Text>
                       </Text>
                       <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-                        kept {formatDateMD(d.dismissed_at.slice(0, 10))}
+                        kept {d.dismissed_at ? formatDateMD(dateInBoise(new Date(d.dismissed_at))) : "—"}
                       </Text>
                       <Pressable onPress={() => handleUndo(d.id)}>
                         <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>Undo</Text>

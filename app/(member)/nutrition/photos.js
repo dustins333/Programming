@@ -14,10 +14,15 @@ import { PhotoCompare } from "../../../components/nutrition/PhotoCompare";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { fonts, colors } from "../../../lib/theme";
+import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
 const CANVAS = "#faf8f6";
 
 export default function NutritionPhotos() {
+  // Tabs keep this screen mounted, so a mount-only load never re-runs
+  // on a return visit — see lib/useRefreshOnFocus.js.
+  const focusKey = useRefreshOnFocus();
+
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -37,7 +42,7 @@ export default function NutritionPhotos() {
 
   useEffect(() => {
     if (access.status === "active") load();
-  }, [access.status, load]);
+  }, [access.status, load, focusKey]);
 
   if (access.status !== "active") {
     return <NutritionAccessMessage status={access.status} error={access.error} onRetry={access.refetch} />;

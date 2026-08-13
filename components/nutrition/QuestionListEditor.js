@@ -3,7 +3,6 @@ import { View, Text, TextInput, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../../lib/theme";
 import { toastError } from "../../lib/toast";
-import { confirmRemoveQuestion } from "../../lib/confirmDialog";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
 // Shared add/rename/reorder/delete list editor for question templates and
@@ -76,9 +75,11 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
     }
   };
 
-  const handleDelete = async (id, text) => {
-    const proceed = await confirmRemoveQuestion(text);
-    if (!proceed) return;
+  // No confirm here — every onDelete this component is given already asks
+  // (settings.js's two template handlers, ClientSettingsModal's per-client
+  // one). Confirming in both places meant an admin approved the delete,
+  // then got an identical second dialog whose Cancel silently aborted it.
+  const handleDelete = async (id) => {
     try {
       await onDelete(id);
     } catch (err) {
@@ -249,7 +250,7 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
                     Edit
                   </Text>
                 </Pressable>
-                <Pressable onPress={() => handleDelete(q.id, q.question_text)} hitSlop={8}>
+                <Pressable onPress={() => handleDelete(q.id)} hitSlop={8}>
                   <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
                     Remove
                   </Text>

@@ -188,6 +188,7 @@ export function StaffReviewRow({
   onApprove,
   onUnapprove,
   onSendBack,
+  onReopen,
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
@@ -232,6 +233,14 @@ export function StaffReviewRow({
             <ActivityIndicator size="small" color={colors.primary} />
           ) : periodClosed ? null : state === REVIEW_SUBMITTED ? (
             <View className="flex-row items-center gap-2">
+              {/* Plain unlock, no note. Send back is for "fix this specific
+                  thing"; this is for "they just asked to add a day", which
+                  previously forced the admin to invent a rejection reason. */}
+              {onReopen ? (
+                <Pressable onPress={onReopen} hitSlop={6}>
+                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: "#a8a29e" }}>Reopen</Text>
+                </Pressable>
+              ) : null}
               <Pressable onPress={() => setNoteOpen((v) => !v)} className="rounded-lg border px-2.5 py-1.5" style={{ borderColor: "#d9d4cd" }}>
                 <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: "#57534e" }}>Send back</Text>
               </Pressable>
@@ -276,7 +285,9 @@ export function StaffReviewRow({
         <View className="px-[15px] pb-4">
           <View className="rounded-xl border p-3.5" style={{ borderColor: "#f0ddd2", backgroundColor: "#fdf6f2", maxWidth: 560 }}>
             <Text className="mb-2" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>
-              What should {staff.name.split(/\s+/)[0]} fix?
+              {/* Guarded the same way initials() above is — a staff row can
+                  carry a null name. */}
+              What should {(staff.name ?? "").split(/\s+/)[0] || "they"} fix?
             </Text>
             <TextInput
               value={note}

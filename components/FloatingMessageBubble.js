@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Modal, View, Text, Pressable } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { AppState, Modal, View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../lib/auth/AuthProvider";
@@ -62,12 +62,30 @@ export function FloatingMessageBubble() {
       });
   }, [profile?.id]);
 
-  useEffect(() => {
+  // Re-checked on every foreground transition, not just on mount. This
+  // component is mounted once at the layout level, so expo-router's
+  // useFocusEffect doesn't apply the way it does for a per-tab screen —
+  // without this the unread dot never appeared for a message that arrived
+  // after launch, and never cleared if the member read the thread through
+  // the header icon route instead of the bubble. Same shape as
+  // AnnouncementChecker's own AppState fix.
+  const checkUnread = useCallback(() => {
     if (!profile?.id) return;
     hasUnreadMessages(profile.id)
       .then(setHasUnread)
       .catch((err) => console.error("Failed to check unread messages:", err));
   }, [profile?.id]);
+
+  useEffect(() => {
+    checkUnread();
+  }, [checkUnread]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") checkUnread();
+    });
+    return () => subscription.remove();
+  }, [checkUnread]);
 
   const load = async () => {
     try {

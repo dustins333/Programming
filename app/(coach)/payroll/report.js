@@ -18,7 +18,7 @@ import { FinalizeModal } from "../../../components/payroll/FinalizeModal";
 export default function PayrollReport() {
   const { profile } = useAuth();
   const router = useRouter();
-  const report = useOwnReport(profile?.id);
+  const report = useOwnReport(profile);
 
   const [finalization, setFinalization] = useState(null);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
@@ -65,6 +65,15 @@ export default function PayrollReport() {
         ) : null}
         {report.loading ? (
           <ActivityIndicator color={colors.primary} />
+        ) : report.loadError ? (
+          <View className="max-w-md">
+            <Text className="mb-3 text-red-600" style={{ fontFamily: fonts.sans }}>
+              Couldn't load your pay for this period. {report.loadError}
+            </Text>
+            <Pressable onPress={report.retry} className="self-start">
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+            </Pressable>
+          </View>
         ) : (
           <>
             <CategoryBreakdown totals={report.totals} entries={report.entries} rateMaps={report.rateMaps} />

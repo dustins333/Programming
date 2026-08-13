@@ -18,6 +18,7 @@ import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
 import { formatDateMD } from "../../../lib/formatDate";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
+import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
 const CANVAS = "#faf8f6";
 const CARD_BORDER = "#ece7e1";
@@ -295,6 +296,10 @@ function DayRow({ date, label, log, target, expanded, onToggle, onLogPress, onLa
 }
 
 export default function NutritionWeekly() {
+  // Tabs keep this screen mounted, so a mount-only load never re-runs
+  // on a return visit — see lib/useRefreshOnFocus.js.
+  const focusKey = useRefreshOnFocus();
+
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -333,7 +338,7 @@ export default function NutritionWeekly() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [access.status, profile.id, week.end, retryKey]);
+  }, [access.status, profile.id, week.end, retryKey, focusKey]);
 
   // Collapse whatever was open when the week changes — an expanded row from
   // the previous week has nothing to do with the one now on screen.
@@ -529,7 +534,6 @@ export default function NutritionWeekly() {
         .map((day) => (
           <DayRow
             key={day.date}
-            date={day.date}
             label={`${day.name} ${formatDateMD(day.date)}${day.isToday ? " · Today" : ""}`}
             log={day.log}
             target={target}

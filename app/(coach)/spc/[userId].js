@@ -82,6 +82,10 @@ async function loadGrid(blockRows) {
   return { rows, exercisesByWorkout };
 }
 
+// NOTE: this file is the NATIVE variant — a .web.js sibling shadows it
+// entirely on web, so `isWeb` below is always false and every branch
+// gated on it is unreachable here. Don't add web-only behaviour to this
+// file; it belongs in the sibling.
 const isWeb = Platform.OS === "web";
 
 function initials(name) {
@@ -113,6 +117,16 @@ function CoachDropdown({ value, coaches, onChange }) {
   if (!isWeb) {
     return (
       <View className="flex-row flex-wrap gap-2">
+        {/* Both web branches offer an Unassigned option; without it here
+            there was no way to clear an assignment once made on a phone. */}
+        <Pressable
+          onPress={() => onChange(null)}
+          className={`rounded-full border px-3.5 py-2.5 ${!value ? "border-primary bg-primary" : "border-stone-300"}`}
+        >
+          <Text className={!value ? "text-white" : "text-stone-700"} style={{ fontFamily: fonts.sans }}>
+            Unassigned
+          </Text>
+        </Pressable>
         {coaches.map((coach) => (
           <Pressable
             key={coach.id}
@@ -181,13 +195,21 @@ export default function SpcClientDetail() {
   const [recentSessions, setRecentSessions] = useState([]);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const [memberRow, clientRow, coachRows, blockRows, defaultLength] = await Promise.all([
         getUser(userId),
         getSpcClient(userId),
         listCoaches(),
         listBlocksForSpcClient(userId),
-        getSetting("default_block_length_spc_weeks", 4),
+        // .catch(() => 4), matching the web sibling — lib/settings.js
+        // throws on a query error (it only falls back on a missing row), so
+        // without this a core.settings blip blanked a whole client's page
+        // over a number the screen can trivially assume.
+        getSetting("default_block_length_spc_weeks", 4).catch(() => 4),
       ]);
       setMember(memberRow);
       setClient(clientRow);

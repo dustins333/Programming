@@ -167,7 +167,7 @@ function DeleteAccountModal({ visible, email, onClose, onConfirm, scrollViewRef,
   return (
     <View className="mt-2 rounded-lg p-4" style={{ backgroundColor: "#fdece5", borderWidth: 1, borderColor: "#f5c9b8" }}>
       <Text className="mb-2 text-sm" style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>
-        Type {CONFIRM_TEXT} to confirm. This permanently deletes your account, logs, and photos — it can't be undone.
+        Type {CONFIRM_TEXT} to confirm. This permanently deletes {email ? `${email}'s` : "your"} account, logs, and photos — it can't be undone.
       </Text>
       <TextInput
         ref={inputRef}
@@ -385,6 +385,16 @@ export default function MemberSettings() {
       {/* The "About / Assigned coach" card was removed in
           design_handoff_member_mobile_v5 (6a) — an assigned coach only
           exists for nutrition clients, and it isn't a setting. */}
+
+      {/* app/support.js existed as a route with no way to reach it from
+          inside the app — it was only ever the App Store's support URL. */}
+      <Card>
+        <CardTitle>Help</CardTitle>
+        <Pressable onPress={() => router.push("/support")} className="flex-row items-center justify-between py-1">
+          <Text style={{ fontFamily: fonts.sansMedium, color: "#44403c" }}>Contact support</Text>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>›</Text>
+        </Pressable>
+      </Card>
 
       <Pressable onPress={signOut} className="mb-4 items-center border border-stone-300 py-3.5" style={{ borderRadius: 16 }}>
         <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>Sign out</Text>

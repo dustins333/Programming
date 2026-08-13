@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getOnboardingStatus, submitQuestionnaire, logObjectiveTrackingDay } from "../../../lib/nutrition/onboarding";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
+import { dateInBoise } from "../../../lib/boiseDate";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { supabase } from "../../../lib/supabase/client";
@@ -13,6 +14,7 @@ import { notifyCoachOfClient } from "../../../lib/notifications/sendPush";
 import { fonts, colors } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
+import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
 function StatusBadge({ done }) {
   return (
@@ -52,9 +54,9 @@ function QuestionnairePanel({ userId, questions, response, onSubmitted }) {
           Questionnaire
         </Text>
         <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-          Submitted {formatDateMDY(response.submitted_at.slice(0, 10))}
+          Submitted {formatDateMDY(dateInBoise(new Date(response.submitted_at)))}
         </Text>
-        {response.answers.map((a, i) => (
+        {(response.answers ?? []).map((a, i) => (
           <View key={i} className="mb-3">
             <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold }}>
               {a.question}
@@ -230,6 +232,10 @@ const TASKS = [
 ];
 
 export default function NutritionOnboarding() {
+  // Tabs keep this screen mounted, so a mount-only load never re-runs
+  // on a return visit — see lib/useRefreshOnFocus.js.
+  const focusKey = useRefreshOnFocus();
+
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -250,6 +256,10 @@ export default function NutritionOnboarding() {
   const wasReadyRef = useRef(null);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const [onboardingStatus, { data: questionRows }] = await Promise.all([
         getOnboardingStatus(profile.id),
@@ -275,7 +285,7 @@ export default function NutritionOnboarding() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, focusKey]);
 
   const handleLogDay = async (date, values) => {
     await logObjectiveTrackingDay(profile.id, date, values);

@@ -22,8 +22,11 @@ import { toastError } from "../../../lib/toast";
 const isWeb = Platform.OS === "web";
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
 
+// (name ?? "") — a core.users row linked by an admin can genuinely have a
+// null name until that person registers, and an unguarded .trim() here
+// white-screened the whole row/page.
 function initials(name) {
-  return name
+  return (name ?? "")
     .trim()
     .split(/\s+/)
     .slice(0, 2)

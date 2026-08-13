@@ -26,6 +26,10 @@ export default function SpcSessionPrintView() {
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const b = await getSpcBlock(blockId);
       const [memberRow, allWorkouts, siblingBlocks] = await Promise.all([

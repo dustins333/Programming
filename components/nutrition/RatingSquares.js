@@ -8,10 +8,8 @@ import { fonts } from "../../lib/theme";
 // Tapping the already-selected square clears it, so a mis-tap is
 // recoverable without a separate "clear" affordance.
 //
-// Deliberately a new component rather than a rewrite of RatingSelect —
-// that one is still the right control inside the coach's own forms, where
-// it sits in a shared flex-row with TargetField and has to match its
-// height exactly.
+// Built for the member's v5 nutrition tab specifically, where it sits beside
+// MacroDial/StatTile rather than the older coach-form field row.
 const CLAY = "#a46a57";
 const UNSELECTED_BG = "#f5f1ec";
 const DASHED_EMPTY = "#ddd6cd";

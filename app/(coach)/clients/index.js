@@ -9,8 +9,11 @@ import { LinkMemberModal } from "../../../components/LinkMemberModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 
+// (name ?? "") — a core.users row linked by an admin can genuinely have a
+// null name until that person registers, and an unguarded .trim() here
+// white-screened the whole row/page.
 function initials(name) {
-  return name
+  return (name ?? "")
     .trim()
     .split(/\s+/)
     .slice(0, 2)

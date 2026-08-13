@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
@@ -19,6 +19,7 @@ import { getClient as getNutritionClient } from "../../../lib/nutrition/clients"
 import { getSetting } from "../../../lib/settings";
 import { SpcSessionReadout } from "../../../components/SpcSessionReadout";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
+import { PrintSessionPickerModal } from "../../../components/PrintSessionPickerModal";
 import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CoachShell } from "../../../components/CoachShell";
 import { PressFade } from "../../../components/PressFade";
@@ -335,6 +336,7 @@ export default function SpcClientBlockWeb() {
   const [coaches, setCoaches] = useState([]);
   const [blocks, setBlocks] = useState([]);
   const [selectedBlockId, setSelectedBlockId] = useState(null);
+  const selectedBlockIdRef = useRef(null);
   const [detail, setDetail] = useState(null);
   const [stats, setStats] = useState(null);
   const [ready, setReady] = useState(false);
@@ -342,6 +344,9 @@ export default function SpcClientBlockWeb() {
   const [rail, setRail] = useState("Lift progress");
   const [readoutSession, setReadoutSession] = useState(null);
   const [newBlockOpen, setNewBlockOpen] = useState(false);
+  // Print is per-session, not per-block: spc/print/[blockId] requires a
+  // ?session= param and rendered an empty "Session NaN" page without one.
+  const [printPickerOpen, setPrintPickerOpen] = useState(false);
   // Click-to-copy: pick a source tile with the ⧉, then click any number of
   // target tiles, then confirm. Restored on web — it only ever existed on
   // the native page, so adding this .web.js sibling silently took it away
@@ -377,7 +382,14 @@ export default function SpcClientBlockWeb() {
       // Default to the block covering today, else the most recent one.
       const current =
         labelled.find((b) => b.block_start_date <= today && today <= b.block_end_date) ?? labelled[0] ?? null;
-      const targetId = selectedBlockId && labelled.some((b) => b.id === selectedBlockId) ? selectedBlockId : current?.id ?? null;
+      // Read through a ref, not the state value: `load` must NOT depend on
+      // selectedBlockId, or every block-tab click changes load's identity,
+      // re-fires the focus effect, and reloads the whole page (member,
+      // coaches, blocks, stats, nutrition, preview) on top of the
+      // getSpcBlockDetail selectBlock already ran.
+      const previous = selectedBlockIdRef.current;
+      const targetId = previous && labelled.some((b) => b.id === previous) ? previous : current?.id ?? null;
+      selectedBlockIdRef.current = targetId;
       setSelectedBlockId(targetId);
 
       // Isolated: a stats failure must not blank the block itself, which is
@@ -415,7 +427,7 @@ export default function SpcClientBlockWeb() {
     } finally {
       setReady(true);
     }
-  }, [userId, selectedBlockId, today]);
+  }, [userId, today]);
 
   useFocusEffect(
     useCallback(() => {
@@ -424,6 +436,7 @@ export default function SpcClientBlockWeb() {
   );
 
   const selectBlock = async (blockId) => {
+    selectedBlockIdRef.current = blockId;
     setSelectedBlockId(blockId);
     try {
       setDetail(await getSpcBlockDetail(userId, blockId, today));
@@ -622,12 +635,22 @@ export default function SpcClientBlockWeb() {
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {detail ? (
               <PressFade
-                onPress={() => router.push(`/(coach)/spc/print/${detail.block.id}`)}
+                onPress={() => setPrintPickerOpen(true)}
                 style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 15, backgroundColor: "#fff" }}
               >
                 <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Print block</Text>
               </PressFade>
             ) : null}
+            {/* Manages block length, Extend and the rolling switch as well
+                as past blocks — the native page has always linked here, but
+                this .web.js sibling never did, so on the platform where
+                programming actually happens none of that was reachable. */}
+            <PressFade
+              onPress={() => router.push(`/(coach)/spc/history/${userId}`)}
+              style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 15, backgroundColor: "#fff" }}
+            >
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>SPC blocks</Text>
+            </PressFade>
             <PressFade
               onPress={() => setNewBlockOpen(true)}
               style={{ backgroundColor: colors.primary, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 17 }}
@@ -986,6 +1009,17 @@ export default function SpcClientBlockWeb() {
         lastBlockLengthWeeks={blocks[0]?.block_length_weeks}
         onClose={() => setNewBlockOpen(false)}
         onSubmit={handleCreateBlock}
+      />
+
+      <PrintSessionPickerModal
+        visible={printPickerOpen}
+        loading={false}
+        sessionNumbers={[...new Set((detail?.sessions ?? []).map((w) => w.session_number))].sort((a, b) => a - b)}
+        onClose={() => setPrintPickerOpen(false)}
+        onPick={(n) => {
+          setPrintPickerOpen(false);
+          router.push(`/(coach)/spc/print/${detail.block.id}?session=${n}`);
+        }}
       />
 
       <CoachMessageBubble userId={userId} clientName={member.name} />

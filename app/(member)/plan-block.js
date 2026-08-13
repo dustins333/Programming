@@ -44,6 +44,7 @@ export default function PlanBlock() {
   const [sessionContent, setSessionContent] = useState({}); // workoutId -> { warmups, exercises }
   const [modalWorkoutId, setModalWorkoutId] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState(null);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -104,6 +105,8 @@ export default function PlanBlock() {
     setModalWorkoutId(workout.id);
     if (sessionContent[workout.id]) return;
     setModalLoading(true);
+    setModalError(null);
+    try {
     const [warmups, exercises] = await Promise.all([listWarmups(workout.id), listWorkoutExercises(workout.id)]);
     setSessionContent((prev) => ({
       ...prev,
@@ -122,7 +125,13 @@ export default function PlanBlock() {
         })),
       },
     }));
-    setModalLoading(false);
+    } catch (err) {
+      // Without this the modal sat on its spinner forever and every retry
+      // re-failed, because sessionContent[id] was never populated.
+      setModalError(err.message ?? String(err));
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const closeModal = () => setModalWorkoutId(null);
@@ -143,7 +152,11 @@ export default function PlanBlock() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
       throw new Error("Enter the date as YYYY-MM-DD.");
     }
-    const completedAt = new Date(`${logDate}T12:00:00`).toISOString();
+    // 18:00Z, not device-local noon: parsing without a zone used the
+    // member's own timezone, so from UTC+7 or later a back-logged
+    // session was stored (and read back) on the wrong Boise day.
+    // 18:00Z is 12:00 MDT / 11:00 MST — mid-day in Boise either way.
+    const completedAt = new Date(`${logDate}T18:00:00Z`).toISOString();
     await finalizeGroupSession(profile.id, workout.id, completedAt);
     setState((prev) => {
       if (prev.status !== "ready") return prev;
@@ -262,7 +275,9 @@ export default function PlanBlock() {
         title={modalWorkout ? `Session ${modalWorkout.session_number}${modalWorkout.title ? ` — ${modalWorkout.title}` : ""}` : ""}
         completed={!!modalCompletedAt}
         completedDateLabel={modalCompletedAt ? formatDateMDY(dateInBoise(new Date(modalCompletedAt))) : null}
-        loading={modalLoading || !modalContent}
+        loading={modalLoading || (!modalError && !modalContent)}
+        error={modalError}
+        onRetry={() => modalWorkout && openSession(modalWorkout)}
         warmups={modalContent?.warmups}
         userId={profile.id}
         datePerformed={modalCompletedAt ? dateInBoise(new Date(modalCompletedAt)) : null}

@@ -20,6 +20,10 @@ export default function OnboardingPhotos() {
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const [clientRow, allPhotos] = await Promise.all([getClient(userId), listAllPhotos(userId)]);
       setClient(clientRow);

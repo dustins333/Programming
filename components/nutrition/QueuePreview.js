@@ -129,7 +129,7 @@ function DayTable({ summary, dates, target }) {
   );
 }
 
-function Photos({ photos, missingAngles }) {
+function Photos({ photos }) {
   return (
     <View className="flex-row" style={{ gap: 8 }}>
       {photos.map(({ angle, photo, url }) => (
@@ -308,7 +308,7 @@ export function QueuePreview({ client, today }) {
             </Pressable>
           }
         >
-          <Photos photos={preview.photos} missingAngles={preview.missingAngles} />
+          <Photos photos={preview.photos} />
         </Card>
       </View>
 

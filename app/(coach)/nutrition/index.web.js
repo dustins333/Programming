@@ -76,6 +76,10 @@ export default function NutritionQueue() {
   const [enrolling, setEnrolling] = useState(false);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       // Archived clients are deliberately excluded — they get their own
       // Archived list. Paused ones stay, in their own group: that's still a

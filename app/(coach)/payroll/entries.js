@@ -16,7 +16,11 @@ import {
 } from "../../../lib/payroll/dayEntries";
 import { listDaySubmissionsForPeriod, submitDay, clearDaySubmission } from "../../../lib/payroll/daySubmissions";
 import { partitionDayEntries, buildRateMaps, computeTotals, formatMoney } from "../../../lib/payroll/calc";
-import { getOwnFinalization, isLocked as isFinalizationLocked } from "../../../lib/payroll/finalizations";
+import {
+  getOwnFinalization,
+  isLocked as isFinalizationLocked,
+  listOwnFinalizations,
+} from "../../../lib/payroll/finalizations";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD, formatDateMDY } from "../../../lib/formatDate";
 import { toastError } from "../../../lib/toast";
@@ -210,12 +214,36 @@ export default function PayrollEntries() {
   // below would briefly see a bogus diff and schedule the old day's numbers
   // onto the new one.
   const [counterDate, setCounterDate] = useState(null);
+  // Earlier periods this coach can still edit — an admin sent one back, so
+  // it's reopened. The screen defaults to the current period as before; this
+  // only ever adds a way to reach a past one, and only when there genuinely
+  // is one to reach.
+  const [editablePastPeriods, setEditablePastPeriods] = useState([]);
+  const [currentPeriodStart, setCurrentPeriodStart] = useState(null);
+  // Which period the screen is showing. A ref alongside the state for the
+  // same reason useOwnReport keeps one: load() runs on every focus and must
+  // read the coach's actual choice, not the value captured when the callback
+  // was first created.
+  const selectedPeriodRef = useRef(null);
 
   const load = useCallback(async () => {
     if (!profile?.id) return;
     setLoading(true);
     try {
-      const start = await getCurrentPeriodStart();
+      const current = await getCurrentPeriodStart();
+      setCurrentPeriodStart(current);
+      const ownFinalizations = await listOwnFinalizations(profile.id);
+      const pastEditable = ownFinalizations
+        .filter((f) => f.pay_period_start < current && !isFinalizationLocked(f))
+        .map((f) => f.pay_period_start);
+      setEditablePastPeriods(pastEditable);
+
+      // Fall back to the current period if a previously-picked past period
+      // has since been re-finalized or closed out from under the selection.
+      const wanted = selectedPeriodRef.current;
+      const start = wanted && (wanted === current || pastEditable.includes(wanted)) ? wanted : current;
+      selectedPeriodRef.current = start;
+
       const [periodRow, allRates, entries, ownFinalization, daySubmissions] = await Promise.all([
         getPayPeriod(start),
         listAllRates(),
@@ -229,12 +257,23 @@ export default function PayrollEntries() {
       setAllEntries(entries);
       setFinalization(ownFinalization);
       setSubmissions(daySubmissions);
+      // Keep the day cursor inside whichever period is now showing.
+      const end = computePeriodEnd(start);
+      setSelectedDate((prev) => (prev >= start && prev <= end ? prev : start));
     } catch (err) {
       toastError("Failed to load payroll", err);
     } finally {
       setLoading(false);
     }
   }, [profile?.id]);
+
+  const selectPeriod = useCallback(
+    (start) => {
+      selectedPeriodRef.current = start;
+      load();
+    },
+    [load]
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -512,6 +551,49 @@ export default function PayrollEntries() {
                   {formatMoney(totals.total)}
                 </Text>
               </View>
+
+              {/* Only appears when an admin has actually sent a past period
+                  back. Until this existed, a coach asked to fix an entry
+                  after the period rolled over had no screen that could
+                  reach it. */}
+              {editablePastPeriods.length > 0 ? (
+                <View className="mb-5 flex-row flex-wrap items-center" style={{ gap: 8 }}>
+                  <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                    Editing:
+                  </Text>
+                  {[currentPeriodStart, ...editablePastPeriods].filter(Boolean).map((start) => {
+                    const active = start === periodStart;
+                    return (
+                      <Pressable
+                        key={start}
+                        onPress={() => (active ? null : selectPeriod(start))}
+                        className="rounded-full border px-3 py-1.5"
+                        style={{
+                          borderColor: active ? colors.primary : "#e7e5e4",
+                          backgroundColor: active ? "#fdf6f2" : "white",
+                        }}
+                      >
+                        <Text
+                          className="text-xs"
+                          style={{ fontFamily: active ? fonts.sansSemiBold : fonts.sansMedium, color: active ? colors.primaryOnWhite : "#78716c" }}
+                        >
+                          {formatDateMD(start)} – {formatDateMD(computePeriodEnd(start))}
+                          {start === currentPeriodStart ? " · current" : " · sent back"}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+
+              {finalization?.send_back_note && !locked ? (
+                <View className="mb-5 rounded-xl border p-4" style={{ borderColor: "#f0ddd2", backgroundColor: "#fdf6f2" }}>
+                  <Text className="mb-1 text-xs" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
+                    Sent back for changes
+                  </Text>
+                  <Text style={{ fontFamily: fonts.sans, color: "#44403c" }}>{finalization.send_back_note}</Text>
+                </View>
+              ) : null}
 
               {locked ? (
                 <View className="mb-5 rounded-xl border p-4" style={{ borderColor: "#f0ddd2", backgroundColor: "#fdf6f2" }}>

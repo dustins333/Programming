@@ -21,10 +21,10 @@ import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/
 import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
 import { listPhases } from "../../../../lib/nutrition/planPhases";
-import { computeWeekWindows, currentCalendarWeek, summarizeWeek, deriveCheckinStatus } from "../../../../lib/nutrition/weekCycle";
+import { computeWeekWindows, currentCalendarWeek, summarizeWeek, deriveCheckinStatus, enumerateRecentWeeks } from "../../../../lib/nutrition/weekCycle";
 import { weekOnProgramme, weekDates } from "../../../../lib/nutrition/queue";
 import { listAllPhotos, photosForRequirementWeek } from "../../../../lib/nutrition/photos";
-import { enumerateRecentWeeks } from "../../../../components/nutrition/WeekList";
+
 import { WeekRows } from "../../../../components/nutrition/WeekRows";
 import { PlanPhases } from "../../../../components/nutrition/PlanPhases";
 import { MilestoneSlots } from "../../../../components/nutrition/MilestoneSlots";
@@ -212,6 +212,10 @@ export default function NutritionClientDetail() {
   }, [today, weekOffset]);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       // Core fetches only — the rows that gate rendering (client/targets/
       // logs/onboarding) or drive real actions (checkin → Finalize). The

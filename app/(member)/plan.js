@@ -11,7 +11,12 @@ import { listWarmups, listWorkoutExercises } from "../../lib/programming/workout
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
 import { listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
-import { listActiveOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
+import {
+  listActiveOneOffWorkoutsForUser,
+  listWeekOneOffWorkoutsForUser,
+  listOneOffWarmups,
+  listOneOffExercises,
+} from "../../lib/programming/oneOffWorkouts";
 import {
   getGroupCompletion,
   listGroupCompletionsForWorkouts,
@@ -32,6 +37,13 @@ import { toastSuccess } from "../../lib/toast";
 const CANVAS = "#faf8f6";
 const CARD_BORDER = "#ece7e1";
 const HITSLOP = { top: 10, bottom: 10, left: 10, right: 10 };
+
+// Bottom padding on the logging list. Has to clear FloatingMessageBubble,
+// which app/(member)/_layout.js pins 74pt above the safe-area bottom at 52pt
+// tall — measured against the screen, so inside a tab screen it floats over
+// roughly the last ~80pt of this ScrollView. At the old pb-8 (32) the
+// Finalize button sat right underneath it.
+const FOOTER_CLEARANCE = 96;
 
 // Matches My Week's card treatment — a light spacing wrapper, not its own
 // bordered card (the individual pieces inside — warmup card, exercise cards
@@ -394,8 +406,20 @@ export default function MyFitness() {
     try {
       const withContent = await retryOnce(async () => {
         const activeOneOffs = await listActiveOneOffWorkoutsForUser(profile.id);
+        // My Week keeps a one-off visible (checked off) for the rest of the
+        // day it was finished and offers "Update session" on it — but the
+        // active list above drops it the moment it's completed, so that
+        // button resolved to nothing and silently dumped the member on an
+        // unrelated session. Pull the specifically-requested one back in.
+        let oneOffList = activeOneOffs;
+        const wantedId = params.session === "one_off" ? params.oneOffWorkoutId : null;
+        if (wantedId && !activeOneOffs.some((w) => w.id === wantedId)) {
+          const weekOneOffs = await listWeekOneOffWorkoutsForUser(profile.id, today);
+          const wanted = weekOneOffs.find((w) => w.id === wantedId);
+          if (wanted) oneOffList = [...activeOneOffs, wanted];
+        }
         return Promise.all(
-        activeOneOffs.map(async (workout) => {
+        oneOffList.map(async (workout) => {
           const [warmupRows, exerciseRows] = await Promise.all([listOneOffWarmups(workout.id), listOneOffExercises(workout.id)]);
           return {
             workout,
@@ -436,7 +460,7 @@ export default function MyFitness() {
     // screen), and adding them here recreates `load`'s identity, which
     // useFocusEffect below picks up the same way it already does for a
     // real focus event.
-  }, [profile.id, params.session, params.groupProgramId, params.weekNumber, params.sessionNumber]);
+  }, [profile.id, params.session, params.groupProgramId, params.weekNumber, params.sessionNumber, params.oneOffWorkoutId]);
 
   // Refetch on every focus, not just first mount — same reasoning as
   // My Week: Tabs keep this screen mounted, so without this, coming back
@@ -452,12 +476,19 @@ export default function MyFitness() {
   // session number since sessionsPerWeek is small enough that refetching
   // on switch isn't a real cost, and it keeps this simple.
   useEffect(() => {
+    // Both early returns clear the loading flag. Leaving a stale `true`
+    // behind kept the spinner up once SPC became ready again, because
+    // nothing else ever resets it.
     if (spc?.status !== "ready" || !spc.selectedSessionNumber) {
       setSpcDetail(null);
+      setSpcDetailLoading(false);
       return;
     }
     const session = spc.sessions.find((s) => s.sessionNumber === spc.selectedSessionNumber);
-    if (!session) return;
+    if (!session) {
+      setSpcDetailLoading(false);
+      return;
+    }
     let cancelled = false;
     setSpcDetailLoading(true);
     setSpcDetailError(null);
@@ -772,10 +803,20 @@ export default function MyFitness() {
     <ScrollView
       ref={scrollViewRef}
       className="flex-1"
-      contentContainerClassName="px-5 pb-8"
-      contentContainerStyle={{ paddingTop: 4 }}
+      contentContainerClassName="px-5"
+      contentContainerStyle={{ paddingTop: 4, paddingBottom: FOOTER_CLEARANCE }}
       keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets
+      // NO automaticallyAdjustKeyboardInsets here, deliberately. It uses
+      // iOS's own keyboard tracking to reveal a focused field, which fights
+      // the manual measure-and-scroll this page already runs through every
+      // ExerciseCard (scrollViewRef/scrollOffsetRef -> lib/scrollToKeyboard).
+      // With both active the two disagree about where the content should
+      // sit: the native inset survives the keyboard hiding, so the list
+      // scrolls up past its own end, the Finalize button goes off-screen,
+      // and the scroll won't settle back. The nutrition Today tab hit the
+      // same conflict and dropped this prop for the same reason — see
+      // app/(member)/nutrition/index.js's note. This page was the one screen
+      // that still had both.
       onScroll={(e) => {
         scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
       }}

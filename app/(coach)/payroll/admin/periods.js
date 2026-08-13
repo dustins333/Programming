@@ -10,13 +10,15 @@ import {
   closePayPeriod,
   isPeriodClosed,
   savePeriodClosingSnapshot,
+  ensurePayPeriod,
 } from "../../../../lib/payroll/periods";
-import { listAllRates, saveRateSnapshotForPeriod } from "../../../../lib/payroll/rates";
+import { listAllRates, saveRateSnapshotForPeriod, getRateMapsForPeriod } from "../../../../lib/payroll/rates";
 import {
   listFinalizationsForPeriod,
   approveFinalization,
   unapproveFinalization,
   sendBackFinalization,
+  reopenFinalization,
   reviewState,
   REVIEW_APPROVED,
   REVIEW_SUBMITTED,
@@ -25,7 +27,7 @@ import {
 } from "../../../../lib/payroll/finalizations";
 import { listPendingRequestsForPeriod } from "../../../../lib/payroll/requests";
 import { listEntriesForPeriodAllStaff } from "../../../../lib/payroll/entries";
-import { buildRateMaps, computeTotals, formatMoney } from "../../../../lib/payroll/calc";
+import { computeTotals, formatMoney } from "../../../../lib/payroll/calc";
 import { buildPeriodCsv, downloadCsv } from "../../../../lib/payroll/csvExport";
 import { formatDateMD, formatDateMDY } from "../../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../../lib/toast";
@@ -134,7 +136,10 @@ export default function AdminPayrollPeriods() {
   const [finalizations, setFinalizations] = useState([]);
   const [entries, setEntries] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  // Live rates, kept only to freeze into the snapshot at close time. What
+  // the table actually displays is rateMaps below, resolved per period.
   const [rates, setRates] = useState({ coreRates: [], otherRates: [], spcTiers: [] });
+  const [rateMaps, setRateMaps] = useState({ core: {}, other: {}, spc: {} });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [closing, setClosing] = useState(false);
@@ -160,14 +165,20 @@ export default function AdminPayrollPeriods() {
       setRates(allRates);
       const target = selectedPeriodRef.current || current;
       applySelectedPeriod(target);
-      const [finals, entryRows, pending] = await Promise.all([
+      const targetRow = options.find((p) => p.start_date === target) ?? null;
+      const [finals, entryRows, pending, maps] = await Promise.all([
         listFinalizationsForPeriod(target),
         listEntriesForPeriodAllStaff(target),
         listPendingRequestsForPeriod(target),
+        // Per-period, not the live tables: paging back to an already-closed
+        // period must show it at the rates frozen at close time, matching
+        // the Closed-periods tab and the CSV it was paid from.
+        getRateMapsForPeriod(targetRow),
       ]);
       setFinalizations(finals);
       setEntries(entryRows);
       setPendingRequests(pending);
+      setRateMaps(maps);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     } finally {
@@ -181,7 +192,6 @@ export default function AdminPayrollPeriods() {
     }, [load])
   );
 
-  const rateMaps = useMemo(() => buildRateMaps(rates), [rates]);
 
   const currentPeriod = periodOptions.find((p) => p.start_date === selectedPeriod);
   const closed = isPeriodClosed(currentPeriod);
@@ -314,7 +324,14 @@ export default function AdminPayrollPeriods() {
 
     setClosing(true);
     try {
-      await closePayPeriod(selectedPeriod, profile.id);
+      // Everything that must survive the close is written BEFORE it.
+      // closePayPeriod is irreversible — RLS blocks writes to the period
+      // afterwards, for admin too — so a snapshot written after it could
+      // fail and leave a permanently-closed period with no frozen rates and
+      // $0.00 owner/staff pay, while the toast said the close had failed.
+      // ensurePayPeriod first — closePayPeriod used to be what created the
+      // row these two writes reference.
+      await ensurePayPeriod(selectedPeriod);
       await saveRateSnapshotForPeriod(selectedPeriod, rates);
 
       const staffById = new Map(staff.map((s) => [s.id, s]));
@@ -325,6 +342,8 @@ export default function AdminPayrollPeriods() {
         else staffPay += row.totals.total;
       }
       await savePeriodClosingSnapshot(selectedPeriod, { ownerPay, staffPay });
+
+      await closePayPeriod(selectedPeriod, profile.id);
 
       const downloaded = downloadCsv(`payroll-${selectedPeriod}.csv`, buildPeriodCsv(entries, rateMaps));
       toastSuccess(downloaded ? "Pay period closed — CSV downloaded" : "Pay period closed — open this page on web to export the CSV");
@@ -445,6 +464,9 @@ export default function AdminPayrollPeriods() {
                         onUnapprove={() => withBusy(row.staff.id, () => unapproveFinalization(row.finalization.id))}
                         onSendBack={(note) =>
                           withBusy(row.staff.id, () => sendBackFinalization(row.finalization.id, profile.id, note), `Sent back to ${row.staff.name}.`)
+                        }
+                        onReopen={() =>
+                          withBusy(row.staff.id, () => reopenFinalization(row.finalization.id, profile.id), `Reopened ${row.staff.name}'s period.`)
                         }
                       />
                     </View>

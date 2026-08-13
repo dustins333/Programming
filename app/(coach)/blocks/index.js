@@ -31,6 +31,10 @@ const PANEL_BG = { Flagship: "#fdf6f2", "Better With Age": "#eef1e7" };
 // per-program settings editor, and the click-to-copy flow all disappear
 // here; tapping a session cell still opens the builder route, which is
 // itself read-only on native — see app/(coach)/builder/[workoutId].js).
+// NOTE: this file is the NATIVE variant — a .web.js sibling shadows it
+// entirely on web, so `isWeb` below is always false and every branch
+// gated on it is unreachable here. Don't add web-only behaviour to this
+// file; it belongs in the sibling.
 const isWeb = Platform.OS === "web";
 
 async function loadProgramData(program) {
@@ -79,6 +83,10 @@ export default function Blocks() {
   const [copyBusy, setCopyBusy] = useState(false);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const programs = await listGroupPrograms();
       const ordered = [...programs].sort((a, b) => (a.name === "Flagship" ? -1 : b.name === "Flagship" ? 1 : 0));

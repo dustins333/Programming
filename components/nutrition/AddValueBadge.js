@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 // The "nothing logged here yet, tap to add" affordance on the member's
 // daily-log fields — the same circled "+" the workout builder uses to join
-// a superset (components/SupersetConnector.js), reused so one glyph means
+// a superset in the builder, reused so one glyph means
 // "add" across the app. It replaces the "–" placeholder those fields used
 // to show, which read as a value rather than an invitation.
 //

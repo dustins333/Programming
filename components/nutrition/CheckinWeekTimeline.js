@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
-import { computeWeekWindows, enumerateUpcomingWeeks, deriveCheckinStatus, checkinMondayForWeek } from "../../lib/nutrition/weekCycle";
-import { enumerateRecentWeeks } from "./WeekList";
+import { computeWeekWindows, enumerateUpcomingWeeks, deriveCheckinStatus, checkinMondayForWeek, enumerateRecentWeeks } from "../../lib/nutrition/weekCycle";
+
 import { isPhotoRequirementWeek, hasAllAngles, photosForRequirementWeek } from "../../lib/nutrition/photos";
 import { reopenCheckin } from "../../lib/nutrition/checkin";
 import { addDays, formatDateTimeInBoise } from "../../lib/boiseDate";

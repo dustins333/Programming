@@ -5,7 +5,7 @@ import { PhaseCard } from "./PhaseCard";
 import { getPhotoSignedUrls } from "../../lib/nutrition/photos";
 import { loggedCalories } from "../../lib/nutrition/targets";
 import { formatDateMDY } from "../../lib/formatDate";
-import { daysBetween } from "../../lib/boiseDate";
+import { daysBetween, dateInBoise, todayInBoise } from "../../lib/boiseDate";
 import { fonts, colors } from "../../lib/theme";
 
 // The Onboarding tab (coach web v2, screen 18) — the only tab a client has
@@ -159,9 +159,11 @@ export function NutritionOnboardingTab({
   const doneCount = applicable.filter((p) => p.done).length;
   const baseline = firstWeekReference(otLogs);
 
-  const daysSinceInvite = client.onboarding_sent_at
-    ? daysBetween(new Date().toISOString().slice(0, 10), client.onboarding_sent_at.slice(0, 10))
-    : null;
+  // Boise dates on both sides. Slicing a timestamptz gives the UTC date, so
+  // a client invited at 6pm Boise displayed as invited the next day and the
+  // day count was off by one every evening.
+  const invitedOn = client.onboarding_sent_at ? dateInBoise(new Date(client.onboarding_sent_at)) : null;
+  const daysSinceInvite = invitedOn ? daysBetween(todayInBoise(), invitedOn) : null;
 
   const approveHref = `/(coach)/nutrition/clients/${userId}/onboarding/approve`;
 
@@ -202,7 +204,7 @@ export function NutritionOnboardingTab({
           </View>
           <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#b0a08d", marginTop: 8 }}>
             {client.onboarding_sent_at
-              ? `Invited ${formatDateMDY(client.onboarding_sent_at.slice(0, 10))}${daysSinceInvite !== null ? ` · she has had the app ${daysSinceInvite} day${daysSinceInvite === 1 ? "" : "s"}` : ""}`
+              ? `Invited ${formatDateMDY(invitedOn)}${daysSinceInvite !== null ? ` · she has had the app ${daysSinceInvite} day${daysSinceInvite === 1 ? "" : "s"}` : ""}`
               : "Not sent to her yet"}
           </Text>
         </View>

@@ -102,6 +102,11 @@ export function ZoomSchedulerModal({ visible, onClose }) {
                 <Pressable
                   onPress={() => {
                     setLoading(true);
+                    // Cleared here, not just in the mount effect — the render
+                    // below branches on loadError before days, so a
+                    // successful retry otherwise left this error screen up
+                    // with the slots loaded behind it and no way past.
+                    setLoadError(null);
                     getCheckinBookingSlots()
                       .then(setDays)
                       .catch((err) => setLoadError(err.message ?? String(err)))

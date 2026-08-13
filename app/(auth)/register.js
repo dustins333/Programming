@@ -37,41 +37,52 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
 
+  // Both handlers use try/finally: functions.invoke rejects outright on a
+  // network failure rather than resolving with an { error }, and without
+  // this the button spun forever with no message (see login.js).
   const handleRequestCode = async () => {
     setErrorMessage(null);
     setLoading(true);
-    const { error } = await supabase.functions.invoke("request-registration-code", { body: { email } });
-    setLoading(false);
-    if (error) {
-      setErrorMessage(await extractFunctionErrorMessage(error));
-      return;
+    try {
+      const { error } = await supabase.functions.invoke("request-registration-code", { body: { email } });
+      if (error) {
+        setErrorMessage(await extractFunctionErrorMessage(error));
+        return;
+      }
+      setStep("code");
+    } catch (err) {
+      setErrorMessage(err.message ?? String(err));
+    } finally {
+      setLoading(false);
     }
-    setStep("code");
   };
 
   const handleVerify = async () => {
     setErrorMessage(null);
     setLoading(true);
-    const { data, error } = await supabase.functions.invoke("verify-registration-code", {
-      body: { email, code, password },
-    });
-    if (error) {
+    try {
+      const { data, error } = await supabase.functions.invoke("verify-registration-code", {
+        body: { email, code, password },
+      });
+      if (error) {
+        setErrorMessage(await extractFunctionErrorMessage(error));
+        return;
+      }
+      if (data?.error) {
+        setErrorMessage(data.error);
+        return;
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        setErrorMessage(signInError.message);
+        return;
+      }
+      router.replace("/");
+    } catch (err) {
+      setErrorMessage(err.message ?? String(err));
+    } finally {
       setLoading(false);
-      setErrorMessage(await extractFunctionErrorMessage(error));
-      return;
     }
-    if (data?.error) {
-      setLoading(false);
-      setErrorMessage(data.error);
-      return;
-    }
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (signInError) {
-      setErrorMessage(signInError.message);
-      return;
-    }
-    router.replace("/");
   };
 
   return (
@@ -172,6 +183,15 @@ export default function Register() {
             </Pressable>
           </>
         )}
+
+        {/* (auth)/_layout.js is a bare <Slot/> with no Stack, and native
+            runs headerShown:false — without this there is no back gesture,
+            no header, and no way out of this screen at all. */}
+        <Pressable onPress={() => router.replace("/login")} className="mt-6 items-center">
+          <Text className="text-sm" style={{ fontFamily: "Montserrat_600SemiBold", color: "#8a5140" }}>
+            ‹ Back to sign in
+          </Text>
+        </Pressable>
 
         <Pressable
           onPress={() => Linking.openURL("https://kovastrength.com/privacy-policy/")}

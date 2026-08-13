@@ -10,11 +10,16 @@ export function BaselineSummary({ baseline }) {
     );
   }
 
+  // computeBaseline returns null percentages when the tracked days average
+  // to zero calories (nothing to take a percentage of) — rendering them at
+  // all would be inventing a number, so the grams stand alone in that case.
+  const pct = (value) => (value == null ? "" : ` (${value.toFixed(0)}%)`);
+
   return (
     <View>
       <Text className="text-sm text-stone-600" style={{ fontFamily: fonts.sans }}>
-        Protein {baseline.protein.toFixed(0)}g ({baseline.proteinPct.toFixed(0)}%) · Carb {baseline.carb.toFixed(0)}g (
-        {baseline.carbPct.toFixed(0)}%) · Fat {baseline.fat.toFixed(0)}g ({baseline.fatPct.toFixed(0)}%) · Fiber{" "}
+        Protein {baseline.protein.toFixed(0)}g{pct(baseline.proteinPct)} · Carb {baseline.carb.toFixed(0)}g
+        {pct(baseline.carbPct)} · Fat {baseline.fat.toFixed(0)}g{pct(baseline.fatPct)} · Fiber{" "}
         {baseline.fiber.toFixed(0)}g
       </Text>
       <Text className="text-sm text-stone-600" style={{ fontFamily: fonts.sans }}>

@@ -13,6 +13,7 @@ import { SessionHistoryModal } from "../../../components/SessionHistoryModal";
 import { MilestoneDetailModal } from "../../../components/nutrition/MilestoneDetailModal";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
+import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
 const CANVAS = "#faf8f6";
 const CARD_BORDER = "#ece7e1";
@@ -188,7 +189,11 @@ function TimelineRow({ entry, onPress, isLast }) {
   );
 }
 
-function ByDayView({ profile, prEntries, sessionCount, streak }) {
+function ByDayView({ profile, prEntries, sessionCount, streak, statsError }) {
+  // Its own counter — this is a separate component from HistoryIndex
+  // below, and the timeline it loads goes stale for the same reason.
+  const focusKey = useRefreshOnFocus();
+
   const [entries, setEntries] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [selectedEntry, setSelectedEntry] = useState(null);
@@ -199,7 +204,7 @@ function ByDayView({ profile, prEntries, sessionCount, streak }) {
     listDayTimeline(profile.id)
       .then(setEntries)
       .catch((err) => setLoadError(err.message ?? String(err)));
-  }, [profile.id, retryKey]);
+  }, [profile.id, retryKey, focusKey]);
 
   const sections = useMemo(() => {
     if (!entries) return [];
@@ -226,8 +231,8 @@ function ByDayView({ profile, prEntries, sessionCount, streak }) {
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 18 }}>
         {/* "Logged sessions", never just "sessions" — members must not read
             this as attendance from the gym management system. */}
-        <StatTile value={sessionCount} label="Logged sessions" color={CLAY} />
-        <StatTile value={streak} label="Week streak" color={OLIVE} />
+        <StatTile value={statsError ? "—" : sessionCount} label="Logged sessions" color={CLAY} />
+        <StatTile value={statsError ? "—" : streak} label="Week streak" color={OLIVE} />
       </View>
 
       {sections.length === 0 ? (
@@ -402,6 +407,10 @@ function ByWorkoutView({ exercises, loadError, onRetry }) {
 }
 
 export default function HistoryIndex() {
+  // Tabs keep this screen mounted, so a mount-only load never re-runs
+  // on a return visit — see lib/useRefreshOnFocus.js.
+  const focusKey = useRefreshOnFocus();
+
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -417,7 +426,7 @@ export default function HistoryIndex() {
     getExerciseStats(profile.id)
       .then(setStats)
       .catch((err) => setStatsError(err.message ?? String(err)));
-  }, [profile.id, retryKey]);
+  }, [profile.id, retryKey, focusKey]);
 
   const prEntries = useMemo(
     () =>
@@ -451,7 +460,10 @@ export default function HistoryIndex() {
       <SegmentedControl segments={MODES} activeKey={mode} onSelect={setMode} />
 
       {mode === "day" ? (
-        <ByDayView profile={profile} prEntries={prEntries} sessionCount={sessionCount} streak={streak} />
+        /* statsError is passed so the tiles can say "—" rather than render
+           a confident 0 sessions / 0-week streak when the stats fetch is
+           what actually failed. */
+        <ByDayView profile={profile} prEntries={prEntries} sessionCount={sessionCount} streak={streak} statsError={statsError} />
       ) : (
         <ByWorkoutView exercises={stats?.exercises ?? null} loadError={statsError} onRetry={() => setRetryKey((k) => k + 1)} />
       )}

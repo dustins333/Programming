@@ -480,6 +480,9 @@ export default function SpcWorkoutBuilderWeb() {
                         onRemove={handleRemoveExercise}
                         onToggleSuperset={handleToggleSuperset}
                         supersetLetter={item.superset_group_id ? supersetLetters[item.superset_group_id] : null}
+                        linkedToNext={Boolean(
+                          item.superset_group_id && item.superset_group_id === exercises[i + 1]?.superset_group_id
+                        )}
                       />
                     ))
                   )}

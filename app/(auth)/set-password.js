@@ -16,23 +16,28 @@ export default function SetPassword() {
     // The invite/recovery email link carries a token_hash, not a live
     // session — exchange it first, same two-step flow as the web app's
     // /auth/confirm route.
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: type === "invite" ? "invite" : "recovery",
-    });
-    if (verifyError) {
-      setErrorMessage(verifyError.message);
-      setLoading(false);
-      return;
-    }
+    // See login.js — a rejection here used to leave the button spinning.
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type === "invite" ? "invite" : "recovery",
+      });
+      if (verifyError) {
+        setErrorMessage(verifyError.message);
+        return;
+      }
 
-    const { error: updateError } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (updateError) {
-      setErrorMessage(updateError.message);
-      return;
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) {
+        setErrorMessage(updateError.message);
+        return;
+      }
+      router.replace("/");
+    } catch (err) {
+      setErrorMessage(err.message ?? String(err));
+    } finally {
+      setLoading(false);
     }
-    router.replace("/");
   };
 
   return (

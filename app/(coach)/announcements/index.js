@@ -11,7 +11,7 @@ import {
   deleteAnnouncement,
   pushAnnouncementNow,
 } from "../../../lib/programming/announcements";
-import { formatDateTimeInBoise } from "../../../lib/boiseDate";
+import { formatDateTimeInBoise, boiseInstantFrom, dateInBoise, todayInBoise, addDays } from "../../../lib/boiseDate";
 import { confirmDeleteAnnouncement } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
@@ -51,14 +51,19 @@ function audienceLabel(announcement, groupPrograms) {
 // modal list (native) fed by the same explicit option lists is slower to
 // scan but behaves identically everywhere — same reasoning as every other
 // web/native form control split in this app.
+// Both read the instant in BOISE, not device-local, so the default the
+// picker opens on is the same clock the coach is scheduling against.
 function toDateValue(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return dateInBoise(date);
 }
 
 function toTimeValue(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Boise",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }
 
 // scan-announcements only scans every 15 minutes anyway (0025's cron
@@ -84,15 +89,21 @@ function buildTimeOptions() {
 }
 const TIME_OPTIONS = buildTimeOptions();
 
+// Built from the Boise date, so "Today" means today at the gym even when
+// the coach's device disagrees.
 function buildDateOptions(daysAhead) {
   const options = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = todayInBoise();
   for (let i = 0; i < daysAhead; i += 1) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    const label = i === 0 ? "Today" : i === 1 ? "Tomorrow" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-    options.push({ value: toDateValue(d), label });
+    const value = addDays(today, i);
+    // Parsed at noon so the weekday label can't roll to the wrong day.
+    const label =
+      i === 0
+        ? "Today"
+        : i === 1
+        ? "Tomorrow"
+        : new Date(`${value}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    options.push({ value, label });
   }
   return options;
 }
@@ -122,16 +133,21 @@ export default function Announcements() {
   const [scheduleDate, setScheduleDate] = useState(() => toDateValue(roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000))));
   const [scheduleTime, setScheduleTime] = useState(() => toTimeValue(roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000))));
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const dateOptions = useMemo(() => buildDateOptions(60), []);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       const [programs, announcements] = await Promise.all([listGroupPrograms(), listAnnouncements()]);
       setGroupPrograms(programs);
       setHistory(announcements);
     } catch (err) {
-      console.error("Failed to load announcements:", err);
+      // A console.error only meant a failed load rendered "No announcements
+      // yet" as if it were true, while the empty group-program list silently
+      // blocked every targeted send behind its own validation.
+      setLoadError(err.message ?? String(err));
     } finally {
       setLoading(false);
     }
@@ -164,7 +180,11 @@ export default function Announcements() {
   const resolveSendAt = () => {
     if (timing === "now") return new Date().toISOString();
     if (!scheduleDate || !scheduleTime) throw new Error("Pick a date and time to schedule for");
-    return new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
+    // Boise, not the coach's device timezone — the picker's options are gym
+    // time and the History line below renders in gym time, so resolving in
+    // device-local meant a travelling coach scheduled the wrong hour and
+    // then saw a time they hadn't picked.
+    return boiseInstantFrom(scheduleDate, scheduleTime);
   };
 
   const handleSend = async () => {
@@ -389,6 +409,15 @@ export default function Announcements() {
 
         {loading ? (
           <ActivityIndicator color={colors.primary} />
+        ) : loadError ? (
+          <View>
+            <Text className="mb-2 text-sm text-red-600" style={{ fontFamily: fonts.sans }}>
+              Couldn't load announcements. {loadError}
+            </Text>
+            <Pressable onPress={load} className="self-start">
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+            </Pressable>
+          </View>
         ) : history.length === 0 ? (
           <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
             No announcements yet — compose one above and it'll appear here.

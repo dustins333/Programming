@@ -11,7 +11,7 @@ import { autofillSuppressedRef } from "../../lib/webAutofillSuppression";
 // render at exactly this height, or the input boxes don't line up across the
 // row — a TextInput sized only by its own padding + font metrics and a web
 // <select> sized by its own padding never land on the same number by
-// coincidence. RatingSelect imports this for the same reason. minHeight, not
+// coincidence. minHeight, not
 // height, so Dynamic Type can still grow the box rather than clip it.
 // 50 is what a TargetField already measures at its default size (1px border +
 // py-3 + a 24px line box, measured in the browser) — so this pins the other

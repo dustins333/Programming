@@ -347,10 +347,7 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
                 <View className="mt-2.5 flex-row items-center gap-4">
                   {onUseExisting ? (
                     <Pressable
-                      onPress={() => {
-                        onUseExisting(likelyDuplicates[0].exercise);
-                        onClose();
-                      }}
+                      onPress={() => onUseExisting(likelyDuplicates[0].exercise)}
                     >
                       <Text className="text-xs" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
                         Use that one

@@ -11,9 +11,8 @@ import { fonts, colors } from "../../lib/theme";
 // scanning eleven weeks wants the shape of each week, not 77 cells at once,
 // and the day-level numbers are what she opens a week to see.
 //
-// WeekList.js is left in place for its enumerateRecentWeeks helper, which
-// this screen and the check-in timeline both use; its own table component is
-// no longer rendered anywhere.
+// Supersedes the old flat metric grid. Its enumerateRecentWeeks helper
+// moved to lib/nutrition/weekCycle.js, beside its forward counterpart.
 
 const OK = "#4d6142";
 const OFF = "#b23a22";
@@ -167,7 +166,10 @@ function DayTable({ week, target }) {
               )}
               {day ? (
                 <Text numberOfLines={1} style={{ flex: NOTE_FLEX, minWidth: 150, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
-                  {day.note || "—"}
+                  {/* client_note, not note — `day` is a raw public.daily_logs
+                      row and there is no `note` column, so this rendered "—"
+                      for every note a member has ever written. */}
+                  {day.client_note || "—"}
                 </Text>
               ) : null}
             </View>

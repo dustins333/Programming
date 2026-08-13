@@ -40,8 +40,12 @@ export function RateRow({ label, unit, value, onSave }) {
               }
               const ok = await confirmRateChange(label, value, n);
               if (!ok) return;
-              await onSave(n);
-              setEditing(null);
+              try {
+                await onSave(n);
+                setEditing(null);
+              } catch (err) {
+                toastError("Failed to save rate", err);
+              }
             }}
           >
             <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, fontSize: 13 }}>Save</Text>

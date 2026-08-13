@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../../../lib/auth/AuthProvider";
@@ -23,6 +23,10 @@ export default function OnboardingApprove() {
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const [clientRow, { data: logs }, targetRows] = await Promise.all([
         getClient(userId),
@@ -58,13 +62,12 @@ export default function OnboardingApprove() {
     return (
       <CoachShell>
         <View className="flex-1 items-center justify-center bg-white px-6">
-          <><Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+          <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
             {loadError}
           </Text>
-        <Pressable onPress={load} style={{ marginTop: 12, alignSelf: "center" }}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
-        </Pressable>
-      </>
+          <Pressable onPress={load} style={{ marginTop: 12, alignSelf: "center" }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
         </View>
       </CoachShell>
     );

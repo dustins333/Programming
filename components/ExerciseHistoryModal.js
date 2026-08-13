@@ -34,12 +34,28 @@ function groupByDate(logs) {
 // autosave writes into the same `logs` table this reads).
 export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exerciseName }) {
   const [logs, setLogs] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
 
+  // The lift title itself opens this, so it's one of the most-tapped things
+  // in the whole logging flow — an uncaught rejection here left a spinner
+  // that never resolved, and reopening the same lift didn't retry.
   useEffect(() => {
     if (!visible || !exerciseId) return;
+    let cancelled = false;
     setLogs(null);
-    listLogsForExercise(userId, exerciseId).then(setLogs);
-  }, [visible, exerciseId, userId]);
+    setLoadError(null);
+    listLogsForExercise(userId, exerciseId)
+      .then((rows) => {
+        if (!cancelled) setLogs(rows);
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err.message ?? String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, exerciseId, userId, retryKey]);
 
   const groups = logs ? groupByDate(logs) : [];
 
@@ -73,7 +89,16 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
             </Pressable>
           </View>
 
-          {!logs ? (
+          {loadError ? (
+            <View className="items-center py-8">
+              <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
+                Couldn't load this lift's history.
+              </Text>
+              <Pressable onPress={() => setRetryKey((k) => k + 1)} hitSlop={8}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : !logs ? (
             <View className="items-center py-8">
               <ActivityIndicator color={colors.primary} />
             </View>

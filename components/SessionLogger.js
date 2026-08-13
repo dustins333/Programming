@@ -42,7 +42,7 @@ export function SessionLogger({
   userId,
   datePerformed,
   source,
-  exercises,
+  exercises: allExercises,
   isCompleted,
   onFinalize,
   hideFinalizeButton,
@@ -56,6 +56,13 @@ export function SessionLogger({
   scrollOffsetRef,
   onDataChanged,
 }) {
+  // Drop any row whose exercises join came back null — an archived or
+  // RLS-invisible exercise. Guarding here rather than at each of the ~6
+  // `item.exercise.…` reads below is deliberate: without it one bad row took
+  // down the entire My Fitness page, not just its own card, and every other
+  // reader of this shape already skips nulls (see exerciseStats.js).
+  const exercises = (allExercises ?? []).filter((item) => item?.exercise);
+
   const isSession = layout === "session";
   const [finalizing, setFinalizing] = useState(false);
   const [expandedIds, setExpandedIds] = useState(() => new Set());

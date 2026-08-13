@@ -223,6 +223,7 @@ export function ExerciseCard({
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
   const [saveState, setSaveState] = useState("idle"); // idle | pending | saving | saved | error
+  const [saveRetry, setSaveRetry] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   // Which row's calculator is open. The mark itself is always rendered (not
   // gated on the TextInput being focused) — an opacity/pointerEvents toggle
@@ -323,8 +324,11 @@ export function ExerciseCard({
       }
     }, AUTOSAVE_DELAY_MS);
     return () => clearTimeout(debounceRef.current);
+    // saveRetry is in here so the "Try again" button below re-runs this
+    // effect: it only ever fired on a rows/notes change, so a member whose
+    // last save failed had to edit something again to get another attempt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, notes]);
+  }, [rows, notes, saveRetry]);
 
   // Fills the checkbox in the moment every set holds both numbers. Fires
   // only on a genuine false→true transition, never on every keystroke, and
@@ -648,10 +652,17 @@ export function ExerciseCard({
           {/* The olive fill on a set box is the everyday "it saved" signal,
               so success stays silent — but a failure must not look
               identical to a save. */}
-          {saveState === "saving" || saveState === "error" ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: saveState === "error" ? "#b23a22" : "#a8a29e", marginTop: 8 }}>
-              {saveState === "saving" ? "Saving…" : "Couldn't save — check your connection."}
-            </Text>
+          {saveState === "saving" ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 8 }}>Saving…</Text>
+          ) : saveState === "error" ? (
+            <View className="flex-row items-center" style={{ marginTop: 8, gap: 10 }}>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#b23a22", flexShrink: 1 }}>
+                Couldn't save — check your connection.
+              </Text>
+              <Pressable onPress={() => setSaveRetry((n) => n + 1)} hitSlop={8}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: colors.primaryOnWhite }}>Try again</Text>
+              </Pressable>
+            </View>
           ) : null}
         </View>
       ) : null}

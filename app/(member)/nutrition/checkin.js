@@ -21,6 +21,7 @@ import { fonts, colors } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { KeyboardDoneButton } from "../../../components/KeyboardDoneButton";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
+import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
 // Matches My Week/My Fitness/My History's shared canvas — the 4 nutrition
 // screens were left on plain white, which read as inconsistent with the
@@ -177,6 +178,10 @@ function SkipReasonModal({ visible, onClose, onSubmit }) {
 }
 
 export default function WeeklyCheckin() {
+  // Tabs keep this screen mounted, so a mount-only load never re-runs
+  // on a return visit — see lib/useRefreshOnFocus.js.
+  const focusKey = useRefreshOnFocus();
+
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -231,6 +236,10 @@ export default function WeeklyCheckin() {
   const reopenFormAnswerRefs = useRef(new Map());
 
   const load = async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const [q, r, p] = await Promise.all([
         getClientQuestions(profile.id),
@@ -258,7 +267,7 @@ export default function WeeklyCheckin() {
     if (access.status !== "active") return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [access.status, profile.id, currentWeek.start]);
+  }, [access.status, profile.id, currentWeek.start, focusKey]);
 
   const photosRequired = access.client ? isPhotoRequirementWeek(access.client, currentWeek.start) : false;
   // The week's own photos plus its filing window — see
@@ -539,7 +548,9 @@ export default function WeeklyCheckin() {
               </Pressable>
             ) : null}
           </View>
-          {response.answers.map((a, i) => (
+          {/* answers is a jsonb column and can be null on a row written
+              outside this app — .map() on it took the screen down. */}
+          {(response.answers ?? []).map((a, i) => (
             <View key={i} className="mb-4">
               <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold }}>
                 {a.question}

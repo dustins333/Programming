@@ -99,7 +99,10 @@ export default function NutritionPhotoCompare() {
           <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
             {loadError}
           </Text>
-          <Pressable onPress={() => (clients.length === 0 ? loadClients() : loadPhotos(selectedId))}>
+          {/* clients is null, not [], when listClients() itself failed —
+              which is exactly the error this button exists to recover from,
+              so it can't dereference .length unguarded. */}
+          <Pressable onPress={() => (!clients?.length ? loadClients() : loadPhotos(selectedId))}>
             <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
           </Pressable>
         </View>

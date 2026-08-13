@@ -59,6 +59,10 @@ export default function TemplateBuilder() {
   const keyboardPadding = Math.max(0, occludedHeight - tabBarHeight);
 
   const load = useCallback(async () => {
+    // Clear any previous failure first — without this a successful
+    // Retry loaded the data but left the error screen up until the app
+    // restarted, since the render branches on loadError alone.
+    setLoadError(null);
     try {
       const [t, warmupRows, exerciseRows, libraryRows] = await Promise.all([
         getTemplate(templateId),

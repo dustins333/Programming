@@ -964,6 +964,19 @@ export default function MemberHome() {
     const targetsMet = readyGroups.every((g) => g.rows.filter((r) => r.completed).length >= g.sessionsPerWeek)
       && (spc?.status !== "ready" || spc.rows.filter((r) => r.completed).length >= spc.sessionsPerWeek);
 
+    // A member whose only training is one-offs has no groups and no SPC, so
+    // every count below sums to zero and readyGroups.every() on an empty
+    // array is vacuously true — the hero read, literally, "Training complete
+    // — 0 of 0 this week." There's no weekly target to report against here,
+    // so say the true thing instead of a number.
+    if (readyGroups.length === 0 && spc?.status !== "ready") {
+      return {
+        kind: "session_done",
+        title: oneOffs.length > 0 ? "Extras all done" : "Nothing scheduled",
+        meta: "Your coach will add more when there's more to do.",
+      };
+    }
+
     if (targetsMet) {
       const completed =
         readyGroups.reduce((sum, g) => sum + g.rows.filter((r) => r.completed).length, 0) +
@@ -1033,6 +1046,7 @@ export default function MemberHome() {
     setPreview({
       visible: true,
       loading: true,
+      error: null,
       title: `${groupEntry.programName} — Week ${groupEntry.weekNumber}, ${row.label}`,
       subtitle: row.title !== "Untitled session" ? row.title : null,
       completed: row.completed,
@@ -1042,20 +1056,25 @@ export default function MemberHome() {
         weekNumber: String(groupEntry.weekNumber),
         sessionNumber: String(row.sessionNumber),
       },
+      retry: () => openGroupPreview(groupEntry, row),
       warmups: [],
       exercises: [],
     });
-    const [warmups, exercises] = await Promise.all([listWarmups(row.workout.id), listWorkoutExercises(row.workout.id)]);
-    setPreview((p) => ({
-      ...p,
-      loading: false,
-      warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
-      exercises: exercises.map((ex) => ({
-        id: ex.id,
-        name: ex.exercises?.name,
-        detail: `${ex.sets}×${ex.reps}${ex.tempo ? ` · ${ex.tempo}` : ""}`,
-      })),
-    }));
+    try {
+      const [warmups, exercises] = await Promise.all([listWarmups(row.workout.id), listWorkoutExercises(row.workout.id)]);
+      setPreview((p) => ({
+        ...p,
+        loading: false,
+        warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
+        exercises: exercises.map((ex) => ({
+          id: ex.id,
+          name: ex.exercises?.name,
+          detail: `${ex.sets}×${ex.reps}${ex.tempo ? ` · ${ex.tempo}` : ""}`,
+        })),
+      }));
+    } catch (err) {
+      setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));
+    }
   };
 
   const openSpcPreview = async (spcEntry, row) => {
@@ -1063,48 +1082,60 @@ export default function MemberHome() {
     setPreview({
       visible: true,
       loading: true,
+      error: null,
       title: `SPC — ${row.label}`,
       subtitle: row.title !== "Untitled session" ? row.title : null,
       completed: row.completed,
       logParams: { session: "spc", weekNumber: String(spcEntry.weekNumber), sessionNumber: String(row.sessionNumber) },
+      retry: () => openSpcPreview(spcEntry, row),
       warmups: [],
       exercises: [],
     });
-    const [warmups, exerciseRows] = await Promise.all([listSpcWarmups(row.workout.id), listSpcWorkoutExercises(row.workout.id)]);
-    setPreview((p) => ({
-      ...p,
-      loading: false,
-      warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
-      exercises: exerciseRows.map((ex) => ({
-        id: ex.id,
-        name: ex.exercises?.name,
-        detail: `${ex.sets ?? "–"}×${ex.reps ?? "–"}`,
-      })),
-    }));
+    try {
+      const [warmups, exerciseRows] = await Promise.all([listSpcWarmups(row.workout.id), listSpcWorkoutExercises(row.workout.id)]);
+      setPreview((p) => ({
+        ...p,
+        loading: false,
+        warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
+        exercises: exerciseRows.map((ex) => ({
+          id: ex.id,
+          name: ex.exercises?.name,
+          detail: `${ex.sets ?? "–"}×${ex.reps ?? "–"}`,
+        })),
+      }));
+    } catch (err) {
+      setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));
+    }
   };
 
   const openOneOffPreview = async (item) => {
     setPreview({
       visible: true,
       loading: true,
+      error: null,
       title: item.label,
       subtitle: null,
       completed: item.completed,
       logParams: { session: "one_off", oneOffWorkoutId: item.workoutId },
+      retry: () => openOneOffPreview(item),
       warmups: [],
       exercises: [],
     });
-    const [warmups, exercises] = await Promise.all([listOneOffWarmups(item.workoutId), listOneOffExercises(item.workoutId)]);
-    setPreview((p) => ({
-      ...p,
-      loading: false,
-      warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
-      exercises: exercises.map((ex) => ({
-        id: ex.id,
-        name: ex.exercises?.name,
-        detail: `${ex.sets}×${ex.reps}${ex.rest ? ` · rest ${ex.rest}` : ""}`,
-      })),
-    }));
+    try {
+      const [warmups, exercises] = await Promise.all([listOneOffWarmups(item.workoutId), listOneOffExercises(item.workoutId)]);
+      setPreview((p) => ({
+        ...p,
+        loading: false,
+        warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
+        exercises: exercises.map((ex) => ({
+          id: ex.id,
+          name: ex.exercises?.name,
+          detail: `${ex.sets}×${ex.reps}${ex.rest ? ` · rest ${ex.rest}` : ""}`,
+        })),
+      }));
+    } catch (err) {
+      setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));
+    }
   };
 
   const closePreview = () => setPreview((p) => (p ? { ...p, visible: false } : p));
@@ -1309,6 +1340,8 @@ export default function MemberHome() {
         title={preview?.title}
         subtitle={preview?.subtitle}
         loading={preview?.loading}
+        error={preview?.error}
+        onRetry={preview?.retry}
         warmups={preview?.warmups}
         exercises={preview?.exercises}
         completed={preview?.completed}
