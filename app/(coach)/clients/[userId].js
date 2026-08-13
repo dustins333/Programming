@@ -9,6 +9,7 @@ import { getCurrentBlock } from "../../../lib/programming/memberPlan";
 import { currentWeekNumber, blockLengthWeeks } from "../../../lib/programming/schedule";
 import { getMissedSessionFlagsByUser } from "../../../lib/programming/flags";
 import { getSpcClient, assignSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
+import { getCurrentSpcBlock } from "../../../lib/programming/spcBlocks";
 import { getClient as getNutritionClient, createOrReactivateClient, setClientStatus as setNutritionStatus } from "../../../lib/nutrition/clients";
 import { listTemplates } from "../../../lib/programming/templates";
 import { listOneOffWorkoutsForUser, createOneOffFromTemplate, deleteOneOffWorkout } from "../../../lib/programming/oneOffWorkouts";
@@ -26,10 +27,25 @@ import { UpcomingSessionsCard } from "../../../components/UpcomingSessionsCard";
 import { MessageThread } from "../../../components/MessageThread";
 import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CoachShell } from "../../../components/CoachShell";
+import { ClientNotesCard } from "../../../components/ClientNotesCard";
+import { ClientLimitationsCard } from "../../../components/ClientLimitationsCard";
+import { ProgrammingCard, NutritionCard } from "../../../components/ClientSnapshotCards";
+import {
+  listClientNotes,
+  addClientNote,
+  updateClientNote,
+  deleteClientNote,
+  listClientLimitations,
+  addClientLimitation,
+  deleteClientLimitation,
+} from "../../../lib/programming/clientNotes";
+import { getClientNutritionSnapshot } from "../../../lib/nutrition/clientSnapshot";
+import { getExerciseStats } from "../../../lib/programming/exerciseStats";
+import { formatDateMDY } from "../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../lib/toast";
-import { confirmRemoveOneOff, confirmArchiveNutritionClient } from "../../../lib/confirmDialog";
+import { confirmRemoveOneOff, confirmArchiveNutritionClient, confirmDelete } from "../../../lib/confirmDialog";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
-import { todayInBoise } from "../../../lib/boiseDate";
+import { todayInBoise, addDays, dayOfWeekInBoise } from "../../../lib/boiseDate";
 import { fonts, colors } from "../../../lib/theme";
 
 const NUTRITION_TONES = { active: "onTrack", paused: "paused", archived: "paused" };
@@ -79,65 +95,139 @@ function ViewLink({ label, onPress }) {
   );
 }
 
-function ProgressBar({ fraction }) {
+// design_handoff_coach_web_v2 screen 13 — "your four". Four equal cards on
+// a wide screen, stacking to one column below 1100px (a 4-up row of cards
+// this dense is unreadable narrower than that, and the installed PWA on a
+// phone is still a web build). Replaces the old two-panel SnapshotPanel.
+function SnapshotRow({ wide, children }) {
   return (
-    <View className="overflow-hidden rounded-full" style={{ height: 6, backgroundColor: "#f1efed" }}>
-      <View style={{ width: `${Math.round(fraction * 100)}%`, height: "100%", backgroundColor: "#4d6142", borderRadius: 999 }} />
+    <View style={wide ? { flexDirection: "row", gap: 16, marginBottom: 16 } : undefined}>
+      {children.map((child, i) => (
+        // flex:1 on the column stretches it to the tallest sibling, but the
+        // Card inside has to claim that height too or it sits short with a
+        // gap under it — the columns are equal, the cards weren't.
+        <View key={i} style={wide ? { flex: 1 } : undefined}>
+          <Card style={wide ? { flex: 1, marginBottom: 0 } : undefined}>{child}</Card>
+        </View>
+      ))}
     </View>
   );
 }
 
-// Block-progress side + missed-session flags side, side by side on web,
-// stacked on native (same isWeb-flag responsive pattern spc/[userId].js
-// already uses). Injury/note flags are intentionally not built yet — there
-// is no way in this app to tag a coach note as injury-related, so shipping
-// that half of the design's example would mean fabricating data; only the
-// "missed session" flag (computed from real completions) is real here.
-function SnapshotPanel({ blockRows, flags }) {
-  if (blockRows.length === 0 && flags.length === 0) return null;
+const DETAIL_TABS = [
+  { key: "history", label: "Training history" },
+  { key: "progress", label: "Lift progress" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "programs", label: "Programs" },
+  { key: "messages", label: "Messages" },
+];
+
+function TabBar({ active, onSelect, tabs }) {
   return (
-    <Card>
-      <View style={{ flexDirection: isWeb ? "row" : "column", flexWrap: "wrap", gap: isWeb ? 32 : 20 }}>
-        {blockRows.length > 0 && (
-          <View style={{ flex: 1, minWidth: 220 }}>
-            <Text className="mb-2.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-              Current block
-            </Text>
-            {blockRows.map((row, idx) => (
-              <View key={row.programId} style={idx > 0 ? { marginTop: 14 } : undefined}>
-                <Text className="mb-2 text-stone-700" style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }}>
-                  {row.programName} · Week {row.weekNum} of {row.totalWeeks}
-                </Text>
-                <ProgressBar fraction={row.weekNum / row.totalWeeks} />
-              </View>
-            ))}
-          </View>
-        )}
-        {flags.length > 0 && (
-          <View
-            style={
-              isWeb && blockRows.length > 0
-                ? { flex: 1.4, minWidth: 280, borderLeftWidth: 1, borderLeftColor: "#ece7e1", paddingLeft: 32 }
-                : { flex: 1.4, minWidth: 280 }
-            }
-          >
-            <Text className="mb-2.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-              Flags
-            </Text>
-            {flags.map((flag, idx) => (
-              <View key={idx} className="mb-1.5 flex-row items-center gap-2">
-                <View className="shrink-0 rounded-full px-2.5 py-[3px]" style={{ backgroundColor: "#fdece5" }}>
-                  <Text style={{ fontFamily: fonts.sansBold, color: "#b23a22", fontSize: 10.5 }}>Missed session</Text>
-                </View>
-                <Text className="flex-1 text-stone-600" style={{ fontFamily: fonts.sans, fontSize: 12.5 }}>
-                  No log for Session {flag.sessionNumber} ({flag.programName}) · {flag.period ?? "this week"}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5 border-b border-stone-200">
+      <View className="flex-row">
+        {tabs.map((t) => {
+          const isActive = t.key === active;
+          return (
+            <Pressable
+              key={t.key}
+              onPress={() => onSelect(t.key)}
+              className="mr-6 pb-3"
+              style={isActive ? { borderBottomWidth: 2, borderBottomColor: colors.primary } : undefined}
+            >
+              <Text style={{ fontFamily: isActive ? fonts.sansSemiBold : fonts.sansMedium, color: isActive ? colors.primaryOnWhite : "#78716c", fontSize: 14 }}>
+                {t.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
-    </Card>
+    </ScrollView>
+  );
+}
+
+// Every lift this client has ever logged, heaviest-recent first. Built off
+// the same getExerciseStats the member's own My History uses, so the PR
+// rule (3 sessions before eligible, then any increase) can't disagree
+// between what she sees and what her coach sees.
+function LiftProgressTab({ stats, error, onRetry }) {
+  if (error) {
+    return (
+      <View>
+        <Text className="text-red-600" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
+          Couldn't load lift progress: {error}
+        </Text>
+        <Pressable onPress={onRetry} className="mt-2 self-start" hitSlop={6}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  if (!stats) return <ActivityIndicator color={colors.primary} />;
+  if (stats.exercises.length === 0) {
+    return (
+      <Text className="text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
+        Nothing logged yet — this fills in as they record sets.
+      </Text>
+    );
+  }
+
+  const prCountByExercise = new Map();
+  for (const pr of stats.personalRecords) prCountByExercise.set(pr.exerciseId, (prCountByExercise.get(pr.exerciseId) ?? 0) + 1);
+  const rows = [...stats.exercises].sort((a, b) => (a.lastDate < b.lastDate ? 1 : a.lastDate > b.lastDate ? -1 : 0));
+
+  return (
+    <View>
+      <View className="flex-row items-center border-b px-1 pb-2" style={{ borderBottomColor: "#ece7e1" }}>
+        <Text className="flex-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+          Lift
+        </Text>
+        {["Last", "Best", "Sessions", "PRs"].map((h) => (
+          <Text key={h} className="text-right text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5, width: 92 }}>
+            {h}
+          </Text>
+        ))}
+      </View>
+      {rows.map((row) => {
+        const prs = prCountByExercise.get(row.exercise.id) ?? 0;
+        return (
+          <View key={row.exercise.id} className="flex-row items-center border-b px-1 py-2.5" style={{ borderBottomColor: "#f5f2ee" }}>
+            <View className="flex-1 pr-3">
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#44403c" }} numberOfLines={1}>
+                {row.exercise.name}
+              </Text>
+              <Text className="mt-0.5 text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 11.5 }}>
+                {formatDateMDY(row.lastDate)}
+                {row.jump != null && row.jump > 0 ? ` · up ${row.jump} lb recently` : ""}
+              </Text>
+            </View>
+            <Text className="text-right text-stone-600" style={{ fontFamily: fonts.sans, fontSize: 13, width: 92 }}>
+              {row.lastWeight != null ? `${row.lastWeight} lb` : "—"}
+              {row.lastReps != null ? ` × ${row.lastReps}` : ""}
+            </Text>
+            <Text className="text-right" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c", width: 92 }}>
+              {row.best != null ? `${row.best} lb` : "—"}
+            </Text>
+            <Text className="text-right text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 13, width: 92 }}>
+              {row.sessionCount}
+            </Text>
+            <View style={{ width: 92, alignItems: "flex-end" }}>
+              {prs > 0 ? (
+                <View className="rounded-full px-2 py-[3px]" style={{ backgroundColor: "#eef1e7" }}>
+                  <Text style={{ fontFamily: fonts.sansBold, color: "#4d6142", fontSize: 10.5 }}>
+                    {prs} PR{prs === 1 ? "" : "s"}
+                  </Text>
+                </View>
+              ) : (
+                <Text className="text-stone-300" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
+                  —
+                </Text>
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -146,13 +236,13 @@ export default function ClientProfile() {
   const { profile } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const sideBySide = isWeb && width >= 768;
   const [member, setMember] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [currentBlocksByProgramId, setCurrentBlocksByProgramId] = useState({});
   const [missedFlags, setMissedFlags] = useState([]);
   const [spcClient, setSpcClient] = useState(null);
+  const [currentSpcBlock, setCurrentSpcBlock] = useState(null);
   const [nutritionClient, setNutritionClient] = useState(null);
   // Per-module fetch errors — an SPC/Nutrition failure renders inline in its
   // own card instead of blanking the whole profile. The enrollment Switch is
@@ -181,6 +271,45 @@ export default function ClientProfile() {
   const scrollOffsetRef = useRef(0);
   const [lastSignInAt, setLastSignInAt] = useState(undefined);
   const [resending, setResending] = useState(false);
+  // Screen 13's four cards + tabs. Each of these is its own isolated fetch
+  // for the same reason SPC/Nutrition already are on this page: an unrun
+  // migration or a transient failure in one must not blank the profile.
+  const [notes, setNotes] = useState(null);
+  const [notesError, setNotesError] = useState(null);
+  const [limitations, setLimitations] = useState(null);
+  const [limitationsError, setLimitationsError] = useState(null);
+  const [nutritionSnapshot, setNutritionSnapshot] = useState(null);
+  const [nutritionSnapshotError, setNutritionSnapshotError] = useState(null);
+  const [liftStats, setLiftStats] = useState(null);
+  const [liftStatsError, setLiftStatsError] = useState(null);
+  const [tab, setTab] = useState("history");
+
+  const loadNotes = useCallback(async () => {
+    try {
+      setNotesError(null);
+      setNotes(await listClientNotes(userId));
+    } catch (err) {
+      setNotesError(err.message ?? String(err));
+    }
+  }, [userId]);
+
+  const loadLimitations = useCallback(async () => {
+    try {
+      setLimitationsError(null);
+      setLimitations(await listClientLimitations(userId));
+    } catch (err) {
+      setLimitationsError(err.message ?? String(err));
+    }
+  }, [userId]);
+
+  const loadLiftStats = useCallback(async () => {
+    try {
+      setLiftStatsError(null);
+      setLiftStats(await getExerciseStats(userId));
+    } catch (err) {
+      setLiftStatsError(err.message ?? String(err));
+    }
+  }, [userId]);
 
   const load = useCallback(async () => {
     try {
@@ -202,6 +331,14 @@ export default function ClientProfile() {
       if (spcResult.status === "fulfilled") {
         setSpcClient(spcResult.value);
         setSpcError(null);
+        // Own try/catch — the block is only needed for the Programming
+        // card's week counter, and a failure there shouldn't surface as
+        // "SPC failed to load" on the enrollment card.
+        try {
+          setCurrentSpcBlock(spcResult.value ? await getCurrentSpcBlock(userId) : null);
+        } catch {
+          setCurrentSpcBlock(null);
+        }
       } else {
         setSpcError(spcResult.reason?.message ?? String(spcResult.reason));
       }
@@ -290,10 +427,25 @@ export default function ClientProfile() {
       } catch (err) {
         setMessagesError(err.message ?? String(err));
       }
+
+      await Promise.all([loadNotes(), loadLimitations(), loadLiftStats()]);
+
+      // Only worth a query once nutrition is actually on for them — the
+      // card renders "Not enrolled" without one.
+      if (nutritionResult.status === "fulfilled" && nutritionResult.value?.status === "active") {
+        try {
+          setNutritionSnapshotError(null);
+          setNutritionSnapshot(await getClientNutritionSnapshot(userId));
+        } catch (err) {
+          setNutritionSnapshotError(err.message ?? String(err));
+        }
+      } else {
+        setNutritionSnapshot(null);
+      }
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
-  }, [userId]);
+  }, [userId, loadNotes, loadLimitations, loadLiftStats]);
 
   // useFocusEffect, not mount-only — pushing into a builder/SPC/nutrition
   // screen and popping back would otherwise show stale enrollment/flags,
@@ -500,13 +652,97 @@ export default function ClientProfile() {
     })
     .filter(Boolean);
 
+  // SPC belongs in here too. Leaving it out meant an SPC-only client — who
+  // has no group membership at all — read "No active block right now" on a
+  // page that was simultaneously linking to their live SPC block. Real
+  // case: Bob, SPC-only, mid-week-1 of a published 4-week block.
+  if (spcActive && currentSpcBlock) {
+    blockRows.push({
+      programId: `spc-${currentSpcBlock.id}`,
+      programName: "SPC",
+      weekNum: currentWeekNumber(currentSpcBlock.block_start_date, currentSpcBlock.block_length_weeks, today),
+      totalWeeks: currentSpcBlock.block_length_weeks,
+      href: `/(coach)/spc/${userId}`,
+    });
+  }
+
+  // Group memberships link to that program's calendar (pre-filtered), SPC
+  // to their SPC page, Nutrition to their nutrition record.
+  const membershipPills = [
+    ...assignments.map((a) => ({
+      key: a.group_program_id,
+      label: a.group_programs?.name ?? "Group",
+      href: `/(coach)/blocks?program=${a.group_program_id}`,
+      bg: "#eef1e7",
+      text: "#4d6142",
+    })),
+    ...(spcActive ? [{ key: "spc", label: "SPC", href: `/(coach)/spc/${userId}`, bg: "#eef1e7", text: "#4d6142" }] : []),
+    ...(nutritionActive
+      ? [{ key: "nutrition", label: "Nutrition", href: `/(coach)/nutrition/clients/${userId}`, bg: "#fdf6f2", text: colors.primaryOnWhite }]
+      : []),
+  ];
+
+  const weekStart = addDays(today, dayOfWeekInBoise(today) === 0 ? -6 : 1 - dayOfWeekInBoise(today));
+  const weekCompleted = recentSessions.filter((s) => s.date >= weekStart).length;
+  const weeklyTarget =
+    assignments.reduce((sum, a) => sum + (a.sessions_per_week ?? 3), 0) + (spcActive ? spcClient?.sessions_per_week ?? 0 : 0);
+  const wideCards = isWeb && width >= 1100;
+  const visibleTabs = DETAIL_TABS.filter((t) => t.key !== "messages" || messagingEnabled);
+
+  const handleAddNote = async (body) => {
+    try {
+      await addClientNote(userId, profile.id, body);
+      await loadNotes();
+    } catch (err) {
+      toastError("Failed to save note", err);
+    }
+  };
+
+  const handleTogglePin = async (note) => {
+    try {
+      await updateClientNote(note.id, { pinned: !note.pinned });
+      await loadNotes();
+    } catch (err) {
+      toastError("Failed to update note", err);
+    }
+  };
+
+  const handleDeleteNote = async (note) => {
+    if (!(await confirmDelete("Delete this note? It can't be recovered.", "Delete note?"))) return;
+    try {
+      await deleteClientNote(note.id);
+      await loadNotes();
+    } catch (err) {
+      toastError("Failed to delete note", err);
+    }
+  };
+
+  const handleAddLimitation = async (fields) => {
+    try {
+      await addClientLimitation(userId, profile.id, fields);
+      await loadLimitations();
+    } catch (err) {
+      toastError("Failed to add limitation", err);
+    }
+  };
+
+  const handleDeleteLimitation = async (lim) => {
+    if (!(await confirmDelete(`Remove "${lim.area} · ${lim.guidance}"?`, "Remove limitation?"))) return;
+    try {
+      await deleteClientLimitation(lim.id);
+      await loadLimitations();
+    } catch (err) {
+      toastError("Failed to remove limitation", err);
+    }
+  };
+
   return (
     <CoachShell>
       <ScrollView
         ref={scrollViewRef}
         className="flex-1"
         style={{ backgroundColor: "#faf8f6" }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: 900 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: wideCards ? 1240 : 900 }}
         onScroll={(e) => {
           scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
         }}
@@ -529,9 +765,27 @@ export default function ClientProfile() {
             </Text>
           </View>
           <View>
-            <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 22 }}>
-              {member.name}
-            </Text>
+            <View className="flex-row flex-wrap items-center gap-2.5">
+              <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 22 }}>
+                {member.name}
+              </Text>
+              {/* Same membership pills the roster row shows, but each one is
+                  a real link to that module's page for this client — the
+                  roster tells you what they're on, this tells you and takes
+                  you there. */}
+              {membershipPills.map((pill) => (
+                <Pressable
+                  key={pill.key}
+                  onPress={() => router.push(pill.href)}
+                  className="flex-row items-center gap-1 rounded-full px-2.5 py-1"
+                  style={{ backgroundColor: pill.bg }}
+                  hitSlop={4}
+                >
+                  <Text style={{ fontFamily: fonts.sansSemiBold, color: pill.text, fontSize: 11.5 }}>{pill.label}</Text>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, color: pill.text, fontSize: 11.5 }}>›</Text>
+                </Pressable>
+              ))}
+            </View>
             <Text className="text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
               {member.email}
               {member.phone ? ` · ${member.phone}` : ""}
@@ -552,8 +806,60 @@ export default function ClientProfile() {
           </View>
         </View>
 
-        <SnapshotPanel blockRows={blockRows} flags={missedFlags} />
+        <SnapshotRow wide={wideCards}>
+          {[
+            <ProgrammingCard
+              key="programming"
+              blockRows={blockRows}
+              flags={missedFlags}
+              lastSession={recentSessions[0] ?? null}
+              weekCompleted={weekCompleted}
+              weeklyTarget={weeklyTarget}
+              hasProgram={assignments.length > 0 || spcActive}
+              onOpenBlock={(row) => router.push(row.href ?? `/(coach)/blocks?program=${row.programId}`)}
+            />,
+            <NutritionCard
+              key="nutrition"
+              enrolled={nutritionActive}
+              snapshot={nutritionSnapshot}
+              error={nutritionSnapshotError}
+              onReview={() => router.push(`/(coach)/nutrition/clients/${userId}`)}
+              onRetry={load}
+            />,
+            <View key="notes">
+              <Text className="mb-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.55 }}>
+                Your notes
+              </Text>
+              <ClientNotesCard
+                notes={notes}
+                error={notesError}
+                coachNameById={coachNameById}
+                currentUserId={profile?.id}
+                onAdd={handleAddNote}
+                onTogglePin={handleTogglePin}
+                onDelete={handleDeleteNote}
+                onRetry={loadNotes}
+              />
+            </View>,
+            <View key="limitations">
+              <Text className="mb-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.55 }}>
+                Limitations
+              </Text>
+              <ClientLimitationsCard
+                limitations={limitations}
+                error={limitationsError}
+                onAdd={handleAddLimitation}
+                onDelete={handleDeleteLimitation}
+                onRetry={loadLimitations}
+              />
+            </View>,
+          ]}
+        </SnapshotRow>
 
+        <TabBar active={tab} onSelect={setTab} tabs={visibleTabs} />
+
+        {tab === "programs" ? (
+        <>
         <SettingsCard icon="barbell-outline" title="Group programs">
           {programs.length === 0 ? (
             <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
@@ -727,28 +1033,29 @@ export default function ClientProfile() {
             </Text>
           </Pressable>
         </SettingsCard>
+        </>
+        ) : null}
 
-        {/* Done and due, side by side where there's room for two columns.
-            Gated on real width, not just platform — the installed PWA is a
-            web build on a phone screen, where two columns would be
-            unreadable. Same 768 breakpoint CoachShell's own mobile nav
-            uses. Both cards cap at three rows with their own expander, so
-            neither runs away from the other. */}
-        <View style={sideBySide ? { flexDirection: "row", gap: 16 } : undefined}>
-          <View style={sideBySide ? { flex: 1 } : undefined}>
-            <SettingsCard icon="stats-chart-outline" title="Recent sessions">
-              <RecentSessionsCard userId={userId} sessions={recentSessions} />
-            </SettingsCard>
-          </View>
-          <View style={sideBySide ? { flex: 1 } : undefined}>
-            <SettingsCard icon="calendar-outline" title="Upcoming sessions">
-              <UpcomingSessionsCard sessions={upcomingSessions} errors={upcomingErrors} />
-            </SettingsCard>
-          </View>
-        </View>
+        {tab === "history" ? (
+          <Card>
+            <RecentSessionsCard userId={userId} sessions={recentSessions} />
+          </Card>
+        ) : null}
 
-        {messagingEnabled ? (
-          <SettingsCard icon="chatbubble-outline" title="Messages">
+        {tab === "progress" ? (
+          <Card>
+            <LiftProgressTab stats={liftStats} error={liftStatsError} onRetry={loadLiftStats} />
+          </Card>
+        ) : null}
+
+        {tab === "upcoming" ? (
+          <Card>
+            <UpcomingSessionsCard sessions={upcomingSessions} errors={upcomingErrors} />
+          </Card>
+        ) : null}
+
+        {tab === "messages" && messagingEnabled ? (
+          <Card>
             <MessageThread
               messages={messages}
               loadError={messagesError}
@@ -762,7 +1069,7 @@ export default function ClientProfile() {
               scrollViewRef={scrollViewRef}
               scrollOffsetRef={scrollOffsetRef}
             />
-          </SettingsCard>
+          </Card>
         ) : null}
 
         <AssignOneOffModal

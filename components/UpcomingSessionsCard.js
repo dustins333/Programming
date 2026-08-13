@@ -11,8 +11,10 @@ const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 // the database yet (a session only exists once it's finalized), so there's
 // nothing to expand into. See listUpcomingSessionsForUser for where these
 // are derived from.
-function whenLabel(date, today) {
-  if (!date) return "This week";
+function whenLabel(date, today, fallback) {
+  // SPC sessions carry no date at all (a client picks the day), so the
+  // source supplies which week it lands in instead.
+  if (!date) return fallback ?? "This week";
   if (date === today) return "Today";
   if (date === addDays(today, 1)) return "Tomorrow";
   return `${WEEKDAY_SHORT[dayOfWeekInBoise(date)]} ${formatDateMD(date)}`;
@@ -23,12 +25,15 @@ function UpcomingRow({ session, today }) {
   return (
     <View className="flex-row items-center justify-between border-b border-stone-100 py-3">
       <View className="flex-1 pr-3">
+        {/* Same two-line shape as the training-history rows: which session
+            on top, the coach's name for it (if any) down with the meta. */}
         <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13.5 }} className="text-stone-700">
-          {session.title ? `${session.label} · ${session.title}` : session.label}
+          {session.label}
         </Text>
         <View className="flex-row items-center gap-1.5">
           <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
             {session.meta}
+            {session.title ? ` · ${session.title}` : ""}
           </Text>
           {session.isDraft ? (
             <View className="rounded-full" style={{ backgroundColor: "#fdf1de", paddingHorizontal: 6, paddingVertical: 1 }}>
@@ -44,7 +49,7 @@ function UpcomingRow({ session, today }) {
           color: isToday ? colors.primaryOnWhite : "#78716c",
         }}
       >
-        {whenLabel(session.date, today)}
+        {whenLabel(session.date, today, session.when)}
       </Text>
     </View>
   );

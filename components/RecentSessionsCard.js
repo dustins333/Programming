@@ -49,17 +49,31 @@ export function SessionRow({ userId, session, title, onOpenClient }) {
     }
   };
 
-  const groups = logs ? groupByExercise(logs) : [];
+  // listLogsForDate returns everything logged that calendar day, so a
+  // client who finalizes two sessions on one day would otherwise see both
+  // sessions' lifts under each row. Narrow to the exercises this session
+  // actually programs (see exerciseIdsForCompletion in coachLogs.js).
+  // session.exerciseIds is null for a session with no exercise rows — then
+  // there's nothing to narrow by and the unfiltered day is the honest
+  // answer.
+  const visibleLogs = logs && session.exerciseIds ? logs.filter((row) => session.exerciseIds.has(row.exercise_id)) : logs;
+  const groups = visibleLogs ? groupByExercise(visibleLogs) : [];
 
   return (
     <View className="border-b border-stone-100 py-3">
       <Pressable onPress={handleToggle} className="flex-row items-center justify-between">
+        {/* Headline is which session it was ("SPC - Week 1 session 1");
+            the coach's own name for it, when they gave one, sits on the
+            second line after the date rather than competing with it. In
+            the dashboard feed `title` is the member's name, so the session
+            label moves down a line there instead. */}
         <View className="flex-1 pr-3">
           <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13.5 }} className="text-stone-700">
             {title ?? session.label}
           </Text>
           <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
             {title ? `${session.label} · ${formatDateMDY(session.date)}` : formatDateMDY(session.date)}
+            {session.sessionTitle ? ` · ${session.sessionTitle}` : ""}
           </Text>
         </View>
         <Ionicons name={open ? "chevron-up" : "chevron-down"} size={16} color="#a8a29e" />
@@ -76,7 +90,7 @@ export function SessionRow({ userId, session, title, onOpenClient }) {
             <Text className="text-xs text-red-600" style={{ fontFamily: fonts.sans }}>
               Couldn't load this session: {loadError}
             </Text>
-          ) : !logs ? (
+          ) : !visibleLogs ? (
             <ActivityIndicator color={colors.primary} size="small" style={{ alignSelf: "flex-start" }} />
           ) : groups.length === 0 ? (
             <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>

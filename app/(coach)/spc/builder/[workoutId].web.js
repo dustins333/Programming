@@ -29,6 +29,8 @@ import { ExercisePickerModal } from "../../../../components/ExercisePickerModal"
 import { ExerciseLibrarySidebar } from "../../../../components/ExerciseLibrarySidebar";
 import { SessionPreviewModal } from "../../../../components/SessionPreviewModal";
 import { CommentThread } from "../../../../components/CommentThread";
+import { ClientLimitationsCard } from "../../../../components/ClientLimitationsCard";
+import { listClientLimitations } from "../../../../lib/programming/clientNotes";
 import { PressFade } from "../../../../components/PressFade";
 import {
   BUILDER_CANVAS,
@@ -85,6 +87,9 @@ export default function SpcWorkoutBuilderWeb() {
   const [publishing, setPublishing] = useState(false);
   const [copyingLastWeek, setCopyingLastWeek] = useState(false);
   const [saveState, setSaveState] = useState("saved"); // saved | saving | error
+  // Own state, own failure mode — migration 0057 may not be run in every
+  // environment, and a builder must never fail to open over a rail panel.
+  const [limitations, setLimitations] = useState(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -108,6 +113,11 @@ export default function SpcWorkoutBuilderWeb() {
       setLibrary(libraryRows);
       setSiblingLifts(siblings);
       setBlockWorkouts(allBlockWorkouts);
+      try {
+        setLimitations(await listClientLimitations(w.spc_blocks.spc_client_id));
+      } catch {
+        setLimitations([]);
+      }
       setLastWeek(previousWeek);
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -486,6 +496,21 @@ export default function SpcWorkoutBuilderWeb() {
               style={{ width: 268, flexGrow: 0, flexShrink: 0, borderLeftWidth: 1, borderLeftColor: BUILDER_CARD_BORDER, backgroundColor: "#faf8f6" }}
               contentContainerStyle={{ padding: 18, flexGrow: 1 }}
             >
+              {/* Limitations lead the rail — they're a constraint on what
+                  you're about to write, so they have to be read before the
+                  balance and last-week panels, not after. Read-only here:
+                  editing them belongs on the client's own page, which is
+                  where the coach has the context to change one. */}
+              {limitations && limitations.length > 0 ? (
+                <View style={{ marginBottom: 22 }}>
+                  <Text
+                    style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.55, color: "#a8a29e", textTransform: "uppercase", marginBottom: 10 }}
+                  >
+                    Limitations
+                  </Text>
+                  <ClientLimitationsCard limitations={limitations} editable={false} compact />
+                </View>
+              ) : null}
               <BalanceRail counts={patternCounts} note={balanceNote} />
               <LastWeekRail lastWeek={lastWeek} onCopy={handleCopyLastWeek} copying={copyingLastWeek} />
               {/* Same reasoning as the group builder: block notes are

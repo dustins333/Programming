@@ -727,7 +727,7 @@ Terra runs payroll for ~13 coaches out of a separate Glide app (a Google Sheet e
 **Finalize/lock/close — a genuinely new three-layer hierarchy, not in Glide at all** (`PayEntries.Locked` existed in the Glide schema but was never once used in 2,161 real rows). Per Terra's explicit ask ("I want a button that locks in that pay period... for audit purposes... it's not changing"):
 1. **Per-coach finalize** (`payroll.finalize_own_period()`, security-definer RPC — the *only* write path for a coach onto `payroll.finalizations`, since RLS can't restrict which column a plain UPDATE touches and a coach must never be able to set their own `reopened_at` to self-unlock). Locks that coach's own entries; admin can reopen (plain table write, same "admin reopens" shape as `programming.nutrition_checkin_reopens`).
 2. **Admin hard-close** (`app/(coach)/payroll/periods.js`'s "Close pay period" button, `confirmClosePayPeriod()` warns by name who hasn't finalized yet as an informed override, not a silent one) — sets `pay_periods.closed = true`. RLS enforces this as a genuine hard stop: **nobody, including admin, can write to a closed period through the app afterward** — a real post-close correction is a manual DB action outside the app, same standing precedent as every other irreversible-action decision in this codebase.
-3. **Deadline reminders** — new `supabase/functions/scan-payroll-deadline-reminders/index.ts` (structured identically to `scan-spc-alerts`: `CRON_SECRET` header auth, `--no-verify-jwt` deploy, service-role client, `sendPushToUser` from the shared `expoPush.ts`) pushes any coach with no finalization yet once the configured weekly deadline passes (`core.settings`: `payroll_deadline_weekday`/`payroll_deadline_time`/`notify_payroll_deadline_reminders`, editable from the Pay Periods admin screen — not yet wired into a Settings UI, currently only editable by hand in `core.settings`). **Deployed and running**: the function is live, migration `0038_payroll_deadline_cron.sql` is run (registers the cron job, polling every 15 minutes and letting the function itself gate on the real deadline window, same "poll cheap, gate inside the function" shape as `announcement-scan`), and the `x-cron-secret` placeholder was filled with the real project `CRON_SECRET` before running. Worth remembering for next time a project secret needs re-checking: `supabase secrets list` only ever shows a SHA-256 digest per secret, never the plaintext (confirmed directly this session — a pasted "value" from that command turned out to be a 64-hex-char hash, not a real key, when checked against what a real VAPID/CRON secret actually looks like) — there's no way to read a secret's real value back out once set, only rotate it.
+3. **Deadline reminders** — new `supabase/functions/scan-payroll-deadline-reminders/index.ts` (structured identically to `scan-spc-alerts`: `CRON_SECRET` header auth, `--no-verify-jwt` deploy, service-role client, `sendPushToUser` from the shared `expoPush.ts`) pushes any coach with no finalization yet once the deadline passes. **Superseded 2026-08-12 — see "Payroll deadline reminder was firing a week early" below for the current schedule and settings keys**; as originally built it gated on `payroll_deadline_weekday`/`payroll_deadline_time` and polled every 15 minutes. **Deployed and running**: the function is live, migration `0038_payroll_deadline_cron.sql` is run (registers the cron job, letting the function itself gate on the real deadline window, same "poll cheap, gate inside the function" shape as `announcement-scan`), and the `x-cron-secret` placeholder was filled with the real project `CRON_SECRET` before running. Worth remembering for next time a project secret needs re-checking: `supabase secrets list` only ever shows a SHA-256 digest per secret, never the plaintext (confirmed directly this session — a pasted "value" from that command turned out to be a 64-hex-char hash, not a real key, when checked against what a real VAPID/CRON secret actually looks like) — there's no way to read a secret's real value back out once set, only rotate it.
 
 **Historical import — built as a re-runnable script, not a one-time migration**, per direct ask: Terra is staying on Glide for a while and will hand over new exports periodically. `scripts/payroll_import.py` reads the xlsx directly (`openpyxl`, same approach used to analyze the export in the first place) and emits idempotent SQL: `pay_entries` rows reuse Glide's own `EntryID` as their primary key (`ON CONFLICT (id) DO UPDATE`), so re-running against a later export is a genuine upsert, not a duplicate-insert risk. `custom_requests` has no stable id in the source data at all, so it dedupes on a composite unique index (`staff_email, pay_period_start, description, amount_requested` — `0036`) instead — a real, documented limitation (an exact duplicate request could theoretically collide and get skipped), not a guaranteed key. **Two real bugs caught and fixed before this was trusted** — one from static review, one from an actual failed run against the live project:
 1. The first version of the script only attached the `ON CONFLICT` clause to the *last* of 11 batched `pay_entries` INSERT statements (2,161 rows batched 200-at-a-time) — every earlier batch would have 23505'd on any re-run. Caught before Terra ever ran it, by static file inspection. Fixed so every batch is now a fully independent, self-contained idempotent statement.
@@ -1691,13 +1691,220 @@ verified**: any of it behind a real login — same standing limitation as
 everywhere else in this file. Worth Terra's click-through, especially the grid's
 bulk bar, the builder's expand/collapse and rest chips, and a real merge.
 
-### Still to do — screens 10-13 and 17-25
+### Still to do — screens 17-25
 
-Not started: **10** payroll close (needs new approve/send-back state —
-today's model is only finalize/reopen), **11** settings permission matrix,
-**12-13** clients roster / client detail, **17-25** the nine nutrition-record
-tabs (note the Photos tab has a real perf requirement: never bulk-load
-thumbnails, a weekly client passes 150 images inside a year).
+Screens 10-13 landed in phase 4 (below). Remaining: **17-25**, the nine
+nutrition-record tabs (note the Photos tab has a real perf requirement:
+never bulk-load thumbnails, a weekly client passes 150 images inside a
+year).
+
+## Coach web v2 — phase 4, business + people (screens 10-13) (2026-08-12)
+
+Three migrations, all **run and verified live** this session.
+
+**Screen 11 — Settings → Team is a permission matrix.** New
+`components/StaffPermissionMatrix.js` (web ≥1024px only; native and the
+phone-width PWA keep the per-coach card list, which reads fine in one
+column). The four flags live in one exported `PERMISSION_COLUMNS` used by
+both layouts, so they can't drift on which flags exist or what each
+defaults to — SPC/Nutrition/Exercise Library default on (0015), Ops Hours
+defaults off (0036). Admin rows render checked-but-inert rather than blank:
+admin genuinely has every module, and an empty cell would read as "no
+access". The two "+ Add coach"/"+ Add admin" buttons collapsed to one
+"+ Add staff" — `AddStaffModal` has had its own role picker since it was
+built, so the second entry point only ever pre-selected a value the modal
+already asked for. The Settings page's 640px cap widens to 1060 for the
+Team tab only.
+
+**Screen 10 — payroll close is review → approve/send back → close.**
+Migration `0055_payroll_review.sql` adds `approved_at`/`approved_by`/
+`sent_back_at`/`sent_back_by`/`send_back_note` to `payroll.finalizations`
+and replaces `finalize_own_period()` so a re-submit clears them. State is
+**derived from timestamp comparison, not a status column** (`reviewState()`
+in `lib/payroll/finalizations.js`) — that's what makes a pre-0055 row read
+correctly as "submitted, nobody's looked yet", and what returns a
+sent-back coach to Submitted with no extra clearing step to forget.
+
+**The load-bearing detail: sending back also writes `reopened_at`.**
+`pay_entries`' four write policies (0036) gate on the finalized/reopened
+comparison alone, so a send-back that only set `sent_back_at` would be
+purely cosmetic — the coach reads "fix your Ops hours" and is still locked
+out of editing them. Rather than widen four RLS policies to know about a
+second unlock column, `sendBackFinalization` writes both stamps in one
+update. A send-back genuinely *is* a reopen, just one carrying a reason.
+No new policies were needed at all: 0036's "admin manage finalizations" is
+already `for all` and already scoped to an open period.
+
+`admin/periods.js` rebuilt as the review table (eight category columns
+carrying counts/hours, a Pay column, per-row expand into a
+chronological line-item list, approve/send-back/nudge/undo) and
+`admin/closed.js` is new — "This period" and "Closed periods" split into
+separate tabs because a growing list of finished periods under a table
+this dense buried the thing you came to do. Closed rows also gained a
+re-downloadable CSV (rebuilt at that period's frozen rates), since the
+close flow's own auto-download is easy to miss. **Close is a real gate**:
+disabled until every row resolves and every custom request is decided, and
+the band says which — the old version disabled nothing and only told you
+what was wrong after you clicked. Admin tab bar is now This period /
+Requests / Closed periods / Report / Settings; deliberately no "My hours"
+tab (the mock has one, but an admin logging their own hours goes through
+the Staff View mode picker, which is the whole point of that split).
+
+**Screen 12 — clients roster is a real table.** New
+`components/ClientRosterTable.js` (Client / Program / Last session / This
+week / Nutrition / Needs), filter chips carrying counts (including Quiet
+7+ days and Check-in due) replacing the old dropdowns, default sort
+longest-quiet-first. `Needs` is the one column that's an action, in
+priority order: an unassigned client needs a program before anything else
+means much, and a long-quiet client needs a nudge before a check-in
+reminder helps.
+
+Migration `0056_roster_last_session.sql` adds
+`programming.get_last_session_dates(uuid[])`. This app's convention is
+"fetch the rows, group in JS" because supabase-js can't express DISTINCT
+ON — that works where the row count is bounded, and it isn't here (~150
+clients × years of sessions for 150 dates). **Deliberately not security
+definer**: `session_completions` already has a staff-read policy, a stable
+SQL function runs with the caller's rights, so RLS does the access control
+and there's nothing to escalate.
+
+**Real bug caught by a screenshot**: a client who joined Aug 1 rendered
+"Since Jul 2023". Both `toISOString().slice(0,10)` and
+`toLocaleDateString` on a raw timestamptz shift the date for anyone west
+of UTC — the same class this file already warns about. `sinceLabel` now
+goes through `dateInBoise` and reads the month off that date string.
+
+**Screen 13 — client detail's "your four" plus tabs.** Migration
+`0057_client_notes_and_limitations.sql` adds `programming.client_notes`
+(editable/deletable — a note is a living scratchpad, unlike
+`client_messages`, which is an immutable log) and
+`programming.client_limitations` (`area` / `guidance` / `severity`, two
+named values so the rust-vs-amber tone can't drift). **Both are staff-only
+in every direction — no member policy at all, not even select.** These are
+the coach's working notes and a clinical-adjacent shorthand written for a
+coach's eye, not something authored for the client to read. Neither fit
+anywhere existing: `program_comments` is block-scoped (a goal like "225
+squat by December" outlives any block) and `client_messages` is a
+conversation *with* the client.
+
+The old two-panel `SnapshotPanel` is replaced by four equal cards
+(Programming / Nutrition & check-in / Your notes / Limitations), stacking
+below 1100px. Programming's "Current vs Behind" is arithmetic only — it
+means a real missed-session flag exists, never "hasn't trained in a
+while", because a client on holiday isn't behind and the card can't tell
+the difference. Nutrition's numbers come from a new
+`lib/nutrition/clientSnapshot.js` rather than `getNutritionRoster()`,
+which fetches every client's logs to build the roster and is wildly
+disproportionate for one client.
+
+The page's seven-card vertical scroll became a tab strip: **Training
+history / Lift progress / Upcoming / Programs / Messages**. Lift progress
+is genuinely new coach-side and reads `getExerciseStats` — the same
+function the member's own My History uses, so the PR rule (3 sessions
+before eligible, then any increase) can't disagree between what she sees
+and what her coach sees. **Deviation from the mock, deliberate**: its
+"Nutrition" and "Check-ins & photos" tabs aren't built here — both already
+have full dedicated screens under `/(coach)/nutrition/clients/[userId]`
+that these tabs would duplicate badly, and those screens are exactly what
+phase 5 (17-25) redesigns. The four cards link out to them instead.
+
+Limitations are surfaced read-only at the top of the **SPC builder's**
+right rail (`spc/builder/[workoutId].web.js`) — they're a constraint on
+what you're about to write, so they read before the balance and last-week
+panels. SPC only, not the group builder: a group block is shared across a
+whole program, so there's no single client whose limitations apply.
+Editing stays on the client's page, where the coach has the context.
+
+**Verification**: `npx expo export -p web` clean after every batch. The
+permission matrix, the payroll review table (including the send-back note
+panel), the roster table, and the four cards were each rendered and
+screenshotted against fake data via the standing login-screen harness,
+reverted after (`git status` clean on `login.js` each time). All three
+migrations verified by direct schema query.
+
+### Phase 4 follow-up — Terra's click-through, all root-caused against real data
+
+Every one of these reproduced against Bob Getsinger's real rows or the real
+Aug 6 pay period before being touched. **Two "did you change my data?"
+questions both answered no, with evidence** — worth the pattern: query the
+DB and read `updated_at`/`last_edited_by` rather than asserting innocence.
+His SPC session titles ("Session A") were last written 2026-08-07, days
+before the pass, and the literal string appears nowhere in the codebase
+except an unrelated placeholder; `spc_clients.sessions_per_week` is 3 and
+nothing in this app writes it outside the SPC page's own control.
+
+- **Programming card said "no active block" for a client who had one.**
+  Bob is SPC-only, and the card built its rows purely from *group*
+  memberships. SPC blocks are in there now, and each membership row links
+  to its own block — one shared "open the block" button can't say which it
+  means for a client holding both.
+- **Upcoming was empty for a client with sessions coming.** `upcomingSpc
+  Sessions` looked only at the *current* block week; Bob had finalized all
+  three of week 1 the same evening, so it was correctly empty for that week
+  while a fully published week 2 sat there. Now covers this week and next,
+  matching what `upcomingGroupSessions` already did.
+- **Training history showed one long mismatched exercise list per row.**
+  `programming.logs` has no workout reference, so `listLogsForDate` returns
+  *everything* logged that calendar day — three sessions finalized in one
+  evening meant all three rows listed all fifteen lifts. Each session now
+  filters to the exercises it actually programs (new
+  `exerciseIdsForCompletion`). Honest residual: a lift programmed in two
+  sessions completed the same day still shows under both, because the log
+  genuinely can't say which. Fixing that properly needs a session reference
+  on `logs`, not a smarter query.
+- **Session labels retitled** to `SPC - Week 1 session 1` (hyphen, not an
+  em dash, per direct ask), with the coach's own name for the session
+  demoted to the second line after the date. The key change is that the
+  label is built purely from program + week + session — a title is separate
+  data and can never masquerade as the session's identity, so clearing one
+  leaves no ghost. Applied to Upcoming too; that surfaced a duplicate
+  "This week", so undated SPC sessions now carry a `when` field for the
+  right-hand column and the meta line just says "Any day".
+- **Payroll per-staff rows didn't sum to the footer** ($310 of rows under a
+  $919 footer). Rows grouped on `user_id` alone, silently dropping every
+  imported Glide entry that only carries `staff_email` — five real coaches,
+  $238, counted in the total and shown on nobody's row. Now grouped on
+  `user_id ?? staff_email` (the key `computeTotalsByStaff` always used),
+  unmatched emails get their own labelled row, and **the footer sums the
+  rows themselves** so the two can't drift again whatever edge case turns
+  up next.
+- **Close is no longer blocked by un-submitted coaches** — payroll goes out
+  on payday regardless, so that's a warning naming exactly who you're
+  closing over, accepted in the confirm dialog. The only true blocker left
+  is an undecided custom request, because approving one *creates a pay
+  entry* and closing first would strand that money. The running "Close
+  unlocks when…" line is gone; Nudge is gone.
+- **Review table re-laid out.** Detail dropdown is Date · Category · Qty ·
+  Notes · Total, with an Other line's type and count leading the Notes cell
+  (a `$30` row under a category called "Other" told a coach nothing) — done
+  locally rather than by changing the shared `entriesForCategory` labeller,
+  since the Report tab's drill-down wants the type in its Qty slot. On the
+  main rows, status sits above the total, the total is last, and actions
+  moved to their own column — with buttons sharing the money column, a row
+  with actions and one without pushed their totals to different x
+  positions. Two things only measurement caught: the button pair needed 196
+  not 168px, and **every row sat 3px right of the header/footer because a
+  `borderLeftWidth` accent consumes layout width in RN** — header and
+  footer now carry a matching transparent gutter. Verified by reading real
+  `getBoundingClientRect().right` values: all five main-line totals land on
+  one edge.
+- **Clients list defaults to name**, and the client page carries clickable
+  membership pills next to the name.
+
+**Also fixed a phase-3 regression**: the SPC block grid's ⧉ click-to-copy
+flow lived only in `spc/[userId].js`, so adding a `[userId].web.js` sibling
+silently removed it from the platform where programming actually happens —
+native had it the whole time. Rebuilt on web with the same vocabulary
+(source / selected / eligible, "Click to paste here" on empties, sticky
+confirm bar, overwrite confirm counting only tiles that'd lose something).
+**Worth watching for whenever a `.web.js` sibling is added to a page that
+already had behaviour** — same shape as the old warm-up-picker bug.
+
+**Not verified**: any of it behind a real login — standing limitation.
+Worth Terra's click-through, especially a real approve/send-back round trip
+(does the sent-back coach actually get their entries back?), the roster's
+Quiet/Check-in-due chips against real data, and adding a note and a
+limitation.
 
 ## Coach web v2 — phase 3, the SPC screens (2026-08-12)
 
@@ -1782,6 +1989,83 @@ standing limitation. Worth Terra's click-through, especially the roster's
 coverage column against a real block and the read-out opened from a real logged
 session.
 
+## Payroll deadline reminder was firing a week early (2026-08-12)
+
+Terra: *"we are a week off. Its firing today, and it should be next wednesday."*
+Real bug, not a misconfigured setting. `scan-payroll-deadline-reminders` gated
+on `payroll_deadline_weekday` (3 = Wednesday) **alone**, with no awareness of
+where the pay period actually was — so it fired on the Wednesday in the middle
+of every 14-day period too, a full week before anything was due. Pay periods
+run Thursday → Wednesday (the anchor, `2025-10-02`, is a Thursday), so every
+period *ends* on a Wednesday and the every-Wednesday version looked plausible
+right up until you noticed it going off twice as often as payroll is run.
+
+**Fix: both reminders are anchored to the period's own boundary, never to a
+weekday.** `payroll_deadline_weekday` is deleted, not just ignored. Two windows,
+which by construction can never land on the same calendar day (the follow-up day
+*is* the next period's first day) — that's why one `payroll_deadline_reminder_last_sent`
+string (`"<periodStart>:<stage>"`) is enough to keep both idempotent:
+
+| Stage | When | Targets |
+|---|---|---|
+| `final` | period's last day, ≥ `payroll_deadline_time` (20:00) | that period |
+| `followup` | next day, ≥ `payroll_deadline_followup_time` (12:00) | the period that just ended |
+
+**The follow-up's target period is the trap here.** On the follow-up day
+`computePeriodStart(today)` returns the *new* period, but `finalizations` rows
+are keyed by `pay_period_start` — so it has to walk back 14 days, or it would
+scan a period nobody could possibly have finalized yet and remind everyone.
+
+**Cron is hourly (`0 * * * *`), and deliberately not two fixed-time entries.**
+pg_cron schedules are UTC; Boise moves between UTC-6 and UTC-7, so a fixed-UTC
+cron is an hour off half the year — and an hour *early* means the function's
+Boise-time gate fails and no reminder goes out at all that day. Hourly poll +
+in-function Boise gate lands on the right hour year-round. A tighter
+`0 * * * 4` (Thursdays UTC only) would cover both windows today but silently
+couples the cron expression to the two time settings, which have no UI and get
+hand-edited — rejected for that.
+
+**Verified live**, not bundle-checked: function redeployed (v3, `verify_jwt:
+false` confirmed preserved), migration run, and the cron job's own command fired
+once by hand — the deployed function returned `{"skipped":true,"reason":"outside
+both reminder windows","today":"2026-08-12","thisPeriodStart":"2026-08-06",
+"thisPeriodEnd":"2026-08-19"}`. The two windows were also simulated across a
+full period in Node before deploying. Firing a job without exposing its secret:
+`do $$ declare cmd text; begin select command into cmd from cron.job where
+jobname='…'; execute cmd; end $$;` then read `net._http_response` — reusable for
+any `pg_net` cron job.
+
+**Collateral worth knowing**: the old function had *no* idempotency guard at
+all, so on any Wednesday past 17:00 it re-pushed every unfinalized coach on
+every 15-minute poll. On the day this was found that was ~5 duplicate pushes
+between 17:00 and 18:12 Boise. The new guard makes each stage fire once.
+
+**Admin UI, same session**: new `components/payroll/DeadlineReminderCard.js`
+leads Payroll → Admin → Settings (above Rates — it's short, and the Other
+section below ends in a long archived list that would bury it), backed by new
+`lib/payroll/deadlineReminder.js`. On/off `Switch` + both times. Deliberately
+**not** added to Settings → Program Defaults, which whitelists its own four keys
+precisely because rendering that shared table wholesale once corrupted unrelated
+rows (see "Settings → Program Defaults was writing to every core.settings row").
+
+- **The toggle commits on flip; the two times batch behind Save.** A half-typed
+  schedule shouldn't go live, but an off switch should take effect immediately.
+  The toggle is optimistic with a rollback on failure.
+- **Hour granularity only (24 options), not the quarter-hour `TIME_OPTIONS`
+  `settings.js` uses.** The cron polls on the hour, so offering `:15` would be a
+  false promise — a 20:15 setting would really fire at 21:00. Same honesty
+  reasoning as that quarter-hour list, which matches its own 15-minute poll.
+- `describeNextReminders()` shows the two real dates under the pickers. Its one
+  subtlety: **the first day of a period is also the follow-up day for the period
+  that just ended**, so on that day the two lines legitimately describe different
+  periods — returned date-sorted so it doesn't read as the follow-up preceding
+  the deadline it follows.
+- **Screenshot-verified** at desktop and mobile widths via the login-screen
+  harness (reverted, `git diff` confirmed clean), enabled and collapsed states
+  both. The unauthenticated harness also exercised the failure path for real:
+  the RLS rejection surfaced the true error in a toast and the optimistic switch
+  rolled back. **Not verified**: a real admin actually saving — needs a login.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -1817,7 +2101,7 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0035_review_signin_notify.sql` — **run**, confirmed live 2026-08-07. Adds a trigger on `auth.users` that texts Terra whenever `review@kovastrength.com` signs in. See "Text alert when Apple's App Review account signs in" above.
 - `0036_payroll_schema.sql` — **run**, confirmed live 2026-08-07. Creates the whole `payroll` schema (`pay_periods`, `core_rates`, `other_rates`, `spc_tiers`, `pay_entries`, `custom_requests`, `nutrition_assignments`, `finalizations`) plus `core.users.can_log_ops_hours` and the `payroll_period_anchor_date`/`payroll_deadline_weekday`/`payroll_deadline_time`/`notify_payroll_deadline_reminders` `core.settings` rows. Had a real table-ordering bug on the first attempt (fixed same session — see "Payroll module" above) before this ran clean.
 - `0037_payroll_seed_data.sql` — **run**, confirmed live 2026-08-07. Generated (not hand-written) by `scripts/payroll_import.py` from the real Glide export — 2,158 historical `pay_entries`, 43 `custom_requests`, 23 `pay_periods`. Failed once on a genuine duplicate-`EntryID` bug in the source data (fixed same session — see "Payroll module" above) before this ran clean. Re-running this same script against a future, newer Glide export is intentionally safe (idempotent upsert) — see "Payroll module" above for exactly how.
-- `0038_payroll_deadline_cron.sql` — **run**, confirmed live 2026-08-07. Registers the `payroll-deadline-reminder-scan` pg_cron job (every 15 minutes) hitting the deployed `scan-payroll-deadline-reminders` Edge Function, using the project's real `CRON_SECRET`.
+- `0038_payroll_deadline_cron.sql` — **run**, confirmed live 2026-08-07. Registers the `payroll-deadline-reminder-scan` pg_cron job hitting the deployed `scan-payroll-deadline-reminders` Edge Function, using the project's real `CRON_SECRET`. Originally every 15 minutes; rescheduled to hourly by `0058` (below).
 - `0039_payroll_schema_usage_grant.sql` — **run**, confirmed live 2026-08-07. Patches a real bug in `0036`: it granted table/sequence privileges on `payroll` but never `GRANT USAGE ON SCHEMA payroll` itself — Postgres checks schema-level USAGE before table grants, so every payroll query failed with `permission denied for schema payroll` even after `payroll` was correctly checked under Exposed Schemas and RLS/table grants were all in place. Same exact bug class `0003` exists to fix for `core`/`programming`/`nutrition` — missed it this time despite that precedent. `0036` itself is also fixed going forward (includes the USAGE grant now) so a fresh setup elsewhere won't repeat this; `0039` is what actually fixed the already-live project.
 - `0040_exercise_completions.sql` — **run**, confirmed by the user 2026-08-08. Adds `programming.exercise_completions` (per-exercise "mark complete" checkbox on My Fitness's focus logging view — same XOR-of-three + partial-unique-index pattern as `session_completions`, row existence = complete). See "My Week / My Fitness rework" above.
 - `0041_payroll_redesign.sql` — **run**, confirmed live via direct schema query 2026-08-09. Adds `pay_entries.strategy_notes`, `pay_periods.owner_pay`/`staff_pay`/`taxes_paid`, and a new `payroll.closed_period_rate_snapshots` table. See "Payroll redesign: tile-based entry, admin/staff view split, audit-locked closed periods" above.
@@ -1831,6 +2115,10 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0052_workout_edit_tracking.sql` — **run**, confirmed live 2026-08-12 (all six triggers verified in `pg_trigger`, and a rolled-back test UPDATE confirmed `updated_at` moves). Adds `last_edited_by` to `group_workouts`/`spc_workouts` plus BEFORE-UPDATE stamping and AFTER-INSERT/UPDATE/DELETE parent-touch triggers on the four content child tables. Backs the coach-web launchpad's resume card and the grid's "you were here" — see the coach web v2 section above for why this is triggers rather than app-side writes, and why there's no backfill.
 - `0053_exercise_merge_dismissals.sql` — **run**, confirmed live 2026-08-12. Adds `programming.exercise_merge_dismissals` (pairs a coach has deliberately kept separate, canonical id order, reversible) behind the same `core.can_access_exercise_library()` gate as managing the library itself.
 - `0054_spc_tempo.sql` — **run**, confirmed live 2026-08-12 (column verified by direct query, `NOTIFY pgrst, 'reload schema'` sent). Adds `tempo` (text, nullable) to `programming.spc_workout_exercises`. See the coach web v2 phase 3 section above for why 0016's "SPC doesn't get tempo" decision was reversed.
+- `0055_payroll_review.sql` — **run**, confirmed live 2026-08-12 (all five columns verified by direct query). Adds `approved_at`/`approved_by`/`sent_back_at`/`sent_back_by`/`send_back_note` to `payroll.finalizations` and replaces `finalize_own_period()` so a re-submit clears them. No new RLS — 0036's `for all` admin policy already covers these. See the phase-4 section above for why a send-back must also write `reopened_at`.
+- `0056_roster_last_session.sql` — **run**, confirmed live 2026-08-12. Adds `programming.get_last_session_dates(uuid[])` (DISTINCT ON, one row per client, unbounded lookback) for the Clients table's Last session column, its default sort, and the Quiet 7+ days chip. Deliberately caller-rights, not security definer.
+- `0057_client_notes_and_limitations.sql` — **run**, confirmed live 2026-08-12 (both tables + both policies verified). Adds `programming.client_notes` and `programming.client_limitations`, staff-only in every direction — a member has no policy on either, not even select.
+- `0058_payroll_deadline_schedule.sql` — **run**, confirmed live 2026-08-12. Not a schema migration — settings + cron config for the payroll deadline reminder: `payroll_deadline_time` → `20:00`, new `payroll_deadline_followup_time` → `12:00`, **deletes** the now-unread `payroll_deadline_weekday`, and reschedules the cron job to hourly. Uses `cron.alter_job` rather than `cron.schedule` specifically so the existing command (which holds the real `CRON_SECRET`) is preserved and no secret has to be pasted into a committed file — worth reusing whenever only a cron *schedule* needs changing. See the section below.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.

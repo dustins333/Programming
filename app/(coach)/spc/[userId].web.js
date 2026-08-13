@@ -11,7 +11,7 @@ import {
   addDays,
   listSpcWorkoutsForBlock,
 } from "../../../lib/programming/spcBlocks";
-import { copyLastBlockContent, listSpcWorkoutExercisesForWorkouts } from "../../../lib/programming/spcWorkouts";
+import { copyLastBlockContent, copySpcWorkoutContent, listSpcWorkoutExercisesForWorkouts } from "../../../lib/programming/spcWorkouts";
 import { getSpcBlockDetail, weekWindow } from "../../../lib/programming/spcBlockDetail";
 import { getExerciseStats } from "../../../lib/programming/exerciseStats";
 import { currentWeekNumber } from "../../../lib/programming/schedule";
@@ -27,6 +27,7 @@ import { STATUS_LABELS, STATUS_ORDER } from "../../../lib/programming/spcStatus"
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../lib/toast";
+import { confirmOverwrite } from "../../../lib/confirmDialog";
 import { fonts, colors } from "../../../lib/theme";
 
 // SPC client block view, coach web (design_handoff_coach_web_v2, screen 15).
@@ -150,7 +151,11 @@ function BlockBand({ block, label, summary, weekNumber, nextQueued, onBuildNext 
 
 /* ------------------------------------------------------------- the grid */
 
-function SessionCell({ session, onPress }) {
+// copyRole is undefined outside copy mode (the plain tile). In copy mode:
+// "source" = the tile being copied FROM, "selected" = a chosen target,
+// "eligible" = a valid but unchosen target. Same vocabulary as the native
+// page's shared BlockGridCells.SessionCell so the two can't drift apart.
+function SessionCell({ session, onPress, copyRole, onStartCopy }) {
   const style = CELL_STATES[session.state] ?? CELL_STATES.upcoming;
   const detail = (() => {
     switch (session.state) {
@@ -177,22 +182,57 @@ function SessionCell({ session, onPress }) {
     return null;
   })();
 
+  // Copy-mode styling wins over the state colours — while copying, "which
+  // tiles am I about to overwrite" matters more than "is this one logged".
+  const copyStyle =
+    copyRole === "source"
+      ? { backgroundColor: "#fdf6f2", borderColor: colors.primary, borderStyle: "solid" }
+      : copyRole === "selected"
+        ? { backgroundColor: "#fdf6f2", borderColor: colors.primary, borderStyle: "dashed" }
+        : copyRole === "eligible"
+          ? { backgroundColor: "#ffffff", borderColor: "#e0cdc2", borderStyle: "dashed" }
+          : null;
+
   return (
     <PressFade
       onPress={() => onPress(session)}
       style={{
         flex: 1,
         minWidth: 190,
-        backgroundColor: style.bg,
+        backgroundColor: copyStyle?.backgroundColor ?? style.bg,
         borderWidth: 1,
-        borderColor: style.border,
+        borderColor: copyStyle?.borderColor ?? style.border,
+        borderStyle: copyStyle?.borderStyle ?? "solid",
         borderLeftWidth: 3,
-        borderLeftColor: style.border,
+        borderLeftColor: copyStyle?.borderColor ?? style.border,
         borderRadius: 10,
         paddingVertical: 11,
         paddingHorizontal: 13,
       }}
     >
+      {/* The ⧉ only shows on a tile that has something worth copying, and
+          only when we're not already in copy mode. */}
+      {onStartCopy && !copyRole && session.programmedSets > 0 ? (
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation?.();
+            onStartCopy(session);
+          }}
+          hitSlop={8}
+          accessibilityLabel={`Copy session ${session.session_number} of week ${session.week_number}`}
+          style={{ position: "absolute", top: 6, right: 8, zIndex: 2 }}
+        >
+          <Text style={{ color: "#4d6142", fontSize: 13 }}>⧉</Text>
+        </Pressable>
+      ) : null}
+      {copyRole === "source" ? (
+        <Text style={{ position: "absolute", top: 6, right: 8, color: colors.primaryOnWhite, fontSize: 11, fontFamily: fonts.sansSemiBold }}>
+          copying
+        </Text>
+      ) : null}
+      {copyRole === "selected" ? (
+        <Text style={{ position: "absolute", top: 6, right: 8, color: colors.primaryOnWhite, fontSize: 13 }}>✓</Text>
+      ) : null}
       <Text
         style={{
           fontFamily: fonts.sansBold,
@@ -210,7 +250,9 @@ function SessionCell({ session, onPress }) {
       ) : null}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 7 }}>
         <View style={{ width: 7, height: 7, borderRadius: 99, backgroundColor: style.dot }} />
-        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: "#57534e" }}>{detail}</Text>
+        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: "#57534e" }}>
+          {copyRole === "eligible" && session.state === "empty" ? "Click to paste here" : detail}
+        </Text>
       </View>
     </PressFade>
   );
@@ -300,6 +342,13 @@ export default function SpcClientBlockWeb() {
   const [rail, setRail] = useState("Lift progress");
   const [readoutSession, setReadoutSession] = useState(null);
   const [newBlockOpen, setNewBlockOpen] = useState(false);
+  // Click-to-copy: pick a source tile with the ⧉, then click any number of
+  // target tiles, then confirm. Restored on web — it only ever existed on
+  // the native page, so adding this .web.js sibling silently took it away
+  // from the platform where the programming actually happens.
+  const [copySource, setCopySource] = useState(null);
+  const [copyTargets, setCopyTargets] = useState(new Set());
+  const [copyBusy, setCopyBusy] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [defaultLengthWeeks, setDefaultLengthWeeks] = useState(4);
   const [latestBlockPreview, setLatestBlockPreview] = useState([]);
@@ -383,12 +432,54 @@ export default function SpcClientBlockWeb() {
     }
   };
 
+  const cancelCopy = () => {
+    setCopySource(null);
+    setCopyTargets(new Set());
+  };
+
   const handleCellPress = (session) => {
+    // While copying, a tile click means "toggle this as a paste target"
+    // rather than "open it" — clicking the source again cancels.
+    if (copySource) {
+      if (session.id === copySource.id) {
+        cancelCopy();
+        return;
+      }
+      setCopyTargets((prev) => {
+        const next = new Set(prev);
+        if (next.has(session.id)) next.delete(session.id);
+        else next.add(session.id);
+        return next;
+      });
+      return;
+    }
     // A logged session opens the read-out; anything else opens the builder,
     // because the only useful thing to do with an unlogged session is write
     // or finish it.
     if (session.state === "logged") setReadoutSession(session);
     else router.push(`/(coach)/spc/builder/${session.id}`);
+  };
+
+  const handleConfirmCopy = async () => {
+    const targets = [...copyTargets];
+    if (targets.length === 0) return;
+    // Only warn about tiles that would actually lose something.
+    const overwriting = targets.filter((id) => {
+      const target = detail?.sessions.find((x) => x.id === id);
+      return (target?.programmedSets ?? 0) > 0;
+    }).length;
+    if (overwriting > 0 && !(await confirmOverwrite(overwriting))) return;
+    setCopyBusy(true);
+    try {
+      await Promise.all(targets.map((id) => copySpcWorkoutContent(copySource.id, id)));
+      toastSuccess(`Copied into ${targets.length} session${targets.length === 1 ? "" : "s"}.`);
+      cancelCopy();
+      await load();
+    } catch (err) {
+      toastError("Failed to copy session", err);
+    } finally {
+      setCopyBusy(false);
+    }
   };
 
   const handleCreateBlock = async (mode, lengthWeeks) => {
@@ -633,8 +724,22 @@ export default function SpcClientBlockWeb() {
                     </View>
                     {sessionNumbers.map((n) => {
                       const session = detail.sessions.find((s) => s.week_number === week && s.session_number === n);
+                      let copyRole;
+                      if (copySource && session) {
+                        if (session.id === copySource.id) copyRole = "source";
+                        else copyRole = copyTargets.has(session.id) ? "selected" : "eligible";
+                      }
                       return session ? (
-                        <SessionCell key={n} session={session} onPress={handleCellPress} />
+                        <SessionCell
+                          key={n}
+                          session={session}
+                          onPress={handleCellPress}
+                          copyRole={copyRole}
+                          onStartCopy={(src) => {
+                            setCopySource(src);
+                            setCopyTargets(new Set());
+                          }}
+                        />
                       ) : (
                         <View key={n} style={{ flex: 1, minWidth: 190 }} />
                       );
@@ -800,6 +905,54 @@ export default function SpcClientBlockWeb() {
           </View>
         )}
       </ScrollView>
+
+      {/* Sticky confirm bar — outside the ScrollView so it stays put while
+          you scroll the grid picking targets. Same shape as the Group
+          Programs grid's own copy bar. */}
+      {copySource ? (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 20,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 14,
+            paddingHorizontal: 22,
+            paddingVertical: 14,
+            backgroundColor: "#3b3531",
+          }}
+        >
+          <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 13, color: "#ffffff" }}>
+            Copying{" "}
+            <Text style={{ fontFamily: fonts.sansSemiBold }}>
+              {copySource.title || `Session ${copySource.session_number}`} · Week {copySource.week_number}
+            </Text>
+            {" — "}
+            {copyTargets.size} target{copyTargets.size === 1 ? "" : "s"} selected. Click tiles to choose where it goes.
+          </Text>
+          <PressFade onPress={cancelCopy} style={{ paddingHorizontal: 14, paddingVertical: 9 }}>
+            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: "#c9beb4" }}>Cancel</Text>
+          </PressFade>
+          <PressFade
+            onPress={handleConfirmCopy}
+            disabled={copyTargets.size === 0 || copyBusy}
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 9,
+              borderRadius: 9,
+              backgroundColor: colors.primary,
+              opacity: copyTargets.size === 0 || copyBusy ? 0.5 : 1,
+            }}
+          >
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#ffffff" }}>
+              {copyBusy ? "Copying…" : `Copy to ${copyTargets.size} session${copyTargets.size === 1 ? "" : "s"}`}
+            </Text>
+          </PressFade>
+        </View>
+      ) : null}
 
       <SpcSessionReadout
         visible={Boolean(readoutSession)}

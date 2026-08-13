@@ -6,9 +6,17 @@ import { fonts, colors } from "../lib/theme";
 // not a 5th tab mixed into it (see app/(coach)/payroll/index.js's mode
 // picker). This whole tree is admin-only by construction; no permission
 // filtering needed here the way the staff bar needs for can_view_nutrition.
+// "This period" and "Closed periods" used to be one Pay Periods tab. The
+// review table that now leads the open period is dense enough that having
+// a growing list of finished periods under it buried the thing you
+// actually came to do — so they split, matching the design handoff.
+// Deliberately no "My hours" tab: an admin logging their own hours goes
+// through the Staff View mode picker (app/(coach)/payroll/index.js), which
+// is the whole point of that split.
 const TABS = [
+  { key: "periods", label: "This period", href: "/(coach)/payroll/admin/periods" },
   { key: "requests", label: "Requests", href: "/(coach)/payroll/admin/requests" },
-  { key: "periods", label: "Pay Periods", href: "/(coach)/payroll/admin/periods" },
+  { key: "closed", label: "Closed periods", href: "/(coach)/payroll/admin/closed" },
   { key: "report", label: "Report", href: "/(coach)/payroll/admin/report" },
   { key: "settings", label: "Settings", href: "/(coach)/payroll/admin/settings" },
 ];

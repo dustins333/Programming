@@ -26,6 +26,7 @@ import { fonts, colors } from "../../lib/theme";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { CoachShell } from "../../components/CoachShell";
 import { AddStaffModal } from "../../components/AddStaffModal";
+import { StaffPermissionMatrix, PERMISSION_COLUMNS } from "../../components/StaffPermissionMatrix";
 import { TemplateEditorButton } from "../../components/nutrition/TemplateEditorButton";
 import { NativePickerField } from "../../components/NativePickerField";
 import { confirmRemoveQuestion, confirmDelete } from "../../lib/confirmDialog";
@@ -177,6 +178,10 @@ export default function Settings() {
   // the two-up defaults grid gets too cramped below it.
   const { width } = useWindowDimensions();
   const narrow = width < 768;
+  // The permission matrix needs ~840px of real estate for its five columns.
+  // Below that (native, and the installed PWA on a phone) the Team tab keeps
+  // its per-coach card list, which reads fine in one column.
+  const matrixLayout = isWeb && width >= 1024;
   const [settings, setSettings] = useState(null);
   const [values, setValues] = useState({});
   const [savingKey, setSavingKey] = useState(null);
@@ -590,7 +595,18 @@ export default function Settings() {
 
   return (
     <CoachShell>
-    <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 32 + extraKeyboardPadding, maxWidth: 640 }}>
+    {/* Every tab but Team is a single column of forms and caps at 640; the
+        Team tab's permission matrix needs the full width to fit its five
+        columns, so the page cap widens for that tab only. */}
+    <ScrollView
+      className="flex-1 bg-white"
+      contentContainerStyle={{
+        paddingHorizontal: 24,
+        paddingTop: 32,
+        paddingBottom: 32 + extraKeyboardPadding,
+        maxWidth: tab === "team" && matrixLayout ? 1060 : 640,
+      }}
+    >
       {Platform.OS !== "web" ? (
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/more"))}
@@ -610,36 +626,36 @@ export default function Settings() {
 
       {tab === "team" && (
       <View>
-        <View className="mb-3 flex-row items-center justify-between">
-          <Text className="text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
-            Coaches &amp; Admins
+        <View className="mb-4 flex-row items-center justify-between">
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 17 }} className="text-stone-700">
+            Staff &amp; permissions
           </Text>
-          <View className="flex-row gap-2">
-            <Pressable
-              onPress={() => {
-                setAddStaffRole("coach");
-                setAddStaffVisible(true);
-              }}
-              className="rounded-lg border border-primary px-3 py-2"
-            >
-              <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, fontSize: 13 }}>+ Add coach</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setAddStaffRole("admin");
-                setAddStaffVisible(true);
-              }}
-              className="rounded-lg border border-primary px-3 py-2"
-            >
-              <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, fontSize: 13 }}>+ Add admin</Text>
-            </Pressable>
-          </View>
+          {/* One button, not two — AddStaffModal has had its own Coach/Admin
+              role picker since it was built, so a second entry point that
+              only pre-selects the role was redundant. */}
+          <Pressable
+            onPress={() => {
+              setAddStaffRole("coach");
+              setAddStaffVisible(true);
+            }}
+            className="rounded-lg px-[18px] py-2.5"
+            style={{ backgroundColor: colors.primary }}
+          >
+            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>+ Add staff</Text>
+          </Pressable>
         </View>
 
         {coaches.length === 0 ? (
           <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
             No coach or admin accounts yet.
           </Text>
+        ) : matrixLayout ? (
+          <StaffPermissionMatrix
+            coaches={coaches}
+            currentUserId={profile?.id}
+            savingPermKey={savingPermKey}
+            onTogglePermission={handleTogglePermission}
+          />
         ) : (
           coaches.map((coach) => (
             <View key={coach.id} className="mb-3 rounded-xl border border-stone-200 p-4">
@@ -667,12 +683,7 @@ export default function Settings() {
                 </Text>
               ) : (
                 <View className="mt-2 gap-2.5">
-                  {[
-                    { field: "can_view_spc", label: "SPC", defaultValue: true },
-                    { field: "can_view_nutrition", label: "Nutrition", defaultValue: true },
-                    { field: "can_view_exercise_library", label: "Exercise Library", defaultValue: true },
-                    { field: "can_log_ops_hours", label: "Ops Hours", defaultValue: false },
-                  ].map(({ field, label, defaultValue }) => (
+                  {PERMISSION_COLUMNS.map(({ field, label, defaultValue }) => (
                     <View key={field} className="flex-row items-center justify-between">
                       <Text className="text-sm text-stone-600" style={{ fontFamily: fonts.sans }}>
                         {label}
