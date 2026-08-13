@@ -2,7 +2,7 @@
 // screen is a list that's usually empty or nearly empty, and it's read on a
 // phone — stacking four full-height sections meant scrolling past a lot of
 // nothing to reach the one that mattered. Same "tap a header row to
-// expand/collapse" pattern ClientSettingsModal's ExpandableSection already
+// expand/collapse" pattern ClientSettingsPanel's predecessor modal already
 // uses, pulled out here since Requests needs several of them.
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

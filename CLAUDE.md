@@ -1691,12 +1691,10 @@ verified**: any of it behind a real login — same standing limitation as
 everywhere else in this file. Worth Terra's click-through, especially the grid's
 bulk bar, the builder's expand/collapse and rest chips, and a real merge.
 
-### Still to do — screens 17-25
+### Still to do — nothing
 
-Screens 10-13 landed in phase 4 (below). Remaining: **17-25**, the nine
-nutrition-record tabs (note the Photos tab has a real perf requirement:
-never bulk-load thumbnails, a weekly client passes 150 images inside a
-year).
+Screens 10-13 landed in phase 4, 14-16 in phase 3, and 17-25 in phase 5
+(below). The handoff's 25 screens are all built.
 
 ## Coach web v2 — phase 4, business + people (screens 10-13) (2026-08-12)
 
@@ -2066,6 +2064,258 @@ rows (see "Settings → Program Defaults was writing to every core.settings row"
   the RLS rejection surfaced the true error in a toast and the optimistic switch
   rolled back. **Not verified**: a real admin actually saving — needs a login.
 
+## Coach web v2 — phase 5, the nutrition client record (screens 17-25)  (2026-08-12)
+
+The last phase of the handoff. Nine screens: the module home plus the eight
+tabs of one client's record. One migration (`0059`, **not yet run**), two new
+lib modules, thirteen new components, seven deleted.
+
+**Screen 17 — the module home is a queue, not a roster.** It used to be
+filter chips over a table of everyone, which answers "who do I have" — a
+question a coach opening this page already knows the answer to. Now the
+status that's genuinely waiting on her opens with its clients listed and
+everything else is one collapsed line carrying its count, next to a preview
+pane for whoever is selected. Same data, same statuses (`rosterStatus` is
+untouched), different question.
+
+- `lib/nutrition/queue.js`'s `getQueuePreview(userId)` is scoped to ONE
+  client deliberately and is **not** folded into `getNutritionRoster` —
+  that already fetches logs for all ~31 clients to compute the tiles, and
+  pulling a week of macros, a target and photo URLs for every one of them
+  so a single pane can render would throw 30/31 of it away.
+- `components/nutrition/QueueList.js` (left rail) and `QueuePreview.js`
+  (right pane). The preview has **no finalize button**, on purpose:
+  completing a check-in means reading her answers, and a one-click "done"
+  next to a summary invites clearing the queue without doing that.
+- **"+ Enrol client" is new as an entry point, not as a feature** —
+  `createOrReactivateClient` already existed, buried on a switch on the
+  client's *programming* page, which is the wrong place to look when
+  you're standing in the nutrition module.
+
+**Screen 18 — the Onboarding tab is gated on FIRST TARGETS, not the
+approval stamp.** Those come apart in a real, previously-patched-over way: a
+pre-existing standalone-app client switched on in Kova is already approved
+with no target, which used to give her a full set of tabs all measuring her
+against nothing (the 2026-08-03 fix bolted a "No target set yet" banner onto
+every tab instead). The tab now appears whenever `targets.length === 0` and
+disappears the moment a target exists. The mock's second button ("Ask her
+for more") is replaced by Kova's real one, **Close out onboarding** — the
+case that actually comes up is a client who finishes two of three and
+stalls, and without it there is no way forward.
+
+**Screen 19 — Dashboard absorbs Trends**, which is gone as a separate tab: a
+coach looking at a weight trend is already asking what the macros were
+doing, and making that a tab switch meant the two were never on screen
+together. One range control governs the weight chart and all four small
+charts (handoff note 8); the **macro rings stay pinned to 7 days whatever
+the range says**, because a 6-month macro average is not a number anyone
+should act on and putting it under the same picker invites exactly that.
+New `WeightBarChart.js` (bars, not a line — weigh-ins are discrete daily
+readings with real gaps, and a line interpolates straight through a missed
+day as though it were measured; bars from the current target's effective
+date render clay, so the chart says "this is the stretch under the numbers
+she's on now" without a second legend) and `MetricSparkTiles.js`.
+
+**Screen 20 — Weeks is one row per week, opening into its seven days**
+(`WeekRows.js`), replacing the flat metric grid. A target change is drawn
+BETWEEN the two weeks it separates, not on either of them — the point is
+that everything above the line was measured against different numbers.
+
+**Screen 21 — Plan.** `nutrition_plan_phases` gets a coach-set
+`status` (migration 0059), reversing 0050's "position is the timeline, delete
+to retire" decision. Order and status turned out to be **different facts**:
+order says which phase comes next, status says which one she's actually in,
+and those diverge the moment two themes run side by side or a phase is
+parked. It also means a finished phase stops reading as upcoming without
+being deleted, which used to throw away the history of what she'd worked
+through. Deliberately a free column, not derived — "the first not-done phase
+is the current one" is tempting and wrong.
+
+**Screen 22 — Check-In pairs every answer against last week**
+(`lib/nutrition/checkinAnswers.js` + `CheckinAnswerList.js`). Answers
+matching word-for-word fold behind one count line so what moved is what's on
+screen. `HERS ONLY` marks a question not in the gym template, matched on
+question text — a client's copy is physical, not a live join
+(`copyTemplateToClient`), so text is the only identifier the two share.
+**When the template fails to load the badge is suppressed entirely rather
+than defaulted**: silently badging all 18 questions as client-specific is
+worse than badging none. The right rail pairs the LIVE game plan with the
+focus items FROZEN at submission — showing today's list against last week's
+answers had the coach marking her against goals that didn't exist yet.
+
+**Screen 23 — Photos, compare-first** (`PhotoCompareRail.js`, distinct from
+`PhotoCompare.js`, which the member tab and the compare tool keep). The
+handoff's perf requirement (note 7) is the whole design: the browse rail is
+TEXT — dates and weights already in hand from the `photos` rows — and only
+the two compared images are ever signed. The legend doubles as the control
+(pick a side, then pick a date) because a bare date click would have to
+guess which pane you meant.
+
+**Screen 24 — Targets** (`TargetsEditor.js` + `TargetHistoryTable.js`, both
+superseding `NewTargetForm`/`TargetsHistory`). History now shows what
+*moved* rather than each row's absolute numbers, via a new `diffTargets` in
+`lib/nutrition/targets.js`. **Two deliberate deviations**: the mock's
+"Recalculate calories from macros" button is dropped — calories are never a
+stored column, always Atwater factors over the three macros, so the box
+already recalculates as you type and a button would imply an override that
+can't exist; and fibre/steps/sleep are kept below the four the mock draws,
+because they're real target columns and losing them to a redesign that
+simply didn't picture them would be a regression.
+
+**Screen 25 — Settings moves off the gear icon onto a tab**
+(`ClientSettingsPanel.js`). `ClientSettingsModal.js` is deleted, not kept
+alongside. Name and phone survive even though the mock's Client card only
+draws start date / coach / status — same reasoning as the targets above.
+
+**Real bug found by verification, not by review — and it would have shipped.**
+`PhotoCompareRail` fired **244 signed-URL requests** where it should have
+fired one, on the very screen whose entire purpose is not doing that. The
+effect computed "which paths still need signing" as *paths with no entry in
+`urls`* — correct-looking, and an infinite loop the moment signing yields a
+null URL for a path (which Supabase does per-path for an object that no
+longer exists): the write lands, the key is still falsy, the effect re-runs
+forever. Now tracked in a ref of attempted paths. **The first fix had the
+same bug in slower motion** — clearing the mark on failure to allow a retry
+meant a hard failure re-signed on every render; a blank frame until reload
+beats a request per render. `NutritionCheckinTab`'s thumbnail fetch had the
+identical shape arrived at from the other direction (effect keyed on a
+`photos` array the parent rebuilds every render) and was fixed with it.
+**Worth remembering as a class: an effect that derives "still needed" from
+the state it writes will loop whenever the write doesn't satisfy the
+predicate.** Neither instance is visible in a bundle check or a screenshot —
+only counting real requests found them.
+
+**Deleted after verifying zero references**: `ClientSettingsModal`,
+`NewTargetForm`, `TargetsHistory`, `OnboardingStepper`, `WeeklySnapshot`,
+`TrendTiles`, `WeekComparison`. `MacroPills.js` stays despite its own
+component being unused — `TargetField` imports its `MACRO_STYLES` palette.
+`WeekList.js` stays for `enumerateRecentWeeks`; its table component is now
+rendered nowhere.
+
+**Verification.** `npx expo export -p web` clean after every batch. The
+rings (stroke colours checked against the ±10% band in the DOM, not
+eyeballed), weight chart, spark tiles, week rows with their expanded day
+table and target-change divider, the targets editor and history, the
+check-in metric strip and answer list with its collapse toggle, the queue
+rail, the photo rail, and the plan-phase badges were all rendered against
+fake data via the login-screen harness and screenshotted; the harness was
+reverted and `git diff` on `login.js` confirmed clean. **Not verified**: any
+of it behind a real login (standing limitation). **Migration 0059 is run**,
+so the Plan tab is fully live — all 16 existing phases read `planned` (no
+badge) until a coach sets one, which is the intended no-backfill behaviour.
+Worth Terra's click-through, especially the queue's preview against a real
+week, a real target save, and the Settings tab now that it's a tab.
+
+
+### Phase 5 follow-up — Terra's click-through (2026-08-12)
+
+Sizing and onboarding fixes from real use. Several are the same root cause
+wearing different hats: **a component that guesses its own size from the
+window instead of measuring what it is actually inside.**
+
+- **Dashboard charts didn't grow with their card.** `chartWidth` was computed
+  from `useWindowDimensions` minus a hand-subtracted sidebar, page padding and
+  rail — wrong (the sidebar is 232px, not the 320 guessed) *and* capped at
+  1180, so the card kept growing while the chart stayed put. Now measured with
+  `onLayout` on the chart's own container. **Guessing a child's width from the
+  window is the bug; measure the parent.**
+- **Macro rings clustered left** — each column now `flex: 1` so the row
+  spreads across whatever card holds it (`minWidth` is the wrap point, not the
+  width).
+- **The Weeks day table sat narrower than the target bars above it** in the
+  same card — fixed-width columns became `flex` + `minWidth`, inside a
+  `ScrollView` with `contentContainerStyle: { flexGrow: 1 }` and a
+  `TABLE_MIN_WIDTH` floor, so it fills when there's room and scrolls when
+  there isn't.
+- **Check-in: the rings card was shorter than the photos beside it** — `flex:
+  1` on the Cards themselves, not just their wrappers, and the rings centre in
+  the height the photos set.
+- **Photos, twice.** First pass: unbounded 3:4 panes worked out ~550px wide
+  and ~730px tall on a desktop card, taller than the viewport, pushing the
+  rail below off screen. Capping the width fixed that and made them tiny on a
+  big monitor. Now **height leads** — the pair fills the window minus a
+  `CHROME_HEIGHT` constant — and width follows from the ratio, clamped so two
+  still fit side by side. The date pill on each photo is now that side's
+  picker (tap it, get every date on file with its weight); the legend
+  selector, chip rail and year toggle are gone with it. "Manage photos" moved
+  into `ManagePhotosModal` so the compare area gets the whole window.
+- **Targets copy**: dropped "for your history, not shown to her", placeholder
+  is now "What changed and why", and the "Every change is stamped on the
+  Weeks tab too" footnote is gone.
+- **Settings was badly broken and it's a footgun this repo has hit before**:
+  the Client card rendered as a sliver with every label stacked one letter per
+  line. Cause is `flex: 0`, which react-native-web compiles to `flex: 0 1 0%`
+  — the 0% basis collapses the explicit width to nothing. Use
+  `flexGrow: 0, flexShrink: 0, width: N`; **never bare `flex: 0` alongside a
+  width.** Also: the photo-cadence calendar opened on today rather than the
+  selected Monday, because `MondayPicker` reads its month from `value` on
+  first render only and the value was arriving a tick later from an effect —
+  now seeded synchronously in `useState`.
+
+**Onboarding**, from a separate round of the same click-through:
+
+- **The client record now opens on the Onboarding tab** for a client who is
+  onboarding. Tab state starts `null` ("not chosen") so the default can depend
+  on data that hasn't loaded at `useState` time.
+- **The hero counted a skipped step as done** — "One of three done" for a
+  client who had submitted nothing. Objective tracking is optional per client
+  and `computeOnboardingPhases` marks it complete when zero days are assigned;
+  the hero now counts only the steps actually being asked of her, so that
+  client reads "None of two done".
+- **"Close out onboarding" left the tab behind.** The tab was gated on first
+  targets (the handoff's wording) rather than on approval, so closing out and
+  not immediately saving a target left it sitting there looking like the
+  action hadn't taken. **Now gated on `objective_tracking_approved_at`** —
+  exactly what close-out sets. The approved-but-target-less case that gate was
+  protecting against is covered by the restored "No target set yet" banner,
+  which is a better fit anyway: she isn't onboarding, she just needs numbers.
+
+**Verified** by screenshot at 1440×900, 1280×680 and 1440×1000: rings and day
+table filling their cards, the Settings client card rendering properly with
+the calendar on the right month, the photo panes tracking window height, the
+date-pill picker opening and actually swapping the pane (header recomputed to
+"23 weeks apart · −4.2 lb"), and the Manage photos modal. **Tooling note:** the
+Browser pane's `resize_window` changes the viewport *without* dispatching a
+`resize` event to the page, so anything driven by window size looks frozen
+under test — a manually dispatched `resize` updated it instantly. Don't
+diagnose a live-resize bug from that tool alone.
+
+
+### Phase 5 follow-up, round 2 (2026-08-12)
+
+- **Targets**: "Fibre" → **Fiber** (US spelling, matching every other label).
+  Fiber/Steps/Sleep are now the same width as Protein/Carbs/Fat — both rows
+  are four flex columns and the second row's fourth slot is an empty spacer,
+  rather than three fields splitting the space four had. The sleep unit ("h")
+  was rendering outside its box: **an `<input>` will not shrink below its
+  intrinsic content width in react-native-web without `minWidth: 0`**, which
+  shoves a sibling out past the border. Identical failure to the member v5
+  pass's sleep tile — worth grepping for whenever a unit or suffix escapes its
+  container.
+- **Check-in shows every answer, every week.** The fold-the-unchanged-behind-
+  a-count behaviour is gone (`splitAnswers` deleted with it, along with the
+  now-unused `unchanged`/`blank` fields) — reading the whole check-in is the
+  job, and deciding for the coach which parts deserve her time isn't this
+  screen's call.
+- **Focus and game plan are editable on the Check-In tab until it's
+  finalized**, then frozen. Revising them IS the review, so both stay live
+  while the coach works; **`finalizeCheckin` now re-captures them onto the
+  response row** and the rail switches to "Game plan that week" / "Focus that
+  week", read-only. `targets_snapshot` is deliberately NOT re-captured: a
+  target set during review takes effect going forward via its own
+  `effective_date`, so overwriting the week's snapshot would retroactively
+  claim she was working to numbers that didn't exist yet.
+- **No photos, no photos box** — the target card takes the full row instead of
+  sitting next to a card whose only content was "none came in". Photos aren't
+  policed here, so their absence isn't news.
+
+Screenshot-verified at 1440×950: Fiber spelling and equal field widths with
+the unit inside the box, all five answers rendering (including one identical
+to last week), the editable rail on an open check-in and the frozen
+"that week" rail on a finalized one, and the full-width target card with no
+photos.
+
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -2119,6 +2369,7 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0056_roster_last_session.sql` — **run**, confirmed live 2026-08-12. Adds `programming.get_last_session_dates(uuid[])` (DISTINCT ON, one row per client, unbounded lookback) for the Clients table's Last session column, its default sort, and the Quiet 7+ days chip. Deliberately caller-rights, not security definer.
 - `0057_client_notes_and_limitations.sql` — **run**, confirmed live 2026-08-12 (both tables + both policies verified). Adds `programming.client_notes` and `programming.client_limitations`, staff-only in every direction — a member has no policy on either, not even select.
 - `0058_payroll_deadline_schedule.sql` — **run**, confirmed live 2026-08-12. Not a schema migration — settings + cron config for the payroll deadline reminder: `payroll_deadline_time` → `20:00`, new `payroll_deadline_followup_time` → `12:00`, **deletes** the now-unread `payroll_deadline_weekday`, and reschedules the cron job to hourly. Uses `cron.alter_job` rather than `cron.schedule` specifically so the existing command (which holds the real `CRON_SECRET`) is preserved and no secret has to be pasted into a committed file — worth reusing whenever only a cron *schedule* needs changing. See the section below.
+- `0059_plan_phase_status.sql` — **run**, confirmed live 2026-08-12 (column, `nutrition_plan_phases_status_check`, and all 16 existing rows reading `planned` verified by direct query; `NOTIFY pgrst, 'reload schema'` sent and confirmed with a real REST select). Adds `programming.nutrition_plan_phases.status` (`planned`/`now`/`done`, default `planned`, so every existing row keeps rendering exactly as it does today with no backfill). Reverses 0050's deliberate "no status flag" decision — see the phase-5 section below for why order and status turned out to be different facts. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.

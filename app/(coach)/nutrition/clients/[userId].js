@@ -1,55 +1,63 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Link, useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays } from "../../../../lib/boiseDate";
 import { getClient, sendOnboardingToClient } from "../../../../lib/nutrition/clients";
 import { listCoaches } from "../../../../lib/programming/clients";
-import { listTargets, deriveCalories } from "../../../../lib/nutrition/targets";
+import { getSpcClient, isSpcActive } from "../../../../lib/programming/spcClients";
+import { listTargets, diffTargets } from "../../../../lib/nutrition/targets";
 import { listLogs } from "../../../../lib/nutrition/dailyLog";
-import { getCheckinForWeek, finalizeCheckin, listCheckinsSince, listCheckinReopensSince } from "../../../../lib/nutrition/checkin";
+import {
+  getCheckinForWeek,
+  finalizeCheckin,
+  listCheckinsSince,
+  listCheckinReopensSince,
+  listTemplateQuestions,
+} from "../../../../lib/nutrition/checkin";
 import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
 import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
-import { computeWeekWindows, currentCalendarWeek, summarizeWeek, checkinMondayForWeek } from "../../../../lib/nutrition/weekCycle";
-import { OnboardingStepper } from "../../../../components/nutrition/OnboardingStepper";
-import { PhaseCard } from "../../../../components/nutrition/PhaseCard";
-import { WeekList, enumerateRecentWeeks } from "../../../../components/nutrition/WeekList";
-import { WeekComparison } from "../../../../components/nutrition/WeekComparison";
-import { WeeklySnapshot } from "../../../../components/nutrition/WeeklySnapshot";
-import { TrendTiles } from "../../../../components/nutrition/TrendTiles";
-import { TrendChart } from "../../../../components/nutrition/TrendChart";
-import { MacroPills } from "../../../../components/nutrition/MacroPills";
-import { FocusChecklist } from "../../../../components/nutrition/FocusChecklist";
-import { GamePlan } from "../../../../components/nutrition/GamePlan";
-import { MilestoneSlots } from "../../../../components/nutrition/MilestoneSlots";
-import { PlanPhases } from "../../../../components/nutrition/PlanPhases";
 import { listPhases } from "../../../../lib/nutrition/planPhases";
-import { TargetsHistory } from "../../../../components/nutrition/TargetsHistory";
-import { ObjectiveTrackingHistory } from "../../../../components/nutrition/ObjectiveTrackingHistory";
-import { NewTargetForm } from "../../../../components/nutrition/NewTargetForm";
-import { HighlightableAnswer } from "../../../../components/nutrition/HighlightableAnswer";
+import { computeWeekWindows, currentCalendarWeek, summarizeWeek, deriveCheckinStatus } from "../../../../lib/nutrition/weekCycle";
+import { weekOnProgramme, weekDates } from "../../../../lib/nutrition/queue";
 import { listAllPhotos, photosForRequirementWeek } from "../../../../lib/nutrition/photos";
-import { PhotoCompare } from "../../../../components/nutrition/PhotoCompare";
-import { PhotoSubmissionsEditor } from "../../../../components/nutrition/PhotoSubmissionsEditor";
-import { PhotoUpload } from "../../../../components/nutrition/PhotoUpload";
-import { ClientSettingsModal } from "../../../../components/nutrition/ClientSettingsModal";
+import { enumerateRecentWeeks } from "../../../../components/nutrition/WeekList";
+import { WeekRows } from "../../../../components/nutrition/WeekRows";
+import { PlanPhases } from "../../../../components/nutrition/PlanPhases";
+import { MilestoneSlots } from "../../../../components/nutrition/MilestoneSlots";
+import { TargetsEditor } from "../../../../components/nutrition/TargetsEditor";
+import { TargetHistoryTable } from "../../../../components/nutrition/TargetHistoryTable";
+import { ObjectiveTrackingHistory } from "../../../../components/nutrition/ObjectiveTrackingHistory";
+import { PhotoCompareRail } from "../../../../components/nutrition/PhotoCompareRail";
+import { ManagePhotosModal } from "../../../../components/nutrition/ManagePhotosModal";
+import { ClientSettingsPanel } from "../../../../components/nutrition/ClientSettingsPanel";
+import { NutritionDashboardTab } from "../../../../components/nutrition/NutritionDashboardTab";
+import { NutritionCheckinTab } from "../../../../components/nutrition/NutritionCheckinTab";
+import { NutritionOnboardingTab } from "../../../../components/nutrition/NutritionOnboardingTab";
 import { CoachMessageBubble } from "../../../../components/CoachMessageBubble";
 import { CoachShell } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { confirmBypassOnboarding, confirmSendToClient } from "../../../../lib/confirmDialog";
-import { toastError, toastSuccess } from "../../../../lib/toast";
+import { toastError } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
+// Two-column rails need real width or they read as two cramped columns; below
+// this everything stacks. Same breakpoint the client detail page in
+// programming uses for its four cards.
+const WIDE_BREAKPOINT = 1100;
 
 const PHASE_LABELS = {
   questionnaire: "the questionnaire",
   tracking: "objective tracking",
   photos: "starting photos",
 };
+
+const WEEKS_SHOWN = 8;
+const TIMELINE_PAST_WEEKS = 6;
 
 // Joins a list into readable prose ("a, b and c") rather than a bare comma
 // list, since this lands in a confirm dialog the coach actually reads.
@@ -62,8 +70,7 @@ function joinPhrases(items) {
 // copy was hardcoded to "without completing the questionnaire, tracking, or
 // photos", which read as though the coach were discarding all three — wrong
 // and alarming for the common case where a client finished two of them and
-// stalled on one (Abbi Stauffer: questionnaire + all 5 tracking days done,
-// only photos missing). Nothing is actually discarded either way —
+// stalled on one. Nothing is actually discarded either way —
 // bypassOnboarding only stamps the approval and seeds check-in questions.
 export function buildCloseOutMessage(name, phases) {
   const who = name || "This client";
@@ -79,44 +86,60 @@ export function buildCloseOutMessage(name, phases) {
   return `${who} has completed ${joinPhrases(done)}. They will be approved without ${joinPhrases(missing)}, and anything already submitted is kept. You'll set their target on the next screen.`;
 }
 
-const WEEKS_SHOWN = 8;
-const TIMELINE_PAST_WEEKS = 6;
-const TIMELINE_UPCOMING_WEEKS = 3;
+function initials(name) {
+  return (name ?? "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
-const TABS = [
-  { key: "dashboard", label: "Dashboard" },
-  { key: "weeks", label: "Weeks" },
-  { key: "trends", label: "Trends" },
-  { key: "checkin", label: "Check-In" },
-  { key: "photos", label: "Photos" },
-  { key: "targets", label: "Targets" },
-];
-
-const TREND_METRICS = [
-  { key: "weight", label: "Weight" },
-  { key: "sleep_hours", label: "Sleep" },
-  { key: "steps", label: "Steps" },
-  { key: "hunger", label: "Hunger" },
-  { key: "energy", label: "Energy" },
-];
-
-const TREND_RANGES = [
-  { key: 7, label: "W" },
-  { key: 30, label: "1m" },
-  { key: 90, label: "3m" },
-  { key: 180, label: "6m" },
-  { key: 365, label: "1y" },
-];
-
-function TabBar({ active, onSelect }) {
+function Card({ title, headerRight, children, style }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6 border-b border-stone-200">
+    <View
+      className="rounded-2xl p-5"
+      style={[
+        {
+          borderWidth: 1,
+          borderColor: "#ece7e1",
+          backgroundColor: "white",
+          shadowColor: "#44403c",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.05,
+          shadowRadius: 10,
+          elevation: 1,
+        },
+        style,
+      ]}
+    >
+      {title ? (
+        <View className="mb-3 flex-row flex-wrap items-center justify-between" style={{ gap: 8 }}>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            {title}
+          </Text>
+          {headerRight}
+        </View>
+      ) : null}
+      {children}
+    </View>
+  );
+}
+
+function TabBar({ tabs, active, onSelect }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6" style={{ borderBottomWidth: 1, borderBottomColor: "#ece7e1" }}>
       <View className="flex-row">
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const isActive = tab.key === active;
           return (
-            <Pressable key={tab.key} onPress={() => onSelect(tab.key)} className="mr-6 pb-3" style={isActive ? { borderBottomWidth: 2, borderBottomColor: colors.primary } : undefined}>
-              <Text style={{ fontFamily: isActive ? fonts.sansSemiBold : fonts.sansMedium, color: isActive ? colors.primaryOnWhite : "#78716c" }}>
+            <Pressable
+              key={tab.key}
+              onPress={() => onSelect(tab.key)}
+              className="mr-7 pb-3"
+              style={isActive ? { borderBottomWidth: 2, borderBottomColor: colors.primary } : undefined}
+            >
+              <Text style={{ fontFamily: isActive ? fonts.sansSemiBold : fonts.sansMedium, fontSize: 14, color: isActive ? colors.primaryOnWhite : "#8a8279" }}>
                 {tab.label}
               </Text>
             </Pressable>
@@ -127,44 +150,32 @@ function TabBar({ active, onSelect }) {
   );
 }
 
-// design_handoff_v2_settings_nutrition tokens: card border #ece7e1 (not the
-// plain stone-200 gray this used before), 12-16px radius, soft two-layer
-// shadow (approximated in RN with one shadow, same convention used
-// elsewhere in the app — RN doesn't support multi-layer box-shadow).
-function SectionCard({ title, children, headerRight }) {
-  return (
-    <View
-      className="mb-5 rounded-xl p-4"
-      style={{
-        borderWidth: 1,
-        borderColor: "#ece7e1",
-        backgroundColor: "white",
-        shadowColor: "#44403c",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 1,
-      }}
-    >
-      <View className="mb-3 flex-row items-center justify-between">
-        <Text className="text-sm text-stone-700" style={{ fontFamily: fonts.sansBold }}>
-          {title}
-        </Text>
-        {headerRight}
-      </View>
-      {children}
-    </View>
-  );
-}
+const STATUS_PILL = {
+  needsTarget: { label: "Needs target", bg: "#f4ede3", text: "#8a5a2e" },
+  pending: { label: "Awaiting her check-in", bg: "#fdece5", text: "#b23a22" },
+  ready: { label: "Awaiting coach check-in", bg: "#f4ede3", text: "#8a5a2e" },
+  completed: { label: "Check-in completed", bg: "#eef1e7", text: "#4d6142" },
+  paused: { label: "Paused", bg: "#f1efed", text: "#78716c" },
+  onboarding: { label: "Onboarding", bg: "#f4ede3", text: "#8a5a2e" },
+};
 
 export default function NutritionClientDetail() {
-  const { userId } = useLocalSearchParams();
+  const { userId, tab: tabParam } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
+  const { width } = useWindowDimensions();
   const today = todayInBoise();
 
-  const [tab, setTab] = useState("dashboard");
+  // Deep-linked from the queue preview's "Read the full form" / "Compare"
+  // links. Applied once per distinct param value rather than every render,
+  // so a coach who then clicks another tab isn't yanked back to this one —
+  // the same applied-param-ref idiom the member plan screen uses.
+  // null = the coach hasn't picked a tab yet, so the default can depend on
+  // data that isn't loaded at useState time (an onboarding client has to land
+  // on Onboarding, and whether she's onboarding isn't known for another tick).
+  const [tab, setTab] = useState(typeof tabParam === "string" && tabParam ? tabParam : null);
+  const appliedTabParamRef = useRef(typeof tabParam === "string" ? tabParam : "");
   const [client, setClient] = useState(null);
   const [coaches, setCoaches] = useState([]);
   const [targets, setTargets] = useState(null);
@@ -175,21 +186,23 @@ export default function NutritionClientDetail() {
   const [onboarding, setOnboarding] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [weekOffset, setWeekOffset] = useState(0);
-  // Paging to another week refetches the whole page — this drives a small
-  // spinner next to the week label so stale data isn't silently shown
-  // while the new week loads.
   const [weekPaging, setWeekPaging] = useState(false);
   const [checkin, setCheckin] = useState(null);
+  const [priorCheckin, setPriorCheckin] = useState(null);
+  const [currentCheckin, setCurrentCheckin] = useState(null);
+  const [templateQuestions, setTemplateQuestions] = useState(null);
+  const [spcClient, setSpcClient] = useState(null);
   const [finalizing, setFinalizing] = useState(false);
-  const [trendMetric, setTrendMetric] = useState("weight");
-  const [trendRange, setTrendRange] = useState(30);
   const [loadError, setLoadError] = useState(null);
   const [checkins, setCheckins] = useState([]);
   const [checkinReopens, setCheckinReopens] = useState([]);
   const [otLogs, setOtLogs] = useState([]);
-  const [settingsVisible, setSettingsVisible] = useState(false);
   const [bypassing, setBypassing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showAllWeeks, setShowAllWeeks] = useState(false);
+  const [managingPhotos, setManagingPhotos] = useState(false);
+
+  const isWide = isWeb && width >= WIDE_BREAKPOINT;
 
   const selectedWeek = useMemo(() => {
     const { currentWeek } = computeWeekWindows(today);
@@ -203,8 +216,8 @@ export default function NutritionClientDetail() {
       // Core fetches only — the rows that gate rendering (client/targets/
       // logs/onboarding) or drive real actions (checkin → Finalize). The
       // display-only fetches below are isolated via allSettled so one
-      // domain's failure doesn't blank the whole page (same reasoning as
-      // the milestones/reopens isolation further down).
+      // domain's failure doesn't blank the whole page.
+      const { currentWeek } = computeWeekWindows(today);
       const [clientRow, coachRows, targetRows, logRows, checkinRow, onboardingStatus] = await Promise.all([
         getClient(userId),
         listCoaches(),
@@ -220,12 +233,21 @@ export default function NutritionClientDetail() {
       setCheckin(checkinRow);
       setOnboarding(onboardingStatus);
 
-      const [focusResult, photosResult, checkinsResult, otLogsResult] = await Promise.allSettled([
-        listFocusItems(userId),
-        listAllPhotos(userId),
-        listCheckinsSince(userId, addDays(today, -7 * TIMELINE_PAST_WEEKS)),
-        listObjectiveTrackingLogs(userId),
-      ]);
+      const [focusResult, photosResult, checkinsResult, otLogsResult, priorResult, currentResult, templateResult, spcResult] =
+        await Promise.allSettled([
+          listFocusItems(userId),
+          listAllPhotos(userId),
+          listCheckinsSince(userId, addDays(today, -7 * TIMELINE_PAST_WEEKS)),
+          listObjectiveTrackingLogs(userId),
+          // Last week's submission, for the "last week — …" line under every
+          // answer on the Check-In tab.
+          getCheckinForWeek(userId, addDays(selectedWeek.start, -7)),
+          // The status pill has to describe where she IS, not whichever past
+          // week the coach happens to be paging through on the Check-In tab.
+          getCheckinForWeek(userId, currentWeek.start),
+          listTemplateQuestions(),
+          getSpcClient(userId),
+        ]);
       if (focusResult.status === "fulfilled") setFocusItems(focusResult.value);
       else console.error("Failed to load focus items:", focusResult.reason);
       if (photosResult.status === "fulfilled") setPhotos(photosResult.value);
@@ -234,6 +256,16 @@ export default function NutritionClientDetail() {
       else console.error("Failed to load check-in history:", checkinsResult.reason);
       if (otLogsResult.status === "fulfilled") setOtLogs(otLogsResult.value);
       else console.error("Failed to load objective-tracking logs:", otLogsResult.reason);
+      if (priorResult.status === "fulfilled") setPriorCheckin(priorResult.value);
+      else console.error("Failed to load last week's check-in:", priorResult.reason);
+      if (currentResult.status === "fulfilled") setCurrentCheckin(currentResult.value);
+      else console.error("Failed to load the current check-in:", currentResult.reason);
+      // Left null on failure rather than defaulted to an empty array — an
+      // empty template would badge every one of her questions HERS ONLY.
+      if (templateResult.status === "fulfilled") setTemplateQuestions(templateResult.value);
+      else console.error("Failed to load the check-in template:", templateResult.reason);
+      if (spcResult.status === "fulfilled") setSpcClient(spcResult.value);
+      else console.error("Failed to load SPC enrolment:", spcResult.reason);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -254,18 +286,25 @@ export default function NutritionClientDetail() {
       console.error("Failed to load check-in reopens:", err);
     }
 
-    // Same isolation, migration 0050 (plan phases).
+    // Same isolation, migrations 0050/0059 (plan phases and their status).
     try {
       setPhases(await listPhases(userId));
     } catch (err) {
       console.error("Failed to load plan phases:", err);
     }
     setWeekPaging(false);
-  }, [userId, selectedWeek.start]);
+  }, [userId, selectedWeek.start, today]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const raw = typeof tabParam === "string" ? tabParam : "";
+    if (appliedTabParamRef.current === raw) return;
+    appliedTabParamRef.current = raw;
+    if (raw) setTab(raw);
+  }, [tabParam]);
 
   const handleFinalizeCheckin = async () => {
     setFinalizing(true);
@@ -280,12 +319,8 @@ export default function NutritionClientDetail() {
   };
 
   // Goes straight into Approve & Set Targets right after bypassing, rather
-  // than leaving the coach to remember to come back and set one later — a
-  // bypassed client with no target sitting around is exactly the
-  // "needsTarget" limbo state that shouldn't exist. approve.js's own gate
-  // only checks whether a target exists yet (not the approval timestamp),
-  // so it's already the right screen to land on here.
-  const handleBypassOnboarding = async () => {
+  // than leaving the coach to remember to come back and set one later.
+  const handleCloseOut = async () => {
     const confirmed = await confirmBypassOnboarding(buildCloseOutMessage(client?.name, onboarding?.phases));
     if (!confirmed) return;
     setBypassing(true);
@@ -293,15 +328,11 @@ export default function NutritionClientDetail() {
       await bypassOnboarding(userId);
       router.replace(`/(coach)/nutrition/clients/${userId}/onboarding/approve`);
     } catch (err) {
-      toastError("Failed to skip onboarding", err);
+      toastError("Failed to close out onboarding", err);
       setBypassing(false);
     }
   };
 
-  // Releases the questionnaire + tracking dates a coach has been setting up
-  // (see migration 0031) — before this, the client's own onboarding hub
-  // shows a "your coach is getting things ready" placeholder instead
-  // (lib/nutrition/useNutritionAccess.js's "pending" status).
   const handleSendToClient = async () => {
     const confirmed = await confirmSendToClient(client.name);
     if (!confirmed) return;
@@ -332,14 +363,13 @@ export default function NutritionClientDetail() {
   if (loadError) {
     return (
       <CoachShell>
-        <View className="flex-1 items-center justify-center bg-white px-6">
-          <><Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
-            Something went wrong loading this client's nutrition data: {loadError}
+        <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: colors.canvas }}>
+          <Text className="text-center text-red-600" style={{ fontFamily: fonts.sans }}>
+            Something went wrong loading this client&apos;s nutrition data: {loadError}
           </Text>
-        <Pressable onPress={load} style={{ marginTop: 12, alignSelf: "center" }}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
-        </Pressable>
-      </>
+          <Pressable onPress={load} style={{ marginTop: 12 }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+          </Pressable>
         </View>
       </CoachShell>
     );
@@ -348,552 +378,335 @@ export default function NutritionClientDetail() {
   if (!client || !targets || !logs || !onboarding) {
     return (
       <CoachShell>
-        <View className="flex-1 items-center justify-center bg-white">
+        <View className="flex-1 items-center justify-center" style={{ backgroundColor: colors.canvas }}>
           <ActivityIndicator color={colors.primary} />
         </View>
       </CoachShell>
     );
   }
 
-  if (!client.objective_tracking_approved_at) {
-    const steps = [
-      { key: "questionnaire", label: "Questionnaire", state: onboarding.phases.questionnaire ? "done" : "pending", subtext: onboarding.phases.questionnaire ? "Submitted" : "Not submitted" },
-      {
-        key: "tracking",
-        label: "Objective Tracking",
-        state: onboarding.trackingState,
-        subtext:
-          onboarding.trackingCount === 0
-            ? "Skipped — no days assigned (optional)"
-            : onboarding.trackingState === "overdue"
-              ? `${onboarding.overdueCount} day${onboarding.overdueCount === 1 ? "" : "s"} overdue`
-              : `${onboarding.loggedCount} of ${onboarding.trackingCount} logged`,
-      },
-      { key: "photos", label: "Starting photos", state: onboarding.phases.photos ? "done" : "pending", subtext: onboarding.phases.photos ? "All angles in" : "Front/side/back needed" },
-    ];
-
-    return (
-      <CoachShell>
-        <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8" contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 900 }}>
-          <Pressable
-            onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/nutrition"))}
-            style={{ marginBottom: 12 }}
-          >
-            <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
-          </Pressable>
-          <View className="mb-1 flex-row items-center gap-3">
-            <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-              {client.name}
-            </Text>
-            <View className="rounded-full px-2.5 py-0.5" style={{ backgroundColor: "#f4ede3" }}>
-              <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#8a5a2e" }}>
-                Onboarding
-              </Text>
-            </View>
-            <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8}>
-              <Ionicons name="settings-outline" size={19} color="#a8a29e" />
-            </Pressable>
-          </View>
-          <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-            {client.email} · started {formatDateMDY(client.start_date)}
-          </Text>
-
-          {client.onboarding_sent_at ? (
-            <View className="mb-5 rounded-lg border px-4 py-3" style={{ borderColor: "#ece7e1", backgroundColor: "#faf8f6" }}>
-              <Text style={{ fontFamily: fonts.sansMedium, color: "#78716c" }}>
-                Sent to client {formatDateMDY(client.onboarding_sent_at.slice(0, 10))} — they can see their questionnaire and tracking dates.
-              </Text>
-            </View>
-          ) : (
-            <View className="mb-5 flex-row items-center justify-between rounded-lg border px-4 py-3" style={{ borderColor: "#f0ddd2", backgroundColor: "#fdf6f2" }}>
-              <Text className="flex-1 pr-3" style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>
-                Not sent yet — they can't see their questionnaire or tracking dates until you send it.
-              </Text>
-              <Pressable onPress={handleSendToClient} disabled={sending} className="rounded-lg px-4 py-2.5" style={{ backgroundColor: colors.primary }}>
-                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                  {sending ? "Sending…" : "Send to client"}
-                </Text>
-              </Pressable>
-            </View>
-          )}
-
-          <SectionCard title="Onboarding progress">
-            <OnboardingStepper steps={steps} />
-          </SectionCard>
-
-          {onboarding.phases.readyForReview ? (
-            <View className="mb-5 rounded-lg border px-4 py-3" style={{ borderColor: "#dbe8cf", backgroundColor: "#eef1e7" }}>
-              <Text style={{ fontFamily: fonts.sansMedium, color: "#4d6142" }}>
-                Ready for review — approve below to set their first targets.
-              </Text>
-            </View>
-          ) : null}
-
-          <View style={{ flexDirection: isWeb ? "row" : "column", gap: 16 }}>
-            <View style={{ flex: 1 }}>
-              <PhaseCard
-                title="Questionnaire"
-                accent="accent"
-                done={onboarding.phases.questionnaire}
-                subtext={onboarding.phases.questionnaire ? "Submitted — tap to view" : "Not submitted yet"}
-                onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/questionnaire`)}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <PhaseCard
-                title="Objective Tracking"
-                accent="primary"
-                done={onboarding.phases.tracking}
-                subtext={
-                  onboarding.trackingCount === 0
-                    ? "Skipped — no days assigned (optional, tap to add)"
-                    : onboarding.phases.tracking
-                      ? "All days logged — tap to view"
-                      : `${onboarding.loggedCount} of ${onboarding.trackingCount} logged`
-                }
-                onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/tracking`)}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <PhaseCard
-                title="Starting Photos"
-                accent="tertiary"
-                done={onboarding.phases.photos}
-                subtext={onboarding.phases.photos ? "All angles in — tap to view" : "Front/side/back needed"}
-                onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/photos`)}
-              />
-            </View>
-          </View>
-
-          <View className="mt-5 flex-row flex-wrap items-center gap-4">
-            {onboarding.phases.readyForReview ? (
-              <Pressable
-                onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/approve`)}
-                className="items-center self-start rounded-lg px-5 py-3"
-                style={{ backgroundColor: colors.primary }}
-              >
-                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                  Approve & Set Targets
-                </Text>
-              </Pressable>
-            ) : null}
-
-            {/* Lets the coach close out onboarding with whatever the client
-                has actually submitted — originally for a client who won't do
-                any of it in-app (ported from the standalone app's
-                bypassObjectiveTracking, see lib/nutrition/onboarding.js's
-                bypassOnboarding), but the far more common case is a client
-                who finished 2 of 3 and stalled on one, where "Approve & Set
-                Targets" is hidden and this is the only way forward.
-                Available regardless of phase progress, since "won't ever
-                finish" isn't something the phase checklist can detect.
-
-                Styled as a real button matching Approve & Set Targets in
-                size and shape, but outlined rather than filled so that when
-                both are on screen the genuine approve stays the primary
-                action instead of two identical buttons competing. */}
-            <Pressable
-              onPress={handleBypassOnboarding}
-              disabled={bypassing}
-              className="items-center self-start rounded-lg px-5 py-3"
-              style={{ borderWidth: 1.5, borderColor: colors.primary, opacity: bypassing ? 0.5 : 1 }}
-            >
-              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
-                {bypassing ? "Closing out…" : "Close out onboarding →"}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Tracking dates aren't assigned during a coach-run draft stage
-              here (Kova has no client_drafts) — the Objective Tracking phase
-              card links straight to the assignment UI on its own page. */}
-        </ScrollView>
-        <ClientSettingsModal
-          visible={settingsVisible}
-          userId={userId}
-          coachId={profile.id}
-          coaches={coaches}
-          client={client}
-          checkins={checkins}
-          reopens={checkinReopens}
-          photos={photos}
-          today={today}
-          onClose={() => setSettingsVisible(false)}
-          onSaved={load}
-        />
-      </CoachShell>
-    );
-  }
-
   const currentTarget = targets[0] ?? null;
+  const hasTargets = targets.length > 0;
+  // The Onboarding tab exists until she is APPROVED — which is exactly what
+  // "Close out onboarding" does, so closing out makes the tab disappear.
+  // Gating on first targets instead (the handoff's wording) meant closing out
+  // and then not saving a target left the tab sitting there, reading as
+  // though the close-out hadn't taken.
+  //
+  // The approved-but-target-less case that gate was protecting against (a
+  // pre-existing standalone-app client switched on in Kova) is covered by the
+  // banner below instead, which is where it lived before and is a better fit:
+  // she isn't onboarding, she just needs numbers.
+  const isOnboarding = !client.objective_tracking_approved_at;
+
+  const tabs = [
+    ...(isOnboarding ? [{ key: "onboarding", label: "Onboarding" }] : []),
+    { key: "dashboard", label: "Dashboard" },
+    { key: "weeks", label: "Weeks" },
+    { key: "plan", label: "Plan" },
+    { key: "checkin", label: "Check-In" },
+    { key: "photos", label: "Photos" },
+    { key: "targets", label: "Targets" },
+    { key: "settings", label: "Settings" },
+  ];
+  const activeTab = tab && tabs.some((t) => t.key === tab) ? tab : isOnboarding ? "onboarding" : "dashboard";
+
   const calendarWeek = currentCalendarWeek(today);
-  const priorCalendarWeek = { start: addDays(calendarWeek.start, -7), end: addDays(calendarWeek.end, -7) };
-  const thisWeekSummary = summarizeWeek(logs, calendarWeek.start, calendarWeek.end);
-  const lastWeekSummary = summarizeWeek(logs, priorCalendarWeek.start, priorCalendarWeek.end);
   const selectedWeekSummary = summarizeWeek(logs, selectedWeek.start, selectedWeek.end);
   const priorToSelectedEnd = addDays(selectedWeek.start, -1);
-  const priorToSelectedStart = addDays(priorToSelectedEnd, -6);
-  const priorToSelectedSummary = summarizeWeek(logs, priorToSelectedStart, priorToSelectedEnd);
+  const priorToSelectedSummary = summarizeWeek(logs, addDays(priorToSelectedEnd, -6), priorToSelectedEnd);
 
-  const recentWeeks = enumerateRecentWeeks(calendarWeek, addDays, WEEKS_SHOWN).map((w) => ({
-    ...w,
-    summary: summarizeWeek(logs, w.start, w.end),
-    target: targets.find((t) => t.effective_date <= w.end) ?? null,
-  }));
+  // Weeks tab. The list runs newest-first and stops at the client's own
+  // start date — enumerating back past it would render empty weeks for a
+  // period she wasn't a client.
+  const maxWeeks = Math.max(1, Math.min(60, Math.ceil((new Date(calendarWeek.end) - new Date(client.start_date)) / (7 * 86400000)) + 1));
+  const weekCount = showAllWeeks ? maxWeeks : Math.min(WEEKS_SHOWN, maxWeeks);
+  const enumerated = enumerateRecentWeeks(calendarWeek, addDays, weekCount);
+  const weekRows = enumerated.map((w, i) => {
+    const summary = summarizeWeek(logs, w.start, w.end);
+    const previous = enumerated[i + 1] ? summarizeWeek(logs, enumerated[i + 1].start, enumerated[i + 1].end) : null;
+    const weekCheckin = checkins.find((c) => c.week_start === w.start) ?? null;
+    const number = weekOnProgramme(client.start_date, w.start);
+    return {
+      ...w,
+      dates: weekDates(w),
+      label: number ? `Week ${number}` : formatDateMDY(w.start),
+      summary,
+      target: targets.find((t) => t.effective_date <= w.end) ?? null,
+      weightDelta:
+        summary.averages.weight !== null && previous?.averages?.weight !== null && previous?.averages?.weight !== undefined
+          ? summary.averages.weight - previous.averages.weight
+          : null,
+      checkinState: weekCheckin ? (weekCheckin.finalized_at ? "reviewed" : "waiting") : "missed",
+    };
+  });
 
-  const trendCutoff = addDays(today, -trendRange);
-  const trendPoints = logs
-    .filter((l) => l.date >= trendCutoff)
-    .slice()
-    .sort((a, b) => (a.date < b.date ? -1 : 1))
-    .map((l) => ({ date: l.date, value: l[trendMetric] }));
+  // A target change is drawn against the first visible week that starts on
+  // or after it took effect, so the divider lands between the weeks measured
+  // against the old numbers and the ones measured against the new.
+  const targetChangeByWeek = {};
+  targets.forEach((target, i) => {
+    const previous = targets[i + 1] ?? null;
+    if (!previous) return;
+    const changes = diffTargets(target, previous);
+    if (changes.length === 0) return;
+    const match = weekRows.find((w) => w.end >= target.effective_date && w.start <= target.effective_date);
+    if (match && !targetChangeByWeek[match.start]) {
+      targetChangeByWeek[match.start] = { changes, date: target.effective_date };
+    }
+  });
+  const targetChangeCount = Object.keys(targetChangeByWeek).length;
 
-  // Photos come in dated groups of up to 3 — grouped by upload date (not
-  // angle) since a mistagged batch usually needs fixing together.
   const photosByDate = {};
   for (const p of photos) {
     if (!photosByDate[p.date]) photosByDate[p.date] = [];
     photosByDate[p.date].push(p);
   }
 
-  // Backs the top-of-page Finalize button's photo indicator — whether the
-  // currently-loaded check-in week (selectedWeek, same week the button
-  // itself finalizes) has any progress photos in yet.
   const weekPhotos = photosForRequirementWeek(photos, selectedWeek);
+  const coachNameById = Object.fromEntries(coaches.map((c) => [c.id, c.name]));
+
+  const pillKey =
+    client.status === "paused" || client.status === "archived"
+      ? "paused"
+      : !client.objective_tracking_approved_at
+        ? "onboarding"
+        : !hasTargets
+          ? "needsTarget"
+          : deriveCheckinStatus(currentCheckin);
+  const pill = STATUS_PILL[pillKey] ?? STATUS_PILL.onboarding;
+
+  const unchangedWeeks = currentTarget
+    ? Math.max(0, Math.floor((new Date(today) - new Date(currentTarget.effective_date)) / (7 * 86400000)))
+    : null;
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8" contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 1000 }}>
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/nutrition"))}
-          style={{ marginBottom: 12 }}
-        >
-          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+      <ScrollView className="flex-1" style={{ backgroundColor: colors.canvas }} contentContainerStyle={{ paddingTop: insets.top + 20, paddingHorizontal: isWeb ? 40 : 18, paddingBottom: 48 }}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/nutrition"))} style={{ marginBottom: 14, alignSelf: "flex-start" }}>
+          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, fontSize: 13 }}>‹ Nutrition</Text>
         </Pressable>
-        <View className="mb-1 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-              {client.name}
-            </Text>
-            <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8}>
-              <Ionicons name="settings-outline" size={19} color="#a8a29e" />
-            </Pressable>
+
+        <View className="mb-5 flex-row flex-wrap items-start justify-between" style={{ gap: 14 }}>
+          <View className="flex-1 flex-row items-center" style={{ gap: 14, minWidth: 260 }}>
+            <View className="items-center justify-center rounded-full" style={{ width: 46, height: 46, backgroundColor: "#fdf6f2" }}>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: colors.primaryOnWhite }}>{initials(client.name)}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View className="flex-row flex-wrap items-center" style={{ gap: 10 }}>
+                <Text style={{ fontFamily: fonts.display, fontSize: 27, color: colors.primary }}>{client.name}</Text>
+                <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: pill.bg }}>
+                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: pill.text }}>{pill.label}</Text>
+                </View>
+                {/* A cross-link, not a duplicate: her lifting lives on the SPC
+                    page and a coach reading a check-in about sore knees is
+                    one click from what she actually squatted. */}
+                {isSpcActive(spcClient) ? (
+                  <Pressable onPress={() => router.push(`/(coach)/spc/${userId}`)} className="rounded-full px-2.5 py-1" style={{ backgroundColor: "#eef1e7" }}>
+                    <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: "#4d6142" }}>SPC ›</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Text className="mt-1" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
+                coach: {coachNameById[client.coach_id] ?? "Unassigned"} · started {formatDateMDY(client.start_date)}
+              </Text>
+            </View>
           </View>
-          {/* Ready-to-finalize check-in action, relocated here from the
-              bottom of the Check-In tab so it's visible regardless of which
-              tab a coach lands on. Tied to the same `checkin`/`selectedWeek`
-              state the Check-In tab's week-navigator drives, so paging to a
-              late-submitted prior week (weekOffset > 0) still works through
-              this same button. The small camera icon is a lightweight "there
-              are photos in this check-in" flag — not unread tracking, just
-              whether any were uploaded for this cycle. */}
+
           {checkin && !checkin.finalized_at ? (
             <Pressable
               onPress={handleFinalizeCheckin}
               disabled={finalizing}
-              className="flex-row items-center gap-2 rounded-lg px-4 py-2 disabled:opacity-50"
-              style={{ backgroundColor: colors.primary }}
+              className="flex-row items-center rounded-lg px-5 py-3"
+              style={{ backgroundColor: colors.primary, opacity: finalizing ? 0.5 : 1, gap: 8 }}
             >
-              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
-                {finalizing ? "Finalizing…" : "Finalize Check-In"}
+              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5 }}>
+                {finalizing ? "Completing…" : "Complete check-in"}
               </Text>
               {weekPhotos.length > 0 ? <Ionicons name="camera" size={15} color="white" /> : null}
             </Pressable>
           ) : null}
         </View>
-        <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-          {client.email}
-        </Text>
 
-        <TabBar active={tab} onSelect={setTab} />
+        <TabBar tabs={tabs} active={activeTab} onSelect={setTab} />
 
-        {/* Entry point for reviewing + setting a client's first target —
-            previously only reachable from the onboarding hub, which a
-            client stops seeing the moment objective_tracking_approved_at
-            is set. A client can be already-approved but still have zero
-            targets (e.g. a pre-existing standalone-app client whose Kova
-            nutrition switch was just turned on, never run through Kova's
-            own onboarding cycle) — that's exactly what the roster's "Needs
-            target" status means, and until now there was no way to reach
-            the baseline-informed review screen for that case. Shown across
-            every tab, not just Dashboard, since a coach might land here
-            from a saved link or a different tab. */}
-        {!currentTarget ? (
-          <Link href={`/(coach)/nutrition/clients/${userId}/onboarding/approve`} asChild>
-            <Pressable
-              className="mb-5 flex-row items-center justify-between rounded-lg border px-4 py-3.5"
-              style={{ borderColor: "#e9d3ae", backgroundColor: "#f4ede3" }}
-            >
-              <View className="flex-1 pr-3">
-                <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5a2e" }}>No target set yet</Text>
-                <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#8a5a2e" }}>
-                  Review their objective tracking baseline and set their first macros.
-                </Text>
-              </View>
-              <Text style={{ fontFamily: fonts.sansSemiBold, color: "#8a5a2e" }}>Review & Set Targets ›</Text>
-            </Pressable>
-          </Link>
+        {/* Approved, but nothing to measure her against yet. Reachable for a
+            pre-existing standalone-app client whose Kova nutrition switch was
+            just turned on, and for anyone just closed out of onboarding who
+            hasn't had their first targets saved. Shown on every tab, since
+            every one of them is meaningless until this is done. */}
+        {!isOnboarding && !hasTargets ? (
+          <Pressable
+            onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/approve`)}
+            className="mb-5 flex-row flex-wrap items-center justify-between rounded-xl px-4 py-3.5"
+            style={{ borderWidth: 1, borderColor: "#e9d3ae", backgroundColor: "#f4ede3", gap: 10 }}
+          >
+            <View style={{ flex: 1, minWidth: 240 }}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#8a5a2e" }}>No target set yet</Text>
+              <Text className="mt-0.5" style={{ fontFamily: fonts.sans, fontSize: 12, color: "#8a5a2e" }}>
+                Every tab here measures her against her targets. Set them and the rest of this page starts working.
+              </Text>
+            </View>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#8a5a2e" }}>Review &amp; set targets ›</Text>
+          </Pressable>
         ) : null}
 
-        {tab === "dashboard" && (
+        {activeTab === "onboarding" ? (
+          <NutritionOnboardingTab
+            userId={userId}
+            client={client}
+            onboarding={onboarding}
+            otLogs={otLogs}
+            photos={photos}
+            isWide={isWide}
+            sending={sending}
+            bypassing={bypassing}
+            onSendToClient={handleSendToClient}
+            onCloseOut={handleCloseOut}
+          />
+        ) : null}
+
+        {activeTab === "dashboard" ? (
+          <NutritionDashboardTab
+            userId={userId}
+            coachId={profile.id}
+            client={client}
+            logs={logs}
+            currentTarget={currentTarget}
+            focusItems={focusItems}
+            milestones={milestones}
+            today={today}
+            isWide={isWide}
+            onChanged={load}
+          />
+        ) : null}
+
+        {activeTab === "weeks" ? (
           <View>
-            {/* Focus items + Notes lead the page (design_handoff_v2 —
-                explicit reorder ask), above the metrics cards below. */}
-            <View style={{ flexDirection: isWeb ? "row" : "column", gap: 20 }}>
-              <View style={{ flex: 1 }}>
-                <SectionCard title="Focus items">
-                  <FocusChecklist userId={userId} items={focusItems} onChanged={load} />
-                </SectionCard>
-              </View>
-              <View style={{ flex: 1 }}>
-                <SectionCard title="Notes">
-                  <GamePlan userId={userId} initialGamePlan={client.game_plan} />
-                </SectionCard>
-              </View>
-            </View>
-
-            <SectionCard title="Milestones">
-              <MilestoneSlots userId={userId} coachId={profile.id} milestones={milestones} onChanged={load} />
-            </SectionCard>
-
-            <SectionCard title="Phases">
-              <PlanPhases userId={userId} coachId={profile.id} phases={phases} onChanged={load} />
-            </SectionCard>
-
-            <SectionCard title="This week at a glance">
-              <TrendTiles thisWeek={thisWeekSummary} lastWeek={lastWeekSummary} />
-            </SectionCard>
-
-            <View style={{ flexDirection: isWeb ? "row" : "column", gap: 20 }}>
-              <View style={{ flex: 1 }}>
-                <SectionCard title="Current target">
-                  {currentTarget ? (
-                    <MacroPills
-                      calories={Math.round(deriveCalories(currentTarget))}
-                      protein={currentTarget.protein_g}
-                      carb={currentTarget.carb_g}
-                      fat={currentTarget.fat_g}
-                      fiber={currentTarget.fiber_g}
-                      steps={currentTarget.step_goal}
-                      sleepHours={currentTarget.sleep_hours_goal}
-                    />
-                  ) : (
-                    <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
-                      No target set yet.
-                    </Text>
-                  )}
-                </SectionCard>
-              </View>
-              <View style={{ flex: 1 }}>
-                <SectionCard title="This week vs. last week">
-                  <WeekComparison thisWeek={thisWeekSummary} lastWeek={lastWeekSummary} target={currentTarget} />
-                </SectionCard>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {tab === "weeks" && (
-          <View>
-            <SectionCard title="Weekly averages">
-              <WeekList weeks={recentWeeks} />
-            </SectionCard>
-          </View>
-        )}
-
-        {tab === "trends" && (
-          <SectionCard title="Trends">
-            <View className="mb-4 flex-row flex-wrap gap-2">
-              {TREND_METRICS.map((m) => (
-                <Pressable
-                  key={m.key}
-                  onPress={() => setTrendMetric(m.key)}
-                  className="rounded-full border px-3 py-1.5"
-                  style={{ borderColor: trendMetric === m.key ? colors.primary : "#d6d3d1", backgroundColor: trendMetric === m.key ? colors.primary : "transparent" }}
-                >
-                  <Text style={{ fontFamily: fonts.sansMedium, color: trendMetric === m.key ? "white" : "#57534e", fontSize: 12 }}>{m.label}</Text>
-                </Pressable>
-              ))}
-              <View className="ml-auto flex-row gap-2">
-                {TREND_RANGES.map((r) => (
-                  <Pressable key={r.key} onPress={() => setTrendRange(r.key)}>
-                    <Text style={{ fontFamily: trendRange === r.key ? fonts.sansSemiBold : fonts.sans, color: trendRange === r.key ? colors.primaryOnWhite : "#a8a29e", fontSize: 12 }}>
-                      {r.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-            <TrendChart points={trendPoints} width={isWeb ? 600 : 320} />
-          </SectionCard>
-        )}
-
-        {tab === "checkin" && (
-          <View>
-            <View className="mb-4 flex-row items-center justify-between">
-              <Pressable onPress={() => { setWeekPaging(true); setWeekOffset((o) => o + 1); }}>
-                <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Prior week</Text>
-              </Pressable>
-              <View className="flex-row items-center gap-2">
-                {/* Labeled by the check-in Monday, matching the timeline in
-                    Client Settings — these two are reachable from the same
-                    screen, so labeling one by its covered week and the other
-                    by its check-in date would show two different dates for
-                    the same check-in. */}
-                <Text style={{ fontFamily: fonts.sansSemiBold }}>
-                  {formatDateMDY(checkinMondayForWeek(selectedWeek.start))} check-in
-                </Text>
-                {weekPaging ? <ActivityIndicator size="small" color={colors.primary} /> : null}
-              </View>
-              <Pressable onPress={() => { if (weekOffset > 0) { setWeekPaging(true); setWeekOffset((o) => Math.max(0, o - 1)); } }} disabled={weekOffset === 0}>
-                <Text style={{ fontFamily: fonts.sansMedium, color: weekOffset === 0 ? "#d6d3d1" : colors.primaryOnWhite }}>Next week ›</Text>
-              </Pressable>
-            </View>
-
-            <SectionCard title="This week's snapshot">
-              <WeeklySnapshot thisWeek={selectedWeekSummary} lastWeek={priorToSelectedSummary} />
-            </SectionCard>
-
-            <SectionCard title="Check-in answers">
-              {checkin ? (
-                <View>
-                  {checkin.answers.map((a, i) => (
-                    <View key={i} className="mb-3">
-                      <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold }}>
-                        {a.question}
-                      </Text>
-                      <HighlightableAnswer
-                        text={a.answer || "—"}
-                        ranges={checkin.highlights?.[i]}
-                        onChangeRanges={(ranges) => handleChangeHighlights(i, ranges)}
-                      />
-                    </View>
-                  ))}
-                  {/* What the client was actually working against that week —
-                      submitCheckin has stored these snapshots on every
-                      response since day one, but nothing ever rendered them,
-                      so the coach was reading last week's answers against
-                      TODAY'S focus/targets. */}
-                  {checkin.targets_snapshot || (checkin.focus_snapshot ?? []).length > 0 || checkin.game_plan_snapshot ? (
-                    <View className="mt-3 rounded-xl border border-stone-200 p-3" style={{ backgroundColor: "#faf8f6" }}>
-                      <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.4 }}>
-                        That week's targets & focus
-                      </Text>
-                      {checkin.targets_snapshot ? (
-                        <View className="mb-2">
-                          <MacroPills
-                            protein={checkin.targets_snapshot.protein_g}
-                            carb={checkin.targets_snapshot.carb_g}
-                            fat={checkin.targets_snapshot.fat_g}
-                            fiber={checkin.targets_snapshot.fiber_g}
-                            calories={Math.round(deriveCalories(checkin.targets_snapshot))}
-                            steps={checkin.targets_snapshot.step_goal}
-                            sleepHours={checkin.targets_snapshot.sleep_hours_goal}
-                          />
-                        </View>
-                      ) : null}
-                      {(checkin.focus_snapshot ?? []).map((f, i) => (
-                        <Text key={i} className="text-sm" style={{ fontFamily: fonts.sans, color: f.done ? "#4d6142" : "#57534e" }}>
-                          {f.done ? "✓" : "○"} {f.text}
-                        </Text>
-                      ))}
-                      {checkin.game_plan_snapshot ? (
-                        <Text className="mt-1 text-sm text-stone-500" style={{ fontFamily: fonts.sans, fontStyle: "italic" }}>
-                          Game plan: {checkin.game_plan_snapshot}
-                        </Text>
-                      ) : null}
-                    </View>
-                  ) : null}
-                  {/* Finalize action itself lives at the top of the page now,
-                      next to the client's name — this is just a status
-                      readout for whoever's down here reading the answers. */}
-                  <Text className="mt-2 text-center" style={{ fontFamily: fonts.sansSemiBold, color: checkin.finalized_at ? "#4d6142" : "#b3843a" }}>
-                    {checkin.finalized_at ? "Finalized ✓" : "Awaiting your review — Finalize at the top of the page"}
-                  </Text>
-                </View>
-              ) : (
-                <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
-                  Not submitted yet this week.
-                </Text>
-              )}
-            </SectionCard>
-
-            {/* The realistic review loop — read answers → update focus/game
-                plan → set the new target — used to cost 3 tab switches; the
-                live editing surfaces now sit right under the answers. */}
-            <View style={{ flexDirection: isWeb ? "row" : "column", gap: 16 }}>
-              <View style={{ flex: 1 }}>
-                <SectionCard title="Focus items (live)">
-                  <FocusChecklist userId={userId} items={focusItems} onChanged={load} />
-                </SectionCard>
-              </View>
-              <View style={{ flex: 1 }}>
-                <SectionCard
-                  title="Game plan (live)"
-                  headerRight={
-                    <Pressable onPress={() => setTab("targets")} hitSlop={8}>
-                      <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
-                        Set new target ›
-                      </Text>
-                    </Pressable>
-                  }
-                >
-                  <GamePlan userId={userId} initialGamePlan={client.game_plan} />
-                </SectionCard>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {tab === "photos" && (
-          <View>
-            <SectionCard title="Compare">
-              <PhotoCompare photos={photos} />
-            </SectionCard>
-
-            <SectionCard
-              title="Fix a day's photos"
-              headerRight={
-                Object.keys(photosByDate).length > 0 ? <PhotoSubmissionsEditor photosByDate={photosByDate} onSaved={load} /> : null
-              }
-            >
-              <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                {photos.length === 0 ? "No photos uploaded yet." : "Use Edit above if a photo's angle or weight is wrong."}
+            <View className="mb-3 flex-row flex-wrap items-baseline justify-between" style={{ gap: 10 }}>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                {maxWeeks} week{maxWeeks === 1 ? "" : "s"} on programme
               </Text>
-            </SectionCard>
-
-            <SectionCard title="Add photos (e.g. old/starting photos)">
-              <PhotoUpload userId={userId} onUploaded={load} allowDatePick />
-            </SectionCard>
+              {targetChangeCount > 0 ? (
+                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
+                  Targets changed {targetChangeCount === 1 ? "once" : `${targetChangeCount} times`} — marked on the weeks they moved
+                </Text>
+              ) : null}
+            </View>
+            <WeekRows weeks={weekRows} targetChangeByWeek={targetChangeByWeek} />
+            {maxWeeks > WEEKS_SHOWN ? (
+              <Pressable onPress={() => setShowAllWeeks((v) => !v)} className="mt-2 self-start">
+                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: colors.primaryOnWhite }}>
+                  {showAllWeeks ? "Show recent weeks only" : `${maxWeeks - WEEKS_SHOWN} earlier week${maxWeeks - WEEKS_SHOWN === 1 ? "" : "s"}`}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
-        )}
+        ) : null}
 
-        {tab === "targets" && (
-          <View>
-            <SectionCard title="Set new target">
-              <NewTargetForm userId={userId} setBy={profile.id} currentTarget={currentTarget} recentAverages={selectedWeekSummary?.averages} onSaved={load} />
-            </SectionCard>
-            <SectionCard title="Target history">
-              <TargetsHistory history={targets} />
-            </SectionCard>
-            <SectionCard title="Objective Tracking">
-              <ObjectiveTrackingHistory logs={otLogs} />
-            </SectionCard>
+        {activeTab === "plan" ? (
+          <View style={{ flexDirection: isWide ? "row" : "column", gap: 18 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Card title="Plan phases">
+                <PlanPhases userId={userId} coachId={profile.id} phases={phases} onChanged={load} />
+              </Card>
+            </View>
+            <View style={{ width: isWide ? 320 : undefined }}>
+              <Card title="Milestones">
+                <MilestoneSlots userId={userId} coachId={profile.id} milestones={milestones} onChanged={load} />
+              </Card>
+            </View>
           </View>
-        )}
+        ) : null}
+
+        {activeTab === "checkin" ? (
+          <NutritionCheckinTab
+            userId={userId}
+            client={client}
+            checkin={checkin}
+            priorCheckin={priorCheckin}
+            templateQuestions={templateQuestions}
+            selectedWeek={selectedWeek}
+            weekOffset={weekOffset}
+            weekPaging={weekPaging}
+            onOlderWeek={() => {
+              setWeekPaging(true);
+              setWeekOffset((o) => o + 1);
+            }}
+            onNewerWeek={() => {
+              if (weekOffset > 0) {
+                setWeekPaging(true);
+                setWeekOffset((o) => Math.max(0, o - 1));
+              }
+            }}
+            summary={selectedWeekSummary}
+            priorSummary={priorToSelectedSummary}
+            currentTarget={currentTarget}
+            photos={photos}
+            focusItems={focusItems}
+            isWide={isWide}
+            onChanged={load}
+            onChangeHighlights={handleChangeHighlights}
+            onOpenPhotos={() => setTab("photos")}
+            onOpenTargets={() => setTab("targets")}
+          />
+        ) : null}
+
+        {/* No card under the comparison — the two photos are the content of
+            this tab and they get the window's height. Backfilling and fixing
+            are occasional housekeeping, so they live behind the toolbar's
+            Manage photos button. */}
+        {activeTab === "photos" ? (
+          <PhotoCompareRail photos={photos} startDate={client.start_date} onManage={() => setManagingPhotos(true)} />
+        ) : null}
+
+        {activeTab === "targets" ? (
+          <View style={{ flexDirection: isWide ? "row" : "column", gap: 18 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Card style={{ marginBottom: 16 }}>
+                <TargetsEditor
+                  userId={userId}
+                  setBy={profile.id}
+                  currentTarget={currentTarget}
+                  recentAverages={selectedWeekSummary?.averages}
+                  setByName={currentTarget ? coachNameById[currentTarget.set_by] : null}
+                  unchangedWeeks={unchangedWeeks}
+                  onSaved={load}
+                />
+              </Card>
+              <Card title="Objective tracking">
+                <ObjectiveTrackingHistory logs={otLogs} />
+              </Card>
+            </View>
+            <View style={{ width: isWide ? 380 : undefined }}>
+              <Card title="History">
+                <TargetHistoryTable history={targets} coachNameById={coachNameById} />
+              </Card>
+            </View>
+          </View>
+        ) : null}
+
+        {activeTab === "settings" ? (
+          <ClientSettingsPanel
+            userId={userId}
+            coachId={profile.id}
+            coaches={coaches}
+            client={client}
+            checkins={checkins}
+            reopens={checkinReopens}
+            photos={photos}
+            today={today}
+            isWide={isWide}
+            onSaved={load}
+          />
+        ) : null}
       </ScrollView>
-      <ClientSettingsModal
-        visible={settingsVisible}
+      <ManagePhotosModal
+        visible={managingPhotos}
         userId={userId}
-        coachId={profile.id}
-        coaches={coaches}
-        client={client}
-        checkins={checkins}
-        reopens={checkinReopens}
-        photos={photos}
-        today={today}
-        onClose={() => setSettingsVisible(false)}
-        onSaved={load}
+        photosByDate={photosByDate}
+        onClose={() => setManagingPhotos(false)}
+        onChanged={load}
       />
       <CoachMessageBubble userId={userId} clientName={client.name} />
     </CoachShell>

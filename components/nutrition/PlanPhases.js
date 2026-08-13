@@ -8,6 +8,7 @@ import {
   updatePhaseItem,
   deletePhaseItem,
   reorderPhases,
+  setPhaseStatus,
 } from "../../lib/nutrition/planPhases";
 import { SortableList } from "../SortableList";
 import { confirmDeletePhase, confirmRemovePhaseItem } from "../../lib/confirmDialog";
@@ -105,6 +106,35 @@ function BulletRow({ item, onChanged }) {
   );
 }
 
+// planned → now → done → planned. A badge rather than a menu because it has
+// three states and cycling one card is a single click; the card's own colour
+// follows it, so which phase she's actually in is readable without reading
+// any of the text. `planned` shows nothing at all — an unbadged card is the
+// normal case and badging every one of them would be noise.
+const PHASE_STATUS_STYLE = {
+  planned: { label: null, border: "#f0ddd2", background: "#fdf6f2", badgeBg: null, badgeText: null },
+  now: { label: "NOW", border: colors.primary, background: "#fdf6f2", badgeBg: "#f4ddd2", badgeText: "#b23a22" },
+  done: { label: "DONE", border: "#dbe8cf", background: "#f4f6f0", badgeBg: "#dbe8cf", badgeText: "#4d6142" },
+};
+const NEXT_STATUS = { planned: "now", now: "done", done: "planned" };
+
+function PhaseStatusBadge({ status, onPress }) {
+  const style = PHASE_STATUS_STYLE[status] ?? PHASE_STATUS_STYLE.planned;
+  return (
+    <Pressable onPress={onPress} hitSlop={6} className="mr-1.5">
+      {style.label ? (
+        <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: style.badgeBg }}>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 9, color: style.badgeText, letterSpacing: 0.4 }}>{style.label}</Text>
+        </View>
+      ) : (
+        <View className="rounded-full px-2 py-0.5" style={{ borderWidth: 1, borderColor: "#e4dcd4" }}>
+          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 9, color: "#c3bdb4", letterSpacing: 0.4 }}>SET</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 function PhaseCard({ phase, controls, onChanged }) {
   // null = not adding; a string = a draft bullet being typed. Opened by the
   // "+" button rather than sitting there as a permanent empty input: a
@@ -146,10 +176,26 @@ function PhaseCard({ phase, controls, onChanged }) {
     }
   };
 
+  const status = phase.status ?? "planned";
+  const statusStyle = PHASE_STATUS_STYLE[status] ?? PHASE_STATUS_STYLE.planned;
+
+  const handleCycleStatus = async () => {
+    try {
+      await setPhaseStatus(phase.id, NEXT_STATUS[status]);
+      await onChanged();
+    } catch (err) {
+      toastError("Failed to change the phase status", err);
+    }
+  };
+
   return (
-    <View className="mb-1.5 rounded-lg border px-2.5 py-2" style={{ borderColor: "#f0ddd2", backgroundColor: "#fdf6f2" }}>
+    <View
+      className="mb-1.5 rounded-lg px-2.5 py-2"
+      style={{ borderWidth: status === "now" ? 1.5 : 1, borderColor: statusStyle.border, backgroundColor: statusStyle.background }}
+    >
       <View className="flex-row items-center">
         {controls}
+        <PhaseStatusBadge status={status} onPress={handleCycleStatus} />
         <InlineField
           value={phase.title}
           placeholder="Phase name"
