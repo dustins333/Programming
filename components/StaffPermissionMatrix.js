@@ -8,11 +8,35 @@ import { fonts, colors } from "../lib/theme";
 // which flags exist or what each one defaults to — SPC/Nutrition/Exercise
 // Library default on (0015), Ops Hours defaults off (0036), matching each
 // column's own DB default rather than one blanket `?? true`.
+//
+// `description` is only used where there's room to explain what a flag
+// actually grants (AddStaffModal's module step) — the matrix below and the
+// native card list show the label alone.
 export const PERMISSION_COLUMNS = [
-  { field: "can_view_spc", label: "SPC", defaultValue: true },
-  { field: "can_view_nutrition", label: "Nutrition", defaultValue: true },
-  { field: "can_view_exercise_library", label: "Exercise Library", defaultValue: true },
-  { field: "can_log_ops_hours", label: "Ops Hours", defaultValue: false },
+  {
+    field: "can_view_spc",
+    label: "SPC",
+    defaultValue: true,
+    description: "Build and manage individual strength programs.",
+  },
+  {
+    field: "can_view_nutrition",
+    label: "Nutrition",
+    defaultValue: true,
+    description: "Coach nutrition clients — check-ins, targets, photos.",
+  },
+  {
+    field: "can_view_exercise_library",
+    label: "Exercise Library",
+    defaultValue: true,
+    description: "Add and edit exercises for the whole gym.",
+  },
+  {
+    field: "can_log_ops_hours",
+    label: "Ops Hours",
+    defaultValue: false,
+    description: "Log operations hours on their payroll entries.",
+  },
 ];
 
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };

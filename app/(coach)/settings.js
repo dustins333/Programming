@@ -545,11 +545,17 @@ export default function Settings() {
     }
   };
 
-  const handleAddStaff = async ({ name, email, role }) => {
+  const handleAddStaff = async ({ name, email, role, existingUserId, permissions }) => {
     try {
-      await inviteStaffMember({ name, email, role });
+      const { invited } = await inviteStaffMember({ name, email, role, existingUserId, permissions });
       await loadCoaches();
-      toastSuccess(`Invited ${name}.`);
+      // Only say "invited" when an email genuinely went out — promoting an
+      // account that already exists sends nothing.
+      toastSuccess(
+        invited
+          ? `Invited ${name} — they'll get an email to set a password.`
+          : `${name} is now ${role === "admin" ? "an admin" : "a coach"}.`
+      );
     } catch (err) {
       toastError("Failed to add staff", err);
       throw err;

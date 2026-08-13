@@ -1,4 +1,7 @@
-// Admin-only: invites a new coach/admin account. Deploy with:
+// Admin-only: adds a coach/admin account — either promoting an account
+// that already exists (a member being upgraded, or anyone with a login
+// from the shared Nutrition Tracker auth project) or, only when the email
+// is genuinely new to the project, inviting one by email. Deploy with:
 //   supabase functions deploy invite-staff
 //
 // Runs with the service-role key server-side so it can call the Auth Admin
@@ -53,7 +56,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Only an admin can add staff accounts" }), { status: 403, headers: jsonHeaders });
   }
 
-  const { name, email, role } = await req.json();
+  const { name, email, role, existingUserId, permissions } = await req.json();
   if (!name || !email || !["coach", "admin"].includes(role)) {
     return new Response(
       JSON.stringify({ error: "name, email, and role ('coach' or 'admin') are required" }),
@@ -61,45 +64,73 @@ Deno.serve(async (req) => {
     );
   }
 
-  // This Supabase project's auth is shared with the separate Nutrition
-  // Tracker app, so the email may already have an auth.users row (e.g.
-  // someone who's a Nutrition Tracker client being promoted to coach here)
-  // — inviteUserByEmail errors on a duplicate, so fall back to finding the
-  // existing user rather than treating that as a hard failure.
-  let authUserId;
-  const invite = await adminClient.auth.admin.inviteUserByEmail(email, {
-    redirectTo: "https://app.kovastrength.com/set-password",
-  });
+  // Module access is always set explicitly by the admin adding the account
+  // — no column falls back to its table default here. 0015's defaults
+  // (SPC/Nutrition/Library on) exist so pre-0015 rows kept working, but a
+  // brand-new coach silently starting with three modules on isn't what an
+  // admin choosing their access expects.
+  const PERMISSION_FIELDS = [
+    "can_view_spc",
+    "can_view_nutrition",
+    "can_view_exercise_library",
+    "can_log_ops_hours",
+  ];
+  const permissionPatch: Record<string, boolean> = {};
+  for (const field of PERMISSION_FIELDS) {
+    permissionPatch[field] = permissions?.[field] === true;
+  }
 
-  if (invite.error) {
-    // See import-client's identical fix: Supabase's real duplicate-email
-    // error text is "already been registered", not "already registered".
-    const alreadyExists = /already.*registered|already exists|email_exists/i.test(invite.error.message ?? "");
-    if (!alreadyExists) {
-      return new Response(JSON.stringify({ error: invite.error.message }), { status: 500, headers: jsonHeaders });
-    }
+  // Whether this account already exists decides whether anyone gets emailed.
+  // Two ways we can know: the admin picked a real client out of the search
+  // (existingUserId), or the email turns out to already have an auth.users
+  // row — this project's auth is shared with the standalone Nutrition
+  // Tracker app, so that's common. Either way the person already has a
+  // working login and a set-your-password email would just be confusing.
+  let authUserId = existingUserId ?? null;
+  let invited = false;
+
+  if (!authUserId) {
     const { data: existing, error: listError } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
     if (listError) {
       return new Response(JSON.stringify({ error: listError.message }), { status: 500, headers: jsonHeaders });
     }
     const match = existing.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-    if (!match) {
-      return new Response(JSON.stringify({ error: "Email already registered but the matching account couldn't be found" }), { status: 500, headers: jsonHeaders });
-    }
-    authUserId = match.id;
-  } else {
-    authUserId = invite.data.user.id;
+    if (match) authUserId = match.id;
   }
 
-  // Upsert on id: a brand-new invite inserts a fresh row (permission
-  // columns fall back to their table defaults, all true); promoting an
-  // existing profile (e.g. an already-linked member) only touches
-  // name/email/role, leaving that row's existing permission flags alone
-  // since they're not part of this payload.
+  if (!authUserId) {
+    // Genuinely new to the whole project — they have no password, so this
+    // is the one path where an invite email is the right thing to send.
+    const invite = await adminClient.auth.admin.inviteUserByEmail(email, {
+      redirectTo: "https://app.kovastrength.com/set-password",
+    });
+    if (invite.error) {
+      // See import-client's identical fix: Supabase's real duplicate-email
+      // error text is "already been registered", not "already registered".
+      // Only reachable if an account appeared between the lookup above and
+      // here, or sat past listUsers' first 1000 rows.
+      const alreadyExists = /already.*registered|already exists|email_exists/i.test(invite.error.message ?? "");
+      if (!alreadyExists) {
+        return new Response(JSON.stringify({ error: invite.error.message }), { status: 500, headers: jsonHeaders });
+      }
+      return new Response(
+        JSON.stringify({ error: "That email already has an account, but it couldn't be found. Search for them under \"Existing client\" instead." }),
+        { status: 409, headers: jsonHeaders }
+      );
+    }
+    authUserId = invite.data.user.id;
+    invited = true;
+  }
+
+  // Upsert on id: inserts a fresh row for a brand-new invite, or promotes
+  // an existing profile (member → coach) in place, keeping the same login.
+  // Permission columns are always part of the payload, so a promoted
+  // account's old flags are replaced by whatever the admin just chose
+  // rather than surviving underneath the new role.
   const { data: profile, error: upsertError } = await adminClient
     .schema("core")
     .from("users")
-    .upsert({ id: authUserId, name, email, role }, { onConflict: "id" })
+    .upsert({ id: authUserId, name, email, role, ...permissionPatch }, { onConflict: "id" })
     .select()
     .single();
 
@@ -122,7 +153,9 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ profile }), {
+  // `invited` tells the app whether an email actually went out, so it can
+  // say "Invited X" vs "X is now a coach" honestly instead of guessing.
+  return new Response(JSON.stringify({ profile, invited }), {
     status: 200,
     headers: jsonHeaders,
   });
