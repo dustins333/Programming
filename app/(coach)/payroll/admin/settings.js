@@ -10,6 +10,7 @@ import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
 import { AdminPayrollTabBar } from "../../../../components/AdminPayrollTabBar";
 import { RateRow } from "../../../../components/payroll/RateRow";
+import { DeadlineReminderCard } from "../../../../components/payroll/DeadlineReminderCard";
 import { NUMERIC_DONE_ID } from "../../../../components/NumericInputAccessory";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../../lib/scrollToKeyboard";
 
@@ -194,6 +195,14 @@ export default function AdminPayrollSettings() {
           <ActivityIndicator color={colors.primary} />
         ) : (
           <>
+            {/* First rather than below the rate tables: it's short, and the
+                Other section below it ends in a long archived list that
+                would bury it. */}
+            <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
+              Reminders
+            </Text>
+            <DeadlineReminderCard />
+
             <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
               Rates
             </Text>
