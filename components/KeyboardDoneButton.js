@@ -20,7 +20,7 @@ import { fonts, colors } from "../lib/theme";
 // numeric or multiline field — it is NOT enough to mount this once at the
 // app root. app/_layout.js's mount covers every non-Modal screen; each
 // Modal-rendering component with an affected field needs its own copy
-// (SessionFocusModal, WeightCalculator, ExerciseFormModal,
+// (WeightCalculator, ExerciseFormModal,
 // NewGroupProgramModal, MilestoneFormModal, PhotoSubmissionsEditor, the
 // PopupModal in nutrition/checkin.js, as of this writing — grep this file's
 // name for the current list).

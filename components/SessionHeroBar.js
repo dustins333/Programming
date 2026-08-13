@@ -1,26 +1,29 @@
-import { View, Text } from "react-native";
+import { View, Text, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "./PressFade";
-import { TimerControl } from "./TimerControl";
-import { fonts } from "../lib/theme";
+import { fonts, colors } from "../lib/theme";
 
-// design_handoff_member_mobile_v5 (3a) — My Fitness's header, promoted from
-// the old flat info bar into the same dark hero My Week leads with, so
-// the two screens read as one product. It doubles as the program selector:
-// the eyebrow's program chip gets a ▾ and opens the picker only when more
-// than one program is actually available (a single-program member sees
-// plain text and nothing to tap, per the handoff).
+// My Fitness's session header (design_handoff_member_lift_v1).
 //
-// Session tabs sit on the hero's bottom edge and are passed in by the
-// caller — SPC supplies its own sessions (it has a real choice to make,
-// since SPC has no day-of-week routing); group programs don't, because the
-// session a member can log is determined by today's weekday. A caller that
-// passes no tabs simply drops the row.
-const HERO_DARK = "#33251f";
-const HERO_CREAM = "#f7f3ee";
-const HERO_SAND = "#beac95";
-const HERO_OCHRE = "#e0b070";
+// This was a dark hero in v5, matching My Week's. The lift-tracking handoff
+// draws it light — an eyebrow, the session name in brand terracotta, and
+// "Full block ›" — and takes the session stopwatch out of it entirely
+// (nobody used it, and it competed with rest, which is now the only timer in
+// the app). With the timer gone the dark block had nothing left on its right
+// side, so it goes back to being a plain page header and the dark hero stays
+// My Week's alone.
+//
+// It doubles as the program selector: the eyebrow's program chip gets a ▾
+// and opens the picker only when more than one program is actually
+// available. A single-program member sees plain text with nothing to tap.
+//
+// Session tabs are passed in by the caller — SPC supplies its own sessions
+// (it has a real choice to make, having no day-of-week routing); group
+// programs don't, because the session a member can log is determined by
+// today's weekday. A caller that passes no tabs simply drops the row.
 const CANVAS = "#faf8f6";
+const CARD_BORDER = "#ece7e1";
+const MUTED = "#a8a29e";
 const HITSLOP = { top: 10, bottom: 10, left: 10, right: 10 };
 
 export function SessionHeroBar({
@@ -31,116 +34,96 @@ export function SessionHeroBar({
   meta,
   completed,
   onViewBlock,
-  timer,
-  timerExpanded,
-  onToggleExpanded,
-  onToggleTimer,
-  onResetTimer,
+  onOpenSettings,
   tabs,
   selectedTab,
   onSelectTab,
 }) {
+  const eyebrow = [programLabel, eyebrowDetail].filter(Boolean).join(" · ").toUpperCase();
+
   return (
-    <View style={{ backgroundColor: HERO_DARK, borderRadius: 24, overflow: "hidden" }}>
-      <View style={{ paddingHorizontal: 18, paddingTop: 18 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 }}>
-            {onPickProgram ? (
-              <PressFade
-                onPress={onPickProgram}
-                accessibilityLabel="Switch program"
+    <View>
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {onPickProgram ? (
+            <PressFade
+              onPress={onPickProgram}
+              accessibilityLabel="Switch program"
+              style={{ flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start" }}
+            >
+              <Text
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.1}
+                style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.3, color: MUTED, flexShrink: 1 }}
+              >
+                {eyebrow}
+              </Text>
+              <Ionicons name="chevron-down" size={11} color={MUTED} />
+            </PressFade>
+          ) : (
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.1}
+              style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.3, color: MUTED }}
+            >
+              {eyebrow}
+            </Text>
+          )}
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 }}>
+            <Text
+              numberOfLines={2}
+              maxFontSizeMultiplier={1.15}
+              style={{ fontFamily: fonts.display, fontSize: 29, lineHeight: 33, color: colors.primary, flexShrink: 1 }}
+            >
+              {title}
+            </Text>
+            {completed ? (
+              <View
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  gap: 4,
-                  backgroundColor: "rgba(247,243,238,0.12)",
+                  backgroundColor: "#eef1e7",
                   borderRadius: 999,
-                  paddingHorizontal: 9,
-                  paddingVertical: 4,
-                  flexShrink: 1,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  flexShrink: 0,
                 }}
               >
-                <Text
-                  numberOfLines={1}
-                  maxFontSizeMultiplier={1.1}
-                  style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.1, textTransform: "uppercase", color: HERO_SAND }}
-                >
-                  {programLabel}
+                <Ionicons name="checkmark" size={9} color="#4d6142" style={{ marginRight: 3 }} />
+                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, color: "#4d6142" }}>
+                  Finalized
                 </Text>
-                <Ionicons name="chevron-down" size={11} color={HERO_SAND} />
-              </PressFade>
-            ) : (
-              <Text
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.1}
-                style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.1, textTransform: "uppercase", color: HERO_SAND, flexShrink: 1 }}
-              >
-                {programLabel}
-              </Text>
-            )}
-            {eyebrowDetail ? (
-              <Text
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.1}
-                style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.1, textTransform: "uppercase", color: "rgba(190,172,149,0.7)" }}
-              >
-                {eyebrowDetail}
-              </Text>
+              </View>
             ) : null}
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {onViewBlock ? (
-              <PressFade onPress={onViewBlock} hitSlop={HITSLOP} style={{}}>
-                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color: HERO_OCHRE }}>
-                  View full block ›
-                </Text>
-              </PressFade>
-            ) : null}
-            {timerExpanded ? <TimerControl timer={timer} onToggle={onToggleTimer} onReset={onResetTimer} compact /> : null}
-            <PressFade
-              onPress={onToggleExpanded}
-              hitSlop={HITSLOP}
-              accessibilityLabel={timerExpanded ? "Hide timer" : "Open timer"}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: "rgba(247,243,238,0.25)",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons name="timer-outline" size={16} color={HERO_CREAM} />
-            </PressFade>
-          </View>
-        </View>
-
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
-          <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: 32, lineHeight: 36, color: HERO_CREAM, flexShrink: 1 }}>
-            {title}
-          </Text>
-          {completed ? (
-            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(233,240,225,0.18)", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 }}>
-              <Ionicons name="checkmark" size={9} color="#cfe0bd" style={{ marginRight: 3 }} />
-              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, color: "#cfe0bd" }}>
-                Finalized
-              </Text>
-            </View>
+          {meta ? (
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: MUTED, marginTop: 3 }}>
+              {meta}
+            </Text>
           ) : null}
         </View>
-        {meta ? (
-          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "rgba(247,243,238,0.62)", marginTop: 3 }}>
-            {meta}
-          </Text>
-        ) : null}
-        <View style={{ height: tabs && tabs.length > 1 ? 14 : 18 }} />
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 0, paddingTop: 2 }}>
+          {onViewBlock ? (
+            <PressFade onPress={onViewBlock} hitSlop={HITSLOP} style={{}}>
+              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color: colors.primaryOnWhite }}>
+                Full block ›
+              </Text>
+            </PressFade>
+          ) : null}
+          {onOpenSettings ? (
+            <PressFade onPress={onOpenSettings} hitSlop={HITSLOP} accessibilityLabel="Settings" style={{}}>
+              <Ionicons name="settings-outline" size={20} color="#78716c" />
+            </PressFade>
+          ) : null}
+          {/* Same 34px round mark every other member tab header carries. */}
+          <Image source={require("../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
+        </View>
       </View>
 
-      {/* Session tabs ride the hero's bottom edge; the active one is canvas-
-          colored so it reads as continuous with the page below it. */}
       {tabs && tabs.length > 1 ? (
-        <View style={{ flexDirection: "row", gap: 4, paddingHorizontal: 10 }}>
+        <View style={{ flexDirection: "row", gap: 6, marginTop: 12 }}>
           {tabs.map((tab) => {
             const active = tab.key === selectedTab;
             return (
@@ -151,20 +134,19 @@ export function SessionHeroBar({
                 style={{
                   flex: 1,
                   alignItems: "center",
-                  paddingVertical: 9,
-                  borderTopLeftRadius: 12,
-                  borderTopRightRadius: 12,
-                  backgroundColor: active ? CANVAS : "rgba(247,243,238,0.1)",
+                  paddingVertical: 8,
+                  borderRadius: 12,
+                  borderWidth: active ? 1.5 : 1,
+                  borderColor: active ? colors.primary : CARD_BORDER,
+                  backgroundColor: active ? "#fdf6f2" : CANVAS,
                 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  {tab.completed ? (
-                    <Ionicons name="checkmark" size={11} color={active ? "#4d6142" : "#cfe0bd"} />
-                  ) : null}
+                  {tab.completed ? <Ionicons name="checkmark" size={11} color="#4d6142" /> : null}
                   <Text
                     numberOfLines={1}
                     maxFontSizeMultiplier={1.05}
-                    style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: active ? "#44403c" : "rgba(247,243,238,0.75)" }}
+                    style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: active ? colors.primaryOnWhite : "#78716c" }}
                   >
                     {tab.label}
                   </Text>
@@ -173,7 +155,7 @@ export function SessionHeroBar({
                   <Text
                     numberOfLines={1}
                     maxFontSizeMultiplier={1.05}
-                    style={{ fontFamily: fonts.sans, fontStyle: "italic", fontSize: 10, color: active ? "#a8a29e" : "rgba(247,243,238,0.5)", marginTop: 1 }}
+                    style={{ fontFamily: fonts.sans, fontStyle: "italic", fontSize: 10, color: MUTED, marginTop: 1 }}
                   >
                     {tab.subtitle}
                   </Text>

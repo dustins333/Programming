@@ -222,7 +222,7 @@ export default function NutritionToday() {
   // reach it; a ScrollView clamps its max offset to contentHeight -
   // viewportHeight, so without this the keyboard (plus the floating Done
   // bar sitting on top of it) simply covers Notes with nowhere left to
-  // scroll. Same full occludedHeight pattern as SessionFocusModal.js /
+  // scroll. Same full occludedHeight pattern as the member logging page /
   // MessageThread.js, tabBarHeight subtracted since this screen sits inside
   // (member)/_layout.js's Tabs navigator and that space is already
   // reserved in the layout (padding by the raw keyboard height would
@@ -754,7 +754,7 @@ export default function NutritionToday() {
             style={{ backgroundColor: finalizedAt ? "#4d6142" : colors.primary,}}
           >
             <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-              {finalizing ? "Saving…" : finalizedAt ? "✓ Day finalized" : "Finalize day"}
+              {finalizing ? "Saving…" : finalizedAt ? "Day finalized" : "Finalize day"}
             </Text>
           </PressFade>
         </View>

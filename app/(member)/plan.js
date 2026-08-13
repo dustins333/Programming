@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,7 +22,6 @@ import {
 } from "../../lib/programming/sessionCompletions";
 import { retryOnce } from "../../lib/retry";
 import { SessionLogger } from "../../components/SessionLogger";
-import { SessionFocusModal } from "../../components/SessionFocusModal";
 import { SessionHeroBar } from "../../components/SessionHeroBar";
 import { ProgramPickerModal } from "../../components/ProgramPickerModal";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
@@ -33,7 +32,6 @@ import { toastSuccess } from "../../lib/toast";
 const CANVAS = "#faf8f6";
 const CARD_BORDER = "#ece7e1";
 const HITSLOP = { top: 10, bottom: 10, left: 10, right: 10 };
-const EYEBROW_MUTED = { fontFamily: fonts.sansBold, fontSize: 11, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 8 };
 
 // Matches My Week's card treatment — a light spacing wrapper, not its own
 // bordered card (the individual pieces inside — warmup card, exercise cards
@@ -57,19 +55,18 @@ function FitnessCard({ title, children }) {
   );
 }
 
-// Warm-up section — a bordered card of name/sets×reps rows, mirroring the
-// exercise list's card language, instead of one joined "Warm-up: A, B" line.
-// Renders the same warmup rows already fetched for the section (no new
-// query), just restyled from an inline string into individual rows.
+// Warm-up — one collapsed row ("Warm-up  5 moves" + chevron) that opens into
+// the individual moves (design_handoff_member_lift_v1). It's the only thing
+// on the session page that starts closed: the lifts all open expanded, and
+// the warm-up is the part you already know by heart.
 //
-// Each row also gets the same circle checkbox ExerciseCard uses, on the
-// right — pure placekeeping for whoever's actually running the session
-// (checking off each warm-up move as they go), not real tracked data: no
+// Each move gets the same circle checkbox the lifts use — pure placekeeping
+// for whoever's actually running the session, not tracked data: no
 // exercise_completions row, no persistence, nothing survives a reload.
-// Local component state is deliberate here, not an oversight — warm-ups
-// have no per-item id worth writing to the database over, this is just a
-// "where was I" aid for the live session.
+// Local state is deliberate, not an oversight — warm-ups have no per-item id
+// worth writing to the database over.
 function WarmupCard({ warmups }) {
+  const [open, setOpen] = useState(false);
   const [checked, setChecked] = useState(() => new Set());
   if (!warmups || warmups.length === 0) return null;
   const toggle = (key) =>
@@ -80,42 +77,60 @@ function WarmupCard({ warmups }) {
       return next;
     });
   return (
-    <>
-      <Text style={EYEBROW_MUTED}>Warm-up</Text>
-      <View className="mb-5 rounded-2xl px-3.5" style={{ backgroundColor: "#fdfbf8", borderWidth: 1, borderColor: "#f2ede7" }}>
-        {warmups.map((w, i) => {
-          const key = w.id ?? i;
-          const detail = w.sets && w.reps ? `${w.sets}×${w.reps}` : w.sets || w.reps || "";
-          const isChecked = checked.has(key);
-          return (
-            <View
-              key={key}
-              className="flex-row items-center justify-between py-2.5"
-              style={i < warmups.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f4efe9" } : undefined}
-            >
-              <View className="flex-1 pr-2">
-                <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>{w.exercises?.name ?? w.label}</Text>
-                {w.notes ? (
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", fontStyle: "italic", marginTop: 1 }}>
-                    {w.notes}
-                  </Text>
-                ) : null}
+    <View
+      className="mb-2.5 rounded-2xl"
+      style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, paddingHorizontal: 15 }}
+    >
+      <Pressable
+        onPress={() => setOpen((o) => !o)}
+        accessibilityLabel={open ? "Hide warm-up" : "Show warm-up"}
+        className="flex-row items-center justify-between"
+        style={{ paddingVertical: 13 }}
+      >
+        <View className="flex-row items-center" style={{ gap: 9 }}>
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#44403c" }}>
+            Warm-up
+          </Text>
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+            {warmups.length} move{warmups.length === 1 ? "" : "s"}
+          </Text>
+        </View>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={15} color="#c9c4bd" />
+      </Pressable>
+      {open
+        ? warmups.map((w, i) => {
+            const key = w.id ?? i;
+            const detail = w.sets && w.reps ? `${w.sets}×${w.reps}` : w.sets || w.reps || "";
+            const isChecked = checked.has(key);
+            return (
+              <View
+                key={key}
+                className="flex-row items-center justify-between py-2.5"
+                style={{ borderTopWidth: 1, borderTopColor: "#f4efe9" }}
+              >
+                <View className="flex-1 pr-2">
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>{w.exercises?.name ?? w.label}</Text>
+                  {w.notes ? (
+                    <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", fontStyle: "italic", marginTop: 1 }}>
+                      {w.notes}
+                    </Text>
+                  ) : null}
+                </View>
+                <View className="flex-row items-center" style={{ gap: 10 }}>
+                  {detail ? <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e" }}>{detail}</Text> : null}
+                  <Pressable
+                    onPress={() => toggle(key)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityLabel={isChecked ? "Mark warm-up not complete" : "Mark warm-up complete"}
+                  >
+                    <Ionicons name={isChecked ? "checkmark-circle" : "checkmark-circle-outline"} size={24} color="#4d6142" />
+                  </Pressable>
+                </View>
               </View>
-              <View className="flex-row items-center" style={{ gap: 10 }}>
-                {detail ? <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e" }}>{detail}</Text> : null}
-                <Pressable
-                  onPress={() => toggle(key)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  accessibilityLabel={isChecked ? "Mark warm-up not complete" : "Mark warm-up complete"}
-                >
-                  <Ionicons name={isChecked ? "checkmark-circle" : "checkmark-circle-outline"} size={24} color="#4d6142" />
-                </Pressable>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    </>
+            );
+          })
+        : null}
+    </View>
   );
 }
 
@@ -149,43 +164,14 @@ export default function MyFitness() {
   // by definition the chip is only ever tapped once something already is —
   // so reusing that gate meant the chip did nothing at all.
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [timer, setTimer] = useState({ elapsedMs: 0, running: false, startedAt: null });
-  const [timerExpanded, setTimerExpanded] = useState(false);
-  // The exercise-focus overlay, lifted up from SessionLogger to here so it
-  // can render as a sibling of the page's own header instead of nested deep
-  // inside the scrolling content — a real page header can't stay visible/
-  // clickable above a component nested that deep (see SessionFocusModal.js
-  // for the fuller version of this). `focusTarget` is deliberately sticky
-  // (never cleared back to null on close, only replaced by the next open) —
-  // ExerciseCard's autosave is a debounced timer cancelled by its own
-  // unmount, so unmounting the whole overlay tree the instant it's closed
-  // could drop an edit made in the last ~900ms; `focusVisible` alone
-  // controls show/hide, same as SessionFocusModal's own internal
-  // display:none pattern for navigating between exercises.
-  const [focusTarget, setFocusTarget] = useState(null);
-  const [focusVisible, setFocusVisible] = useState(false);
-  // Which SessionLogger instance to tell to refresh its own summaries/
-  // completions once the overlay closes — keyed by the same sectionKey
-  // string passed into openFocus below, registered via each SessionLogger's
-  // callback ref as they mount/unmount (there can be several one-off
-  // instances at once, only ever one group/SPC one on this page).
-  const loggerRefs = useRef(new Map());
-  const registerLoggerRef = (key) => (el) => {
-    if (el) loggerRefs.current.set(key, el);
-    else loggerRefs.current.delete(key);
-  };
-
-  const openFocus = (sectionProps, payload) => {
-    setFocusTarget({ ...sectionProps, ...payload });
-    setFocusVisible(true);
-  };
-
-  const closeFocus = () => {
-    setFocusVisible(false);
-    loggerRefs.current.get(focusTarget?.sectionKey)?.refresh();
-  };
-
-  const navigateFocus = (i) => setFocusTarget((prev) => (prev ? { ...prev, focusIndex: i } : prev));
+  // The page's own ScrollView is what a focused reps/weight/notes field
+  // scrolls itself above the keyboard inside — this used to be the focus
+  // overlay's ScrollView, but with the session on one page the page is the
+  // scroller. scrollOffsetRef is tracked here and shared by every card, since
+  // RN has no synchronous way to read a ScrollView's current offset (see
+  // lib/scrollToKeyboard.js).
+  const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
 
   // Same staleness guard as My Week's load() — useFocusEffect below re-runs
   // load() on every focus, and without this an older in-flight call can
@@ -597,7 +583,13 @@ export default function MyFitness() {
   ]
     .map((p) => p ?? "")
     .join("|");
-  const activePick = pickedFocus?.signature === paramSignature ? pickedFocus.focus : null;
+  // Whether this navigation actually names a session at all. Pressing the
+  // My Fitness tab in the tab bar arrives with NO params — which used to
+  // change the signature and quietly throw away the pick, so coming back from
+  // My Week re-asked "which session are you logging?" every time. An absence
+  // of params is not a fresh choice; only a real deep link supersedes one.
+  const hasNavParams = !!(params.session || params.program || params.groupProgramId || params.oneOffWorkoutId);
+  const activePick = pickedFocus && (!hasNavParams || pickedFocus.signature === paramSignature) ? pickedFocus.focus : null;
 
   let focus = null;
   if (activePick) {
@@ -677,16 +669,6 @@ export default function MyFitness() {
     };
   }
 
-  const handleToggleTimer = () => {
-    setTimer((t) =>
-      t.running
-        ? { elapsedMs: t.elapsedMs + (Date.now() - t.startedAt), running: false, startedAt: null }
-        : { ...t, running: true, startedAt: Date.now() }
-    );
-  };
-
-  const handleResetTimer = () => setTimer({ elapsedMs: 0, running: false, startedAt: null });
-
   if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && spcLoadError) {
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
@@ -729,33 +711,14 @@ export default function MyFitness() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: CANVAS }}>
-    <View
-      style={{
-        paddingTop: insets.top + 10,
-        paddingBottom: 10,
-        paddingHorizontal: 20,
-        backgroundColor: CANVAS,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        borderBottomWidth: activeFinalize || (focus?.type === "extras" && oneOffs.length > 0) ? 0 : 1,
-        borderBottomColor: CARD_BORDER,
-      }}
-    >
-      {/* Root-tab header — matches the other three tabs' display-serif
-          title (this used to be a 16px bold sans with a back chevron that
-          navigated to a *different* tab, unlike any other root tab). The
-          gear mirrors My Week's header; the audit flagged it as belonging
-          on every tab. */}
-      <Text className="flex-1" numberOfLines={1} style={{ fontFamily: fonts.display, fontSize: 24, color: colors.primary }}>
-        My Fitness
-      </Text>
-      <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={HITSLOP} accessibilityLabel="Settings">
-        <Ionicons name="settings-outline" size={22} color="#78716c" />
-      </Pressable>
-    </View>
+    {/* One header, not two. When there's a session to log, the session's own
+        identity IS this page's title (the handoff draws it that way), so the
+        generic "My Fitness" row would just be a second heading saying less —
+        the gear moves into it instead so Settings stays reachable from this
+        tab either way. With no session (rest day, week done, nothing
+        published) the plain tab header stands on its own. */}
     {activeFinalize ? (
-      <View style={{ paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
+      <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
         <SessionHeroBar
           programLabel={activeFinalize.programLabel}
           onPickProgram={candidates.length > 1 ? () => setPickerOpen(true) : null}
@@ -764,11 +727,7 @@ export default function MyFitness() {
           meta={activeFinalize.meta}
           completed={activeFinalize.completed}
           onViewBlock={activeFinalize.onViewBlock}
-          timer={timer}
-          timerExpanded={timerExpanded}
-          onToggleExpanded={() => setTimerExpanded((e) => !e)}
-          onToggleTimer={handleToggleTimer}
-          onResetTimer={handleResetTimer}
+          onOpenSettings={() => router.push("/(member)/settings")}
           tabs={activeFinalize.tabs}
           selectedTab={activeFinalize.selectedTab}
           onSelectTab={activeFinalize.onSelectTab}
@@ -776,29 +735,51 @@ export default function MyFitness() {
       </View>
     ) : focus?.type === "extras" && oneOffs.length > 0 ? (
       // One-offs never become "the" activeFinalize (several can coexist, no
-      // single session to dock a Finalize for) — but an Extras logging
-      // session still deserves the same header identity + timer instead of
-      // a visibly different, chrome-less screen.
-      <View style={{ paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
+      // single session to finalize) — but an Extras logging session still
+      // deserves the same header identity instead of a chrome-less screen.
+      <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
         <SessionHeroBar
           programLabel="Extras"
           onPickProgram={candidates.length > 1 ? () => setPickerOpen(true) : null}
           title={oneOffs.length === 1 ? oneOffs[0].workout.title || "One-off workout" : `${oneOffs.length} one-off workouts`}
-          timer={timer}
-          timerExpanded={timerExpanded}
-          onToggleExpanded={() => setTimerExpanded((e) => !e)}
-          onToggleTimer={handleToggleTimer}
-          onResetTimer={handleResetTimer}
+          onOpenSettings={() => router.push("/(member)/settings")}
         />
       </View>
-    ) : null}
-    <View style={{ flex: 1, position: "relative" }}>
+    ) : (
+      <View
+        style={{
+          paddingTop: insets.top + 10,
+          paddingBottom: 10,
+          paddingHorizontal: 20,
+          backgroundColor: CANVAS,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: CARD_BORDER,
+        }}
+      >
+        <Text className="flex-1" numberOfLines={1} style={{ fontFamily: fonts.display, fontSize: 24, color: colors.primary }}>
+          My Fitness
+        </Text>
+        <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={HITSLOP} accessibilityLabel="Settings">
+          <Ionicons name="settings-outline" size={22} color="#78716c" />
+        </Pressable>
+        <Image source={require("../../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
+      </View>
+    )}
+    <View style={{ flex: 1 }}>
     <ScrollView
+      ref={scrollViewRef}
       className="flex-1"
-      contentContainerClassName="px-6 pb-8"
-      contentContainerStyle={{ paddingTop: 16 }}
+      contentContainerClassName="px-5 pb-8"
+      contentContainerStyle={{ paddingTop: 4 }}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
+      onScroll={(e) => {
+        scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+      }}
+      scrollEventThrottle={16}
     >
       {needsPicker && pickerDismissed && (
         <Pressable onPress={() => setPickerOpen(true)} className="mb-6 items-center self-center" hitSlop={HITSLOP}>
@@ -858,33 +839,32 @@ export default function MyFitness() {
               <FitnessCard title={null}>
                 <WarmupCard warmups={groupEntry.warmups} />
 
-                <Text style={EYEBROW_MUTED}>Main session</Text>
                 <SessionLogger
-                  ref={registerLoggerRef(`group-${groupEntry.groupProgramId}`)}
                   userId={profile.id}
                   datePerformed={groupEntry.datePerformed}
                   source={groupEntry.source}
                   exercises={groupEntry.exercises}
                   isCompleted={groupEntry.completed}
                   onFinalize={() => handleFinalizeGroup(groupEntry)}
-                  layout="focus"
+                  layout="session"
                   exerciseCompletionType="group"
-                  onOpenFocus={(payload) =>
-                    openFocus(
-                      {
-                        sectionKey: `group-${groupEntry.groupProgramId}`,
-                        userId: profile.id,
-                        datePerformed: groupEntry.datePerformed,
-                        source: groupEntry.source,
-                        exerciseCompletionType: "group",
-                        onFinalize: () => handleFinalizeGroup(groupEntry),
-                        isCompleted: groupEntry.completed,
-                        onSessionDataChanged: () =>
-                          setGroups((prev) =>
-                            prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: false } : g))
-                          ),
-                      },
-                      payload
+                  scrollViewRef={scrollViewRef}
+                  scrollOffsetRef={scrollOffsetRef}
+                  // Where the pinned rest bar's "Back to lift ›" returns to.
+                  // These are the same params My Week's own deep links use,
+                  // so load() resolves this exact session again.
+                  restReturnTo={{
+                    pathname: "/(member)/plan",
+                    params: {
+                      session: "group",
+                      groupProgramId: groupEntry.groupProgramId,
+                      weekNumber: String(groupEntry.weekNumber),
+                      sessionNumber: String(groupEntry.sessionNumber),
+                    },
+                  }}
+                  onDataChanged={() =>
+                    setGroups((prev) =>
+                      prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: false } : g))
                     )
                   }
                 />
@@ -938,43 +918,35 @@ export default function MyFitness() {
               ) : spcDetailLoading || !spcDetail ? (
                 <ActivityIndicator color={colors.primary} />
               ) : (
-                <>
-                  <Text style={EYEBROW_MUTED}>Main session</Text>
-                  <SessionLogger
-                    ref={registerLoggerRef("spc")}
-                    userId={profile.id}
-                    datePerformed={spcDetail.completedAt ? dateInBoise(new Date(spcDetail.completedAt)) : todayInBoise()}
-                    source="spc"
-                    exercises={spcDetail.exercises}
-                    isCompleted={spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false}
-                    onFinalize={handleFinalizeSpc}
-                    layout="focus"
-                    exerciseCompletionType="spc"
-                    weekNumber={spc.weekNumber}
-                    onOpenFocus={(payload) =>
-                      openFocus(
-                        {
-                          sectionKey: "spc",
-                          userId: profile.id,
-                          datePerformed: spcDetail.completedAt ? dateInBoise(new Date(spcDetail.completedAt)) : todayInBoise(),
-                          source: "spc",
-                          exerciseCompletionType: "spc",
-                          weekNumber: spc.weekNumber,
-                          onFinalize: handleFinalizeSpc,
-                          isCompleted: spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false,
-                          onSessionDataChanged: () =>
-                            setSpc((s) => ({
-                              ...s,
-                              sessions: s.sessions.map((row) =>
-                                row.sessionNumber === spcDetail.sessionNumber ? { ...row, completed: false } : row
-                              ),
-                            })),
-                        },
-                        payload
-                      )
-                    }
-                  />
-                </>
+                <SessionLogger
+                  userId={profile.id}
+                  datePerformed={spcDetail.completedAt ? dateInBoise(new Date(spcDetail.completedAt)) : todayInBoise()}
+                  source="spc"
+                  exercises={spcDetail.exercises}
+                  isCompleted={spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false}
+                  onFinalize={handleFinalizeSpc}
+                  layout="session"
+                  exerciseCompletionType="spc"
+                  weekNumber={spc.weekNumber}
+                  scrollViewRef={scrollViewRef}
+                  scrollOffsetRef={scrollOffsetRef}
+                  restReturnTo={{
+                    pathname: "/(member)/plan",
+                    params: {
+                      session: "spc",
+                      weekNumber: String(spc.weekNumber),
+                      sessionNumber: String(spcDetail.sessionNumber),
+                    },
+                  }}
+                  onDataChanged={() =>
+                    setSpc((s) => ({
+                      ...s,
+                      sessions: s.sessions.map((row) =>
+                        row.sessionNumber === spcDetail.sessionNumber ? { ...row, completed: false } : row
+                      ),
+                    }))
+                  }
+                />
               )}
             </FitnessCard>
           )}
@@ -989,53 +961,24 @@ export default function MyFitness() {
           <FitnessCard key={workout.id} title={workout.title}>
             <WarmupCard warmups={warmups} />
             <SessionLogger
-              ref={registerLoggerRef(`oneoff-${workout.id}`)}
               userId={profile.id}
               datePerformed={todayInBoise()}
               source="one_off"
               exercises={exercises}
               isCompleted={false}
               onFinalize={() => handleFinalizeOneOff(workout.id)}
-              layout="focus"
+              layout="session"
               exerciseCompletionType="one_off"
-              onOpenFocus={(payload) =>
-                openFocus(
-                  {
-                    sectionKey: `oneoff-${workout.id}`,
-                    userId: profile.id,
-                    datePerformed: todayInBoise(),
-                    source: "one_off",
-                    exerciseCompletionType: "one_off",
-                    onFinalize: () => handleFinalizeOneOff(workout.id),
-                    isCompleted: false,
-                  },
-                  payload
-                )
-              }
+              scrollViewRef={scrollViewRef}
+              scrollOffsetRef={scrollOffsetRef}
+              restReturnTo={{
+                pathname: "/(member)/plan",
+                params: { session: "one_off", oneOffWorkoutId: workout.id },
+              }}
             />
           </FitnessCard>
         ))}
     </ScrollView>
-
-    {focusTarget && (
-      <SessionFocusModal
-        visible={focusVisible}
-        groups={focusTarget.groups}
-        focusIndex={focusTarget.focusIndex}
-        onNavigate={navigateFocus}
-        onClose={closeFocus}
-        userId={focusTarget.userId}
-        datePerformed={focusTarget.datePerformed}
-        source={focusTarget.source}
-        hideVideo={focusTarget.hideVideo}
-        exerciseCompletionType={focusTarget.exerciseCompletionType}
-        weekNumber={focusTarget.weekNumber}
-        completions={focusTarget.completions}
-        onFinalize={focusTarget.onFinalize}
-        isCompleted={focusTarget.isCompleted}
-        onSessionDataChanged={focusTarget.onSessionDataChanged}
-      />
-    )}
     </View>
 
     <ProgramPickerModal

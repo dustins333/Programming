@@ -1,11 +1,15 @@
+import { useMemo } from "react";
 import { Redirect, Tabs } from "expo-router";
 import { View, Text, ActivityIndicator } from "react-native";
+import { SafeAreaInsetsContext, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../lib/nutrition/useNutritionAccess";
 import { useHasFitness } from "../../lib/programming/useFitnessAccess";
 import { AnnouncementChecker } from "../../lib/notifications/AnnouncementChecker";
 import { FloatingMessageBubble } from "../../components/FloatingMessageBubble";
+import { RestTimerBar } from "../../components/RestTimerBar";
+import { RestTimerProvider, useRestTimer } from "../../lib/restTimer";
 import { colors, fonts } from "../../lib/theme";
 
 // 21px line icons regardless of whatever size the navigator would
@@ -91,8 +95,35 @@ export default function MemberLayout() {
   const isStaff = profile.role === "admin" || profile.role === "coach";
 
   return (
+    <RestTimerProvider>
+      <MemberTabs showFitnessTab={showFitnessTab} showNutritionTab={showNutritionTab} isStaff={isStaff} />
+    </RestTimerProvider>
+  );
+}
+
+// Split out purely so it can consume the rest-timer context its own parent
+// provides. The rest bar is rendered in normal flow above <Tabs> rather than
+// as an overlay — the handoff pushes the page content down rather than
+// covering its header — which means the bar owns the top safe-area inset
+// while it's up, and every screen underneath must stop adding that inset a
+// second time or they'd all sit under ~60px of dead space. Overriding
+// SafeAreaInsetsContext for the tab subtree is the one place that can be
+// said once instead of in every member screen.
+function MemberTabs({ showFitnessTab, showNutritionTab, isStaff }) {
+  const { timer } = useRestTimer();
+  const insets = useSafeAreaInsets();
+  const barVisible = !!timer;
+  const tabInsets = useMemo(
+    () => (barVisible ? { ...insets, top: 0 } : insets),
+    [barVisible, insets]
+  );
+
+  return (
     <>
       <AnnouncementChecker />
+      <View style={{ flex: 1, backgroundColor: colors.canvas }}>
+        <RestTimerBar />
+        <SafeAreaInsetsContext.Provider value={tabInsets}>
       <Tabs
       screenOptions={{
         headerShown: false,
@@ -158,6 +189,8 @@ export default function MemberLayout() {
       <Tabs.Screen name="nutrition/onboarding" options={{ href: null }} />
       <Tabs.Screen name="history/[exerciseId]" options={{ href: null }} />
       </Tabs>
+        </SafeAreaInsetsContext.Provider>
+      </View>
       {/* Rendered after <Tabs>, not before — paints on top of the tab bar
           (later JSX = later paint = on top for overlapping siblings). See
           FloatingMessageBubble.js's own header comment for why this can't

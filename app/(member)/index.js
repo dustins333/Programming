@@ -254,7 +254,15 @@ function QuietHero({ eyebrow, title, titleColor = OLIVE, meta, ctaLabel, onPress
 // One session of a program week. The stripe itself is 11px, but the whole
 // column is the tap target and carries ≥44pt of height (house rule 6).
 // Dashed = not published (house rule 1), untappable.
-function SessionStripe({ completed, published, caption, onPress, accessibilityLabel }) {
+// `isToday` brings back the "which one is today" marker the bubble layout
+// used to carry and the stripe rework dropped. Two signals, not one: a small
+// TODAY label above the stripe, and today's stripe at full clay instead of
+// the 31%-opacity upcoming tint. The label's row is rendered (empty) on
+// every stripe whether or not it's today — sibling columns are stretched to
+// equal height, so leaving it out on the others would push their stripes and
+// captions to a different vertical position, which is the exact alignment
+// bug the old session bubbles hit.
+function SessionStripe({ completed, published, caption, isToday, onPress, accessibilityLabel }) {
   return (
     <PressFade
       onPress={published ? onPress : () => showToast("Not published yet — check back soon.")}
@@ -267,11 +275,25 @@ function SessionStripe({ completed, published, caption, onPress, accessibilityLa
 
       }}
     >
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1}
+        style={{
+          fontFamily: fonts.sansBold,
+          fontSize: 8.5,
+          letterSpacing: 0.8,
+          color: BRAND_TEXT,
+          textAlign: "center",
+          marginBottom: 5,
+        }}
+      >
+        {isToday ? "TODAY" : " "}
+      </Text>
       <View
         style={{
           height: 11,
           borderRadius: 999,
-          backgroundColor: published ? (completed ? OLIVE : "rgba(164,106,87,0.31)") : "transparent",
+          backgroundColor: published ? (completed ? OLIVE : isToday ? CLAY : "rgba(164,106,87,0.31)") : "transparent",
           borderWidth: published ? 0 : 1.5,
           borderStyle: published ? "solid" : "dashed",
           borderColor: DASHED_EMPTY,
@@ -285,7 +307,7 @@ function SessionStripe({ completed, published, caption, onPress, accessibilityLa
           fontSize: 9,
           letterSpacing: 0.55,
           textTransform: "uppercase",
-          color: published ? INK_MUTED : "#c9c4bd",
+          color: published ? (isToday ? BRAND_TEXT : INK_MUTED) : "#c9c4bd",
           textAlign: "center",
           marginTop: 7,
         }}
@@ -341,6 +363,7 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
             completed={row.completed}
             published={row.published}
             caption={row.caption}
+            isToday={row.isToday}
             onPress={row.onPress}
             accessibilityLabel={`Preview ${row.label}${row.title && row.title !== "Untitled session" ? `, ${row.title}` : ""}`}
           />

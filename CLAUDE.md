@@ -2316,6 +2316,186 @@ to last week), the editable rail on an open check-in and the frozen
 photos.
 
 
+## Member lift tracking v1 — one scrolling session, app-level rest timer (2026-08-12)
+
+A handoff scoped to one surface (`design_handoff_member_lift_v1/` — README +
+`Kova Member Mobile - Directions.dc.html` turn 9 + five screenshots) rebuilds
+the member's session-logging page. Direction **9a** (cards) was the
+recommendation and is what's built; 9b (hairline list, no card chrome) was
+reference only. **No schema change, no migration, no deploy step** — this is
+all client-side.
+
+**The overlay is gone.** `SessionFocusModal.js` is deleted: taking over the
+screen one lift at a time meant looking ahead cost you your logging spot.
+`SessionLogger`'s "focus" layout (the compact index rows + overlay) is gone
+with it — `GroupIndexRow` too. Everything is one scrolling page of lift
+cards, every lift **expanded on load**, only the warm-up starting closed.
+
+**What else went away, and why** (all from the handoff's own table): the
+per-set **Log set** button (read as a required extra step when autosave had
+already persisted everything), the ± **steppers** (people believed they had
+to use them instead of typing), the session **stopwatch** in the header
+(unused, and it competed with rest — `components/TimerControl.js` deleted),
+the red `PILL_BG`/`PILL_TEXT` **"Last time" band** (read as a warning), the
+notes **placeholder** copy, the **History** and **Video** pills, the **✓** on
+both Finalize buttons (fitness *and* nutrition — "Workout finalized" / "Day
+finalized"), and the per-card **Show/Hide last time** toggle
+(`lib/lastTimePref.js` deleted; last time always shows).
+
+**A set is logged when reps AND weight both hold a value** — that's the olive
+fill (`#f3f6ef` / `#dbe8cf`), derived from the values themselves. The v5
+`loggedCount` progression is gone, and **so is carry-over prefill**: an
+un-logged box now shows last time's matching set number as a grey ghost
+*placeholder* (`#c9c4bd`) instead of pre-filling it. That's what the handoff
+draws, and it's honest — nothing is written until it's typed — but it does
+cost the "a straight 3×10 @ 65 is three taps" speed v5 had. Flag if Terra
+wants that back; the ghost is already the right value to accept from.
+
+**Auto-check does NOT auto-collapse, deliberately.** The checkbox still fills
+itself in the moment every set holds both numbers (that's a real persisted
+`exercise_completions` row and predates this pass). Collapsing on it would be
+wrong: "fully filled" flips true after the **first digit** of a three-digit
+weight, so the card would close mid-number. Only a manual tap collapses (to
+one `Logged 3 × 8 @ 185` line); tapping again reopens. The expanded card
+therefore keeps a chevron the mockup doesn't draw — without it, an
+auto-checked lift could only be collapsed by unchecking it first.
+
+**The rest timer moved above the tab navigator** — the one piece with real
+architectural weight. New `lib/restTimer.js` (`RestTimerProvider` /
+`useRestTimer` / `parseRestSeconds` / `formatSeconds`) + new
+`components/RestTimerBar.js`, mounted in `app/(member)/_layout.js`. It never
+auto-starts; once running it pins to the top (dark `#33251f`, remaining time,
+`REST · {LIFT}`, filling ochre progress bar, Cancel), survives leaving the
+card/session/tab, then turns olive `#4d6142` with "Rest done · {lift} · set
+n" and clears itself after ~6s. The old `RestButton` was local state inside
+`ExerciseCard`, so it died on unmount — which is exactly what this replaces.
+Three things worth knowing:
+- **The 250ms tick lives in the bar, not the provider.** A provider
+  re-render re-renders every member screen under it; My Nutrition has no
+  business repainting four times a second because someone is resting.
+- **The bar is in normal flow above `<Tabs>`, not an overlay** (the handoff
+  pushes content down rather than covering headers), so while it's up it owns
+  the top safe-area inset — and every screen underneath would otherwise add
+  that inset a second time. `MemberTabs` overrides
+  `SafeAreaInsetsContext` to `top: 0` for the tab subtree while the bar
+  shows. That's the one place it can be said once instead of in every member
+  screen; if a screen ever renders with a dead ~60px gap under the bar, this
+  is why.
+- **"Back to lift ›" navigates, it does not scroll.** Each `SessionLogger`
+  gets a `restReturnTo` built from the same deep-link params My Week already
+  uses (`session`/`groupProgramId`/`weekNumber`/`sessionNumber`, or
+  `oneOffWorkoutId`), so `load()` re-resolves that exact session. Scrolling to
+  the specific card was deliberately skipped — it needs `measureLayout`
+  against the ScrollView's inner node through four levels of nesting, and in
+  the common case the member never left the page anyway.
+
+**`SessionHeroBar` is a light header now, not the dark hero.** This reverses
+v5's deliberate "promote it to match My Week" call — with the stopwatch gone
+the dark block had nothing left on its right side, and the handoff draws it
+light (eyebrow, session name in brand terracotta, `Full block ›`). The dark
+hero stays My Week's alone. **Deviation worth confirming with Terra**: the
+mockup shows no "My Fitness" title row at all, but that row is the tab's only
+Settings entry point (UX-overhaul Phase 4's tab-header parity decision) — so
+rather than stack two headers, the gear moved *into* the session header and
+the plain "My Fitness" row now only renders when there's no session to log
+(rest day, week done, nothing published).
+
+**Two layouts remain in `SessionLogger`, and they now differ only in how
+expansion starts**: `"session"` (all open, completions live, collapse on
+manual tick) and `"accordion"` (all closed, single-open, no checkboxes) —
+the latter is My History's `SessionDetailModal`, where an all-expanded
+default would fire `onExpandExercise` immediately and lock the "when did you
+do this?" date before anyone typed anything.
+
+**Efficiency, not just paint**: per-card `getLastLoggedSession` (one query per
+lift) is replaced by `SessionLogger`'s single batched `listLastLoggedSessions`,
+which now returns `{ date, sets, topSet }` — `sets` is new, and it's what
+feeds every ghost value. `ExerciseCard` also gained a real `+` at the end of
+the last set row (a member can add sets past what the coach programmed), and
+reload sizes the card to `max(targetSets, highest logged set_number)` so
+those extra sets come back.
+
+**Verified for real, not just bundle-checked**: `npx expo export -p web`
+clean, and the whole card was driven at mobile width via the standing
+login-screen harness (mounted, screenshotted, reverted — `git diff` on
+`login.js` confirmed clean afterwards). Confirmed by real interaction: typing
+two sets flips them olive and moves the terracotta "current" border + plate
+calculator onto set 3; ticking the checkbox collapses to `Logged 2 × 10 @
+145`; the pinned bar counts down with a correct progress fill and turns olive
+"Rest done" on expiry, then clears itself. **Not verified**: any of it behind
+a real login (standing limitation), and none of it on native — this pass
+touches `Pressable`/absolute-positioning-adjacent layout, which this file has
+been burned by twice (NativeWind's function-style `style` drop,
+`StyleSheet.absoluteFillObject` in a style array). Worth a device pass,
+especially the safe-area override while the bar is up and the keyboard
+scrolling now that the page's own ScrollView — not the deleted overlay's — is
+what a focused field scrolls inside.
+
+**Follow-up, same session — everything Terra flagged clicking through it,
+several of them outside this handoff's own scope:**
+- **The Kova mark is back on My Fitness and My History.** My Week and My
+  Nutrition both carried the 34px round logo at the right end of the header
+  row; the other two tabs never had it. Added to both — on My Fitness it lives
+  in `SessionHeroBar`, so it shows on the session header *and* on the plain
+  "My Fitness" fallback header.
+- **My Week's "today" marker is back**, dropped when v5 replaced the session
+  bubbles with stripes (`row.isToday` was still being computed and simply not
+  rendered). Two signals rather than one: a small `TODAY` label above the
+  stripe, and today's stripe at full clay instead of the 31%-opacity upcoming
+  tint. **The label's row renders empty on every other stripe on purpose** —
+  sibling columns stretch to equal height, so omitting it would push their
+  stripes and captions to a different vertical position, which is exactly the
+  alignment bug the old session bubbles hit.
+- **Real bug: leaving My Fitness and coming back re-expanded every lift**,
+  including ones already ticked off. The checkbox was never the problem — it
+  writes a real `programming.exercise_completions` row (0040) and that row was
+  there the whole time. `load()` runs on every focus and flips the page to its
+  loading state, which genuinely **unmounts** the whole subtree, so expansion
+  state can't survive on its own and the new "everything starts open" seed
+  reopened the lot. `SessionLogger`'s completions fetch now re-applies it:
+  first load for a given exercise set collapses whatever's already complete
+  (keyed by the exercise-id string, so switching SPC sessions re-seeds but a
+  plain refetch can't stomp expansions made by hand since). `ExerciseCard`
+  also now loads today's logged sets when it mounts collapsed-because-ticked,
+  or its one-line summary would fall back to the coach's prescription instead
+  of reading `Logged 3 × 8 @ 185`.
+- **The rest presets fan out as circles along the timer button's own
+  circumference** instead of a rectangular strip floating above it (which read
+  as a menu bolted onto a round control). Same diameter as the button they
+  fan off, so they read as siblings of it rather than a smaller menu hanging
+  off it. Arc runs up-and-left — the only free space, since the button sits
+  bottom-right (`PRESET_ANGLES = [110, 155, 200]`, `radius = size + 24`).
+  **The last set row's "+" is hidden (opacity + pointerEvents, never
+  unmounted, so nothing shifts under a finger) while the fan is open** — that
+  is what lets the arc sit this close to the button and still start
+  near-vertical. Without it the geometry doesn't work: three same-size bubbles
+  only fit in the ~100° of free space at a wide angular spread, and at a
+  radius tight enough to read as attached to the button, the top one lands on
+  the "+". Two earlier attempts got this wrong in opposite directions — one
+  put a preset straight on top of the "+", the next cleared it by pushing the
+  whole fan 46px out, which read as floating away. Measured in the browser
+  rather than eyeballed: 38px bubbles, 24px off the button, ~9.5px between
+  adjacent edges, each hit-testing to its own control, and the "+" restored
+  the moment a preset is picked.
+- **Real bug: the program picker forgot your choice on every tab return.** A
+  member with both a group program and SPC picks one from the picker, goes to
+  My Week, comes back, and gets asked again. `pickedFocus` is deliberately
+  tied to the params it was chosen under (so a fresh My Week deep link
+  supersedes it rather than being silently overridden by an older pick) — but
+  **pressing the My Fitness tab in the tab bar arrives with no params at
+  all**, which changed the signature and threw the pick away. An absence of
+  params isn't a fresh choice; `hasNavParams` now gates that invalidation, so
+  only a navigation that actually names a session supersedes a pick.
+- **Unrelated, reported mid-session: `exercises/merge` was leaking as
+  its own tab in the native coach view.** `app/(coach)/exercises/` had no
+  `_layout.js`, so Expo Router flattened both routes into the parent Tabs
+  navigator and only `exercises` itself was declared — the same bug
+  `blocks/_layout.js` and `payroll/_layout.js` already exist to prevent. Fixed
+  with a `Stack` layout for the folder rather than a one-off `href: null`, so
+  the next route added in there can't repeat it. Audited every other coach and
+  member folder for the same shape: this was the only one.
+
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

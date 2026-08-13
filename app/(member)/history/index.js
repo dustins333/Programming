@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, TextInput, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -438,13 +438,14 @@ export default function HistoryIndex() {
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerStyle={{ paddingTop: insets.top + 6, paddingHorizontal: 24, paddingBottom: 32 }}>
-      <View className="mb-4 flex-row items-center justify-between">
-        <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+      <View className="mb-4 flex-row items-center" style={{ gap: 12 }}>
+        <Text className="flex-1 text-2xl" numberOfLines={1} style={{ fontFamily: fonts.display, color: colors.primary }}>
           My History
         </Text>
         <PressFade onPress={() => router.push("/(member)/settings")} hitSlop={10} accessibilityLabel="Settings" style={{}}>
           <Ionicons name="settings-outline" size={22} color="#78716c" />
         </PressFade>
+        <Image source={require("../../../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
       </View>
 
       <SegmentedControl segments={MODES} activeKey={mode} onSelect={setMode} />

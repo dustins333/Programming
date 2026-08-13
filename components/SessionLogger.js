@@ -1,180 +1,44 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { getLoggedSetsForDate, listLastLoggedSessions } from "../lib/programming/memberPlan";
+import { listLastLoggedSessions } from "../lib/programming/memberPlan";
 import {
   listGroupExerciseCompletionsForItems,
   listSpcExerciseCompletionsForItems,
   listOneOffExerciseCompletionsForItems,
+  markGroupExerciseComplete,
+  markSpcExerciseComplete,
+  markOneOffExerciseComplete,
+  unmarkGroupExerciseComplete,
+  unmarkSpcExerciseComplete,
+  unmarkOneOffExerciseComplete,
 } from "../lib/programming/exerciseCompletions";
 import { PressFade } from "./PressFade";
-import { formatDateMD } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
 import { toastError } from "../lib/toast";
-import { ExerciseCard, targetLineFor } from "./ExerciseCard";
-import { SessionFocusModal } from "./SessionFocusModal";
+import { ExerciseCard } from "./ExerciseCard";
 
-const CARD_BORDER = "#ece7e1";
-
-// Turns a date's logged rows for one exercise into a short "what's already
-// here" line for the focus-layout index row — e.g. "3×8 @ 135". Used so the
-// index always shows real persisted values regardless of finalize state
-// (finalize never touches this data), instead of a bare exercise name that
-// looks the same whether something was logged or not.
-function summarizeLoggedSets(sets) {
-  const withData = sets.filter((s) => s.reps != null || s.weight != null);
-  if (withData.length === 0) return { hasAny: false, summaryText: null };
-  const reps = withData.map((s) => s.reps);
-  const weights = withData.map((s) => s.weight);
-  const uniform = new Set(reps).size <= 1 && new Set(weights).size <= 1;
-  const summaryText = uniform
-    ? `${withData.length}×${reps[0] ?? "–"}${weights[0] != null ? ` @ ${weights[0]}` : ""}`
-    : withData.map((s) => `${s.reps ?? "–"}${s.weight != null ? `@${s.weight}` : ""}`).join(", ");
-  return { hasAny: true, summaryText };
-}
-
-// One compact row per group in "focus" layout — replaces the old
-// always-expanded flat stack. Shows a persistent "what's logged so far"
-// summary (independent of finalize state, which never touches this data)
-// instead of a bare name, so a glance at the collapsed list proves nothing
-// was lost after finalizing. Tapping anywhere opens the focus modal there.
-// The trailing indicator is the real per-exercise "marked complete"
-// checkbox (from `completions`) whenever that feature is active for this
-// caller — this is also, combined with the docked Finalize bar below it,
-// the "whole lift, see what's checked off" summary the last focus card
-// collapses back into. Callers that don't opt into completions (e.g. the
-// coach's read-only past-session viewer) keep the original "has any logged
-// data" dot instead, unchanged.
-function GroupIndexRow({ group, index, summaries, completions, lastSessions, onPress }) {
-  const isSuperset = group.length > 1;
-  return (
-    <PressFade
-      onPress={onPress}
-      className="mb-2.5 rounded-2xl bg-white px-4 py-3"
-      pressedOpacity={0.7}
-      style={
-        isSuperset
-          ? { borderWidth: 1.5, borderColor: "#a46a57", borderStyle: "dashed" }
-          : { borderWidth: 1, borderColor: CARD_BORDER, shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 }
-      }
-    >
-      {isSuperset ? (
-        <Text className="mb-1.5 self-start rounded-full px-2.5 py-0.5" style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#b23a22", backgroundColor: "#fdece5" }}>
-          ⚭ SUPERSET
-        </Text>
-      ) : null}
-      {group.map((item, i) => {
-        const summary = summaries[item.exercise.id];
-        const last = lastSessions?.get(item.exercise.id);
-        return (
-          <View
-            key={item.id}
-            className="flex-row items-center"
-            style={{ gap: 10, marginTop: isSuperset && i > 0 ? 10 : 0 }}
-          >
-            {/* Numbered square (design_handoff_member_mobile_v5, 3a). A
-                superset's members share the group's number and get a/b
-                suffixes, so the count still reads as "exercise 3 of 6"
-                rather than jumping. */}
-            <View
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 7,
-                backgroundColor: "#f5f1ec",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color: "#8a5140" }}>
-                {index + 1}
-                {isSuperset ? String.fromCharCode(97 + i) : ""}
-              </Text>
-            </View>
-            <View className="flex-1" style={{ minWidth: 0 }}>
-              <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#44403c" }}>
-                {item.exercise.name}
-              </Text>
-              {/* Target (with tempo/rest) always shows — it used to be
-                  replaced by the logged summary the instant a set saved,
-                  which erased what the coach prescribed mid-session. The
-                  logged summary renders as its own second line instead. */}
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 1 }}>{targetLineFor(item)}</Text>
-              {summary?.hasAny && summary?.summaryText ? (
-                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: "#78716c", marginTop: 1 }}>{summary.summaryText}</Text>
-              ) : null}
-            </View>
-            {/* Last time's top set — the "am I beating it?" reference, the
-                one number worth carrying onto the overview. */}
-            <View style={{ alignItems: "flex-end", flexShrink: 0 }}>
-              {last ? (
-                <>
-                  <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 12, color: "#8a5140" }}>
-                    {last.topSet.reps ?? "–"}
-                    {last.topSet.weight != null ? ` × ${last.topSet.weight}` : ""}
-                  </Text>
-                  <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 10, color: "#c9c4bd", marginTop: 1 }}>
-                    {formatDateMD(last.date)}
-                  </Text>
-                </>
-              ) : (
-                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#c9c4bd" }}>
-                  first time
-                </Text>
-              )}
-            </View>
-            {completions ? (
-              // Same circle icon, same size, same color as the warm-up
-              // checkboxes on My Fitness (plan.js's WarmupCard) — square
-              // vs. circle here read as two different controls even though
-              // they mean the same thing, per direct feedback.
-              <Ionicons
-                name={completions.has(item.id) ? "checkmark-circle" : "checkmark-circle-outline"}
-                size={24}
-                color="#4d6142"
-                style={{ flexShrink: 0 }}
-              />
-            ) : (
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: summary?.hasAny ? "#4d6142" : "#e7e5e4", flexShrink: 0 }} />
-            )}
-          </View>
-        );
-      })}
-    </PressFade>
-  );
-}
-
-// Shared logging surface for both group and SPC sessions on My Fitness.
-// Two layouts: "accordion" (default) is the original always-visible flat
-// stack, single-open, each expanded card breaking its target sets into
-// individual reps/weight rows plus a notes field (autosaved, debounced,
-// same pattern as nutrition's daily log) and a "last time" history panel.
-// "focus" replaces that with a compact index (GroupIndexRow above) plus a
-// SessionFocusModal that takes over the screen one exercise/superset at a
-// time with left/right navigation — see SessionFocusModal.js for why every
-// group's ExerciseCard has to mount immediately either way, not lazily per
-// navigation. One Finalize button for the whole session either way.
-// hideFinalizeButton lets a caller drop the Finalize button entirely —
-// used by the coach's read-only past-session viewer, which has nothing to
-// finalize. My Fitness deliberately does NOT pass it: the button belongs
-// inline at the end of the exercise list (it used to be docked to the
-// bottom of the screen, which read as heavy-handed over the content).
+// The member's session-logging surface (design_handoff_member_lift_v1).
 //
-// `onOpenFocus`, when provided, hands control of the whole focus-overlay
-// experience to the caller instead of self-rendering it: tapping a
-// GroupIndexRow calls `onOpenFocus({ groups, completions, focusIndex })`
-// rather than opening SessionLogger's own internal SessionFocusModal.
-// My Fitness (plan.js) uses this so the overlay can render as a sibling of
-// its own page header instead of nested deep inside this component's own
-// return value — a real page header can't stay visible/clickable above a
-// component nested this deep without that lift. Every other caller (e.g.
-// the coach's read-only past-session viewer) doesn't pass it, and keeps
-// the original fully self-contained behavior. `ref.refresh()` is exposed
-// for exactly that lifted case — the caller calls it once its externally-
-// rendered overlay closes, to re-pull summaries/completions the same way
-// this component's own handleCloseFocus already does internally.
-export const SessionLogger = forwardRef(function SessionLogger({
+// This used to be two very different things: an "accordion" stack and a
+// "focus" index-plus-full-screen-overlay. The overlay is gone — looking
+// ahead at the rest of the session meant leaving your logging spot, which is
+// the opposite of what a session page is for. Everything is now one
+// scrolling page of lift cards.
+//
+// Two layouts remain, and they differ only in how expansion starts:
+//  - "session": every lift opens expanded when the page loads, and a lift
+//    collapses only when its checkbox is manually ticked (to one "Logged
+//    3 × 8 @ 185" line). Per-exercise completion is live here.
+//  - "accordion" (default): everything starts closed, single-open. Used by
+//    the read-only/late-entry session viewer in My History, where the point
+//    is reviewing a past session rather than working through one — and where
+//    onExpandExercise locks the "when did you do this?" date on first open,
+//    which an all-expanded default would fire immediately.
+//
+// One Finalize button for the whole session either way, inline at the end of
+// the list — never docked over the content (the handoff is explicit: you
+// should scroll past the last lift to reach it).
+export function SessionLogger({
   userId,
   datePerformed,
   source,
@@ -187,41 +51,25 @@ export const SessionLogger = forwardRef(function SessionLogger({
   layout = "accordion",
   exerciseCompletionType,
   weekNumber,
-  onOpenFocus,
-}, ref) {
-  const [expandedId, setExpandedId] = useState(null);
-  const [focusIndex, setFocusIndex] = useState(null);
+  restReturnTo,
+  scrollViewRef,
+  scrollOffsetRef,
+  onDataChanged,
+}) {
+  const isSession = layout === "session";
   const [finalizing, setFinalizing] = useState(false);
-  const [summaries, setSummaries] = useState({});
-  // null (not an empty Set) when the feature's off for this caller (no
-  // exerciseCompletionType passed, e.g. the coach's read-only past-session
-  // viewer) — GroupIndexRow uses that distinction to fall back to its
-  // original "has any logged data" dot instead of a real checkbox.
+  const [expandedIds, setExpandedIds] = useState(() => new Set());
+  // null (not an empty Set) when the feature's off for this caller — that's
+  // what tells ExerciseCard to render no checkbox at all.
   const [completions, setCompletions] = useState(null);
-  // Map<exerciseId, { date, topSet }> — last time's top set per exercise,
-  // shown on each index row. One batched query for the whole session.
+  // Map<exerciseId, { date, sets, topSet }> — one batched query for the whole
+  // session, feeding both each card's "Last time …" header line and the grey
+  // ghost value in every not-yet-logged box. Firing getLastLoggedSession per
+  // card would be a real N+1 on a page that re-renders on every focus.
   const [lastSessions, setLastSessions] = useState(null);
 
-  const isFocus = layout === "focus";
-
-  const handleToggle = (id) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-    onExpandExercise?.();
-  };
-
-  const handleFinalize = async () => {
-    setFinalizing(true);
-    try {
-      await onFinalize();
-    } catch (err) {
-      toastError("Couldn't save", err);
-    } finally {
-      setFinalizing(false);
-    }
-  };
-
-  // Superset pairs render adjacently regardless of stored position — group
-  // by supersetGroupId (falling back to the item's own id so an unlinked
+  // Superset pairs render adjacently regardless of stored position — group by
+  // supersetGroupId (falling back to the item's own id so an unlinked
   // exercise is its own group of one), preserving first-occurrence order.
   const groups = [];
   const groupIndexByKey = new Map();
@@ -237,184 +85,203 @@ export const SessionLogger = forwardRef(function SessionLogger({
   const exerciseIdsKey = exercises.map((item) => item.exercise.id).join(",");
   const completionIdsKey = exercises.map((item) => item.id).join(",");
 
-  const fetchSummaryFor = useCallback(
-    async (exerciseId) => {
-      const sets = await getLoggedSetsForDate(userId, exerciseId, datePerformed);
-      setSummaries((prev) => ({ ...prev, [exerciseId]: summarizeLoggedSets(sets) }));
-    },
-    [userId, datePerformed]
-  );
-
-  // Index-row summaries are fetched independently of ExerciseCard's own
-  // lazy load (slightly redundant, but decoupled and low-risk) so they're
-  // available before any card is ever opened.
+  // Session layout opens everything; accordion opens nothing. Re-seeded
+  // whenever the exercise list itself changes (e.g. switching SPC sessions).
+  // A lift that's ALREADY checked off gets collapsed again the moment
+  // completions land — see fetchCompletions below.
   useEffect(() => {
-    if (!isFocus) return;
-    exercises.forEach((item) => fetchSummaryFor(item.exercise.id));
-    // Own isolated catch — the index rows are still fully usable without
-    // their last-time reference, so a failure here shouldn't blank the list.
+    setExpandedIds(isSession ? new Set(exercises.map((item) => item.id)) : new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSession, completionIdsKey]);
+
+  // Which exercise set the "collapse what's already done" seed has run for.
+  // Keyed rather than a plain boolean so switching SPC sessions re-seeds,
+  // while a mere refetch for the same session (e.g. weekNumber changing
+  // identity) can't stomp expansions the member has made by hand since.
+  const seededKeyRef = useRef(null);
+
+  useEffect(() => {
+    if (exercises.length === 0) return;
+    // Own isolated catch — the cards are still fully usable without their
+    // last-time reference, so a failure here shouldn't blank the list.
     listLastLoggedSessions(userId, exercises.map((item) => item.exercise.id), datePerformed)
       .then(setLastSessions)
-      .catch((err) => console.error("Failed to load last-time top sets:", err));
+      .catch((err) => console.error("Failed to load last-time sets:", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocus, exerciseIdsKey, datePerformed]);
+  }, [exerciseIdsKey, datePerformed, userId]);
 
-  // Batched, one round trip for the whole session — parallel to the
-  // summaries fetch above, keyed by the join-row id (item.id), not the raw
-  // exercise id, since that's what exercise_completions is keyed on.
+  // Batched, one round trip for the whole session — keyed by the join-row id
+  // (item.id), not the raw exercise id, since that's what
+  // exercise_completions is keyed on.
   const fetchCompletions = useCallback(async () => {
-    if (!isFocus || !exerciseCompletionType) return;
+    if (!exerciseCompletionType) return;
     const ids = exercises.map((item) => item.id);
-    const set =
-      exerciseCompletionType === "group"
-        ? await listGroupExerciseCompletionsForItems(userId, ids)
-        : exerciseCompletionType === "spc"
-          ? await listSpcExerciseCompletionsForItems(userId, ids, weekNumber)
-          : await listOneOffExerciseCompletionsForItems(userId, ids);
-    setCompletions(set);
+    if (ids.length === 0) return;
+    try {
+      const set =
+        exerciseCompletionType === "group"
+          ? await listGroupExerciseCompletionsForItems(userId, ids)
+          : exerciseCompletionType === "spc"
+            ? await listSpcExerciseCompletionsForItems(userId, ids, weekNumber)
+            : await listOneOffExerciseCompletionsForItems(userId, ids);
+      setCompletions(set);
+      // Leaving the tab and coming back re-runs My Fitness's load(), which
+      // flips it to its loading state and genuinely unmounts this whole
+      // subtree — so expansion state can't survive on its own, and everything
+      // came back open even for lifts already ticked off. The checkbox itself
+      // was never the problem: it writes a real programming.exercise_completions
+      // row (migration 0040) and that row was there the whole time. This is
+      // what re-applies it, so a session resumes where it was left.
+      if (isSession && seededKeyRef.current !== completionIdsKey) {
+        seededKeyRef.current = completionIdsKey;
+        setExpandedIds(new Set(exercises.filter((item) => !set.has(item.id)).map((item) => item.id)));
+      }
+    } catch (err) {
+      console.error("Failed to load exercise completions:", err);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocus, exerciseCompletionType, weekNumber, userId, completionIdsKey]);
+  }, [exerciseCompletionType, weekNumber, userId, completionIdsKey, isSession]);
 
   useEffect(() => {
     fetchCompletions();
   }, [fetchCompletions]);
 
-  const handleCloseFocus = () => {
-    const closedGroup = focusIndex !== null ? groups[focusIndex] : null;
-    setFocusIndex(null);
-    closedGroup?.forEach((item) => fetchSummaryFor(item.exercise.id));
-    // Re-fetch the whole batch (not just the closed group) rather than
-    // patching completions locally — a mark/unmark inside the modal only
-    // updates ExerciseCard's own local state, so the index list's checkbox
-    // needs this to actually reflect what just happened.
-    fetchCompletions();
+  const markCompleteFor = (item) => {
+    if (exerciseCompletionType === "group") return markGroupExerciseComplete(userId, item.id);
+    if (exerciseCompletionType === "spc") return markSpcExerciseComplete(userId, item.id, weekNumber);
+    if (exerciseCompletionType === "one_off") return markOneOffExerciseComplete(userId, item.id);
+    return Promise.resolve();
   };
 
-  // Exposed for the externally-controlled (onOpenFocus) case — the caller
-  // calls this once its own lifted overlay closes, same refresh
-  // handleCloseFocus already does for the self-contained case.
-  useImperativeHandle(ref, () => ({
-    refresh: () => {
-      exercises.forEach((item) => fetchSummaryFor(item.exercise.id));
-      fetchCompletions();
-    },
-  }));
+  const unmarkCompleteFor = (item) => {
+    if (exerciseCompletionType === "group") return unmarkGroupExerciseComplete(userId, item.id);
+    if (exerciseCompletionType === "spc") return unmarkSpcExerciseComplete(userId, item.id, weekNumber);
+    if (exerciseCompletionType === "one_off") return unmarkOneOffExerciseComplete(userId, item.id);
+    return Promise.resolve();
+  };
 
-  const handleOpenFocus = (i) => {
-    if (onOpenFocus) {
-      onOpenFocus({ groups, completions, focusIndex: i });
-    } else {
-      setFocusIndex(i);
+  // `src` distinguishes a deliberate tap from the card auto-filling its own
+  // checkbox once every set holds both numbers. Only a manual tap collapses
+  // the lift: "fully filled" flips true after the first digit of a
+  // three-digit weight, so collapsing on auto would close the card
+  // mid-number. Writes are fire-and-forget, same non-blocking philosophy as
+  // autosave — the checkbox already shows the new state optimistically.
+  const handleToggleComplete = (item, next, src = "manual") => {
+    setCompletions((prev) => {
+      const updated = new Set(prev ?? []);
+      if (next) updated.add(item.id);
+      else updated.delete(item.id);
+      return updated;
+    });
+    (next ? markCompleteFor(item) : unmarkCompleteFor(item)).catch((err) => toastError("Couldn't save", err));
+    if (src !== "manual") return;
+    setExpandedIds((prev) => {
+      const updated = new Set(prev);
+      if (next) updated.delete(item.id);
+      else updated.add(item.id);
+      return updated;
+    });
+  };
+
+  const handleToggleExpanded = (id) => {
+    setExpandedIds((prev) => {
+      if (prev.has(id)) {
+        const updated = new Set(prev);
+        updated.delete(id);
+        return updated;
+      }
+      onExpandExercise?.();
+      // Accordion stays single-open; the session page keeps whatever else is
+      // already open, since the whole point there is one continuous list.
+      return isSession ? new Set(prev).add(id) : new Set([id]);
+    });
+  };
+
+  const handleFinalize = async () => {
+    setFinalizing(true);
+    try {
+      await onFinalize();
+    } catch (err) {
+      toastError("Couldn't save", err);
+    } finally {
+      setFinalizing(false);
     }
   };
 
-  if (isFocus) {
-    return (
-      <View>
-        {groups.map((group, i) => (
-          <GroupIndexRow
-            key={group[0].id}
-            group={group}
-            index={i}
-            summaries={summaries}
-            completions={completions}
-            lastSessions={lastSessions}
-            onPress={() => handleOpenFocus(i)}
-          />
-        ))}
-
-        {!onOpenFocus && (
-          <SessionFocusModal
-            visible={focusIndex !== null}
-            groups={groups}
-            focusIndex={focusIndex ?? 0}
-            onNavigate={setFocusIndex}
-            onClose={handleCloseFocus}
-            userId={userId}
-            datePerformed={datePerformed}
-            source={source}
-            hideVideo={hideVideo}
-            exerciseCompletionType={exerciseCompletionType}
-            weekNumber={weekNumber}
-            completions={completions}
-            onFinalize={onFinalize}
-            isCompleted={isCompleted}
-          />
-        )}
-
-        {!hideFinalizeButton && (
-          <PressFade
-            onPress={handleFinalize}
-            disabled={finalizing}
-            className="mt-2 items-center justify-center disabled:opacity-50"
-            pressedOpacity={0.75}
-            style={{
-              height: 52,
-              borderRadius: 12,
-              backgroundColor: isCompleted ? "#4d6142" : colors.primary,
-              shadowColor: isCompleted ? "#4d6142" : colors.primary,
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.25,
-              shadowRadius: 16,
-            }}
-          >
-            <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
-              {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}
-            </Text>
-          </PressFade>
-        )}
-      </View>
-    );
-  }
+  const renderCard = (item, group, groupIndex, indexInGroup) => (
+    <ExerciseCard
+      key={item.id}
+      userId={userId}
+      datePerformed={datePerformed}
+      source={source}
+      item={item}
+      // A superset's members share the group's number and get a/b suffixes,
+      // so the count still reads as "lift 5 of 6" rather than jumping.
+      numberLabel={`${groupIndex + 1}${group.length > 1 ? String.fromCharCode(97 + indexInGroup) : ""}`}
+      expanded={expandedIds.has(item.id)}
+      onToggleExpanded={handleToggleExpanded}
+      completed={completions ? completions.has(item.id) : undefined}
+      onToggleComplete={exerciseCompletionType ? (next, src) => handleToggleComplete(item, next, src) : undefined}
+      lastSession={lastSessions?.get(item.exercise.id) ?? null}
+      hideVideo={hideVideo}
+      scrollViewRef={scrollViewRef}
+      scrollOffsetRef={scrollOffsetRef}
+      onDataChanged={onDataChanged}
+      restReturnTo={restReturnTo}
+      compact={group.length > 1}
+    />
+  );
 
   return (
     <View>
-      {groups.map((group) =>
+      {groups.map((group, groupIndex) =>
         group.length > 1 ? (
           <View
             key={group[0].id}
-            className="mb-2.5 rounded-2xl px-2 pt-2"
-            style={{ borderWidth: 1.5, borderColor: "#a46a57", borderStyle: "dashed" }}
+            style={{
+              borderWidth: 1.5,
+              borderColor: "#d8bcae",
+              borderStyle: "dashed",
+              borderRadius: 18,
+              backgroundColor: "#fffdfb",
+              paddingHorizontal: 11,
+              paddingTop: 9,
+              paddingBottom: 1,
+              marginBottom: 10,
+            }}
           >
-            <Text className="mb-1 self-start rounded-full px-2.5 py-0.5" style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#b23a22", backgroundColor: "#fdece5" }}>
-              ⚭ SUPERSET
+            <Text
+              maxFontSizeMultiplier={1.1}
+              style={{
+                alignSelf: "flex-start",
+                fontFamily: fonts.sansBold,
+                fontSize: 9.5,
+                color: "#b23a22",
+                backgroundColor: "#fdece5",
+                borderRadius: 999,
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                marginBottom: 8,
+              }}
+            >
+              SUPERSET
             </Text>
-            {group.map((item) => (
-              <ExerciseCard
-                key={item.id}
-                userId={userId}
-                datePerformed={datePerformed}
-                source={source}
-                item={item}
-                expanded={expandedId === item.id}
-                onToggle={handleToggle}
-                hideVideo={hideVideo}
-              />
-            ))}
+            {group.map((item, i) => renderCard(item, group, groupIndex, i))}
           </View>
         ) : (
-          <ExerciseCard
-            key={group[0].id}
-            userId={userId}
-            datePerformed={datePerformed}
-            source={source}
-            item={group[0]}
-            expanded={expandedId === group[0].id}
-            onToggle={handleToggle}
-            hideVideo={hideVideo}
-          />
+          renderCard(group[0], group, groupIndex, 0)
         )
       )}
 
-      {!hideFinalizeButton && (
+      {!hideFinalizeButton && onFinalize ? (
         <PressFade
           onPress={handleFinalize}
           disabled={finalizing}
-          className="mt-2 items-center justify-center disabled:opacity-50"
+          className="mt-1 items-center justify-center disabled:opacity-50"
           pressedOpacity={0.75}
           style={{
             height: 52,
-            borderRadius: 12,
+            borderRadius: 14,
             backgroundColor: isCompleted ? "#4d6142" : colors.primary,
             shadowColor: isCompleted ? "#4d6142" : colors.primary,
             shadowOffset: { width: 0, height: 6 },
@@ -423,10 +290,10 @@ export const SessionLogger = forwardRef(function SessionLogger({
           }}
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 14 }}>
-            {finalizing ? "Saving…" : isCompleted ? "✓ Finalized" : "Finalize workout"}
+            {finalizing ? "Saving…" : isCompleted ? "Workout finalized" : "Finalize workout"}
           </Text>
         </PressFade>
-      )}
+      ) : null}
     </View>
   );
-});
+}
