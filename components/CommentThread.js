@@ -75,7 +75,7 @@ export function CommentThread({ groupBlockId, spcBlockId, scrollViewRef, scrollO
           className="flex-1 rounded-lg border border-stone-300 px-3 py-2"
           style={{ fontFamily: "Montserrat_400Regular" }}
         />
-        <Pressable onPress={handlePost} disabled={posting || !draft.trim()} className="rounded-lg bg-primary px-4 py-2 disabled:opacity-50">
+        <Pressable onPress={handlePost} disabled={posting || !draft.trim()} style={{ opacity: posting || !draft.trim() ? 0.5 : 1 }} className="rounded-lg bg-primary px-4 py-2">
           <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
             Post
           </Text>

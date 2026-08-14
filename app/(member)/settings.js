@@ -132,7 +132,7 @@ function InlineChangeForm({ visible, placeholder, secure, submitLabel, onSubmit,
         <Pressable onPress={onCancel} className="rounded-lg border border-stone-300 px-4 py-2.5">
           <Text style={{ fontFamily: fonts.sansMedium }}>Cancel</Text>
         </Pressable>
-        <Pressable onPress={handleSubmit} disabled={saving || !value} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
+        <Pressable onPress={handleSubmit} disabled={saving || !value} style={{ opacity: saving || !value ? 0.5 : 1 }} className="rounded-lg bg-primary px-4 py-2.5">
           <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
             {saving ? "Saving…" : submitLabel}
           </Text>
@@ -191,8 +191,8 @@ function DeleteAccountModal({ visible, email, onClose, onConfirm, scrollViewRef,
         <Pressable
           onPress={handleConfirm}
           disabled={typed !== CONFIRM_TEXT || deleting}
-          className="rounded-lg px-4 py-2.5 disabled:opacity-50"
-          style={{ backgroundColor: "#b23a22" }}
+          className="rounded-lg px-4 py-2.5"
+          style={{ opacity: typed !== CONFIRM_TEXT || deleting ? 0.5 : 1, backgroundColor: "#b23a22" }}
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
             {deleting ? "Deleting…" : "Delete account"}

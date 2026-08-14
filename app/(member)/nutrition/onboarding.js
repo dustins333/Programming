@@ -109,7 +109,7 @@ function QuestionnairePanel({ userId, questions, response, onSubmitted }) {
         ))
       )}
       {questions.length > 0 ? (
-        <Pressable onPress={handleSubmit} disabled={submitting} className="items-center rounded-lg bg-primary py-3.5 disabled:opacity-50">
+        <Pressable onPress={handleSubmit} disabled={submitting} style={{ opacity: submitting ? 0.5 : 1 }} className="items-center rounded-lg bg-primary py-3.5">
           <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
             {submitting ? "Submitting…" : "Submit"}
           </Text>

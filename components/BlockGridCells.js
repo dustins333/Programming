@@ -190,7 +190,7 @@ export function GapSlot({ rowCount, groupWidth, onStart, starting, rolling }) {
         Nothing scheduled yet.
       </Text>
       {onStart ? (
-        <Pressable onPress={onStart} disabled={starting} className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50">
+        <Pressable onPress={onStart} disabled={starting} style={{ opacity: starting ? 0.5 : 1 }} className="rounded-lg bg-primary px-4 py-2.5">
           <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
             {starting ? "Starting…" : "Start new block"}
           </Text>

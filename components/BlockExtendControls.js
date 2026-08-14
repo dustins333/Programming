@@ -123,8 +123,8 @@ export function BlockExtendControls({ block, onExtend, onToggleAutoExtend }) {
           <Pressable
             onPress={handleExtend}
             disabled={busy || !weeksValid}
-            className="mt-3 self-start rounded-lg px-4 py-2 disabled:opacity-50"
-            style={{ backgroundColor: colors.primary }}
+            className="mt-3 self-start rounded-lg px-4 py-2"
+            style={{ opacity: busy || !weeksValid ? 0.5 : 1, backgroundColor: colors.primary }}
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 12.5 }}>
               {busy ? "Extending…" : `Add ${weeksValid ? weeks : ""} week${Number(weeks) === 1 ? "" : "s"}`}

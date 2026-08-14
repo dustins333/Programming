@@ -130,7 +130,7 @@ function DayEditor({ date, photos, onSaved, onDataChanged }) {
         </Text>
       ) : null}
 
-      <Pressable onPress={handleSave} disabled={saving || !isValidSet} className="mt-4 self-end rounded px-3 py-1.5 disabled:opacity-50" style={{ backgroundColor: colors.primary }}>
+      <Pressable onPress={handleSave} disabled={saving || !isValidSet} className="mt-4 self-end rounded px-3 py-1.5" style={{ opacity: saving || !isValidSet ? 0.5 : 1, backgroundColor: colors.primary }}>
         <Text className="text-sm text-white" style={{ fontFamily: fonts.sansSemiBold }}>
           {saving ? "Saving…" : "Save"}
         </Text>

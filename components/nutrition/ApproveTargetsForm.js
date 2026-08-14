@@ -87,7 +87,7 @@ export function ApproveTargetsForm({ userId, coachId, baseline, onApproved }) {
         style={{ fontFamily: fonts.sans }}
       />
 
-      <Pressable onPress={handleSubmit} disabled={submitting} className="self-start rounded-lg px-4 py-2.5 disabled:opacity-50" style={{ backgroundColor: colors.primary }}>
+      <Pressable onPress={handleSubmit} disabled={submitting} className="self-start rounded-lg px-4 py-2.5" style={{ opacity: submitting ? 0.5 : 1, backgroundColor: colors.primary }}>
         <Text className="text-sm text-white" style={{ fontFamily: fonts.sansSemiBold }}>
           {submitting ? "Approving…" : "Approve & Set Targets"}
         </Text>

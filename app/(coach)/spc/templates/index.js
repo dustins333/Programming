@@ -55,8 +55,8 @@ function NewTemplateForm({ onCreate }) {
       />
       <Pressable
         onPress={handleCreate}
-        disabled={saving || !name.trim()}
-        className="self-start rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50"
+        disabled={saving || !name.trim()} style={{ opacity: saving || !name.trim() ? 0.5 : 1 }}
+        className="self-start rounded-lg bg-primary px-4 py-2.5"
       >
         <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
           {saving ? "Creating…" : "+ Create template"}

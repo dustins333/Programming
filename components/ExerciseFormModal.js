@@ -511,8 +511,8 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               </Pressable>
               <Pressable
                 onPress={handleSubmit}
-                disabled={saving || !form.name || noMuscleGroupSelected}
-                className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
+                disabled={saving || !form.name || noMuscleGroupSelected} style={{ opacity: saving || !form.name || noMuscleGroupSelected ? 0.5 : 1 }}
+                className="rounded-lg bg-primary px-4 py-3"
               >
                 <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
                   {saving ? "Saving…" : "Save"}

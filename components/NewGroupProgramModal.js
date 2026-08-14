@@ -120,8 +120,8 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
             </Pressable>
             <Pressable
               onPress={handleSubmit}
-              disabled={saving || !form.name.trim()}
-              className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
+              disabled={saving || !form.name.trim()} style={{ opacity: saving || !form.name.trim() ? 0.5 : 1 }}
+              className="rounded-lg bg-primary px-4 py-3"
             >
               <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
                 {saving ? "Saving…" : isEdit ? "Save changes" : "Create program"}

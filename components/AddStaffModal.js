@@ -292,8 +292,8 @@ export function AddStaffModal({ visible, initialRole, onClose, onSubmit }) {
             {step === "who" ? (
               <Pressable
                 onPress={() => setStep("modules")}
-                disabled={!canContinue}
-                className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
+                disabled={!canContinue} style={{ opacity: !canContinue ? 0.5 : 1 }}
+                className="rounded-lg bg-primary px-4 py-3"
               >
                 <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                   Next
@@ -302,8 +302,8 @@ export function AddStaffModal({ visible, initialRole, onClose, onSubmit }) {
             ) : (
               <Pressable
                 onPress={handleSubmit}
-                disabled={saving}
-                className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
+                disabled={saving} style={{ opacity: saving ? 0.5 : 1 }}
+                className="rounded-lg bg-primary px-4 py-3"
               >
                 <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                   {saving ? "Adding…" : `Add ${roleLabel}`}

@@ -284,9 +284,10 @@ export function SessionLogger({
         <PressFade
           onPress={handleFinalize}
           disabled={finalizing}
-          className="mt-1 items-center justify-center disabled:opacity-50"
+          className="mt-1 items-center justify-center"
           pressedOpacity={0.75}
           style={{
+            opacity: finalizing ? 0.5 : 1,
             height: 52,
             borderRadius: 14,
             backgroundColor: isCompleted ? "#4d6142" : colors.primary,

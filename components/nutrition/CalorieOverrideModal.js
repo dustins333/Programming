@@ -57,8 +57,8 @@ export function CalorieOverrideModal({ visible, initialValue, onClose, onOverrid
               <Pressable
                 onPress={() => onOverride(text.trim())}
                 disabled={!text.trim()}
-                className="rounded-lg px-4 py-2.5 disabled:opacity-50"
-                style={{ backgroundColor: colors.primary }}
+                className="rounded-lg px-4 py-2.5"
+                style={{ opacity: !text.trim() ? 0.5 : 1, backgroundColor: colors.primary }}
               >
                 <Text style={{ fontFamily: fonts.sansSemiBold, color: "white" }}>Override</Text>
               </Pressable>

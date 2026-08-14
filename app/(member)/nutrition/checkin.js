@@ -162,8 +162,8 @@ function SkipReasonModal({ visible, onClose, onSubmit }) {
             </Pressable>
             <Pressable
               onPress={() => text.trim() && onSubmit(text.trim())}
-              disabled={!text.trim()}
-              className="rounded-lg bg-primary px-4 py-2.5 disabled:opacity-50"
+              disabled={!text.trim()} style={{ opacity: !text.trim() ? 0.5 : 1 }}
+              className="rounded-lg bg-primary px-4 py-2.5"
             >
               <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                 Save
@@ -513,8 +513,8 @@ export default function WeeklyCheckin() {
           <Pressable
             onPress={handleReopenSubmit}
             disabled={reopenSubmitting}
-            style={!reopenCanFinalize ? { opacity: 0.5 } : undefined}
-            className="mt-1 items-center rounded-lg bg-primary py-3 disabled:opacity-50"
+            style={[{ opacity: reopenSubmitting ? 0.5 : 1 }, !reopenCanFinalize ? { opacity: 0.5 } : undefined]}
+            className="mt-1 items-center rounded-lg bg-primary py-3"
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
               {reopenSubmitting ? "Submitting…" : "Finalize missed check-in"}
@@ -608,8 +608,8 @@ export default function WeeklyCheckin() {
             <Pressable
               onPress={handleSubmit}
               disabled={submitting}
-              style={!canFinalize ? { opacity: 0.5 } : undefined}
-              className="mt-2 items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+              style={[{ opacity: submitting ? 0.5 : 1 }, !canFinalize ? { opacity: 0.5 } : undefined]}
+              className="mt-2 items-center rounded-lg bg-primary py-3.5"
             >
               <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                 {submitting ? "Finalizing…" : "Finalize Check-In"}

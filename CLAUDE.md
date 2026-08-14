@@ -2496,6 +2496,66 @@ several of them outside this handoff's own scope:**
   member folder for the same shape: this was the only one.
 
 
+## House rule: every disabled button must dim (2026-08-13)
+
+**`disabled:opacity-50` does nothing. Never use it.** NativeWind sets
+`aria-disabled` but leaves computed opacity at 1 — measured in the browser,
+not inferred. A disabled button therefore rendered fully saturated, so it
+read as "tapping does nothing" rather than "you're not done yet." That is
+the same bug class as the nutrition Finalize button (see the check-in
+section above), and it had spread to 34 buttons across the app.
+
+**The rule for any new button:** if it takes a `disabled` prop, it dims
+itself with a real inline style. Two shapes, both fine:
+
+```jsx
+// no existing style
+<Pressable onPress={save} disabled={busy} style={{ opacity: busy ? 0.5 : 1 }}>
+
+// existing style — merge, don't replace
+<Pressable disabled={d} style={{ opacity: d ? 0.5 : 1, backgroundColor: colors.primary }}>
+```
+
+When a call site already dims for its own reason, put the `disabled`
+dimming **first** in a style array so the existing rule still wins:
+`style={[{ opacity: busy ? 0.5 : 1 }, !ready ? { opacity: 0.5 } : undefined]}`
+— RN merges left to right. That's what keeps the member check-in Finalize
+button (deliberately *not* disabled by readiness, so tapping explains what's
+missing) behaving exactly as before.
+
+**This was deliberately NOT done as a Babel plugin**, unlike
+`noAutofillPlugin.js`/`maxFontSizeMultiplierPlugin.js`, and the idea should
+not be revived without re-reading this. 83 `Pressable`s take `disabled`, and
+the prop carries at least three different meanings:
+1. **unavailable** — missing info, or a boundary (`atTop`, `clampedPage <= 1`,
+   `i === 0` on a reorder arrow). Dimming is right.
+2. **busy** — `saving`/`submitting`/`uploading`. Dimming is right, and doubles
+   as progress feedback.
+3. **inert by design, but must still look normal.** Dimming is *wrong* here:
+   `StaffPermissionMatrix`'s `disabled={isAdmin}` (an admin's checkboxes are
+   checked-but-inert; dimming makes full access read as no access — the exact
+   thing that design decision avoided), `RatingSquares`' `disabled={readOnly}`
+   (a coach viewing a submitted rating; dimming makes real data look invalid),
+   `MondayPicker`'s `disabled={!selectable}`, `AttentionAlerts`' `disabled={clear}`
+   ("nothing needs attention" is a *good* state, not an unavailable one).
+
+Some sites also already dim a **child** view, which no static transform can
+see — `PermissionCheckbox` returns a plain `View` (not a Pressable) when
+disabled, and its inner Pressable's box carries `opacity: saving ? 0.5 : 1`,
+so an automatic wrapper-level dim would multiply to 0.25.
+
+So the 34 conversions were scoped to elements that already carried
+`disabled:opacity-50` — the author had already declared the intent, so
+nothing had to be guessed — via a throwaway Babel codemod that located nodes
+and applied precise text splices (whole-file regeneration would have
+reformatted everything). None of the category-3 sites carried the class, so
+none were touched. Verified: the object shape is runtime-confirmed on
+login/register/reset-password (opacity 0.5 → 1 as conditions are met); the
+two array-merge cases in `checkin.js` were checked by inspection across every
+branch. Clean `expo export -p web`, and zero `disabled:opacity-50` left
+outside explanatory comments.
+
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

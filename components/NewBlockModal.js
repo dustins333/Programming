@@ -119,8 +119,8 @@ export function NewBlockModal({ visible, programs, onClose, onSubmit }) {
             </Pressable>
             <Pressable
               onPress={handleSubmit}
-              disabled={saving || !groupProgramId || !startDate || !lengthValid}
-              className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
+              disabled={saving || !groupProgramId || !startDate || !lengthValid} style={{ opacity: saving || !groupProgramId || !startDate || !lengthValid ? 0.5 : 1 }}
+              className="rounded-lg bg-primary px-4 py-3"
             >
               <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
                 {saving ? "Creating…" : "Create block"}

@@ -132,8 +132,8 @@ export function ZoomSchedulerModal({ visible, onClose }) {
                         key={iso}
                         onPress={() => handlePick(iso)}
                         disabled={booking !== null}
-                        className="rounded-lg border px-3 py-2 disabled:opacity-50"
-                        style={{ borderColor: "#d6d3d1" }}
+                        className="rounded-lg border px-3 py-2"
+                        style={{ opacity: booking !== null ? 0.5 : 1, borderColor: "#d6d3d1" }}
                       >
                         <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13 }}>
                           {booking === iso ? "Booking…" : formatSlotTime(iso)}

@@ -125,7 +125,7 @@ export function NewSpcBlockChoiceModal({
                 Cancel
               </Text>
             </Pressable>
-            <Pressable onPress={handleCreate} disabled={saving || !lengthValid} className="rounded-lg px-[18px] py-2.5 disabled:opacity-50" style={{ backgroundColor: colors.primary }}>
+            <Pressable onPress={handleCreate} disabled={saving || !lengthValid} className="rounded-lg px-[18px] py-2.5" style={{ opacity: saving || !lengthValid ? 0.5 : 1, backgroundColor: colors.primary }}>
               <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 13 }}>
                 {saving ? "Creating…" : `Create ${nextLabel}`}
               </Text>

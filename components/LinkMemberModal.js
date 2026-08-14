@@ -51,8 +51,8 @@ export function LinkMemberModal({ visible, onClose, onSubmit }) {
             </Pressable>
             <Pressable
               onPress={handleSubmit}
-              disabled={saving || !form.id || !form.name || !form.email}
-              className="rounded-lg bg-primary px-4 py-3 disabled:opacity-50"
+              disabled={saving || !form.id || !form.name || !form.email} style={{ opacity: saving || !form.id || !form.name || !form.email ? 0.5 : 1 }}
+              className="rounded-lg bg-primary px-4 py-3"
             >
               <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
                 {saving ? "Linking…" : "Link account"}

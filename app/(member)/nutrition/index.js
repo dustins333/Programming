@@ -752,11 +752,11 @@ export default function NutritionToday() {
           <PressFade
             onPress={handleFinalize}
             disabled={finalizing}
-            className="items-center rounded-[15px] py-3.5 disabled:opacity-50"
+            className="items-center rounded-[15px] py-3.5"
             // Olive once finalized — same completed-state language as the
             // fitness Finalize button, which used to stay terracotta here.
             pressedOpacity={0.75}
-            style={{ backgroundColor: finalizedAt ? "#4d6142" : colors.primary,}}
+            style={{ opacity: finalizing ? 0.5 : 1, backgroundColor: finalizedAt ? "#4d6142" : colors.primary,}}
           >
             <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
               {finalizing ? "Saving…" : finalizedAt ? "Day finalized" : "Finalize day"}

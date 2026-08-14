@@ -182,8 +182,8 @@ export function PhotoUpload({ userId, onUploaded, allowDatePick = false }) {
       </View>
       <Pressable
         onPress={handleUpload}
-        disabled={!hasSelection || uploading}
-        className="mt-4 items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+        disabled={!hasSelection || uploading} style={{ opacity: !hasSelection || uploading ? 0.5 : 1 }}
+        className="mt-4 items-center rounded-lg bg-primary py-3.5"
       >
         {uploading ? <ActivityIndicator color="white" /> : <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>Upload</Text>}
       </Pressable>

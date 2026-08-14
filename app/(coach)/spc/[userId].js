@@ -505,8 +505,8 @@ export default function SpcClientDetail() {
           <Pressable
             onPress={handleSaveNotes}
             disabled={savingNotes}
-            className="self-start rounded-lg px-4 py-2.5 disabled:opacity-50"
-            style={{ backgroundColor: colors.primary }}
+            className="self-start rounded-lg px-4 py-2.5"
+            style={{ opacity: savingNotes ? 0.5 : 1, backgroundColor: colors.primary }}
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
               {savingNotes ? "Saving…" : "Save notes"}

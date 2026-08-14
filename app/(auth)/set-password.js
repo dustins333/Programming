@@ -73,8 +73,8 @@ export default function SetPassword() {
           ) : null}
           <Pressable
             onPress={handleSetPassword}
-            disabled={loading || password.length < 8}
-            className="mt-4 items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+            disabled={loading || password.length < 8} style={{ opacity: loading || password.length < 8 ? 0.5 : 1 }}
+            className="mt-4 items-center rounded-lg bg-primary py-3.5"
           >
             {loading ? (
               <ActivityIndicator color="white" />

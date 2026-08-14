@@ -752,8 +752,8 @@ export default function Settings() {
         </View>
         <Pressable
           onPress={handleSaveAll}
-          disabled={savingKey === "all"}
-          className="mt-1 self-start rounded-lg bg-primary px-5 py-3 disabled:opacity-50"
+          disabled={savingKey === "all"} style={{ opacity: savingKey === "all" ? 0.5 : 1 }}
+          className="mt-1 self-start rounded-lg bg-primary px-5 py-3"
         >
           <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
             {savingKey === "all" ? "Saving…" : "Save changes"}
@@ -821,8 +821,8 @@ export default function Settings() {
           </View>
           <Pressable
             onPress={handleAddSpecialtyBar}
-            disabled={savingBars}
-            className="rounded-lg bg-primary px-5 py-3 disabled:opacity-50"
+            disabled={savingBars} style={{ opacity: savingBars ? 0.5 : 1 }}
+            className="rounded-lg bg-primary px-5 py-3"
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
               + Add
@@ -961,8 +961,8 @@ export default function Settings() {
 
             <Pressable
               onPress={handleSaveCheckinNotif}
-              disabled={savingCheckinNotif}
-              className="mt-4 self-start rounded-lg bg-primary px-5 py-3 disabled:opacity-50"
+              disabled={savingCheckinNotif} style={{ opacity: savingCheckinNotif ? 0.5 : 1 }}
+              className="mt-4 self-start rounded-lg bg-primary px-5 py-3"
             >
               <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                 {savingCheckinNotif ? "Saving…" : "Save changes"}
@@ -1082,8 +1082,8 @@ export default function Settings() {
         </Text>
         <Pressable
           onPress={handleSendTestPush}
-          disabled={sendingPush}
-          className="self-start rounded-lg border border-primary px-5 py-3 disabled:opacity-50"
+          disabled={sendingPush} style={{ opacity: sendingPush ? 0.5 : 1 }}
+          className="self-start rounded-lg border border-primary px-5 py-3"
         >
           <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
             {sendingPush ? "Sending…" : "Send test push to myself"}

@@ -154,8 +154,8 @@ export function MilestoneFormModal({ visible, milestone, userId, createdBy, onCl
             <Pressable
               onPress={handleSave}
               disabled={disabled || !form.title.trim()}
-              className="rounded-lg px-4 py-3 disabled:opacity-50"
-              style={{ backgroundColor: colors.primary }}
+              className="rounded-lg px-4 py-3"
+              style={{ opacity: disabled || !form.title.trim() ? 0.5 : 1, backgroundColor: colors.primary }}
             >
               <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                 {saving ? "Saving…" : "Save"}
