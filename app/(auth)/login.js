@@ -110,10 +110,15 @@ export default function Login() {
           </Text>
         ) : null}
 
+        {/* Dimming is inline, not Tailwind's `disabled:opacity-50` —
+            NativeWind sets aria-disabled but leaves opacity at 1, so the
+            button rendered fully saturated while inert and read as "tapping
+            does nothing" instead of "fill both fields in". */}
         <Pressable
           onPress={handleSignIn}
           disabled={loading || !email || !password}
-          className="items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+          className="items-center rounded-lg bg-primary py-3.5"
+          style={{ opacity: loading || !email || !password ? 0.5 : 1 }}
         >
           {loading ? (
             <ActivityIndicator color="white" />

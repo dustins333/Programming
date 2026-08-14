@@ -85,6 +85,13 @@ export default function Register() {
     }
   };
 
+  // Dimming is inline, not Tailwind's `disabled:opacity-50` — NativeWind
+  // sets aria-disabled but leaves opacity at 1, so a disabled button
+  // rendered fully saturated and read as "tapping does nothing" rather
+  // than "you're not done yet" (measured in the browser).
+  const requestDisabled = loading || !email;
+  const verifyDisabled = loading || code.length !== 6 || password.length < 8;
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1 bg-white">
       <View className="flex-1 justify-center px-6">
@@ -115,8 +122,9 @@ export default function Register() {
             ) : null}
             <Pressable
               onPress={handleRequestCode}
-              disabled={loading || !email}
-              className="items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+              disabled={requestDisabled}
+              className="items-center rounded-lg bg-primary py-3.5"
+              style={{ opacity: requestDisabled ? 0.5 : 1 }}
             >
               {loading ? (
                 <ActivityIndicator color="white" />
@@ -165,8 +173,9 @@ export default function Register() {
             ) : null}
             <Pressable
               onPress={handleVerify}
-              disabled={loading || code.length !== 6 || password.length < 8}
-              className="items-center rounded-lg bg-primary py-3.5 disabled:opacity-50"
+              disabled={verifyDisabled}
+              className="items-center rounded-lg bg-primary py-3.5"
+              style={{ opacity: verifyDisabled ? 0.5 : 1 }}
             >
               {loading ? (
                 <ActivityIndicator color="white" />
