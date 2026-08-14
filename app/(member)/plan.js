@@ -24,6 +24,8 @@ import {
   finalizeGroupSession,
   finalizeSpcSession,
   finalizeOneOffSession,
+  unfinalizeGroupSession,
+  unfinalizeSpcSession,
 } from "../../lib/programming/sessionCompletions";
 import { retryOnce } from "../../lib/retry";
 import { SessionLogger } from "../../components/SessionLogger";
@@ -525,7 +527,21 @@ export default function MyFitness() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spc?.selectedSessionNumber, spc?.status, spcDetailRetryKey]);
 
+  // Finalize is a toggle, not a one-way door. People kept tapping it by
+  // accident mid-session and had no way back — and because My Week's
+  // "done for the week" count is derived straight from session_completions,
+  // one stray tap made the whole week read as finished. Tapping again undoes
+  // it. Nothing they typed is touched either way; only the completion row
+  // moves. The button's own copy is unchanged (SessionLogger already swaps
+  // olive/clay on isCompleted), so the two states stay tellable apart
+  // without a second verb to learn.
   const handleFinalizeGroup = async (groupEntry) => {
+    if (groupEntry.completed) {
+      await unfinalizeGroupSession(profile.id, groupEntry.workout.id);
+      setGroups((prev) => prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: false } : g)));
+      toastSuccess("Un-finalized — keep logging.");
+      return;
+    }
     await finalizeGroupSession(profile.id, groupEntry.workout.id);
     setGroups((prev) => prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: true } : g)));
     toastSuccess("Workout finalized — nice work!");
@@ -534,8 +550,19 @@ export default function MyFitness() {
   const handleFinalizeSpc = async () => {
     const session = spc.sessions.find((s) => s.sessionNumber === spc.selectedSessionNumber);
     if (!session) return;
+    const setCompleted = (completed) =>
+      setSpc((s) => ({
+        ...s,
+        sessions: s.sessions.map((row) => (row.sessionNumber === session.sessionNumber ? { ...row, completed } : row)),
+      }));
+    if (session.completed) {
+      await unfinalizeSpcSession(profile.id, session.workout.id, spc.weekNumber);
+      setCompleted(false);
+      toastSuccess("Un-finalized — keep logging.");
+      return;
+    }
     await finalizeSpcSession(profile.id, session.workout.id, spc.weekNumber);
-    setSpc((s) => ({ ...s, sessions: s.sessions.map((row) => (row.sessionNumber === session.sessionNumber ? { ...row, completed: true } : row)) }));
+    setCompleted(true);
     toastSuccess("Workout finalized — nice work!");
   };
 

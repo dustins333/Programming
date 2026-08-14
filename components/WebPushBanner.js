@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Modal, View, Text, Pressable, Platform } from "react-native";
+import { View, Text, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { PassThroughOverlay } from "./PassThroughOverlay";
 import { useAuth } from "../lib/auth/AuthProvider";
 import { getWebPushStatus, subscribeToWebPush } from "../lib/notifications/webPush";
 import { toastSuccess, toastError } from "../lib/toast";
@@ -12,9 +13,11 @@ const DISMISS_KEY = "web-push-banner-dismissed";
 // PWA counterpart to native push permission — the standalone Nutrition
 // Tracker app proved this exact "small dismissible banner, detect iOS
 // outside standalone mode" pattern in production, see webPush.js's own
-// header comment. Rendered through a Modal (like ToastHost) so it overlays
-// both the member Tabs bar and the coach web sidebar without needing to be
-// threaded into either layout individually.
+// header comment. Rendered through PassThroughOverlay (like ToastHost) so it
+// overlays both the member Tabs bar and the coach web sidebar without needing
+// to be threaded into either layout individually — and, unlike the RN Modal
+// this used to use, without making the entire app underneath untouchable for
+// as long as the banner sits there undismissed.
 export function WebPushBanner() {
   const { profile } = useAuth();
   const [status, setStatus] = useState("checking");
@@ -55,7 +58,7 @@ export function WebPushBanner() {
   const isIosPrompt = status === "ios-needs-install";
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={() => {}}>
+    <PassThroughOverlay>
       <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end", alignItems: "center", paddingBottom: insets.bottom + 12, paddingHorizontal: 16 }}>
         <View
           style={{
@@ -104,6 +107,6 @@ export function WebPushBanner() {
           </Pressable>
         </View>
       </View>
-    </Modal>
+    </PassThroughOverlay>
   );
 }

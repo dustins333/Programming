@@ -262,6 +262,13 @@ function QuietHero({ eyebrow, title, titleColor = OLIVE, meta, ctaLabel, onPress
 // equal height, so leaving it out on the others would push their stripes and
 // captions to a different vertical position, which is the exact alignment
 // bug the old session bubbles hit.
+//
+// That reserved row needs an EXPLICIT height, not a " " placeholder string.
+// numberOfLines={1} makes react-native-web emit `white-space: nowrap`, which
+// collapses a whitespace-only text node away entirely — measured in a
+// browser: the "TODAY" label rendered 10px tall while every " " sibling
+// rendered 0, dropping today's stripe 10px below the rest of its row. The
+// height/lineHeight pair below makes the slot exist whatever's in it.
 function SessionStripe({ completed, published, caption, isToday, onPress, accessibilityLabel }) {
   return (
     <PressFade
@@ -281,13 +288,15 @@ function SessionStripe({ completed, published, caption, isToday, onPress, access
         style={{
           fontFamily: fonts.sansBold,
           fontSize: 8.5,
+          lineHeight: 11,
+          height: 11,
           letterSpacing: 0.8,
           color: BRAND_TEXT,
           textAlign: "center",
           marginBottom: 5,
         }}
       >
-        {isToday ? "TODAY" : " "}
+        {isToday ? "TODAY" : ""}
       </Text>
       <View
         style={{

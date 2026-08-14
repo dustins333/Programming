@@ -101,21 +101,133 @@ export function coachNoteFor(item) {
 // close to the button and still start near-vertical. Three same-size bubbles
 // only fit in the ~100° of free space here at a wide angular spread: 45°
 // apart is what keeps ~9px of air between adjacent edges at this radius.
+//
+// The arc is rendered by RestFanGutter, NOT by this button, and that split is
+// load-bearing rather than cosmetic. Every bubble lands entirely outside the
+// button's own 38x53 box (measured offsets -21/-58, -56/-26, -58/+21), and
+// neither iOS nor Android delivers a touch to a view outside its parent's
+// bounds. The arc had only ever been hit-tested in a browser, where CSS has
+// no such rule — so the presets worked on the PWA and were dead on a real
+// build: the tap fell through to whatever was behind, leaving the fan open.
+// The gutter is an ancestor whose bounds DO contain the arc.
 const PRESET_ANGLES = [110, 155, 200];
+const REST_PRESETS = [60, 90, 120];
+// The stopwatch's caption is pinned to its natural rendered height (measured:
+// 11px) rather than left to the font, because the arc is positioned from the
+// row's bottom edge and this height is part of that offset. Pinning it keeps
+// the geometry identical on both platforms instead of depending on font
+// metrics; at 11 it also reproduces today's layout to the pixel.
+const REST_LABEL_H = 11;
+// How far the gutter reaches above the row, so the topmost bubble is inside
+// it. Worst case is the SHORTEST row (a taller notes field only pushes the
+// arc down): 58.3px at full size, 54.5px compact — 64 leaves ~6px spare.
+const REST_FAN_ABOVE = 64;
+// ...and below it. The 200° bubble sits BELOW the button's centre and hangs
+// ~6px past the row's bottom edge (4.8px compact), so the gutter has to
+// reach under the row too or that one preset alone stays out of bounds —
+// which is exactly what the containment check caught.
+const REST_FAN_BELOW = 10;
 
-function RestTimerButton({ seconds, onStart, compact, open, onOpenChange }) {
+function restFanGeometry(compact) {
   const size = compact ? 34 : 38;
   // Presets are the same size as the timer button they fan off — they read as
-  // siblings of it rather than as a smaller menu hanging off it.
-  const bubble = size;
-  // Both radii (= one full `size`, since the bubbles match the button) plus a
-  // 24px gap — close enough to read as attached to the button rather than
-  // floating away from it.
-  const radius = size + 24;
+  // siblings of it rather than as a smaller menu hanging off it. Both radii
+  // (= one full `size`, since the bubbles match the button) plus a 24px gap —
+  // close enough to read as attached to the button rather than floating away.
+  return { size, bubble: size, radius: size + 24 };
+}
+
+// Wraps the card's bottom row and reaches past it — REST_FAN_ABOVE px up and
+// REST_FAN_BELOW px down — so the arc has an ancestor that contains it. The marginTop/paddingTop pair is
+// deliberately net-zero: the box grows upward by exactly what the margin
+// pulls it back, so the row's content — and everything below it — stays
+// exactly where it was (verified: card height unchanged to the pixel).
+// box-none so the transparent gutter can't swallow taps meant for the set
+// rows it now overlaps; only its children (the row, and the bubbles) are
+// touchable.
+function RestFanGutter({ children }) {
+  return (
+    <View
+      pointerEvents="box-none"
+      style={{
+        marginTop: 4 - REST_FAN_ABOVE,
+        paddingTop: REST_FAN_ABOVE,
+        marginBottom: -REST_FAN_BELOW,
+        paddingBottom: REST_FAN_BELOW,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+// Positioned from the gutter's bottom-right — which is the row's bottom-right,
+// i.e. the timer button's own corner — so no measurement is needed and the
+// arc can't drift when the notes field changes height. Reduces to
+// right = -r·cosθ, bottom = labelH + gap + r·sinθ. Verified pixel-identical
+// (dx=0, dy=0 on all three) to the previous in-button positioning at normal
+// text, an inflated notes field, and compact — and every bubble measured
+// fully inside the gutter, which is what makes them tappable on native.
+//
+// The bubbles are ALWAYS mounted and faded in/out rather than added and
+// removed, same treatment (and same reason) as the "+" add-set button next
+// to them. Picking a preset starts the app-level rest timer, which mounts
+// RestTimerBar in normal flow above <Tabs> and shifts the whole page down —
+// so unmounting three shadowed, rounded, absolutely-positioned views in the
+// exact frame the page moves left ghost tiles behind on iOS: reported as the
+// white circles staying put after the tap, minus their text. Toggling
+// opacity keeps the layer stable and gives the compositor nothing to strand.
+function RestPresetFan({ open, compact, onPick }) {
+  const { bubble, radius } = restFanGeometry(compact);
+  return REST_PRESETS.map((s, i) => {
+    const theta = (PRESET_ANGLES[i] * Math.PI) / 180;
+    return (
+      <PressFade
+        key={s}
+        onPress={() => onPick(s)}
+        accessibilityLabel={`Rest ${formatSeconds(s)}`}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        style={{
+          position: "absolute",
+          opacity: open ? 1 : 0,
+          // RNW compiles this to `pointer-events: none !important`, so it
+          // beats the box-none polyfill's `> * { pointer-events: auto }` on
+          // the gutter and a hidden bubble can't be tapped.
+          pointerEvents: open ? "auto" : "none",
+          right: -radius * Math.cos(theta),
+          // REST_FAN_BELOW because the gutter's own bottom padding moves the
+          // edge these are measured from down by exactly that much.
+          bottom: REST_FAN_BELOW + REST_LABEL_H + 4 + radius * Math.sin(theta),
+          width: bubble,
+          height: bubble,
+          borderRadius: 999,
+          borderWidth: 1.5,
+          borderColor: colors.primary,
+          backgroundColor: "#fff",
+          alignItems: "center",
+          justifyContent: "center",
+          shadowColor: "#44403c",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.12,
+          shadowRadius: 8,
+        }}
+      >
+        <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 12, color: "#8a5140" }}>
+          {formatSeconds(s)}
+        </Text>
+      </PressFade>
+    );
+  });
+}
+
+function RestTimerButton({ seconds, onStart, compact, open, onOpenChange }) {
+  const { size } = restFanGeometry(compact);
   const pickerOpen = open;
   const setPickerOpen = (next) => onOpenChange(typeof next === "function" ? next(open) : next);
   return (
-    <View style={{ alignItems: "center", gap: 4, flexShrink: 0 }}>
+    // Explicit width so the arc's horizontal anchor is the button's own
+    // centre regardless of how wide the caption under it happens to render.
+    <View style={{ width: size, alignItems: "center", gap: 4, flexShrink: 0 }}>
       <PressFade
         onPress={() => (seconds ? onStart(seconds) : setPickerOpen((o) => !o))}
         accessibilityLabel={seconds ? "Start rest timer" : pickerOpen ? "Hide rest presets" : "Choose a rest length"}
@@ -132,47 +244,12 @@ function RestTimerButton({ seconds, onStart, compact, open, onOpenChange }) {
       >
         <Ionicons name="stopwatch-outline" size={compact ? 17 : 19} color="#8a5140" />
       </PressFade>
-      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, color: MUTED }}>
+      <Text
+        maxFontSizeMultiplier={1}
+        style={{ fontFamily: fonts.sansBold, fontSize: 9.5, height: REST_LABEL_H, lineHeight: REST_LABEL_H, textAlign: "center", color: MUTED }}
+      >
         {seconds ? formatSeconds(seconds) : "Rest"}
       </Text>
-      {pickerOpen
-        ? [60, 90, 120].map((s, i) => {
-            const theta = (PRESET_ANGLES[i] * Math.PI) / 180;
-            return (
-              <PressFade
-                key={s}
-                onPress={() => {
-                  setPickerOpen(false);
-                  onStart(s);
-                }}
-                accessibilityLabel={`Rest ${formatSeconds(s)}`}
-                style={{
-                  position: "absolute",
-                  // Centred on the button's own centre (size/2, size/2),
-                  // then pushed out along the arc.
-                  left: size / 2 + radius * Math.cos(theta) - bubble / 2,
-                  top: size / 2 - radius * Math.sin(theta) - bubble / 2,
-                  width: bubble,
-                  height: bubble,
-                  borderRadius: 999,
-                  borderWidth: 1.5,
-                  borderColor: colors.primary,
-                  backgroundColor: "#fff",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  shadowColor: "#44403c",
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: 0.12,
-                  shadowRadius: 8,
-                }}
-              >
-                <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 12, color: "#8a5140" }}>
-                  {formatSeconds(s)}
-                </Text>
-              </PressFade>
-            );
-          })
-        : null}
     </View>
   );
 }
@@ -617,37 +694,47 @@ export function ExerciseCard({
           {/* Note beside the rest timer on the card's bottom row. Blank —
               the old prefilled prompt read as content that was already
               there. */}
-          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10, marginTop: 4 }}>
-            <TextInput
-              value={notes}
-              onChangeText={setNotes}
-              onFocus={() => scrollFieldIntoView(cardRef.current)}
-              multiline
-              inputAccessoryViewID={NUMERIC_DONE_ID}
-              accessibilityLabel={`Notes for ${item.exercise.name}`}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                minHeight: 42,
-                borderWidth: 1,
-                borderColor: INPUT_BORDER,
-                borderRadius: 10,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                fontFamily: fonts.sans,
-                fontSize: 13,
-                color: "#44403c",
-                backgroundColor: "#fff",
+          <RestFanGutter>
+            <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10 }}>
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                onFocus={() => scrollFieldIntoView(cardRef.current)}
+                multiline
+                inputAccessoryViewID={NUMERIC_DONE_ID}
+                accessibilityLabel={`Notes for ${item.exercise.name}`}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 42,
+                  borderWidth: 1,
+                  borderColor: INPUT_BORDER,
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontFamily: fonts.sans,
+                  fontSize: 13,
+                  color: "#44403c",
+                  backgroundColor: "#fff",
+                }}
+              />
+              <RestTimerButton
+                seconds={parseRestSeconds(item.rest)}
+                onStart={handleStartRest}
+                compact={compact}
+                open={restPickerOpen}
+                onOpenChange={setRestPickerOpen}
+              />
+            </View>
+            <RestPresetFan
+              open={restPickerOpen}
+              compact={compact}
+              onPick={(s) => {
+                setRestPickerOpen(false);
+                handleStartRest(s);
               }}
             />
-            <RestTimerButton
-              seconds={parseRestSeconds(item.rest)}
-              onStart={handleStartRest}
-              compact={compact}
-              open={restPickerOpen}
-              onOpenChange={setRestPickerOpen}
-            />
-          </View>
+          </RestFanGutter>
 
           {/* The olive fill on a set box is the everyday "it saved" signal,
               so success stays silent — but a failure must not look

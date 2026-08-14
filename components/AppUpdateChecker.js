@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, View, Text, Pressable, Platform } from "react-native";
+import { View, Text, Pressable, Platform } from "react-native";
+import { PassThroughOverlay } from "./PassThroughOverlay";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
@@ -76,7 +77,10 @@ export function AppUpdateChecker() {
   if (Platform.OS !== "web" || !latestSrc) return null;
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={handleDismiss}>
+    // PassThroughOverlay, not a Modal: this pill sits there until it's
+    // dismissed, and as a Modal it made the whole app under it untouchable
+    // the entire time (see PassThroughOverlay.web.js).
+    <PassThroughOverlay onRequestClose={handleDismiss}>
       <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end", alignItems: "center" }}>
         <View
           style={{
@@ -113,6 +117,6 @@ export function AppUpdateChecker() {
           </Pressable>
         </View>
       </View>
-    </Modal>
+    </PassThroughOverlay>
   );
 }

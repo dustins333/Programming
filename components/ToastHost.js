@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Modal, View, Text, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { PassThroughOverlay } from "./PassThroughOverlay";
 import { subscribeToast } from "../lib/toast";
 import { fonts } from "../lib/theme";
 
@@ -10,13 +11,15 @@ const TONE = {
   info: "#44403c",
 };
 
-// Mounted once at the app root (app/_layout.js). Rendered through a real RN
-// <Modal> — plain absolutely-positioned overlays don't show above an
-// already-open Modal (native presents each Modal as its own layer, and RNW
-// mirrors that with a portal), and several of the flows this replaces throw
-// their error while a create/edit modal is still open on purpose (so the
-// user doesn't lose what they typed). A later-presented Modal stacks above
-// an earlier one on both platforms, so this reliably shows through.
+// Mounted once at the app root (app/_layout.js). Rendered through
+// PassThroughOverlay rather than a plain absolutely-positioned View: several
+// of the flows this replaces raise their error while a create/edit modal is
+// still open on purpose (so the user doesn't lose what they typed), and an
+// in-tree overlay can't paint above a modal on either platform.
+// PassThroughOverlay keeps that stacking while — critically on web — NOT
+// blocking the app underneath; a toast used to freeze the whole screen for
+// its 3-4.5s lifetime, which is what made PWA scrolling "stick". See
+// PassThroughOverlay.web.js for the measurements.
 export function ToastHost() {
   const [toasts, setToasts] = useState([]);
   const insets = useSafeAreaInsets();
@@ -33,7 +36,7 @@ export function ToastHost() {
   const dismiss = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   return (
-    <Modal visible={toasts.length > 0} transparent animationType="none" onRequestClose={() => {}}>
+    <PassThroughOverlay visible={toasts.length > 0}>
       <View pointerEvents="box-none" style={{ flex: 1, alignItems: "center", paddingTop: insets.top + 12, paddingHorizontal: 16 }}>
         {toasts.map((t) => (
           <Pressable
@@ -57,6 +60,6 @@ export function ToastHost() {
           </Pressable>
         ))}
       </View>
-    </Modal>
+    </PassThroughOverlay>
   );
 }

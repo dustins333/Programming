@@ -2632,6 +2632,127 @@ as current; only a fresh tab gives a trustworthy zero. Verification: web
 screenshot/DOM-measured throughout, native confirmed by Terra live on her
 phone at every step, including the final smooth spin.
 
+## Non-blocking overlays, a finalize toggle, and two measured layout bugs (2026-08-13)
+
+Four member-side fixes from real PWA use. The overlay one is the important
+one — it had been silently breaking touch across the whole app.
+
+**Every non-blocking overlay was rendered through an RN `<Modal>`, which on
+web covers the entire screen and eats every touch.** react-native-web renders
+a Modal as TWO stacked `position: fixed; inset: 0` divs (ModalAnimation's
+container at `z-index: 9999`, then ModalContent's own), portaled to
+`document.body`, and **neither sets `pointer-events`**. `pointerEvents=
+"box-none"` on the child inside is no help — the ancestors have already
+captured the event. Measured against a real RNW Modal: with a banner up,
+`elementFromPoint` at the top, middle AND bottom of the viewport all returned
+an element inside the Modal, so the whole app underneath was untouchable.
+That is what made PWA scrolling "get stuck at times": a toast is only up for
+3-4.5s so it read as intermittent, while `WebPushBanner` and — most likely the
+one Terra kept hitting — `AppUpdateChecker`'s "New version available" pill
+blocked everything **until dismissed**, which on a heavy-deploy day is often.
+Same root cause as the `FloatingMessageBubble` bug on native ("its overlaying
+the whole screen with a clear non clickable page"), which was fixed by
+dropping ITS Modal; the note here previously claimed ToastHost/WebPushBanner
+were "safe because they're small and dismissible" — that was wrong, they cover
+the entire screen regardless of how small they look.
+
+New `components/PassThroughOverlay.js` / `.web.js` — native keeps the Modal
+(an RN Modal is its own window, and that boundary is exactly what lets a toast
+fired from inside an already-open modal render above it); web gets its own
+`body`-level portal at `z-index: 10000` with a `pointer-events: none` host,
+children keeping their existing `box-none`. **A plain in-tree overlay does not
+work as a substitute** — every RNW `View` is `position: relative; z-index: 0`,
+so it creates a stacking context and an overlay nested anywhere in the app
+tree is trapped in one: a `z-index: 10000` element still painted UNDER a real
+Modal's body-level 9999 portal (measured). Verified all three ways: paints
+above an open Modal, is clickable itself, and hit-testing away from it reaches
+the content below. `ToastHost`, `WebPushBanner` and `AppUpdateChecker` all use
+it now.
+
+**My Week's "today" stripe sat 10px lower than its siblings.** The non-today
+stripes reserved the `TODAY` label's row with a whitespace-only string, and
+`numberOfLines={1}` makes RNW emit `white-space: nowrap`, which **collapses a
+lone space to zero height**. Measured: the "TODAY" label rendered 10px tall
+while every `" "` sibling rendered 0. Fixed with an explicit
+`height`/`lineHeight` on the label instead of relying on a space to hold the
+row open. **General rule: never reserve vertical space with a `" "` string in
+a `numberOfLines={1}` Text** — give it a real height.
+
+**Finalize is a two-way toggle now.** Members kept tapping it by accident with
+no way back, and since My Week's "done for the week" count is derived straight
+from `programming.session_completions`, one stray tap made the whole week read
+as finished. New `unfinalizeGroupSession`/`unfinalizeSpcSession`
+(`lib/programming/sessionCompletions.js`) delete the row; the member's own
+`for all` policy from 0007 already permits it, so **no migration**. Deleting
+rather than flagging because every reader treats "a row exists" as the
+completion. Logged sets and per-exercise ticks are untouched. Button copy is
+unchanged — `SessionLogger` already swaps olive/clay off `isCompleted`. One
+gap worth knowing: a **1x/week** client who over-finalizes gets the "no
+remaining sessions" card instead of the button, and has to go back via My Week
+→ the session → "Update session"; the explicit deep link bypasses the weekly
+cap, which is what makes that path work at all.
+
+**The rest-timer preset fan had two separate defects.** (1) All three bubbles
+rendered entirely outside their 38x53 parent (measured offsets -21/-58,
+-56/-26, -58/+21), and **neither iOS nor Android delivers a touch to a view
+outside its parent's bounds** — the arc had only ever been hit-tested in a
+browser, where CSS has no such rule, so it worked on the PWA and would have
+been dead on the App Store build. Fixed with `RestFanGutter`, which wraps the
+card's bottom row and reaches past it via a **net-zero `marginTop`/
+`paddingTop` pair** (the box grows upward by exactly what the margin pulls it
+back, so nothing on the card moves) plus the same trick below, because the
+200° bubble hangs ~6px under the row — a containment check caught that one
+alone still escaping. It's `box-none` so the now-transparent overlap can't
+swallow taps meant for the set rows. Anchoring from the gutter's bottom-right
+IS the button's own corner, so positioning reduces to `right = -r·cosθ`,
+`bottom = labelH + gap + r·sinθ` — no measurement, nothing to drift when the
+notes field changes height. Verified pixel-identical to the previous
+positioning (`dx 0, dy 0` on all nine bubble/variant combinations across
+normal text, an inflated notes field, and compact) with card heights
+unchanged.
+
+(2) Reported separately: tapping a preset started the timer but left **white
+circles stranded on screen with their text gone**. That's a repaint artifact,
+not a hit-test failure — picking a preset unmounts three shadowed, rounded,
+absolutely-positioned views in the *exact frame* `startRest` mounts
+`RestTimerBar` in normal flow above `<Tabs>` and shifts the whole page down,
+which is a well-known way to strand composited tiles in iOS Safari. The
+bubbles are now **always mounted and faded** rather than added/removed — the
+same treatment (and reason) the "+" add-set button beside them already used.
+Verified the hidden state blocks nothing: `opacity: 0` + `pointerEvents:
+"none"`, which RNW compiles to `pointer-events: none !important` so it beats
+the gutter's box-none `> * { pointer-events: auto }` polyfill. **This one is
+reasoned, not reproduced** — an iOS Safari compositing artifact can't be
+recreated in the sandboxed browser. If ghosts survive it, the next move is
+making `RestTimerBar` an overlay instead of in-flow, which fights the
+handoff's deliberate "push content down" design and so wasn't done first.
+
+**Dynamic Type was investigated and ruled out** as the cause of the fan
+trouble, twice over: the fan's own text is already pinned at
+`maxFontSizeMultiplier={1}` and measures identical geometry at 1x and 1.3x,
+and more fundamentally **react-native-web has no reference to
+`allowFontScaling`/`maxFontSizeMultiplier` at all** — they are native-only
+props, silently ignored on web, so iOS text-size settings do not scale any RNW
+text in the PWA. "Bigger text" there is Safari's per-site zoom, which scales
+everything uniformly. Worth remembering before blaming Dynamic Type for a
+web-only layout report.
+
+**Tooling note that cost real time**: `onLayout` in react-native-web is
+implemented with `ResizeObserver`, and **ResizeObserver never fires in the
+sandboxed Browser pane** (measured: 0 callbacks in 800ms on a 350px-wide
+element). Anything depending on `onLayout` is therefore unverifiable in this
+environment — an `onLayout`-anchored version of the rest fan was written and
+then abandoned for the measurement-free geometry above precisely because of
+this. Prefer deterministic geometry over measured layout when the change has
+to be verified from here.
+
+**Not visually verified** — standing login limitation; `npx expo export -p web`
+clean after every change, and every geometry claim above measured in a real
+browser against real react-native-web components rather than eyeballed. Worth
+a click-through once deployed: scrolling while a toast/update pill is up,
+finalize→unfinalize round-tripping to My Week's count, the TODAY stripe
+lining up with its row, and the rest presets on a real device.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
