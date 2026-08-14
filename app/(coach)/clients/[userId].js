@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Switch, Platform, useWindowDimensions } from "react-native";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase, core } from "../../../lib/supabase/client";
+import { core } from "../../../lib/supabase/client";
 import { getUser, listCoaches, listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../../lib/programming/clients";
 import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { getCurrentBlock } from "../../../lib/programming/memberPlan";
@@ -42,7 +42,7 @@ import {
 import { getClientNutritionSnapshot } from "../../../lib/nutrition/clientSnapshot";
 import { getExerciseStats } from "../../../lib/programming/exerciseStats";
 import { formatDateMDY } from "../../../lib/formatDate";
-import { toastError, toastSuccess } from "../../../lib/toast";
+import { toastError } from "../../../lib/toast";
 import { confirmRemoveOneOff, confirmArchiveNutritionClient, confirmDelete, confirmRemoveGroupMembership } from "../../../lib/confirmDialog";
 import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
 import { todayInBoise, addDays, dayOfWeekInBoise } from "../../../lib/boiseDate";
@@ -273,7 +273,6 @@ export default function ClientProfile() {
   const scrollViewRef = useRef(null);
   const scrollOffsetRef = useRef(0);
   const [lastSignInAt, setLastSignInAt] = useState(undefined);
-  const [resending, setResending] = useState(false);
   // Screen 13's four cards + tabs. Each of these is its own isolated fetch
   // for the same reason SPC/Nutrition already are on this page: an unrun
   // migration or a transient failure in one must not blank the profile.
@@ -537,26 +536,6 @@ export default function ClientProfile() {
     }
   };
 
-  // Kova has no separate email-invite system (a member's auth.users row
-  // already exists before any module is turned on for them) — this really
-  // means "send them a fresh link to set their password and get in for the
-  // first time," which works regardless of whether they've ever signed in.
-  // Same mechanism as this app's own "Forgot / set up password?" flow.
-  const handleResendInvite = async () => {
-    setResending(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(member.email, {
-        redirectTo: "https://app.kovastrength.com/set-password",
-      });
-      if (error) throw error;
-      toastSuccess(`A sign-in link was sent to ${member.email}.`);
-    } catch (err) {
-      toastError("Failed to send", err);
-    } finally {
-      setResending(false);
-    }
-  };
-
   const handleAssignOneOff = async (template) => {
     try {
       await createOneOffFromTemplate({ userId, templateId: template.id, templateName: template.name, assignedBy: profile.id });
@@ -798,18 +777,15 @@ export default function ClientProfile() {
               {member.email}
               {member.phone ? ` · ${member.phone}` : ""}
             </Text>
+            {/* No resend-invite action here on purpose. Registration is
+                phone-OTP now (app/(auth)/register.js — they tap Register,
+                type their email, and get a code texted via GHL), so there
+                is no email for a coach to re-send. This line stays as the
+                signal to walk them through Register in person. */}
             {lastSignInAt === null ? (
-              <View className="mt-1 flex-row items-center gap-2">
-                <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>
-                  Never signed in
-                </Text>
-                <Text style={{ color: "#d6d3d1" }}>·</Text>
-                <Pressable onPress={handleResendInvite} disabled={resending} hitSlop={6}>
-                  <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                    {resending ? "Sending…" : "Resend invite"}
-                  </Text>
-                </Pressable>
-              </View>
+              <Text className="mt-1 text-xs" style={{ fontFamily: fonts.sansMedium, color: "#b23a22" }}>
+                Never signed in
+              </Text>
             ) : null}
           </View>
         </View>
