@@ -55,6 +55,11 @@ export function SessionLogger({
   scrollViewRef,
   scrollOffsetRef,
   onDataChanged,
+  // Which reference the ghost value in every empty box comes from — the
+  // page header's own toggle drives this (see GhostSourceToggle). Defaulted
+  // rather than required so the read-only viewer in My History, which has no
+  // header to put a switch in, keeps the original behaviour.
+  ghostMode = "last",
 }) {
   // Drop any row whose exercises join came back null — an archived or
   // RLS-invisible exercise. Guarding here rather than at each of the ~6
@@ -230,6 +235,7 @@ export function SessionLogger({
       completed={completions ? completions.has(item.id) : undefined}
       onToggleComplete={exerciseCompletionType ? (next, src) => handleToggleComplete(item, next, src) : undefined}
       lastSession={lastSessions?.get(item.exercise.id) ?? null}
+      ghostMode={ghostMode}
       hideVideo={hideVideo}
       scrollViewRef={scrollViewRef}
       scrollOffsetRef={scrollOffsetRef}

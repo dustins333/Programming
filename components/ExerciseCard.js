@@ -9,6 +9,7 @@ import { WeightCalculator } from "./WeightCalculator";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
 import { PressFade } from "./PressFade";
+import { ghostTint } from "./GhostSourceToggle";
 import { autofillSuppressedRef } from "../lib/webAutofillSuppression";
 import { useRestTimer, parseRestSeconds, formatSeconds } from "../lib/restTimer";
 
@@ -289,6 +290,7 @@ export function ExerciseCard({
   completed,
   onToggleComplete,
   lastSession,
+  ghostMode = "last",
   hideVideo,
   scrollViewRef,
   scrollOffsetRef,
@@ -433,6 +435,9 @@ export function ExerciseCard({
   const currentIndex = rows.findIndex((r) => !isLogged(r));
   const loggedSummary = summarizeSets(rows);
   const lastSummary = lastSession ? summarizeSets(lastSession.sets) : null;
+  // Same hue as the toggle's thumb, so the boxes say where their numbers came
+  // from without needing a legend.
+  const ghostColor = ghostTint(ghostMode);
 
   const title = `${numberLabel ? `${numberLabel}. ` : ""}${item.exercise.name}`;
   const titleSize = compact ? 19 : 21;
@@ -591,12 +596,20 @@ export function ExerciseCard({
             const logged = isLogged(row);
             const isCurrent = i === currentIndex;
             const isLast = i === rows.length - 1;
-            // Ghost values come from last time's matching set number; reps
-            // fall back to the coach's programmed reps for that set, so a
-            // first-time lift still shows what to aim for.
+            // Where the ghost value in an empty box comes from, driven by the
+            // header's toggle:
+            //  - "this": what the coach programmed for that set. Weight is
+            //    never prescribed in this gym, so that box stays empty by
+            //    design rather than borrowing a number from history and
+            //    presenting it as the plan.
+            //  - "last": that set number from the last logged session, with
+            //    the programmed reps as a fallback so a first-time lift still
+            //    shows something to aim for.
             const histSet = lastSession?.sets.find((s) => s.set_number === i + 1) ?? null;
-            const repsGhost = histSet?.reps != null ? String(histSet.reps) : String(item.repScheme?.[i] ?? item.targetReps ?? "");
-            const weightGhost = histSet?.weight != null ? String(histSet.weight) : "";
+            const targetReps = String(item.repScheme?.[i] ?? item.targetReps ?? "");
+            const useLast = ghostMode !== "this";
+            const repsGhost = useLast && histSet?.reps != null ? String(histSet.reps) : targetReps;
+            const weightGhost = useLast && histSet?.weight != null ? String(histSet.weight) : "";
 
             const boxStyle = {
               flex: 1,
@@ -629,7 +642,7 @@ export function ExerciseCard({
                   keyboardType="decimal-pad"
                   inputAccessoryViewID={NUMERIC_DONE_ID}
                   placeholder={repsGhost}
-                  placeholderTextColor={GHOST}
+                  placeholderTextColor={ghostColor}
                   maxFontSizeMultiplier={1}
                   accessibilityLabel={`Set ${i + 1} reps`}
                   style={{ ...boxStyle, ...(isCurrent && !logged ? { borderWidth: 1.5, borderColor: colors.primary } : null) }}
@@ -643,7 +656,7 @@ export function ExerciseCard({
                     keyboardType="decimal-pad"
                     inputAccessoryViewID={NUMERIC_DONE_ID}
                     placeholder={weightGhost}
-                    placeholderTextColor={GHOST}
+                    placeholderTextColor={ghostColor}
                     maxFontSizeMultiplier={1}
                     accessibilityLabel={`Set ${i + 1} weight`}
                     style={{ ...boxStyle, flex: undefined, width: "100%", paddingRight: isCurrent ? 30 : 8 }}
