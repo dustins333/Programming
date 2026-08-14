@@ -15,6 +15,8 @@ import { fonts, colors } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
+import { useFormDraft } from "../../../lib/formDraft";
+import { DraftNotice } from "../../../components/DraftNotice";
 
 function StatusBadge({ done }) {
   return (
@@ -47,6 +49,16 @@ function QuestionnairePanel({ userId, questions, response, onSubmitted }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  // Intake is the longest free-text form in the app and the one members
+  // put the most into — it held every answer in the state above with a
+  // single write on Submit, so a closed app lost all of it. Autosaved to
+  // the device and cleared once it's really submitted.
+  const draft = useFormDraft({
+    key: questions.length > 0 && !response ? `${userId}:questionnaire` : null,
+    values,
+    onRestore: setValues,
+  });
+
   if (response) {
     return (
       <View>
@@ -74,6 +86,7 @@ function QuestionnairePanel({ userId, questions, response, onSubmitted }) {
     try {
       const answers = questions.map((q) => ({ question: q.question_text, answer: values[q.id] || "" }));
       await submitQuestionnaire(userId, answers);
+      await draft.clearDraft();
       await onSubmitted();
     } catch (err) {
       setError(err.message ?? String(err));
@@ -92,6 +105,9 @@ function QuestionnairePanel({ userId, questions, response, onSubmitted }) {
           Your coach hasn't set up your intake questions yet.
         </Text>
       ) : (
+        <DraftNotice restored={draft.restored} />
+      )}
+      {questions.length === 0 ? null : (
         questions.map((q) => (
           <View key={q.id} className="mb-4">
             <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>

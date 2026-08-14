@@ -22,6 +22,8 @@ import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { KeyboardDoneButton } from "../../../components/KeyboardDoneButton";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
+import { useFormDraft } from "../../../lib/formDraft";
+import { DraftNotice } from "../../../components/DraftNotice";
 
 // Matches My Week/My Fitness/My History's shared canvas — the 4 nutrition
 // screens were left on plain white, which read as inconsistent with the
@@ -295,6 +297,23 @@ export default function WeeklyCheckin() {
   const reopenFormSatisfied = questions ? questions.every((q) => (reopenAnswers[q.id] || "").trim().length > 0) : false;
   const reopenCanFinalize = reopenPhotosSatisfied && (questions?.length === 0 || reopenFormSatisfied);
 
+  // Autosave both forms as they're typed. Answers used to live only in the
+  // component state above, with the single write happening on Finalize —
+  // so an app reload or a closed tab mid-form threw the lot away silently.
+  // Keyed by week so the live and reopened forms can't restore into each
+  // other, and disabled once a real response exists so a leftover draft can
+  // never be restored over something already submitted.
+  const liveDraft = useFormDraft({
+    key: questions && !response ? `${profile.id}:checkin:${currentWeek.start}` : null,
+    values: answers,
+    onRestore: setAnswers,
+  });
+  const reopenDraft = useFormDraft({
+    key: questions && reopen && !reopenSubmitted ? `${profile.id}:checkin:${reopen.week_start}` : null,
+    values: reopenAnswers,
+    onRestore: setReopenAnswers,
+  });
+
   const answerTriggersBooking = (answersMap) =>
     (questions || []).some((q) => q.question_type === "single_choice" && q.booking_option && answersMap[q.id] === q.booking_option);
 
@@ -353,6 +372,7 @@ export default function WeeklyCheckin() {
         weekStart: reopen.week_start,
         photosSkipReason: !reopenPhotosUploaded ? reopenSkipReason : null,
       });
+      await reopenDraft.clearDraft();
       setReopenSubmitted(true);
       setReopen(null);
       toastSuccess("Check-in submitted — your coach will review it!");
@@ -380,6 +400,7 @@ export default function WeeklyCheckin() {
     try {
       const payload = questions.map((q) => ({ question: q.question_text, answer: answers[q.id] || "" }));
       const saved = await submitCheckin(profile.id, payload, { photosSkipReason: !photosUploaded ? skipReason : null });
+      await liveDraft.clearDraft();
       setResponse(saved);
       toastSuccess("Check-in submitted — your coach will review it!");
       // Fire-and-forget — the coach side was entirely pull-based before
@@ -650,6 +671,7 @@ export default function WeeklyCheckin() {
         scrollViewRef={formScrollViewRef}
         scrollOffsetRef={formScrollOffsetRef}
       >
+        <DraftNotice restored={liveDraft.restored} />
         {questions.map((q) =>
           q.question_type === "single_choice" ? (
             <ChoiceQuestion key={q.id} question={q} value={answers[q.id] || ""} onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))} />
@@ -723,6 +745,7 @@ export default function WeeklyCheckin() {
             scrollViewRef={reopenFormScrollViewRef}
             scrollOffsetRef={reopenFormScrollOffsetRef}
           >
+            <DraftNotice restored={reopenDraft.restored} />
             {questions.map((q) =>
               q.question_type === "single_choice" ? (
                 <ChoiceQuestion key={q.id} question={q} value={reopenAnswers[q.id] || ""} onChange={(v) => setReopenAnswers((a) => ({ ...a, [q.id]: v }))} />
