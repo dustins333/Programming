@@ -92,7 +92,10 @@ function MacroRing({ short, value, goal }) {
   const center = RING_SIZE / 2;
 
   return (
-    <View style={{ width: RING_COL_WIDTH, alignItems: "center" }}>
+    // Flexes so the four rings spread across whatever width the row leaves
+    // them rather than bunching at the left edge; RING_COL_WIDTH is the wrap
+    // point, not the width.
+    <View style={{ flex: 1, minWidth: RING_COL_WIDTH, alignItems: "center" }}>
       <View style={{ width: RING_SIZE, height: RING_SIZE, alignItems: "center", justifyContent: "center" }}>
         <Svg width={RING_SIZE} height={RING_SIZE} style={{ position: "absolute" }}>
           <Circle cx={center} cy={center} r={radius} stroke={RING_TRACK} strokeWidth={RING_STROKE} fill="none" />

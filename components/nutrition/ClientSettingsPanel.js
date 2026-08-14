@@ -22,10 +22,11 @@ import { fonts, colors } from "../../lib/theme";
 // viewport height, which is why both of the latter two were collapsed
 // behind expanders by default.
 //
-// Name and phone are kept even though the mock's Client card only draws
-// start date / coach / status. They're real editable columns with no other
-// home now the modal is gone, and dropping a field because a mock didn't
-// picture it is how you lose one.
+// The Client card is deliberately just start date / assigned coach / status.
+// Name and phone were editable here originally and were pulled per direct
+// ask — a client's name comes in from the GHL import and isn't something a
+// coach edits from the nutrition record. Neither is written by handleSave
+// any more, so both columns are simply left alone.
 
 const STATUS_OPTIONS = [
   { key: "active", label: "Active" },
@@ -97,8 +98,6 @@ const inputStyle = {
 };
 
 export function ClientSettingsPanel({ userId, coachId, coaches = [], client, checkins = [], reopens = [], photos = [], today, isWide, onSaved }) {
-  const [name, setName] = useState(client.name ?? "");
-  const [phone, setPhone] = useState(client.phone ?? "");
   const [startDate, setStartDate] = useState(client.start_date ?? "");
   const [status, setStatus] = useState(client.status ?? "active");
   const [assignedCoachId, setAssignedCoachId] = useState(client.coach_id ?? null);
@@ -137,8 +136,6 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
   }, [userId]);
 
   useEffect(() => {
-    setName(client.name ?? "");
-    setPhone(client.phone ?? "");
     setStartDate(client.start_date ?? "");
     setStatus(client.status ?? "active");
     setAssignedCoachId(client.coach_id ?? null);
@@ -164,8 +161,6 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
     try {
       const freqValue = frequency === "off" || !firstCheckinMonday ? null : frequency;
       await updateClient(userId, {
-        name: name.trim(),
-        phone: phone.trim() || null,
         start_date: startDate,
         status,
         coach_id: assignedCoachId,
@@ -230,12 +225,6 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
             line. Same trap the member v5 pass documented; spell out grow and
             shrink instead. */}
         <Card title="Client" style={isWide ? { flexGrow: 0, flexShrink: 0, width: 320 } : undefined}>
-          <Field label="Name">
-            <TextInput value={name} onChangeText={setName} style={inputStyle} />
-          </Field>
-          <Field label="Phone">
-            <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" style={inputStyle} />
-          </Field>
           <Field label="Start date">
             <TextInput value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor="#c9c4bd" style={inputStyle} />
           </Field>
