@@ -22,7 +22,7 @@ import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
 import { listPhases } from "../../../../lib/nutrition/planPhases";
 import { computeWeekWindows, currentCalendarWeek, summarizeWeek, deriveCheckinStatus, enumerateRecentWeeks } from "../../../../lib/nutrition/weekCycle";
-import { weekOnProgramme, weekDates } from "../../../../lib/nutrition/queue";
+import { weekOnProgram, weekDates } from "../../../../lib/nutrition/queue";
 import { listAllPhotos, photosForRequirementWeek } from "../../../../lib/nutrition/photos";
 
 import { WeekRows } from "../../../../components/nutrition/WeekRows";
@@ -269,7 +269,7 @@ export default function NutritionClientDetail() {
       if (templateResult.status === "fulfilled") setTemplateQuestions(templateResult.value);
       else console.error("Failed to load the check-in template:", templateResult.reason);
       if (spcResult.status === "fulfilled") setSpcClient(spcResult.value);
-      else console.error("Failed to load SPC enrolment:", spcResult.reason);
+      else console.error("Failed to load SPC enrollment:", spcResult.reason);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -430,7 +430,11 @@ export default function NutritionClientDetail() {
     const summary = summarizeWeek(logs, w.start, w.end);
     const previous = enumerated[i + 1] ? summarizeWeek(logs, enumerated[i + 1].start, enumerated[i + 1].end) : null;
     const weekCheckin = checkins.find((c) => c.week_start === w.start) ?? null;
-    const number = weekOnProgramme(client.start_date, w.start);
+    // Numbered from the week's END, not its start: the week that CONTAINS
+    // the start date is week 1 (its start is a few days before she began),
+    // and a week that finished before she started gets no number at all and
+    // falls back to its date.
+    const number = weekOnProgram(client.start_date, w.end);
     return {
       ...w,
       dates: weekDates(w),
@@ -589,7 +593,7 @@ export default function NutritionClientDetail() {
           <View>
             <View className="mb-3 flex-row flex-wrap items-baseline justify-between" style={{ gap: 10 }}>
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                {maxWeeks} week{maxWeeks === 1 ? "" : "s"} on programme
+                {maxWeeks} week{maxWeeks === 1 ? "" : "s"} on program
               </Text>
               {targetChangeCount > 0 ? (
                 <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>

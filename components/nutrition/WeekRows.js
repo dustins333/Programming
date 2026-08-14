@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { colorForTarget, colorForStepsTarget } from "../../lib/nutrition/weekCycle";
 import { deriveCalories } from "../../lib/nutrition/targets";
@@ -64,23 +65,72 @@ function colorFor(key, actual, target) {
   return key === "steps" || key === "step_goal" ? colorForStepsTarget(actual, target) : colorForTarget(actual, target);
 }
 
-function MacroBar({ short, value, goal }) {
+// A week's average for one macro, as a ring against its target.
+//
+// Replaces a horizontal bar. The bar needed ~96px of width to read at all,
+// and four of them plus their gaps put a 420px floor under this row that no
+// amount of flex-wrap could shrink — on the PWA at phone width the bars ran
+// clean off the right edge. A ring carries the same "how close to target"
+// signal in a fixed 62px column, and has room to state the target itself
+// underneath rather than leaving the coach to infer it from the fill.
+//
+// Colour keeps the bar's own three-tone rule (the ±10% band, red included),
+// NOT MacroDial's never-red one — a finished week's average genuinely can be
+// over or under, where an in-progress day is only ever "not there yet".
+const RING_COL_WIDTH = 62;
+const RING_SIZE = 44;
+const RING_STROKE = 4;
+const RING_TRACK = "#f0ece6";
+
+function MacroRing({ short, value, goal }) {
   const tone = colorFor(short, value, goal);
   const color = tone === "green" ? OK : tone === "red" ? OFF : MUTED;
-  const fill = value !== null && goal ? Math.max(0.02, Math.min(1, value / goal)) : 0;
+  const logged = value !== null && value !== undefined;
+  const progress = logged && goal ? Math.max(0, Math.min(1, value / goal)) : 0;
+  const radius = (RING_SIZE - RING_STROKE) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const center = RING_SIZE / 2;
+
   return (
-    <View style={{ flex: 1, minWidth: 96 }}>
-      <View className="flex-row items-baseline justify-between" style={{ gap: 6 }}>
-        <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e" }}>
-          {short}
-        </Text>
-        <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color }}>
+    <View style={{ width: RING_COL_WIDTH, alignItems: "center" }}>
+      <View style={{ width: RING_SIZE, height: RING_SIZE, alignItems: "center", justifyContent: "center" }}>
+        <Svg width={RING_SIZE} height={RING_SIZE} style={{ position: "absolute" }}>
+          <Circle cx={center} cy={center} r={radius} stroke={RING_TRACK} strokeWidth={RING_STROKE} fill="none" />
+          {progress > 0 ? (
+            <Circle
+              cx={center}
+              cy={center}
+              r={radius}
+              stroke={color}
+              strokeWidth={RING_STROKE}
+              fill="none"
+              strokeDasharray={`${circumference * progress} ${circumference}`}
+              strokeLinecap="round"
+              // Start the arc at 12 o'clock instead of 3 o'clock.
+              transform={`rotate(-90 ${center} ${center})`}
+            />
+          ) : null}
+        </Svg>
+        <Text
+          maxFontSizeMultiplier={1}
+          numberOfLines={1}
+          style={{
+            width: RING_SIZE - 8,
+            textAlign: "center",
+            fontFamily: fonts.sansSemiBold,
+            fontSize: 12,
+            color: logged ? color : MUTED,
+          }}
+        >
           {fmt(value, 0)}
         </Text>
       </View>
-      <View style={{ height: 4, borderRadius: 3, backgroundColor: "#f0ece6", marginTop: 3, overflow: "hidden" }}>
-        <View style={{ width: `${fill * 100}%`, height: 4, borderRadius: 3, backgroundColor: color === MUTED ? "#ddd6cd" : color }} />
-      </View>
+      <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#57534e", marginTop: 4 }}>
+        {short}
+      </Text>
+      <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 10, color: "#a8a29e", marginTop: 1 }}>
+        {goal ? `of ${Math.round(goal)}` : "no target"}
+      </Text>
     </View>
   );
 }
@@ -104,6 +154,8 @@ const CHECKIN_STATE = {
 function DayTable({ week, target }) {
   const byDate = Object.fromEntries(week.summary.days.map((d) => [d.date, d]));
   const dates = Array.from({ length: 7 }, (_, i) => week.dates[i]);
+  // Which day's note is opened out to its full text. One at a time.
+  const [openNote, setOpenNote] = useState(null);
 
   return (
     <ScrollView
@@ -136,7 +188,10 @@ function DayTable({ week, target }) {
           return (
             <View
               key={date}
-              className="flex-row items-center"
+              // Top-aligned while a note is opened out, so the day's numbers
+              // sit on the note's first line instead of floating halfway
+              // down a three-line block.
+              className={openNote === date ? "flex-row items-start" : "flex-row items-center"}
               style={{ paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#f6f3ef", opacity: day ? 1 : 0.55 }}
             >
               <Text style={{ width: DAY_COL_WIDTH, fontFamily: fonts.sansSemiBold, fontSize: 12, color: day ? "#44403c" : MUTED }}>{weekday}</Text>
@@ -164,13 +219,29 @@ function DayTable({ week, target }) {
               ) : (
                 <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12, color: MUTED, fontStyle: "italic" }}>nothing logged</Text>
               )}
-              {day ? (
-                <Text numberOfLines={1} style={{ flex: NOTE_FLEX, minWidth: 150, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
-                  {/* client_note, not note — `day` is a raw public.daily_logs
-                      row and there is no `note` column, so this rendered "—"
-                      for every note a member has ever written. */}
-                  {day.client_note || "—"}
-                </Text>
+              {/* client_note, not note — `day` is a raw public.daily_logs
+                  row and there is no `note` column, so this rendered "—"
+                  for every note a member has ever written.
+
+                  Tap a note to read the whole thing. It was truncated to one
+                  line with no press handler at all, so a long note was
+                  simply unreadable from this table. */}
+              {day && day.client_note ? (
+                <Pressable
+                  onPress={() => setOpenNote((cur) => (cur === date ? null : date))}
+                  className="flex-row items-start"
+                  style={{ flex: NOTE_FLEX, minWidth: 150, gap: 4 }}
+                >
+                  <Text
+                    numberOfLines={openNote === date ? undefined : 1}
+                    style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}
+                  >
+                    {day.client_note}
+                  </Text>
+                  <Ionicons name={openNote === date ? "chevron-up" : "chevron-down"} size={12} color="#c9c4bd" style={{ marginTop: 2 }} />
+                </Pressable>
+              ) : day ? (
+                <Text style={{ flex: NOTE_FLEX, minWidth: 150, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>—</Text>
               ) : null}
             </View>
           );
@@ -253,9 +324,12 @@ export function WeekRow({ week, expanded, onToggle }) {
           </Text>
         </View>
 
-        <View className="flex-row" style={{ flex: 1, minWidth: 260, gap: 12 }}>
+        {/* minWidth is the four rings plus their gaps exactly — below that
+            this whole block wraps to its own line rather than overflowing,
+            which is what the old bars did on a phone. */}
+        <View className="flex-row flex-wrap" style={{ flex: 1, minWidth: RING_COL_WIDTH * 4 + 24, gap: 8 }}>
           {MACRO_BARS.map((bar) => (
-            <MacroBar key={bar.key} short={bar.short} value={week.summary.averages[bar.key] ?? null} goal={targetValue(target, bar.targetKey)} />
+            <MacroRing key={bar.key} short={bar.short} value={week.summary.averages[bar.key] ?? null} goal={targetValue(target, bar.targetKey)} />
           ))}
         </View>
 

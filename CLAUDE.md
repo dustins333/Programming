@@ -2874,6 +2874,91 @@ a click-through once deployed: scrolling while a toast/update pill is up,
 finalize→unfinalize round-tripping to My Week's count, the TODAY stripe
 lining up with its row, and the rest presets on a real device.
 
+## Weeks tab: British spellings, week rings, note tap, and the real "everything
+is Week 1" bug (2026-08-14)
+
+Four reports off the coach's nutrition client record, plus a data correction
+that came out of the third one.
+
+**"programme"/"enrol" → "program"/"enroll".** Reported as "some French".
+`weekOnProgramme` → `weekOnProgram` (3 call sites), the Weeks tab's "N weeks
+on programme" header, and the Nutrition queue's "+ Enrol client" button,
+empty state, modal title and toasts. **"programmed" is deliberately left
+alone everywhere** — that's the correct US spelling of the verb, not a
+British leftover, and "3 sets programmed" is not a typo.
+
+**Every week reading "Week 1" — two causes, one code, one data.**
+`weekOnProgram` clamped any date *before* the client's start date to 1. That
+read fine for its original caller (which passes `today`), but the Weeks tab
+numbered each row from the week's **start**, so for a client whose
+`start_date` sat near today every displayed week ended before she began and
+came back as Week 1. Ashley Curry showed three identical "Week 1" rows. Now:
+the function returns **null** for a pre-start date, and the Weeks tab numbers
+from the week's **end** — so the week that *contains* the start date is week
+1, and a week that finished before she started gets no number and falls back
+to its date. The two queue callers already handled null (` week ? ... : ""`),
+so a future-start client now reads as "not started" rather than "week 1",
+which is more honest.
+
+**The data half: `start_date` was the GHL import date for most migrated
+clients**, not their real start — Ashley's said 2026-08-06 while her photos
+went back to 2025-02-12. Corrected 11 rows from their legacy Google Sheets
+trackers (`GoogleDrive-tsmout1@gmail.com/My Drive/Nutrition/Trackers_Macros`,
+still synced locally — no links needed), using each client's first genuinely
+logged day, or `min(daily_logs.date)` where the tracker's logs were already
+imported. **Only `start_date` was written; nothing else touched.** Rollback
+SQL with every prior value was saved before applying.
+
+| Client | was | now | | Client | was | now |
+|---|---|---|---|---|---|---|
+| Abbi Stauffer | 2026-08-02 | 2023-12-18 | | Rae Karanjia | `0026-07-22` | 2025-08-22 |
+| Banesa Getsinger | 2026-07-11 | 2024-03-04 | | Roxy Franco | 2026-07-14 | 2025-11-03 |
+| MIchelle Dodge | 2026-07-20 | 2024-10-07 | | Bob Getsinger | 2026-07-17 | 2026-01-23 |
+| Rita Cabrera | 2026-08-03 | 2024-11-11 | | Abby Thompson | 2026-07-11 | 2026-02-02 |
+| Ashley Curry | 2026-08-06 | 2024-12-16 | | Terra | 2026-08-04 | 2026-02-10 |
+| Bonnie Horsburgh | 2026-07-20 | 2025-08-20 | | | | |
+
+Rae's was **`0026-07-22`** — year 26, a separate typo found in passing.
+Dates were only ever moved **backward**; clients whose `start_date` already
+preceded their first log (signed up, started logging days later) were left
+alone. All 11 are past onboarding, so moving the anchor back can't retro-
+satisfy an onboarding phase via `photosSinceEngagement`.
+
+**Tracker parsing produced wrong dates twice before it was right** — traps
+now recorded in [[google_tracker_full_import]]: column layouts differ between
+sheets (Rae's is shifted, so fixed indices read her Calories *formula*, which
+carries a 0 on untouched days, as protein); **column A is not data** (it holds
+`Establish 1` block labels and a `Weight / Start 154` caption that normalises
+to exactly `weight`, so every block label read as a logged weight); and a
+sheet can carry **several header rows with real data above the first one**
+(Abbi's). Final values were checked row-by-row against the raw sheets rather
+than trusted from the parser. Still open for Terra: Abbi at Week 139 logged
+549 of ~972 days, so a break-and-restart may deserve a later anchor, and
+Roxy/Rita/Bonnie each have a starting photo days-to-weeks before their first
+log if "start" should mean first contact.
+
+**Week-average bars → rings, with the target stated.** On the PWA the four
+macro bars ran off the right edge: each needed ~96px, putting a hard 420px
+floor under that row that no `flex-wrap` could shrink. Replaced with a ring
+per macro (value inside, macro + `of {target}` beneath) in a fixed 62px
+column, so all four fit in ~272px and wrap cleanly. Measured at 375px: page
+scroll width equals client width, and **zero** elements overflow outside the
+day table's own intentional horizontal scroller. The ring keeps the bar's
+three-tone ±10% rule **including red**, deliberately NOT `MacroDial`'s
+never-red rule — a finished week's average genuinely can be over target,
+where an in-progress day is only ever "not there yet".
+
+**Tapping a note never worked because it was never wired** — the Note cell was
+plain `numberOfLines={1}` text with no press handler at all, so a long note
+was unreadable from this table. Now a `Pressable` that opens it to full text,
+with a chevron marking any day that has one, and the row switching to
+`items-start` while open so the day's numbers sit on the note's first line.
+Verified by driving a real tap: 16px → 60px, clamp removed.
+
+Rings and the note tap were screenshot- and DOM-verified at 375px and 1440px
+via the login-screen harness (reverted, `git diff` clean). `npx expo export -p
+web` clean. **Not verified behind a real login** — standing limitation.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

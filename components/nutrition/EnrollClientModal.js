@@ -7,13 +7,13 @@ import { fonts, colors } from "../../lib/theme";
 
 // "+ Enroll client" on the Nutrition queue (coach web v2, screen 17).
 //
-// Nutrition enrolment already existed — as a switch buried on the client's
+// Nutrition enrollment already existed — as a switch buried on the client's
 // programming page, which is the wrong place to look for it when you're
 // standing in the nutrition module. Same underlying call
 // (createOrReactivateClient), reachable from where the job actually starts.
 //
 // Search is by name, not email: an admin is far more likely to recognise the
-// person than their address, and a mistyped address here would enrol the
+// person than their address, and a mistyped address here would enroll the
 // wrong person silently. Anyone who already has a nutrition row is excluded
 // outright rather than shown and rejected on tap.
 export function EnrollClientModal({ visible, existingClientIds, onClose, onEnrolled }) {
@@ -48,7 +48,7 @@ export function EnrollClientModal({ visible, existingClientIds, onClose, onEnrol
       await onEnrolled(member.id);
       onClose();
     } catch (err) {
-      toastError("Failed to enrol", err);
+      toastError("Failed to enroll", err);
     } finally {
       setBusyId(null);
     }
@@ -59,7 +59,7 @@ export function EnrollClientModal({ visible, existingClientIds, onClose, onEnrol
       <View className="flex-1 items-center justify-center px-4" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
         <View className="w-full rounded-2xl bg-white" style={{ maxWidth: 460, maxHeight: "80%" }}>
           <View className="px-5 pb-3 pt-5">
-            <Text style={{ fontFamily: fonts.display, fontSize: 20, color: colors.primary }}>Enrol a nutrition client</Text>
+            <Text style={{ fontFamily: fonts.display, fontSize: 20, color: colors.primary }}>Enroll a nutrition client</Text>
             <Text className="mt-1" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
               Anyone already on nutrition is left out of this list.
             </Text>
@@ -104,7 +104,7 @@ export function EnrollClientModal({ visible, existingClientIds, onClose, onEnrol
                     </Text>
                   </View>
                   <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
-                    {busyId === member.id ? "Enrolling…" : "Enrol →"}
+                    {busyId === member.id ? "Enrolling…" : "Enroll →"}
                   </Text>
                 </Pressable>
               ))

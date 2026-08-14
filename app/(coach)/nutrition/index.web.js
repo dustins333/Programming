@@ -194,7 +194,7 @@ export default function NutritionQueue() {
       })}
       {roster.length === 0 ? (
         <Text className="p-6" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
-          No nutrition clients yet — enrol one above.
+          No nutrition clients yet — enroll one above.
         </Text>
       ) : null}
     </View>
@@ -221,7 +221,7 @@ export default function NutritionQueue() {
                 <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Archived</Text>
               </Pressable>
             </Link>
-            <HeaderButton label="+ Enrol client" primary onPress={() => setEnrolling(true)} />
+            <HeaderButton label="+ Enroll client" primary onPress={() => setEnrolling(true)} />
           </View>
         </View>
 

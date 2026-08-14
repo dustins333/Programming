@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Text, Pressable, Image, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { MacroRingRow, LoggingDots } from "./MacroRingRow";
-import { getQueuePreview, weekOnProgramme, weekDates } from "../../lib/nutrition/queue";
+import { getQueuePreview, weekOnProgram, weekDates } from "../../lib/nutrition/queue";
 import { metricDeltas } from "../../lib/nutrition/checkinAnswers";
 import { deriveCalories } from "../../lib/nutrition/targets";
 import { formatDateMD } from "../../lib/formatDate";
@@ -181,7 +181,7 @@ export function QueuePreview({ client, today }) {
   }, [client.userId, today]);
 
   const href = `/(coach)/nutrition/clients/${client.userId}`;
-  const weekNumber = weekOnProgramme(client.startDate, today);
+  const weekNumber = weekOnProgram(client.startDate, today);
 
   if (error) {
     return (

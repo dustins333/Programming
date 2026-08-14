@@ -1,6 +1,6 @@
 import { View, Text, Pressable } from "react-native";
 import { STATUS_META } from "../../lib/nutrition/rosterStatus";
-import { weekOnProgramme } from "../../lib/nutrition/queue";
+import { weekOnProgram } from "../../lib/nutrition/queue";
 import { dateInBoise, daysBetween } from "../../lib/boiseDate";
 import { fonts, colors } from "../../lib/theme";
 
@@ -36,7 +36,7 @@ function initials(name) {
 // check-in wants "how long has this been sitting", an onboarding client
 // wants "which step".
 function subline(client, today) {
-  const week = weekOnProgramme(client.startDate, today);
+  const week = weekOnProgram(client.startDate, today);
   const weekPart = week ? ` · week ${week}` : "";
 
   if (client.rosterStatus === "readyForCheckin") {
