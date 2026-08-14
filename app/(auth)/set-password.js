@@ -1,8 +1,23 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
+import { View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase/client";
+import { KovaDisc } from "../../components/auth/KovaCoin";
+import { AuthField } from "../../components/auth/AuthFields";
+import {
+  AuthFooter,
+  AuthScreen,
+  Body,
+  ErrorLine,
+  Heading,
+  PrimaryButton,
+} from "../../components/auth/AuthChrome";
 
+// Not one of the handoff's seven frames, but it's where "Email me a link
+// instead" actually lands — the fallback the other two screens offer ends
+// here, so leaving it on the old white treatment put a seam at the end of
+// the one flow the redesign exists to support. Same shell as the code step
+// it mirrors.
 export default function SetPassword() {
   const { token_hash: tokenHash, type } = useLocalSearchParams();
   const [password, setPassword] = useState("");
@@ -40,52 +55,47 @@ export default function SetPassword() {
     }
   };
 
+  const disabled = loading || password.length < 8;
+
   return (
-    <View className="flex-1 justify-center bg-white px-6">
-      <Text className="mb-2 text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
-        Set your password
-      </Text>
-      <Text className="mb-6 text-base text-stone-600" style={{ fontFamily: "Montserrat_400Regular" }}>
-        Choose a password for your Kova Strength account.
-      </Text>
+    <AuthScreen contentStyle={{ paddingHorizontal: 28 }}>
+      <View style={{ paddingTop: 44, marginBottom: 24 }}>
+        <KovaDisc />
+      </View>
+
+      <Heading style={{ marginBottom: 10 }}>Set your password.</Heading>
+      <Body style={{ marginBottom: 26 }}>Choose a password for your Kova Strength account.</Body>
 
       {!tokenHash ? (
-        <Text className="text-sm text-red-600" style={{ fontFamily: "Montserrat_400Regular" }}>
-          This link is missing or invalid. Request a new one from the sign-in screen.
-        </Text>
+        <ErrorLine message="This link is missing or invalid. Request a new one from the sign-in screen." />
       ) : (
         <>
-          <TextInput
+          <AuthField
+            label="NEW PASSWORD"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            placeholder="New password"
+            secureToggle
             autoCapitalize="none"
             autoComplete="new-password"
             textContentType="newPassword"
-            placeholder="New password"
-            className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
-            style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
+            hint="At least 8 characters."
+            returnKeyType="go"
+            onSubmitEditing={disabled ? undefined : handleSetPassword}
+            style={{ marginBottom: 18 }}
           />
-          {errorMessage ? (
-            <Text className="mb-4 text-sm text-red-600" style={{ fontFamily: "Montserrat_400Regular" }}>
-              {errorMessage}
-            </Text>
-          ) : null}
-          <Pressable
+
+          <ErrorLine message={errorMessage} />
+
+          <PrimaryButton
+            label={loading ? "Saving…" : "Set password"}
             onPress={handleSetPassword}
-            disabled={loading || password.length < 8} style={{ opacity: loading || password.length < 8 ? 0.5 : 1 }}
-            className="mt-4 items-center rounded-lg bg-primary py-3.5"
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text className="text-base text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
-                Set password
-              </Text>
-            )}
-          </Pressable>
+            disabled={disabled}
+          />
         </>
       )}
-    </View>
+
+      <AuthFooter onBack={() => router.replace("/login")} />
+    </AuthScreen>
   );
 }

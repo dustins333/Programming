@@ -2556,6 +2556,82 @@ branch. Clean `expo export -p web`, and zero `disabled:opacity-50` left
 outside explanatory comments.
 
 
+## Member auth v1 design pass — clay screens + the ray-traced coin (2026-08-13)
+
+A design handoff (`design_handoff_member_auth_v1/` — README + `.dc.html`,
+approved direction **11a**, clay field with the spinning coin) drove a full
+restyle of everything under `app/(auth)/`: login, reset-password, register —
+**and set-password**, which isn't one of the handoff's seven frames but is
+where "Email me a link instead" actually lands, so leaving it white would
+have put a seam at the end of the exact fallback the redesign supports.
+
+New `components/auth/`: `AuthChrome.js` (full-bleed clay shell + overlay
+blobs; sets `StatusBar style="light"` — expo-status-bar's last-mounted
+instance wins, so this overrides the root layout's `dark` only while an auth
+screen is up; `PrimaryButton` swaps its label for "Sending…"/"Signing you
+in…" when busy instead of adding an ActivityIndicator, since per the handoff
+the coin is this app's only spinner; error text is cream `#ffe4d8` — the old
+red-600 sits at roughly 2:1 against clay and effectively disappears),
+`AuthFields.js` (translucent field with focus border + Show/Hide password
+toggle; `CodeInput` renders six display boxes over **one** invisible
+`TextInput` carrying `autoComplete="one-time-code"`/`textContentType`, so
+SMS autofill still lands exactly as it did on the single field — six real
+inputs would each be a one-character field and break it), and `KovaCoin.js`
+(below). Handoff departures shipped: six-box code entry, "At least 8
+characters." stated under the password field, and the round `←` goes one
+step back within a flow (replacing the old "Use a different email" link)
+while `‹ Back to sign in` remains the exit. The screens' old
+`KeyboardAvoidingView` wrappers are gone — `AuthScreen`'s ScrollView uses
+`automaticallyAdjustKeyboardInsets` (iOS-only; Android's adjustResize and
+web's visual viewport already handle it), since a KAV inside a ScrollView
+fights the scroll instead of helping.
+
+**The coin is pre-rendered — a ray-traced sprite sheet, not live layers —
+and the path there is the most instructive part.** Five successive 2D
+composites failed, each in a way web verification could not catch (Terra
+was watching live on her phone via the dev server the whole time, which is
+what caught every one — that feedback loop is worth deliberately recreating
+for anything visual+native):
+
+1. RN has no `translateZ`/`preserve-3d` (checked the installed style types),
+   so the mock's 13-disc CSS edge can't be built live at all.
+2. `perspective` + `translateX` + `rotateY` composes the shift *before*
+   projection — the rim rendered ~2× too wide with a seam. Orthographic
+   (`scaleX(|cosθ|)`) makes offsets exact.
+3. Two `<Svg>`s in one component sharing a gradient id: fine on web
+   (duplicate ids resolve to the first identical definition), unresolved →
+   transparent fills on native. The rim vanished; only a centre bar was
+   left — "a spool".
+4. Opacity-driven face culling let the far face bleed through on a real
+   phone while web rendered it perfectly.
+5. The rim fill itself: a clay-family bronze read as the wall showing
+   through ("transparent"); flat black read as a void; a white ring on the
+   rim disc read as the far face leaking (the mock gets away with that trick
+   only because both its faces are white — this coin has a black reverse).
+
+Final architecture: `scripts/render_coin.py` (a ~100-line numpy ray-tracer)
+bakes a real cylinder — logo obverse, inverted logo sampled mirrored on the
+reverse like a struck coin, machined steel edge, one key light — into
+`assets/kova-coin-sheet.webp`: **120 frames in a 12×10 grid** of 300px cells
+(a 120-frame vertical strip would be 36,000px tall, past iOS's 16,384
+texture cap). 40 frames was tried first and Terra immediately read ~9fps as
+jumpy; 120 gives 3°/step at ~27fps. q92 WebP, 1.7MB bundled, ~43MB decoded
+while the screen is up (Metro bundles webp; iOS 14+/Android/browsers decode
+it natively). The player in `KovaCoin.js` is a rAF + setState frame index
+driving `translateX/Y` on one Image inside an overflow-hidden window —
+no SVG, no perspective, no backfaceVisibility, no opacity switching
+anywhere. The bob and shadow stay live `Animated` transform loops, the one
+kind of animation that never misbehaved. `KovaDisc` (flat 58px disc) is the
+static header for the reset/register/set-password screens.
+
+**Preview-pane blind spots reconfirmed the hard way**: rAF is frozen in the
+hidden Browser pane, so no animation can be verified there (only static
+frames/math), and the console error log *accumulates stale errors across
+HMR edits* — a transient mid-edit error (including another session's) reads
+as current; only a fresh tab gives a trustworthy zero. Verification: web
+screenshot/DOM-measured throughout, native confirmed by Terra live on her
+phone at every step, including the final smooth spin.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

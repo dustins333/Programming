@@ -1,8 +1,21 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { Text, View } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase/client";
-import { NUMERIC_DONE_ID } from "../../components/NumericInputAccessory";
+import { toastSuccess } from "../../lib/toast";
+import { KovaDisc } from "../../components/auth/KovaCoin";
+import { AuthField, CodeInput } from "../../components/auth/AuthFields";
+import {
+  AuthFooter,
+  AuthScreen,
+  BackButton,
+  Body,
+  ErrorLine,
+  Heading,
+  LinkButton,
+  PrimaryButton,
+} from "../../components/auth/AuthChrome";
+import { fonts } from "../../lib/theme";
 
 // Same reason as register.js — functions.invoke() doesn't parse a non-2xx
 // body into `data`, so error.message is always the generic "Edge Function
@@ -91,7 +104,7 @@ export default function ResetPassword() {
     }
   };
 
-  const handleEmailLink = async () => {
+  const handleEmailLink = async ({ resend = false } = {}) => {
     setErrorMessage(null);
     setLoading(true);
     try {
@@ -102,6 +115,7 @@ export default function ResetPassword() {
         setErrorMessage(error.message);
         return;
       }
+      if (resend) toastSuccess("Link sent again.");
       setStep("emailSent");
     } catch (err) {
       setErrorMessage(err.message ?? String(err));
@@ -110,155 +124,158 @@ export default function ResetPassword() {
     }
   };
 
-  // Dimming is an inline style, not Tailwind's `disabled:opacity-50`:
-  // NativeWind sets aria-disabled but leaves opacity at 1, so a disabled
-  // button renders fully saturated and reads as "tapping does nothing"
-  // rather than "you're not done yet" (measured in the browser — the same
-  // variant is inert on login.js/register.js too).
   const emailStepDisabled = loading || !email;
   const verifyDisabled = loading || code.length !== 6 || password.length < 8;
+  const backToSignIn = () => router.replace("/login");
 
-  const errorLine = errorMessage ? (
-    <Text className="mb-4 text-sm text-red-600" style={{ fontFamily: "Montserrat_400Regular" }}>
-      {errorMessage}
-    </Text>
-  ) : null;
+  if (step === "emailSent") {
+    return (
+      <AuthScreen>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 28,
+          }}
+        >
+          <View
+            style={{
+              width: 76,
+              height: 76,
+              borderRadius: 38,
+              backgroundColor: "rgba(250,248,246,0.96)",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 26,
+              shadowColor: "#2a211c",
+              shadowOpacity: 0.22,
+              shadowRadius: 15,
+              shadowOffset: { width: 0, height: 12 },
+              elevation: 5,
+            }}
+          >
+            <Text allowFontScaling={false} style={{ fontSize: 34, color: "#4d6142" }}>
+              ✓
+            </Text>
+          </View>
+          <Heading style={{ fontSize: 32, lineHeight: 35, textAlign: "center", marginBottom: 10 }}>
+            Link sent.
+          </Heading>
+          <Body style={{ textAlign: "center", maxWidth: 275 }}>
+            Check <Text style={{ fontFamily: fonts.sansBold, color: "#fff" }}>{email}</Text> for a link to set a
+            new password.
+          </Body>
+          <View style={{ width: "100%", marginTop: 32 }}>
+            <PrimaryButton label="Back to sign in" onPress={backToSignIn} />
+          </View>
+        </View>
+
+        <View style={{ paddingHorizontal: 28, paddingBottom: 34, alignItems: "center", flexDirection: "row", justifyContent: "center" }}>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "rgba(255,255,255,0.7)" }}>
+            Nothing after a minute?{" "}
+          </Text>
+          <LinkButton
+            label="Resend"
+            onPress={() => handleEmailLink({ resend: true })}
+            disabled={loading}
+            style={{ paddingVertical: 0 }}
+          />
+        </View>
+      </AuthScreen>
+    );
+  }
+
+  const isEmailStep = step === "email";
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1 bg-white">
-      <View className="flex-1 justify-center px-6">
-        <Text className="mb-2 text-2xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
-          Reset your password
-        </Text>
-
-        {step === "emailSent" ? (
-          <>
-            <Text className="mb-6 text-base text-stone-600" style={{ fontFamily: "Montserrat_400Regular" }}>
-              Check {email} for a link to set a new password.
-            </Text>
-            <Pressable onPress={() => router.replace("/login")} className="items-center rounded-lg bg-primary py-3.5">
-              <Text className="text-base text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
-                Back to sign in
-              </Text>
-            </Pressable>
-          </>
-        ) : step === "email" ? (
-          <>
-            <Text className="mb-6 text-base text-stone-600" style={{ fontFamily: "Montserrat_400Regular" }}>
-              Enter the email your gym has on file. We'll text a code to the phone number on your account.
-            </Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              placeholder="Email"
-              className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
-              style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
-            />
-            {errorLine}
-            <Pressable
-              onPress={handleSendCode}
-              disabled={emailStepDisabled}
-              className="items-center rounded-lg bg-primary py-3.5"
-              style={{ opacity: emailStepDisabled ? 0.5 : 1 }}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-base text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
-                  Text me a code
-                </Text>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={handleEmailLink}
-              disabled={emailStepDisabled}
-              className="mt-4 items-center"
-              style={{ opacity: emailStepDisabled ? 0.5 : 1 }}
-            >
-              <Text className="text-sm" style={{ fontFamily: "Montserrat_600SemiBold", color: "#8a5140" }}>
-                Email me a link instead
-              </Text>
-            </Pressable>
-          </>
-        ) : (
-          <>
-            <Text className="mb-6 text-base text-stone-600" style={{ fontFamily: "Montserrat_400Regular" }}>
-              Enter the code we texted you, and choose a new password.
-            </Text>
-            <TextInput
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
-              // Explicit, so babel/noAutofillPlugin.js leaves it alone —
-              // this field genuinely wants autofill from the SMS.
-              autoComplete="one-time-code"
-              textContentType="oneTimeCode"
-              inputAccessoryViewID={NUMERIC_DONE_ID}
-              placeholder="6-digit code"
-              maxLength={6}
-              className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
-              style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
-            />
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="new-password"
-              textContentType="newPassword"
-              placeholder="New password"
-              className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
-              style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
-            />
-            {errorLine}
-            <Pressable
-              onPress={handleVerify}
-              disabled={verifyDisabled}
-              className="mt-2 items-center rounded-lg bg-primary py-3.5"
-              style={{ opacity: verifyDisabled ? 0.5 : 1 }}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-base text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
-                  Reset & sign in
-                </Text>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={handleEmailLink}
-              disabled={loading}
-              className="mt-4 items-center"
-              style={{ opacity: loading ? 0.5 : 1 }}
-            >
-              <Text className="text-sm" style={{ fontFamily: "Montserrat_600SemiBold", color: "#8a5140" }}>
-                Didn't get the text? Email me a link instead
-              </Text>
-            </Pressable>
-            <Pressable onPress={() => setStep("email")} className="mt-3 items-center">
-              <Text className="text-sm" style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140" }}>
-                Use a different email
-              </Text>
-            </Pressable>
-          </>
-        )}
-
-        {/* The emailSent branch above already offers this; the other
-            branches had no way out at all. (auth)/_layout.js is a bare
-            <Slot/> with no Stack and native runs headerShown:false, so
-            there's no back gesture either. */}
-        {step === "emailSent" ? null : (
-          <Pressable onPress={() => router.replace("/login")} className="mt-6 items-center">
-            <Text className="text-sm" style={{ fontFamily: "Montserrat_600SemiBold", color: "#8a5140" }}>
-              ‹ Back to sign in
-            </Text>
-          </Pressable>
-        )}
+    <AuthScreen contentStyle={{ paddingHorizontal: 28 }}>
+      <View style={{ paddingTop: 14, marginBottom: 30 }}>
+        {/* One step back, not all the way out — on the code step this is
+            what "use a different email" used to be. `‹ Back to sign in`
+            below is the exit. */}
+        <BackButton onPress={isEmailStep ? backToSignIn : () => setStep("email")} />
       </View>
-    </KeyboardAvoidingView>
+
+      {isEmailStep ? (
+        <>
+          <View style={{ marginBottom: 24 }}>
+            <KovaDisc />
+          </View>
+          <Heading style={{ marginBottom: 10 }}>Reset your password.</Heading>
+          <Body style={{ marginBottom: 26 }}>
+            Enter the email your gym has on file. We'll text a code to the phone number on your account.
+          </Body>
+
+          <AuthField
+            label="EMAIL"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            returnKeyType="go"
+            onSubmitEditing={emailStepDisabled ? undefined : handleSendCode}
+            style={{ marginBottom: 18 }}
+          />
+
+          <ErrorLine message={errorMessage} />
+
+          <PrimaryButton
+            label={loading ? "Sending…" : "Text me a code"}
+            onPress={handleSendCode}
+            disabled={emailStepDisabled}
+          />
+          <LinkButton
+            label="Email me a link instead"
+            onPress={handleEmailLink}
+            disabled={emailStepDisabled}
+            style={{ marginTop: 14 }}
+          />
+        </>
+      ) : (
+        <>
+          <Heading style={{ marginBottom: 10 }}>Check your texts.</Heading>
+          <Body style={{ marginBottom: 26 }}>
+            Enter the 6-digit code we sent, then pick a new password.
+          </Body>
+
+          <CodeInput value={code} onChangeText={setCode} style={{ marginBottom: 18 }} />
+
+          <AuthField
+            label="NEW PASSWORD"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="New password"
+            secureToggle
+            autoCapitalize="none"
+            autoComplete="new-password"
+            textContentType="newPassword"
+            // Stated, not just enforced by a dimmed button — the rule used
+            // to be invisible until you'd already failed it.
+            hint="At least 8 characters."
+            style={{ marginBottom: 18 }}
+          />
+
+          <ErrorLine message={errorMessage} />
+
+          <PrimaryButton
+            label={loading ? "Signing you in…" : "Reset & sign in"}
+            onPress={handleVerify}
+            disabled={verifyDisabled}
+          />
+          <LinkButton
+            label="Didn't get the text? Email me a link instead"
+            onPress={handleEmailLink}
+            disabled={loading}
+            style={{ marginTop: 14 }}
+          />
+        </>
+      )}
+
+      <AuthFooter onBack={backToSignIn} />
+    </AuthScreen>
   );
 }

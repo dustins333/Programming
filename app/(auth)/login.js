@@ -1,16 +1,17 @@
 import { useRef, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Linking,
-} from "react-native";
-import { Link, router } from "expo-router";
+import { Text, View } from "react-native";
+import { router } from "expo-router";
 import { supabase } from "../../lib/supabase/client";
+import { KovaCoin } from "../../components/auth/KovaCoin";
+import { AuthField } from "../../components/auth/AuthFields";
+import {
+  AuthScreen,
+  ErrorLine,
+  LinkButton,
+  PrimaryButton,
+  AuthFooter,
+} from "../../components/auth/AuthChrome";
+import { fonts } from "../../lib/theme";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -41,25 +42,40 @@ export default function Login() {
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      className="flex-1 bg-white"
-    >
-      <View className="flex-1 justify-center px-6">
-        <Text className="mb-1 text-center text-3xl text-primary" style={{ fontFamily: "ProtestStrike_400Regular" }}>
-          Kova Strength
-        </Text>
-        <Text className="mb-8 text-center text-base text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
-          Sign in to your account
-        </Text>
+  // The coin at 110px/1.1s IS the loading state — this app's only spinner.
+  // Email/password live above this early return, so an error lands back on
+  // a filled-in form rather than an empty one.
+  if (loading) return <SigningIn />;
 
-        <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-          Email
+  return (
+    <AuthScreen>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 32, paddingBottom: 8 }}>
+        <KovaCoin size={140} />
+        <Text
+          maxFontSizeMultiplier={1.1}
+          style={{ fontFamily: fonts.display, fontSize: 40, lineHeight: 42, letterSpacing: -0.4, color: "#fff", marginTop: 26 }}
+        >
+          KOVA
         </Text>
-        <TextInput
+        <Text
+          maxFontSizeMultiplier={1.1}
+          style={{
+            fontFamily: fonts.sansBold,
+            fontSize: 10,
+            letterSpacing: 3.2,
+            color: "rgba(255,255,255,0.7)",
+            marginTop: 9,
+          }}
+        >
+          STRENGTH
+        </Text>
+      </View>
+
+      <View style={{ paddingHorizontal: 28 }}>
+        <AuthField
           value={email}
           onChangeText={setEmail}
+          placeholder="Email"
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
@@ -67,77 +83,72 @@ export default function Login() {
           returnKeyType="next"
           onSubmitEditing={() => passwordRef.current?.focus()}
           blurOnSubmit={false}
-          className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
-          style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
+          style={{ marginBottom: 12 }}
         />
-
-        <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-          Password
-        </Text>
-        <TextInput
+        <AuthField
           ref={passwordRef}
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
+          placeholder="Password"
+          secureToggle
           autoCapitalize="none"
           autoComplete="password"
           textContentType="password"
           returnKeyType="go"
           onSubmitEditing={handleSignIn}
-          className="mb-2 rounded-lg border border-stone-300 px-4 py-3"
-          style={{ fontFamily: "Montserrat_400Regular", fontSize: 16, lineHeight: 22 }}
+          style={{ marginBottom: 18 }}
         />
 
-        <Link
-          href="/reset-password"
-          className="mb-2 self-end text-sm"
-          style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140" }}
-        >
-          Forgot / set up password?
-        </Link>
+        <ErrorLine message={errorMessage} />
 
-        <Link
-          href="/register"
-          className="mb-6 self-end text-sm"
-          style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140" }}
-        >
-          New here? Set up your account
-        </Link>
+        <PrimaryButton label="Sign in" onPress={handleSignIn} disabled={!email || !password} />
 
-        {errorMessage ? (
-          <Text className="mb-4 text-sm text-red-600" style={{ fontFamily: "Montserrat_400Regular" }}>
-            {errorMessage}
-          </Text>
-        ) : null}
-
-        {/* Dimming is inline, not Tailwind's `disabled:opacity-50` —
-            NativeWind sets aria-disabled but leaves opacity at 1, so the
-            button rendered fully saturated while inert and read as "tapping
-            does nothing" instead of "fill both fields in". */}
-        <Pressable
-          onPress={handleSignIn}
-          disabled={loading || !email || !password}
-          className="items-center rounded-lg bg-primary py-3.5"
-          style={{ opacity: loading || !email || !password ? 0.5 : 1 }}
-        >
-          {loading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text className="text-base text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
-              Sign In
-            </Text>
-          )}
-        </Pressable>
-
-        <Pressable
-          onPress={() => Linking.openURL("https://kovastrength.com/privacy-policy/")}
-          className="mt-6 items-center"
-        >
-          <Text className="text-xs text-stone-400" style={{ fontFamily: "Montserrat_400Regular" }}>
-            Privacy Policy
-          </Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 }}>
+          <LinkButton
+            label="Forgot password?"
+            tone="soft"
+            onPress={() => router.push("/reset-password")}
+            style={{ alignItems: "flex-start" }}
+          />
+          <LinkButton
+            label="New here?"
+            onPress={() => router.push("/register")}
+            style={{ alignItems: "flex-end" }}
+          />
+        </View>
       </View>
-    </KeyboardAvoidingView>
+
+      <AuthFooter />
+    </AuthScreen>
+  );
+}
+
+function SigningIn() {
+  return (
+    <AuthScreen scroll={false}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <KovaCoin size={110} duration={1100} bob={false} shadow={false} />
+        <Text
+          maxFontSizeMultiplier={1.2}
+          style={{
+            fontFamily: fonts.sansSemiBold,
+            fontSize: 12.5,
+            letterSpacing: 0.5,
+            color: "rgba(255,255,255,0.8)",
+            marginTop: 30,
+          }}
+        >
+          Signing you in…
+        </Text>
+      </View>
+      <View style={{ alignItems: "center", paddingBottom: 34 }}>
+        <Text
+          maxFontSizeMultiplier={1.1}
+          style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 3, color: "rgba(255,255,255,0.45)" }}
+        >
+          KOVA STRENGTH
+        </Text>
+      </View>
+    </AuthScreen>
   );
 }
