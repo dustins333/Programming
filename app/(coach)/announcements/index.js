@@ -11,12 +11,15 @@ import {
   deleteAnnouncement,
   pushAnnouncementNow,
 } from "../../../lib/programming/announcements";
-import { formatDateTimeInBoise, boiseInstantFrom, dateInBoise, todayInBoise, addDays } from "../../../lib/boiseDate";
+import { formatDateTimeInBoise, boiseInstantFrom } from "../../../lib/boiseDate";
+import { buildDateOptions, TIME_OPTIONS, roundUpToQuarterHour, toDateValue, toTimeValue } from "../../../lib/dateTimeOptions";
 import { confirmDeleteAnnouncement } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { GraphicPicker } from "../../../components/GraphicPicker";
+import { GraphicImage } from "../../../components/GraphicImage";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 
@@ -43,70 +46,9 @@ function audienceLabel(announcement, groupPrograms) {
   return found ? found.label : announcement.target_type;
 }
 
-// Deliberately not <input type="datetime-local"> — cross-browser behavior
-// for that control is genuinely inconsistent (Safari in particular doesn't
-// auto-close on date selection the way Chrome does, and support for a
-// combined date+time picker with a `step` restricting minute granularity
-// is spotty), and it read as broken in practice. A plain <select> (web) /
-// modal list (native) fed by the same explicit option lists is slower to
-// scan but behaves identically everywhere — same reasoning as every other
-// web/native form control split in this app.
-// Both read the instant in BOISE, not device-local, so the default the
-// picker opens on is the same clock the coach is scheduling against.
-function toDateValue(date) {
-  return dateInBoise(date);
-}
-
-function toTimeValue(date) {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "America/Boise",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-}
-
-// scan-announcements only scans every 15 minutes anyway (0025's cron
-// schedule) — picking anything finer would just be a false promise of
-// precision, so TIME_OPTIONS below only ever offers :00/:15/:30/:45, and
-// this rounds the default suggested time up to match.
-function roundUpToQuarterHour(date) {
-  const ms = 15 * 60 * 1000;
-  return new Date(Math.ceil(date.getTime() / ms) * ms);
-}
-
-function buildTimeOptions() {
-  const options = [];
-  for (let h = 0; h < 24; h += 1) {
-    for (const m of [0, 15, 30, 45]) {
-      const pad = (n) => String(n).padStart(2, "0");
-      const period = h < 12 ? "AM" : "PM";
-      const h12 = h % 12 === 0 ? 12 : h % 12;
-      options.push({ value: `${pad(h)}:${pad(m)}`, label: `${h12}:${pad(m)} ${period}` });
-    }
-  }
-  return options;
-}
-const TIME_OPTIONS = buildTimeOptions();
-
-// Built from the Boise date, so "Today" means today at the gym even when
-// the coach's device disagrees.
-function buildDateOptions(daysAhead) {
-  const options = [];
-  const today = todayInBoise();
-  for (let i = 0; i < daysAhead; i += 1) {
-    const value = addDays(today, i);
-    // Parsed at noon so the weekday label can't roll to the wrong day.
-    const label =
-      i === 0
-        ? "Today"
-        : i === 1
-        ? "Tomorrow"
-        : new Date(`${value}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-    options.push({ value, label });
-  }
-  return options;
-}
+// The date/time option lists moved to lib/dateTimeOptions.js once the event
+// composer needed the same scheduling controls — see that file's header for
+// why these are explicit <select>/modal lists rather than datetime-local.
 
 // Native's stand-in for <select> — see components/NativePickerField.js,
 // extracted from here so PayrollOtherRow's own native type picker could
@@ -121,6 +63,7 @@ export default function Announcements() {
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [imagePath, setImagePath] = useState(null);
   // KeyboardDoneButton floats above the keyboard on iOS (app/_layout.js) —
   // extra bottom padding when it's showing keeps it from covering the
   // Message field. See lib/scrollToKeyboard.js.
@@ -168,6 +111,7 @@ export default function Announcements() {
   const resetForm = () => {
     setTitle("");
     setMessage("");
+    setImagePath(null);
     setAudience("all");
     setTargetGroupProgramId(null);
     setRequiresReload(false);
@@ -201,7 +145,7 @@ export default function Announcements() {
     try {
       const sendAt = resolveSendAt();
       const created = await createAnnouncement(
-        { title, message, sendAt, targetType: audience, targetGroupProgramId, requiresReload },
+        { title, message, sendAt, targetType: audience, targetGroupProgramId, requiresReload, imagePath },
         profile.id
       );
       if (timing === "now") {
@@ -266,6 +210,8 @@ export default function Announcements() {
         </Text>
 
         <View className="mb-8 max-w-xl rounded-2xl border border-stone-200 p-5">
+          <GraphicPicker value={imagePath} onChange={setImagePath} folder="announcements" />
+
           <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
             Title
           </Text>
@@ -427,6 +373,11 @@ export default function Announcements() {
             const isFuture = new Date(a.send_at) > new Date();
             return (
               <View key={a.id} className="mb-2 max-w-xl flex-row items-start justify-between rounded-xl border border-stone-200 p-4">
+                {a.image_path ? (
+                  <View className="mr-3" style={{ width: 44 }}>
+                    <GraphicImage path={a.image_path} minRatio={1} radius={8} />
+                  </View>
+                ) : null}
                 <View className="flex-1 pr-3">
                   <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{a.title}</Text>
                   <Text className="mt-0.5 text-sm text-stone-500" style={{ fontFamily: fonts.sans }} numberOfLines={2}>

@@ -2556,6 +2556,127 @@ branch. Clean `expo export -p web`, and zero `disabled:opacity-50` left
 outside explanatory comments.
 
 
+## Announcement graphics + a member Events tab (2026-08-13)
+
+Two deliverables from one ask: attach a Canva export to an announcement, and
+a members' Events tab for bring-a-friend days, class registrations, and
+supplement/merch orders. Plan at
+`/Users/Dustin/.claude/plans/events-tab-and-announcement-graphics.md`.
+
+**Decisions confirmed with Terra before building**: order forms are *items with
+options* (S/M/L, Vanilla/Chocolate), not bare item+qty and not a priced
+catalog; **admin only** composes; publishing *optionally* announces (a
+per-event checkbox); events **auto-hide when they close**.
+
+**There is deliberately NO on/off switch for the Events tab.** Terra's own
+call once auto-hide was on the table — "i dont need the master switch."
+`useHasEvents` (`lib/programming/useEventsAccess.js`) makes the tab exist
+exactly while a live event is targeted at that member; unpublishing is the
+emergency brake for taking something down before its date, which is why every
+live row on the admin list carries a one-tap "Take down". The hook defaults
+**hidden** while loading and on error — the opposite of `useHasFitness`, and
+for a real reason: hiding My Fitness takes a tab from someone who genuinely
+trains, whereas Events is additive, empty most weeks, and has the
+announcement/push as its actual notification channel.
+
+**Graphics live in a new PUBLIC `graphics` bucket** (migration `0060`, created
+in SQL rather than by hand), separate from nutrition's private `photos`. A
+poster is for the whole gym, signed URLs expire out from under a card that
+stays on screen, and a public URL is the only kind that could ever be embedded
+in a push later — so **nothing client-specific may ever be written there**.
+`lib/nutrition/imagePicker.js` moved to `lib/imagePicker.js` (it was never
+nutrition-specific) and gained width/quality options: graphics run wider and
+less compressed (1400px @ 0.85) because flat text on a solid background is the
+worst case for JPEG ringing.
+
+**Announce-on-publish reuses the announcement pipeline rather than adding
+push infra.** "Also announce this" writes a normal `programming.announcements`
+row carrying the same `image_path` plus a new `event_id`, then calls the
+existing `pushAnnouncementNow` — so the event lands in Announcements history
+for free, the popup gains a "View details" button, and the only server change
+was one line in `_shared/announcementAudience.ts` adding `url:
+/events/<id>` to the push payload (both `send-announcement` and
+`scan-announcements` call that shared helper; both redeployed,
+`scan-announcements` kept `--no-verify-jwt`, flags verified after). Announcing
+is best-effort and separate from publishing: a push failure reads as "the
+announcement didn't go out", never "publishing failed". `alsoAnnounce`
+defaults **off** once `pushed_at` is set, so take-down-and-republish can't
+notify everyone twice.
+
+**Audience resolution was extracted** into `lib/programming/audience.js` and
+shared with announcements rather than copied a third time.
+
+**Four real bugs found by verification, not review** — all four survived a
+clean `expo export`:
+- **`maxHeight` fights `aspectRatio` in RN.** The box keeps its 100% width,
+  clamps its height and breaks the ratio, so a 4:5 poster rendered in a
+  landscape box with grey bars down both sides. A height budget has to be
+  spent as a **width** cap (`maxWidth = budget × ratio`), which bounds height
+  implicitly. Measured: 208×260 at ratio 0.800, and 146×260 for a 9:16.
+- **`closesAt.slice(0, 10)`** printed a close date one day late — the same
+  UTC-vs-Boise class this file already warns about. Uses `dateInBoise` now.
+- **`colors` was never imported** into `app/(member)/index.js` for the new
+  teaser. Metro doesn't resolve identifiers, so the bundle was clean and it
+  would have thrown at render.
+- **A failed graphic reserved a 260px grey box** above the announcement title.
+  Renders nothing now.
+
+**Two storage findings worth remembering**: `supabase storage rm
+--experimental` still returns `{"deleted":[]}` and does not delete (already
+noted in this file) — and the documented SQL fallback **no longer works
+either**: deleting from `storage.objects` now raises `42501: Direct deletion
+from storage tables is not allowed` from a `storage.protect_delete()` trigger.
+Deleting a stored object needs the Storage API with a JWT that satisfies the
+bucket's own RLS, i.e. the dashboard or a logged-in admin.
+
+**Verification**: RLS was tested against the live DB by impersonating a real
+member inside a rolled-back transaction (`set_config('request.jwt.claims')` +
+`set local role authenticated`) — the member saw only the published,
+not-yet-closed event, only that event's items (not a draft's), and none of
+another member's responses. Both migrations are **run and verified**; PostgREST
+returns `[]` rather than PGRST205. The announcement popup (with and without a
+graphic, both aspect ratios, long-message overflow), the member event cards,
+the order stepper, the choice question and the coach item editor were all
+rendered and screenshotted, and the quantity stepper driven for real. **Not
+verified**: anything behind a real login — the composer end-to-end, a real
+publish, a real member order, and the CSV. Standing limitation.
+
+**Same-day follow-up from Terra's first click-through** (migration `0062`,
+**run and verified**): a sign-up event used to *always* ask how many guests
+you're bringing, which baked "bring a friend day" into a response type she
+also wants for registering people onto a program. `events.ask_guest_count`
+makes that opt-in, defaulted **off** — bring-a-friend is the special case, not
+the norm — and the copy went neutral with it ("Sign me up" / "Signed up", not
+"I'm in" / "You're in"). Two knock-ons worth knowing: a bare sign-up now has
+nothing to edit once submitted, so the submit button is replaced by a
+confirmation card rather than an "Update" button that updates nothing
+(`canEditResponse` gates this — true for any order, or a sign-up with guests
+or extra questions); and an unasked guest count stores **null, not 0**, or a
+program roster would read "On their own" against every name.
+`events.cta_label` lets a link-out event's button say what it does
+("Register") instead of always "Open" — generically named on purpose, so a
+sign-up could use it later without another migration.
+
+**Preview button on the composer** (same follow-up round). The point of a
+preview is that it can't disagree with what members actually get, so the
+member's view was **extracted rather than reimplemented**: new
+`components/events/EventCard.js` (moved out of the member list screen) and
+`components/events/EventDetailView.js` (moved out of the member detail
+screen, now owning its own guests/answers/quantities form state, seeded from
+`response`, with a `preview` prop that makes every control inert). The member
+screens keep data loading and the API calls and render those two; the coach's
+Preview modal renders the same two at a fixed 360px frame — a member view
+stretched across a desktop card would misrepresent every line break and the
+graphic's crop, which is most of what a preview is for. It builds its event
+object from **live form state**, not the saved row, so unsaved edits show.
+Caught one drift while looking at it: the list card hardcoded "Open" for a
+link-out even when the button had been relabelled.
+
+**Left for Terra**: two throwaway test graphics
+(`graphics/announcements/test-4x5.jpg`, `test-9x16.jpg`) need deleting from
+the Storage dashboard — see the storage note above for why neither the CLI nor
+SQL can do it.
+
 ## Member auth v1 design pass — clay screens + the ray-traced coin (2026-08-13)
 
 A design handoff (`design_handoff_member_auth_v1/` — README + `.dc.html`,
@@ -2807,6 +2928,9 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0057_client_notes_and_limitations.sql` — **run**, confirmed live 2026-08-12 (both tables + both policies verified). Adds `programming.client_notes` and `programming.client_limitations`, staff-only in every direction — a member has no policy on either, not even select.
 - `0058_payroll_deadline_schedule.sql` — **run**, confirmed live 2026-08-12. Not a schema migration — settings + cron config for the payroll deadline reminder: `payroll_deadline_time` → `20:00`, new `payroll_deadline_followup_time` → `12:00`, **deletes** the now-unread `payroll_deadline_weekday`, and reschedules the cron job to hourly. Uses `cron.alter_job` rather than `cron.schedule` specifically so the existing command (which holds the real `CRON_SECRET`) is preserved and no secret has to be pasted into a committed file — worth reusing whenever only a cron *schedule* needs changing. See the section below.
 - `0059_plan_phase_status.sql` — **run**, confirmed live 2026-08-12 (column, `nutrition_plan_phases_status_check`, and all 16 existing rows reading `planned` verified by direct query; `NOTIFY pgrst, 'reload schema'` sent and confirmed with a real REST select). Adds `programming.nutrition_plan_phases.status` (`planned`/`now`/`done`, default `planned`, so every existing row keeps rendering exactly as it does today with no backfill). Reverses 0050's deliberate "no status flag" decision — see the phase-5 section below for why order and status turned out to be different facts. Needs `NOTIFY pgrst, 'reload schema'` after running.
+- `0060_announcement_graphics.sql` — **run**, confirmed live 2026-08-13 (column, bucket, and all 4 storage policies verified by direct query). Adds `programming.announcements.image_path` plus the **public** `graphics` storage bucket and its admin-write/public-read policies. See the announcement-graphics section above for why this bucket is public where nutrition's `photos` is not.
+- `0061_events.sql` — **run**, confirmed live 2026-08-13 (5 tables with the expected policy counts, plus a real REST select returning `[]` rather than PGRST205). Adds `programming.events` / `event_items` / `event_questions` / `event_responses` / `event_response_items`, and `announcements.event_id`. **Do not reorder this file** — the child tables' policies reference `programming.events` in an EXISTS subquery, and Postgres resolves those at CREATE POLICY time (the bug that broke 0036 in production). Uses `unique nulls not distinct` (Postgres 15+) on the response-items constraint so an options-less item can't accumulate duplicate rows.
+- `0062_event_signup_options.sql` — **run**, confirmed live 2026-08-13. Adds `programming.events.ask_guest_count` (boolean, default **false**) and `cta_label` (nullable). Both additive; every existing event keeps behaving as it did.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.

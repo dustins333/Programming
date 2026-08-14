@@ -14,6 +14,7 @@ import { listSpcWorkoutExercises, listSpcWarmups } from "../../lib/programming/s
 import { listGroupCompletionsForWorkouts, getCompletedSpcWorkoutIdsForWeek } from "../../lib/programming/sessionCompletions";
 import { listWeekOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import { hasUnreadMessages } from "../../lib/programming/messages";
+import { listLiveEventsForUser, listMyResponses } from "../../lib/programming/events";
 import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
 import { listLogsForDateRange } from "../../lib/nutrition/dailyLog";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
@@ -21,7 +22,7 @@ import { retryOnce } from "../../lib/retry";
 import { SessionPreviewModal } from "../../components/SessionPreviewModal";
 import { ProgressRing } from "../../components/ProgressRing";
 import { PressFade } from "../../components/PressFade";
-import { fonts } from "../../lib/theme";
+import { fonts, colors } from "../../lib/theme";
 import { showToast } from "../../lib/toast";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -382,6 +383,46 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
   );
 }
 
+// A nudge toward the Events tab, not a second copy of it. Only appears when
+// a live event is actually waiting on this member — sign-ups and orders,
+// which have a deadline worth missing. Read-only notices are left to the
+// tab (and the announcement that already went out).
+function EventsTeaser({ events, onOpen }) {
+  const single = events.length === 1 ? events[0] : null;
+  return (
+    <PressFade
+      onPress={onOpen}
+      style={{
+        marginBottom: 14,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: "#f0ddd2",
+        backgroundColor: "#fdf6f2",
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <Ionicons name="calendar" size={22} color={colors.primary} />
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
+          {single ? single.title : `${events.length} things need a response`}
+        </Text>
+        <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#8a8580" }}>
+          {single
+            ? single.response_type === "order"
+              ? "Put in your order"
+              : "Let us know if you're coming"
+            : "Tap to take a look"}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+    </PressFade>
+  );
+}
+
 // One-offs have no fixed session grid and no day-of-week mapping, so their
 // stripes are captioned with the workout's own name instead.
 function OneOffsSection({ items, onNavigate }) {
@@ -650,6 +691,9 @@ export default function MemberHome() {
   const [oneOffs, setOneOffs] = useState([]);
   const [hasUnread, setHasUnread] = useState(false);
   const [messagingEnabled, setMessagingEnabled] = useState(false);
+  // Live events this member hasn't answered yet. The Events tab is where
+  // they live; this is just the nudge on the screen people actually open.
+  const [pendingEvents, setPendingEvents] = useState([]);
   const [heroExerciseCount, setHeroExerciseCount] = useState(null);
   const [preview, setPreview] = useState(null); // { visible, loading, title, subtitle, warmups, exercises }
 
@@ -880,6 +924,21 @@ export default function MemberHome() {
       }
     } else if (!isStale()) {
       setHasUnread(false);
+    }
+
+    // Own try/catch, like every other domain on this screen — an events
+    // failure must not take down the training or nutrition cards.
+    try {
+      const live = await retryOnce(() => listLiveEventsForUser(profile.id));
+      // Only the ones that actually want something back. A read-only notice
+      // has no deadline to miss, and nagging about it here would just be
+      // noise on top of the announcement that already went out.
+      const wantsResponse = live.filter((e) => e.response_type === "signup" || e.response_type === "order");
+      const responded = await retryOnce(() => listMyResponses(profile.id, wantsResponse.map((e) => e.id)));
+      if (!isStale()) setPendingEvents(wantsResponse.filter((e) => !responded[e.id]));
+    } catch (err) {
+      console.error("My Week: failed to check events", err);
+      if (!isStale()) setPendingEvents([]);
     }
   }, [profile.id]);
 
@@ -1323,6 +1382,10 @@ export default function MemberHome() {
           onNavigate={() => router.push({ pathname: "/(member)/plan", params: { program: "spc" } })}
           onViewBlock={() => router.push("/(member)/plan-spc-block")}
         />
+      )}
+
+      {pendingEvents.length > 0 && (
+        <EventsTeaser events={pendingEvents} onOpen={() => router.push("/(member)/events")} />
       )}
 
       {oneOffs.length > 0 && (

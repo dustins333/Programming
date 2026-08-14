@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../lib/nutrition/useNutritionAccess";
 import { useHasFitness } from "../../lib/programming/useFitnessAccess";
+import { useHasEvents } from "../../lib/programming/useEventsAccess";
 import { AnnouncementChecker } from "../../lib/notifications/AnnouncementChecker";
 import { FloatingMessageBubble } from "../../components/FloatingMessageBubble";
 import { RestTimerBar } from "../../components/RestTimerBar";
@@ -74,6 +75,11 @@ export default function MemberLayout() {
   // — hidden only once confirmed they have no group/SPC/one-off programming
   // (defaults visible while loading/on error, see useFitnessAccess.js).
   const showFitnessTab = useHasFitness(session?.user?.id);
+  // Events has no admin on/off switch at all — the tab exists exactly while
+  // a live event is targeted at this member, and hides itself again when the
+  // last one closes. Defaults hidden (see useEventsAccess.js for why that's
+  // the opposite default from My Fitness).
+  const showEventsTab = useHasEvents(session?.user?.id);
 
   if (!ready) {
     return (
@@ -96,7 +102,12 @@ export default function MemberLayout() {
 
   return (
     <RestTimerProvider>
-      <MemberTabs showFitnessTab={showFitnessTab} showNutritionTab={showNutritionTab} isStaff={isStaff} />
+      <MemberTabs
+        showFitnessTab={showFitnessTab}
+        showNutritionTab={showNutritionTab}
+        showEventsTab={showEventsTab}
+        isStaff={isStaff}
+      />
     </RestTimerProvider>
   );
 }
@@ -109,7 +120,7 @@ export default function MemberLayout() {
 // second time or they'd all sit under ~60px of dead space. Overriding
 // SafeAreaInsetsContext for the tab subtree is the one place that can be
 // said once instead of in every member screen.
-function MemberTabs({ showFitnessTab, showNutritionTab, isStaff }) {
+function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, isStaff }) {
   const { timer } = useRestTimer();
   const insets = useSafeAreaInsets();
   const barVisible = !!timer;
@@ -153,6 +164,16 @@ function MemberTabs({ showFitnessTab, showNutritionTab, isStaff }) {
         }}
       />
       <Tabs.Screen name="history" options={{ title: "My History", tabBarIcon: TabIcon("time"), tabBarLabel: TabLabel("My History") }} />
+
+      <Tabs.Screen
+        name="events"
+        options={{
+          title: "Events",
+          tabBarIcon: TabIcon("calendar"),
+          tabBarLabel: TabLabel("Events"),
+          href: showEventsTab ? undefined : null,
+        }}
+      />
 
       {/* Staff-only way back to the coach dashboard, since a coach/admin
           can now reach this member tab set too (see the note above) — a

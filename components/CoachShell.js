@@ -91,6 +91,10 @@ function NavList({ profile, pathname, messagingEnabled, onNavigate, onSignOut })
         ) : null}
 
         {isAdmin ? (
+          <NavRow active={isActive(pathname, "/(coach)/events")} icon="calendar" label="Events" onPress={() => onNavigate("/(coach)/events")} />
+        ) : null}
+
+        {isAdmin ? (
           <NavRow active={isActive(pathname, "/(coach)/settings")} icon="settings" label="Settings" onPress={() => onNavigate("/(coach)/settings")} />
         ) : null}
       </View>

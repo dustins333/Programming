@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View, Text, Image, Pressable, Modal, ActivityIndicator, TextInput, Platform } from "react-native";
 import { toastError } from "../../lib/toast";
 import { Ionicons } from "@expo/vector-icons";
-import { pickPhoto } from "../../lib/nutrition/imagePicker";
+import { pickPhoto } from "../../lib/imagePicker";
 import { uploadPhoto } from "../../lib/nutrition/photos";
 import { todayInBoise } from "../../lib/boiseDate";
 import { fonts } from "../../lib/theme";

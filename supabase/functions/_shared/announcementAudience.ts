@@ -17,6 +17,9 @@ export interface Announcement {
   message: string;
   target_type: "all" | "group_program" | "spc" | "nutrition";
   target_group_program_id: string | null;
+  // Set when this announcement is the megaphone for a published event
+  // (migration 0061) — makes the push deep-link to the event itself.
+  event_id?: string | null;
 }
 
 export async function resolveAudienceUserIds(admin: SupabaseClient, announcement: Announcement): Promise<string[]> {
@@ -63,9 +66,14 @@ export async function sendAnnouncementPush(admin: SupabaseClient, announcement: 
 
   let pushed = 0;
   for (const userId of userIds) {
+    // `url` stays UNPREFIXED by convention — public/sw.js opens it as a real
+    // browser path (route groups are transparent in the web export), and
+    // lib/notifications/PushDeepLink.js adds the (member) group back for the
+    // native router.
     const result = await sendPushToUser(admin, userId, announcement.title, announcement.message, {
       type: "announcement",
       announcementId: announcement.id,
+      ...(announcement.event_id ? { url: `/events/${announcement.event_id}` } : {}),
     });
     if (result.sent > 0) pushed += 1;
   }
