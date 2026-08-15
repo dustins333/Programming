@@ -285,6 +285,11 @@ export function ExerciseCard({
   userId,
   datePerformed,
   source,
+  // Which session these sets belong to — {groupWorkoutId} | {spcWorkoutId,
+  // weekNumber} | {oneOffWorkoutId}. Part of a log row's identity, not a
+  // label: see logResult (0063). Optional so the read-only viewers that
+  // never write keep working unchanged.
+  session,
   item,
   numberLabel,
   expanded,
@@ -342,7 +347,7 @@ export function ExerciseCard({
     loaded.current = true;
     (async () => {
       try {
-        const todaysSets = await getLoggedSetsForDate(userId, item.exercise.id, datePerformed);
+        const todaysSets = await getLoggedSetsForDate(userId, item.exercise.id, datePerformed, session);
         if (todaysSets.length === 0) return;
         skipAutosaveRef.current = true;
         skipCompletionEffectRef.current = true;
@@ -392,6 +397,7 @@ export function ExerciseCard({
               weight: row.weight === "" ? null : Number(row.weight),
               notes: notes === "" ? null : notes,
               source,
+              session,
             })
           )
         );

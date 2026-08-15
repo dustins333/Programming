@@ -256,6 +256,7 @@ export default function PlanSpcBlock() {
         loggable={modalWorkout ? modalWorkout.week_number <= currentWeek : false}
         defaultLogDate={todayInBoise()}
         source="spc"
+        session={modalWorkout ? { spcWorkoutId: modalWorkout.id, weekNumber: modalWorkout.week_number } : undefined}
         exercises={modalExercises}
         onFinalize={(logDate) => handleFinalizeMissedSession(modalWorkout, logDate)}
       />

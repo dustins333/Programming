@@ -51,6 +51,10 @@ export function SessionLogger({
   layout = "accordion",
   exerciseCompletionType,
   weekNumber,
+  // Which session's logs these are — {groupWorkoutId} | {spcWorkoutId,
+  // weekNumber} | {oneOffWorkoutId}, mirroring session_completions. Threaded
+  // straight to ExerciseCard, which writes it onto every set (0063).
+  session,
   restReturnTo,
   scrollViewRef,
   scrollOffsetRef,
@@ -226,6 +230,7 @@ export function SessionLogger({
       userId={userId}
       datePerformed={datePerformed}
       source={source}
+      session={session}
       item={item}
       // A superset's members share the group's number and get a/b suffixes,
       // so the count still reads as "lift 5 of 6" rather than jumping.

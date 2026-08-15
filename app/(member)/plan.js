@@ -925,6 +925,7 @@ export default function MyFitness() {
                   source={groupEntry.source}
                   exercises={groupEntry.exercises}
                   isCompleted={groupEntry.completed}
+                  session={{ groupWorkoutId: groupEntry.workout.id }}
                   onFinalize={() => handleFinalizeGroup(groupEntry)}
                   ghostMode={ghostMode}
                   layout="session"
@@ -1005,6 +1006,10 @@ export default function MyFitness() {
                   source="spc"
                   exercises={spcDetail.exercises}
                   isCompleted={spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.completed ?? false}
+                  session={{
+                    spcWorkoutId: spc.sessions.find((s) => s.sessionNumber === spcDetail.sessionNumber)?.workout?.id,
+                    weekNumber: spc.weekNumber,
+                  }}
                   onFinalize={handleFinalizeSpc}
                   ghostMode={ghostMode}
                   layout="session"
@@ -1048,6 +1053,7 @@ export default function MyFitness() {
               source="one_off"
               exercises={exercises}
               isCompleted={false}
+              session={{ oneOffWorkoutId: workout.id }}
               onFinalize={() => handleFinalizeOneOff(workout.id)}
               ghostMode={ghostMode}
               layout="session"

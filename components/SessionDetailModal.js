@@ -80,6 +80,10 @@ export function SessionDetailModal({
   loggable,
   defaultLogDate,
   source,
+  // Which session these sets belong to (0063) — the two "View full block"
+  // screens pass it, so a lift logged here is attributed the same way it
+  // would be from My Fitness rather than landing as session-unknown.
+  session,
   exercises,
   onFinalize,
 }) {
@@ -157,6 +161,7 @@ export function SessionDetailModal({
                   userId={userId}
                   datePerformed={datePerformed}
                   source={source}
+                  session={session}
                   exercises={exercises}
                   hideVideo
                   hideFinalizeButton
@@ -194,6 +199,7 @@ export function SessionDetailModal({
                     userId={userId}
                     datePerformed={logDate}
                     source={source}
+                    session={session}
                     exercises={exercises}
                     hideVideo
                     isCompleted={false}

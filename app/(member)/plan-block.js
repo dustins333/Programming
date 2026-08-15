@@ -284,6 +284,7 @@ export default function PlanBlock() {
         loggable={modalWorkout ? modalWorkout.week_number <= currentWeek : false}
         defaultLogDate={todayInBoise()}
         source={state.source}
+        session={modalWorkout ? { groupWorkoutId: modalWorkout.id } : undefined}
         exercises={modalContent?.exercises ?? []}
         onFinalize={(logDate) => handleFinalizeMissedSession(modalWorkout, logDate)}
       />

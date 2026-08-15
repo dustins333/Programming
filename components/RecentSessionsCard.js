@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { listLogsForDate } from "../lib/programming/memberPlan";
+import { listLogsForDate, listLogsForSession } from "../lib/programming/memberPlan";
 import { formatDateMDY } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
 
@@ -33,6 +33,9 @@ function groupByExercise(logs) {
 export function SessionRow({ userId, session, title, onOpenClient }) {
   const [open, setOpen] = useState(false);
   const [logs, setLogs] = useState(null);
+  // Whether `logs` came back already scoped to this exact session (0063) or
+  // is a whole calendar day that still needs narrowing by exercise.
+  const [logsAreScoped, setLogsAreScoped] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   const handleToggle = async () => {
@@ -46,20 +49,24 @@ export function SessionRow({ userId, session, title, onOpenClient }) {
     // rather than showing the stale error alongside freshly-loaded rows.
     setLoadError(null);
     try {
-      setLogs(await listLogsForDate(userId, session.date));
+      // Ask for this exact session first. Returns null when none of its logs
+      // carry a session stamp — i.e. anything logged before 0063 — in which
+      // case fall back to the calendar day and narrow it the old way.
+      const scoped = session.session ? await listLogsForSession(userId, session.session) : null;
+      setLogsAreScoped(Boolean(scoped));
+      setLogs(scoped ?? (await listLogsForDate(userId, session.date)));
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
   };
 
-  // listLogsForDate returns everything logged that calendar day, so a
-  // client who finalizes two sessions on one day would otherwise see both
-  // sessions' lifts under each row. Narrow to the exercises this session
-  // actually programs (see exerciseIdsForCompletion in coachLogs.js).
-  // session.exerciseIds is null for a session with no exercise rows — then
-  // there's nothing to narrow by and the unfiltered day is the honest
-  // answer.
-  const visibleLogs = logs && session.exerciseIds ? logs.filter((row) => session.exerciseIds.has(row.exercise_id)) : logs;
+  // A scoped result is already exactly this session's sets. A fallback
+  // result is everything logged that calendar day, so a client who finalized
+  // two sessions in one evening would otherwise see both sessions' lifts
+  // under each row — narrow to the exercises this session actually programs.
+  // session.exerciseIds is null for a session with no exercise rows, and
+  // then the unfiltered day is the honest answer.
+  const visibleLogs = logs && !logsAreScoped && session.exerciseIds ? logs.filter((row) => session.exerciseIds.has(row.exercise_id)) : logs;
   const groups = visibleLogs ? groupByExercise(visibleLogs) : [];
 
   return (
