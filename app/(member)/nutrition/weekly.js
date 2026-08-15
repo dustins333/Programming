@@ -13,8 +13,7 @@ import { currentCalendarWeek, summarizeWeek } from "../../../lib/nutrition/weekC
 import { MacroDial } from "../../../components/nutrition/MacroDial";
 import { StatTile } from "../../../components/nutrition/StatTile";
 import { RatingSquares } from "../../../components/nutrition/RatingSquares";
-import { SegmentedControl } from "../../../components/SegmentedControl";
-import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
+import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHeader";
 import { formatDateMD } from "../../../lib/formatDate";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
@@ -346,17 +345,6 @@ export default function NutritionWeekly() {
     setExpandedDate(null);
   }, [week.start]);
 
-  const tabs = (activeKey) => (
-    <SegmentedControl
-      segments={NUTRITION_TABS}
-      activeKey={activeKey}
-      onSelect={(key) => {
-        const seg = NUTRITION_TABS.find((s) => s.key === key);
-        if (seg && seg.key !== activeKey) router.push(seg.href);
-      }}
-    />
-  );
-
   if (access.status !== "active") {
     return <NutritionAccessMessage status={access.status} error={access.error} onRetry={access.refetch} />;
   }
@@ -365,10 +353,7 @@ export default function NutritionWeekly() {
     return (
       <View className="flex-1" style={{ backgroundColor: CANVAS }}>
         <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24 }}>
-          <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-            My Nutrition
-          </Text>
-          {tabs("weekly")}
+          <NutritionTabHeader activeKey="weekly" />
         </View>
         <View className="flex-1 items-center justify-center px-6">
           <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
@@ -422,10 +407,7 @@ export default function NutritionWeekly() {
       contentContainerClassName="px-6 pb-8"
       contentContainerStyle={{ paddingTop: insets.top + 6 }}
     >
-      <Text className="mb-3 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        My Nutrition
-      </Text>
-      {tabs("weekly")}
+      <NutritionTabHeader activeKey="weekly" />
 
       <AveragesBand
         title={weekOffset === 0 ? "This week" : `${formatDateMD(week.start)} – ${formatDateMD(week.end)}`}
@@ -534,7 +516,7 @@ export default function NutritionWeekly() {
         .map((day) => (
           <DayRow
             key={day.date}
-            label={`${day.name} ${formatDateMD(day.date)}${day.isToday ? " · Today" : ""}`}
+            label={`${day.name} ${formatDateMD(day.date)}${day.isToday ? " | Today" : ""}`}
             log={day.log}
             target={target}
             expanded={expandedDate === day.date}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
@@ -11,8 +11,7 @@ import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { PhotoCompare } from "../../../components/nutrition/PhotoCompare";
-import { SegmentedControl } from "../../../components/SegmentedControl";
-import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
+import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHeader";
 import { fonts, colors } from "../../../lib/theme";
 import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
@@ -24,7 +23,6 @@ export default function NutritionPhotos() {
   const focusKey = useRefreshOnFocus();
 
   const { profile } = useAuth();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const access = useNutritionAccess(profile.id);
   useFocusEffect(useCallback(() => access.refetch(), [access.refetch]));
@@ -52,17 +50,7 @@ export default function NutritionPhotos() {
     return (
       <View className="flex-1" style={{ backgroundColor: CANVAS }}>
         <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24 }}>
-          <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-            Nutrition
-          </Text>
-          <SegmentedControl
-            segments={NUTRITION_TABS}
-            activeKey="photos"
-            onSelect={(key) => {
-              const seg = NUTRITION_TABS.find((s) => s.key === key);
-              if (seg && seg.key !== "photos") router.push(seg.href);
-            }}
-          />
+          <NutritionTabHeader activeKey="photos" />
         </View>
         <View className="flex-1 items-center justify-center px-6">
           <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
@@ -82,18 +70,7 @@ export default function NutritionPhotos() {
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
-      <Text className="mb-3 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        My Nutrition
-      </Text>
-
-      <SegmentedControl
-        segments={NUTRITION_TABS}
-        activeKey="photos"
-        onSelect={(key) => {
-          const seg = NUTRITION_TABS.find((s) => s.key === key);
-          if (seg && seg.key !== "photos") router.push(seg.href);
-        }}
-      />
+      <NutritionTabHeader activeKey="photos" />
 
       {(() => {
         // "What's still needed" status — this tab never said whether photos

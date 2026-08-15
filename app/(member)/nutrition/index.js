@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { View, Text, Image, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
@@ -15,7 +15,6 @@ import { getLogForDate, saveDraftLog, finalizeLog, listLogsForDateRange } from "
 import { listFocusItems, toggleFocusItem } from "../../../lib/nutrition/coachClient";
 import { listActiveMilestones, listCompletedMilestones, getUnseenCompletedMilestone, acknowledgeMilestone, MILESTONE_COLORS } from "../../../lib/nutrition/milestones";
 import { listPhases } from "../../../lib/nutrition/planPhases";
-import { SegmentedControl } from "../../../components/SegmentedControl";
 import { TodayCardSlider } from "../../../components/nutrition/TodayCardSlider";
 import { MilestoneCongratsModal } from "../../../components/nutrition/MilestoneCongratsModal";
 import { MilestoneDetailModal } from "../../../components/nutrition/MilestoneDetailModal";
@@ -24,7 +23,7 @@ import { MacroDial } from "../../../components/nutrition/MacroDial";
 import { RatingSquares } from "../../../components/nutrition/RatingSquares";
 import { StatTile } from "../../../components/nutrition/StatTile";
 import { AddValueBadge } from "../../../components/nutrition/AddValueBadge";
-import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
+import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHeader";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
 import { toastError, toastSuccess } from "../../../lib/toast";
@@ -71,6 +70,25 @@ const CARD_BORDER = "#ece7e1";
 const DIVIDER = "#f4efe9";
 const OLIVE = "#4d6142";
 const DASHED_EMPTY = "#ddd6cd";
+const INPUT_BORDER = "#d9d4cd";
+const CARD_SHADOW = {
+  shadowColor: "#44403c",
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.045,
+  shadowRadius: 14,
+  elevation: 2,
+};
+
+function Eyebrow({ children, color = "#a8a29e", style }) {
+  return (
+    <Text
+      maxFontSizeMultiplier={1.1}
+      style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color, ...style }}
+    >
+      {children}
+    </Text>
+  );
+}
 
 // design_handoff_member_mobile_v5 (1g) — the three tinted "Log these in the
 // morning / macros / evening" cards are replaced by plain white cards with
@@ -88,25 +106,43 @@ function LogCard({ eyebrow, aside, children, radius = 18, style }) {
         paddingHorizontal: 16,
         paddingVertical: 14,
         marginBottom: 12,
-        shadowColor: "#44403c",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.045,
-        shadowRadius: 14,
-        elevation: 2,
+        ...CARD_SHADOW,
         ...style,
       }}
     >
       {eyebrow ? (
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10 }}>
-          <Text
-            maxFontSizeMultiplier={1.1}
-            style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color: "#a8a29e" }}
-          >
-            {eyebrow}
-          </Text>
+          <Eyebrow>{eyebrow}</Eyebrow>
           {aside}
         </View>
       ) : null}
+      {children}
+    </View>
+  );
+}
+
+// The coach's own cards in the slider above the log — focus list, game plan,
+// plan phases, milestones. The v5 mock doesn't draw these at all (they were
+// deliberately kept, since nothing else surfaces what the coach wrote), so
+// they'd been left on the old rounded-lg/stone-200 chrome and read as a
+// different app sitting on top of the one below them. Same shell as LogCard,
+// with the palette passed in for the tinted ones.
+function SliderCard({ eyebrow, eyebrowColor, bg = "#fff", border = CARD_BORDER, children }) {
+  return (
+    <View
+      style={{
+        backgroundColor: bg,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: border,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        ...CARD_SHADOW,
+      }}
+    >
+      <Eyebrow color={eyebrowColor} style={{ marginBottom: 8 }}>
+        {eyebrow}
+      </Eyebrow>
       {children}
     </View>
   );
@@ -446,15 +482,7 @@ export default function NutritionToday() {
   return (
     <View style={{ flex: 1, backgroundColor: CANVAS }}>
       <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24, backgroundColor: CANVAS }}>
-        <View className="flex-row items-center gap-3">
-          <Text className="flex-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }} numberOfLines={1}>
-            My Nutrition
-          </Text>
-          <Pressable onPress={() => router.push("/(member)/settings")} hitSlop={10} accessibilityLabel="Settings">
-            <Ionicons name="settings-outline" size={22} color="#78716c" />
-          </Pressable>
-          <Image source={require("../../../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
-        </View>
+        <NutritionTabHeader activeKey="today" badges={checkinDue ? ["checkin"] : null}>
         {/* Date + logged-state badge, per the mock. The ‹ › arrows are
             folded into this row rather than kept as the separate sticky
             date card they used to live in — two date displays on one screen
@@ -468,7 +496,7 @@ export default function NutritionToday() {
             </Pressable>
             <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
               {formatDateWeekday(selectedDate)}
-              {dateOffset === 0 ? " · Today" : ""}
+              {dateOffset === 0 ? " | Today" : ""}
             </Text>
             <Pressable
               onPress={() => setDateOffset((o) => Math.max(0, o - 1))}
@@ -489,16 +517,7 @@ export default function NutritionToday() {
             </Text>
           </View>
         </View>
-
-        <SegmentedControl
-          segments={NUTRITION_TABS}
-          activeKey="today"
-          badges={checkinDue ? ["checkin"] : null}
-          onSelect={(key) => {
-            const seg = NUTRITION_TABS.find((s) => s.key === key);
-            if (seg && seg.key !== "today") router.push(seg.href);
-          }}
-        />
+        </NutritionTabHeader>
         {checkinDue ? (
           <Pressable onPress={() => router.push("/(member)/nutrition/checkin")} className="mb-3 -mt-4 self-start" hitSlop={8}>
             <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: "#b23a22" }}>
@@ -539,14 +558,11 @@ export default function NutritionToday() {
                     {
                       key: "focus",
                       content: (
-                        <View className="rounded-lg border border-stone-200 bg-white p-4">
-                          <Text className="mb-1.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-                            Focus
-                          </Text>
+                        <SliderCard eyebrow="Focus">
                           {focusItems.map((item) => (
                             <FocusRow key={item.id} item={item} onChanged={loadFocus} />
                           ))}
-                        </View>
+                        </SliderCard>
                       ),
                     },
                   ]
@@ -556,12 +572,11 @@ export default function NutritionToday() {
                     {
                       key: "notes",
                       content: (
-                        <View className="rounded-lg border border-stone-200 bg-white p-4">
-                          <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-                            Notes
+                        <SliderCard eyebrow="From your coach">
+                          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>
+                            {access.client.game_plan}
                           </Text>
-                          <Text style={{ fontFamily: fonts.sans }}>{access.client.game_plan}</Text>
-                        </View>
+                        </SliderCard>
                       ),
                     },
                   ]
@@ -574,20 +589,21 @@ export default function NutritionToday() {
               ...phases.slice(0, 3).map((phase) => ({
                 key: `phase-${phase.id}`,
                 content: (
-                  <View className="rounded-lg p-4" style={{ borderWidth: 1, borderColor: "#f0ddd2", backgroundColor: "#fdf6f2" }}>
-                    <Text className="mb-1 text-xs uppercase" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5, color: colors.primaryOnWhite }}>
-                      What we&apos;re working on
-                    </Text>
-                    <Text className="mb-1" style={{ fontFamily: fonts.sansBold, fontSize: 15, color: colors.primaryOnWhite }}>
+                  <SliderCard eyebrow="What we're working on" eyebrowColor={colors.primaryOnWhite} bg="#fdf6f2" border="#f0ddd2">
+                    <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 15, color: colors.primaryOnWhite }}>
                       {phase.title}
                     </Text>
-                    {phase.details ? <Text style={{ fontFamily: fonts.sans, color: "#57534e" }}>{phase.details}</Text> : null}
+                    {phase.details ? (
+                      <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e", marginTop: 3 }}>
+                        {phase.details}
+                      </Text>
+                    ) : null}
                     {phase.items.map((item) => (
-                      <Text key={item.id} className="mt-1 text-xs" style={{ fontFamily: fonts.sans, color: "#57534e" }}>
+                      <Text key={item.id} maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "#57534e", marginTop: 4 }}>
                         – {item.text}
                       </Text>
                     ))}
-                  </View>
+                  </SliderCard>
                 ),
               })),
               ...milestones.map((m) => {
@@ -595,15 +611,16 @@ export default function NutritionToday() {
                 return {
                   key: `milestone-${m.id}`,
                   content: (
-                    <View className="rounded-lg p-4" style={{ borderWidth: 1, borderColor: palette.border, backgroundColor: palette.bg }}>
-                      <Text className="mb-1 text-xs uppercase" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5, color: palette.text }}>
-                        Milestone
-                      </Text>
-                      <Text className="mb-1" style={{ fontFamily: fonts.sansBold, fontSize: 15, color: palette.text }}>
+                    <SliderCard eyebrow="Milestone" eyebrowColor={palette.text} bg={palette.bg} border={palette.border}>
+                      <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 15, color: palette.text }}>
                         {m.title}
                       </Text>
-                      {m.details ? <Text style={{ fontFamily: fonts.sans, color: "#57534e" }}>{m.details}</Text> : null}
-                    </View>
+                      {m.details ? (
+                        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e", marginTop: 3 }}>
+                          {m.details}
+                        </Text>
+                      ) : null}
+                    </SliderCard>
                   ),
                 };
               }),
@@ -612,13 +629,10 @@ export default function NutritionToday() {
                     {
                       key: "completed-milestones",
                       content: (
-                        <View className="rounded-lg border border-stone-200 bg-white p-4">
-                          <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-                            Completed milestones
-                          </Text>
+                        <SliderCard eyebrow="Completed milestones">
                           <View className="flex-row flex-wrap gap-2">
                             {completedMilestones.map((m) => (
-                              <Pressable
+                              <PressFade
                                 key={m.id}
                                 onPress={() => setSelectedMilestone(m)}
                                 className="items-center justify-center rounded-full"
@@ -627,12 +641,12 @@ export default function NutritionToday() {
                                 {m.emoji ? (
                                   <Text style={{ fontSize: 18 }}>{m.emoji}</Text>
                                 ) : (
-                                  <Ionicons name="trophy" size={16} color="#4d6142" />
+                                  <Ionicons name="trophy" size={16} color={OLIVE} />
                                 )}
-                              </Pressable>
+                              </PressFade>
                             ))}
                           </View>
-                        </View>
+                        </SliderCard>
                       ),
                     },
                   ]
@@ -714,9 +728,7 @@ export default function NutritionToday() {
             <RatingSquares label="Energy" value={values.energy} onChangeText={(t) => update("energy", t)} />
           </LogCard>
 
-          <Text className="mb-1 mt-2 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-            Notes
-          </Text>
+          <Eyebrow style={{ marginTop: 4, marginBottom: 8 }}>Notes for your coach</Eyebrow>
           <TextInput
             ref={notesRef}
             value={values.client_note}
@@ -724,8 +736,8 @@ export default function NutritionToday() {
             onFocus={() => scrollFieldIntoView(notesRef.current)}
             multiline
             inputAccessoryViewID={NUMERIC_DONE_ID}
-            className="mb-2 min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
-            style={{ fontFamily: fonts.sans }}
+            className="mb-3 min-h-[80px] px-4 py-3"
+            style={{ fontFamily: fonts.sans, fontSize: 14, borderRadius: 14, borderWidth: 1, borderColor: INPUT_BORDER, backgroundColor: "#fff" }}
           />
 
           <Text className="mb-6 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>

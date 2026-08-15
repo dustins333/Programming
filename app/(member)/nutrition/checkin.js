@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays, dateInBoise } from "../../../lib/boiseDate";
@@ -12,8 +12,7 @@ import { getClientQuestions, getCheckinForWeek, submitCheckin, getActiveCheckinR
 import { listAllPhotos, isPhotoRequirementWeek, hasAllAngles, photosForRequirementWeek } from "../../../lib/nutrition/photos";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { ZoomSchedulerModal } from "../../../components/nutrition/ZoomSchedulerModal";
-import { SegmentedControl } from "../../../components/SegmentedControl";
-import { NUTRITION_TABS } from "../../../lib/nutrition/tabs";
+import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHeader";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { toastSuccess } from "../../../lib/toast";
 import { notifyCoachOfClient } from "../../../lib/notifications/sendPush";
@@ -31,6 +30,7 @@ import { DraftNotice } from "../../../components/DraftNotice";
 // (TaskRow etc.) stay bg-white, same "white card on canvas" pattern those
 // other tabs already use.
 const CANVAS = "#faf8f6";
+const ANGLES = ["front", "side", "back"];
 
 function TaskRow({ title, subtitle, done, onPress }) {
   return (
@@ -155,17 +155,17 @@ function SkipReasonModal({ visible, onClose, onSubmit }) {
             autoFocus
             inputAccessoryViewID={NUMERIC_DONE_ID}
             placeholder="e.g. traveling this week, will catch up next week"
-            className="mb-4 min-h-[80px] rounded-lg border border-stone-300 px-3 py-2.5 text-sm"
-            style={{ fontFamily: fonts.sans }}
+            className="mb-4 min-h-[80px] px-3 py-2.5"
+            style={{ fontFamily: fonts.sans, fontSize: 13.5, borderRadius: 14, borderWidth: 1, borderColor: "#d9d4cd", backgroundColor: "#fff" }}
           />
           <View className="flex-row justify-end gap-3">
-            <Pressable onPress={onClose} className="rounded-lg border border-stone-300 px-4 py-2.5">
+            <Pressable onPress={onClose} className="rounded-[14px] border border-[#d9d4cd] px-4 py-2.5">
               <Text style={{ fontFamily: fonts.sansMedium }}>Cancel</Text>
             </Pressable>
             <Pressable
               onPress={() => text.trim() && onSubmit(text.trim())}
               disabled={!text.trim()} style={{ opacity: !text.trim() ? 0.5 : 1 }}
-              className="rounded-lg bg-primary px-4 py-2.5"
+              className="rounded-[14px] bg-primary px-4 py-2.5"
             >
               <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                 Save
@@ -185,7 +185,6 @@ export default function WeeklyCheckin() {
   const focusKey = useRefreshOnFocus();
 
   const { profile } = useAuth();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const today = todayInBoise();
   const { currentWeek } = computeWeekWindows(today);
@@ -278,7 +277,12 @@ export default function WeeklyCheckin() {
   // matches what the coach's timeline counts exactly.
   const recentPhotos = useMemo(() => photosForRequirementWeek(photos ?? [], currentWeek), [photos, currentWeek]);
   const photosUploaded = hasAllAngles(recentPhotos);
+  // The task row states what's actually in rather than a bare "Submitted" —
+  // "front, side" tells a member which one she still owes (v5, 5a).
+  const anglesIn = ANGLES.filter((a) => recentPhotos.some((p) => p.angle === a));
+  const anglesMissing = ANGLES.filter((a) => !anglesIn.includes(a));
   const photosSatisfied = !photosRequired || photosUploaded || !!skipReason;
+  const answeredCount = questions ? questions.filter((q) => (answers[q.id] || "").trim().length > 0).length : 0;
   const formSatisfied = questions ? questions.every((q) => (answers[q.id] || "").trim().length > 0) : false;
   const canFinalize = photosSatisfied && (questions?.length === 0 || formSatisfied);
   // Only count tasks the member actually has: a non-photo week has one.
@@ -427,17 +431,7 @@ export default function WeeklyCheckin() {
     return (
       <View className="flex-1" style={{ backgroundColor: CANVAS }}>
         <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 24 }}>
-          <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-            Nutrition
-          </Text>
-          <SegmentedControl
-            segments={NUTRITION_TABS}
-            activeKey="checkin"
-            onSelect={(key) => {
-              const seg = NUTRITION_TABS.find((s) => s.key === key);
-              if (seg && seg.key !== "checkin") router.push(seg.href);
-            }}
-          />
+          <NutritionTabHeader activeKey="checkin" />
         </View>
         <View className="flex-1 items-center justify-center px-6">
           <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
@@ -457,23 +451,27 @@ export default function WeeklyCheckin() {
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
-      <Text className="mb-3 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-        My Nutrition
-      </Text>
-
-      <SegmentedControl
-        segments={NUTRITION_TABS}
-        activeKey="checkin"
-        onSelect={(key) => {
-          const seg = NUTRITION_TABS.find((s) => s.key === key);
-          if (seg && seg.key !== "checkin") router.push(seg.href);
-        }}
-      />
+      <NutritionTabHeader activeKey="checkin" />
 
       {/* Week band (v5, 5a) — the "N of M done" chip is the whole status of
           the check-in in one place, rather than making the member infer it
           from the task rows below. */}
-      <View style={{ backgroundColor: "#33251f", borderRadius: 20, padding: 16, marginBottom: 16 }}>
+      <View style={{ backgroundColor: "#33251f", borderRadius: 20, padding: 16, marginBottom: 16, overflow: "hidden" }}>
+        {/* The same decorative circle bleeding off the corner that My Week's
+            hero carries — these are the app's two dark surfaces and they
+            should read as the same object. */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: -40,
+            right: -34,
+            width: 132,
+            height: 132,
+            borderRadius: 66,
+            backgroundColor: "rgba(190,172,149,0.12)",
+          }}
+        />
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <Text
             numberOfLines={1}
@@ -504,7 +502,7 @@ export default function WeeklyCheckin() {
         <View className="mb-5 rounded-2xl border px-4 py-3.5" style={{ borderColor: "#b23a22", borderWidth: 1.5, backgroundColor: "#fdf6f2" }}>
           <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: "#b23a22" }}>Missed check-in reopened</Text>
           <Text className="mb-3 mt-0.5 text-xs text-stone-600" style={{ fontFamily: fonts.sans }}>
-            Week of {formatDateMDY(reopen.week_start)} – {formatDateMDY(reopenWeekEnd)} · complete by {formatDateMDY(reopen.expires_at)}
+            Week of {formatDateMDY(reopen.week_start)} – {formatDateMDY(reopenWeekEnd)} | complete by {formatDateMDY(reopen.expires_at)}
           </Text>
 
           {reopenPhotosRequired ? (
@@ -534,10 +532,13 @@ export default function WeeklyCheckin() {
           <Pressable
             onPress={handleReopenSubmit}
             disabled={reopenSubmitting}
-            style={[{ opacity: reopenSubmitting ? 0.5 : 1 }, !reopenCanFinalize ? { opacity: 0.5 } : undefined]}
-            className="mt-1 items-center rounded-lg bg-primary py-3"
+            style={[
+              { opacity: reopenSubmitting ? 0.5 : 1, borderRadius: 15, backgroundColor: colors.primary },
+              !reopenCanFinalize ? { opacity: 0.45 } : undefined,
+            ]}
+            className="mt-1 items-center py-3.5"
           >
-            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+            <Text maxFontSizeMultiplier={1.2} className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
               {reopenSubmitting ? "Submitting…" : "Finalize missed check-in"}
             </Text>
           </Pressable>
@@ -576,7 +577,7 @@ export default function WeeklyCheckin() {
               <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold }}>
                 {a.question}
               </Text>
-              <Text style={{ fontFamily: fonts.sans }}>{a.answer || "—"}</Text>
+              <Text style={{ fontFamily: fonts.sans }}>{a.answer || "–"}</Text>
             </View>
           ))}
         </View>
@@ -593,7 +594,15 @@ export default function WeeklyCheckin() {
               <TaskRow
                 title="This week's progress photos"
                 done={photosSatisfied}
-                subtitle={photosUploaded ? "Submitted" : skipReason ? `Skipped — ${skipReason}` : "Tap to upload"}
+                subtitle={
+                  photosUploaded
+                    ? `Submitted | ${anglesIn.join(", ")}`
+                    : skipReason
+                      ? `Skipped — ${skipReason}`
+                      : anglesIn.length > 0
+                        ? `${anglesIn.join(", ")} in | ${anglesMissing.join(", ")} still needed`
+                        : "Tap to upload | front, side, back"
+                }
                 onPress={() => setPhotoPopupOpen(true)}
               />
               {!photosUploaded && !skipReason ? (
@@ -614,7 +623,11 @@ export default function WeeklyCheckin() {
             <TaskRow
               title="Check-in form"
               done={formSatisfied}
-              subtitle={formSatisfied ? "Ready to finalize" : `${questions.length} question${questions.length === 1 ? "" : "s"}`}
+              subtitle={
+                formSatisfied
+                  ? "Ready to finalize"
+                  : `${questions.length} question${questions.length === 1 ? "" : "s"} | ${answeredCount} answered`
+              }
               onPress={() => setFormPopupOpen(true)}
             />
           ) : null}
@@ -625,15 +638,30 @@ export default function WeeklyCheckin() {
             </Text>
           ) : null}
 
+          {/* Deliberately not `disabled` while incomplete: tapping it is how a
+              member finds out what's still missing (buildReadinessMessage
+              above). 0.45 opacity while blocked, per the handoff. */}
           {questions.length > 0 || photosRequired ? (
             <Pressable
               onPress={handleSubmit}
               disabled={submitting}
-              style={[{ opacity: submitting ? 0.5 : 1 }, !canFinalize ? { opacity: 0.5 } : undefined]}
-              className="mt-2 items-center rounded-lg bg-primary py-3.5"
+              style={[
+                {
+                  opacity: submitting ? 0.5 : 1,
+                  borderRadius: 15,
+                  backgroundColor: colors.primary,
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 16,
+                  elevation: 3,
+                },
+                !canFinalize ? { opacity: 0.45 } : undefined,
+              ]}
+              className="mt-2 items-center py-4"
             >
-              <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                {submitting ? "Finalizing…" : "Finalize Check-In"}
+              <Text maxFontSizeMultiplier={1.2} className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                {submitting ? "Finalizing…" : "Finalize check-in"}
               </Text>
             </Pressable>
           ) : null}
@@ -689,13 +717,13 @@ export default function WeeklyCheckin() {
                 onFocus={() => scrollFormFieldIntoView(formAnswerRefs.current.get(q.id))}
                 multiline
                 inputAccessoryViewID={NUMERIC_DONE_ID}
-                className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
-                style={{ fontFamily: fonts.sans }}
+                className="min-h-[80px] px-4 py-3"
+                style={{ fontFamily: fonts.sans, fontSize: 14, borderRadius: 14, borderWidth: 1, borderColor: "#d9d4cd", backgroundColor: "#fff" }}
               />
             </View>
           )
         )}
-        <Pressable onPress={() => setFormPopupOpen(false)} className="items-center rounded-lg bg-primary py-3">
+        <Pressable onPress={() => setFormPopupOpen(false)} className="items-center rounded-[14px] bg-primary py-3">
           <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
             Done
           </Text>
@@ -763,13 +791,13 @@ export default function WeeklyCheckin() {
                     onFocus={() => scrollReopenFormFieldIntoView(reopenFormAnswerRefs.current.get(q.id))}
                     multiline
                     inputAccessoryViewID={NUMERIC_DONE_ID}
-                    className="min-h-[80px] rounded-lg border border-stone-300 px-4 py-3 text-base"
-                    style={{ fontFamily: fonts.sans }}
+                    className="min-h-[80px] px-4 py-3"
+                    style={{ fontFamily: fonts.sans, fontSize: 14, borderRadius: 14, borderWidth: 1, borderColor: "#d9d4cd", backgroundColor: "#fff" }}
                   />
                 </View>
               )
             )}
-            <Pressable onPress={() => setReopenFormPopupOpen(false)} className="items-center rounded-lg bg-primary py-3">
+            <Pressable onPress={() => setReopenFormPopupOpen(false)} className="items-center rounded-[14px] bg-primary py-3">
               <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                 Done
               </Text>
