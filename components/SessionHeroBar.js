@@ -42,7 +42,8 @@ export function SessionHeroBar({
   ghostMode,
   onGhostModeChange,
 }) {
-  const eyebrow = [programLabel, eyebrowDetail].filter(Boolean).join(" · ").toUpperCase();
+  // "{PROGRAM} | SESSION n" — "|" is the house separator (v5 house rule 4).
+  const eyebrow = [programLabel, eyebrowDetail].filter(Boolean).join(" | ").toUpperCase();
 
   return (
     <View>

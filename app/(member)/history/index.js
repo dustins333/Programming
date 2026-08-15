@@ -231,8 +231,8 @@ function ByDayView({ profile, prEntries, sessionCount, streak, statsError }) {
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 18 }}>
         {/* "Logged sessions", never just "sessions" — members must not read
             this as attendance from the gym management system. */}
-        <StatTile value={statsError ? "—" : sessionCount} label="Logged sessions" color={CLAY} />
-        <StatTile value={statsError ? "—" : streak} label="Week streak" color={OLIVE} />
+        <StatTile value={statsError ? "–" : sessionCount} label="Logged sessions" color={CLAY} />
+        <StatTile value={statsError ? "–" : streak} label="Week streak" color={OLIVE} />
       </View>
 
       {sections.length === 0 ? (
@@ -460,7 +460,7 @@ export default function HistoryIndex() {
       <SegmentedControl segments={MODES} activeKey={mode} onSelect={setMode} />
 
       {mode === "day" ? (
-        /* statsError is passed so the tiles can say "—" rather than render
+        /* statsError is passed so the tiles can say "–" rather than render
            a confident 0 sessions / 0-week streak when the stats fetch is
            what actually failed. */
         <ByDayView profile={profile} prEntries={prEntries} sessionCount={sessionCount} streak={streak} statsError={statsError} />

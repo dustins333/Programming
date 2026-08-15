@@ -5,9 +5,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { pickPhoto } from "../../lib/imagePicker";
 import { uploadPhoto } from "../../lib/nutrition/photos";
 import { todayInBoise } from "../../lib/boiseDate";
-import { fonts } from "../../lib/theme";
+import { fonts, colors } from "../../lib/theme";
 
 const isWeb = Platform.OS === "web";
+
+// design_handoff_member_mobile_v5 (5b) — empty slots are peach dashed drop
+// targets, filled ones carry an olive angle chip. Same dashed-means-not-yet
+// rule as every other unlogged control in the member app.
+const EMPTY_BG = "#fdf1ea";
+const EMPTY_BORDER = "#e0b6a5";
+const CARD_BORDER = "#ece7e1";
+const OLIVE = "#4d6142";
+const BRAND_TEXT = "#8a5140";
 
 const ANGLES = [
   { key: "front", label: "Front" },
@@ -67,12 +76,31 @@ function AngleBox({ angle, label, selected, uploading, onPicked, onCleared }) {
       <Pressable
         onPress={() => setPickerOpen(true)}
         disabled={uploading}
-        className="items-center justify-center overflow-hidden rounded-lg border border-dashed border-stone-300"
-        style={{ aspectRatio: 3 / 4 }}
+        className="items-center justify-center overflow-hidden"
+        style={{
+          aspectRatio: 3 / 4,
+          borderRadius: 16,
+          borderWidth: selected ? 1 : 1.5,
+          borderStyle: selected ? "solid" : "dashed",
+          borderColor: selected ? CARD_BORDER : EMPTY_BORDER,
+          backgroundColor: selected ? "#fff" : EMPTY_BG,
+        }}
       >
         {selected ? (
           <>
             <Image source={{ uri: selected.uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+            {/* Olive "FRONT ✓" chip — the slot says what it holds without
+                needing the caption underneath to be read (v5, 5b). */}
+            <View
+              pointerEvents="none"
+              className="flex-row items-center rounded-full"
+              style={{ position: "absolute", top: 6, left: 6, backgroundColor: OLIVE, paddingHorizontal: 7, paddingVertical: 3, gap: 3 }}
+            >
+              <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.7, color: "#fff" }}>
+                {label.toUpperCase()}
+              </Text>
+              <Ionicons name="checkmark" size={9} color="#fff" />
+            </View>
             <Pressable
               onPress={() => onCleared(angle)}
               disabled={uploading}
@@ -84,6 +112,10 @@ function AngleBox({ angle, label, selected, uploading, onPicked, onCleared }) {
           </>
         ) : (
           <>
+            {/* The pose illustration is deliberately untouched — the handoff
+                keeps it as-is and restyles only the frame around it. Plain
+                width/height rather than StyleSheet.absoluteFillObject, which
+                renders this Image invisible on native Fabric (2026-08-02). */}
             <Image source={POSE_IMAGES[angle]} resizeMode="contain" style={{ width: "100%", height: "100%" }} />
             <View
               pointerEvents="none"
@@ -91,17 +123,37 @@ function AngleBox({ angle, label, selected, uploading, onPicked, onCleared }) {
             >
               <View
                 className="items-center justify-center rounded-full"
-                style={{ width: 36, height: 36, backgroundColor: "rgba(0,0,0,0.35)" }}
+                style={{
+                  width: 34,
+                  height: 34,
+                  backgroundColor: "#fff",
+                  shadowColor: "#44403c",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.16,
+                  shadowRadius: 6,
+                  elevation: 3,
+                }}
               >
-                <Ionicons name="add" size={22} color="white" />
+                <Ionicons name="add" size={20} color={BRAND_TEXT} />
               </View>
             </View>
           </>
         )}
       </Pressable>
-      <Text className="mt-1 text-center text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-        {label}
-      </Text>
+      {/* Empty slots only. The mock puts this label inside the slot; here it
+          sits under it, because the pose illustration fills the slot and a
+          label on top of it can't be relied on to stay legible. A filled slot
+          gets no caption — the olive chip already names the angle, and both
+          at once just reads as the word twice. */}
+      {selected ? null : (
+        <Text
+          maxFontSizeMultiplier={1.1}
+          className="mt-1.5 text-center"
+          style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.9, textTransform: "uppercase", color: "#a8a29e" }}
+        >
+          {label}
+        </Text>
+      )}
       <SourceModal visible={pickerOpen} onPick={handlePick} onClose={() => setPickerOpen(false)} />
     </View>
   );
@@ -148,7 +200,8 @@ export function PhotoUpload({ userId, onUploaded, allowDatePick = false }) {
     }
   };
 
-  const hasSelection = Object.keys(selected).length > 0;
+  const selectedCount = Object.keys(selected).length;
+  const hasSelection = selectedCount > 0;
 
   return (
     <View>
@@ -180,12 +233,30 @@ export function PhotoUpload({ userId, onUploaded, allowDatePick = false }) {
           <AngleBox key={a.key} angle={a.key} label={a.label} selected={selected[a.key]} uploading={uploading} onPicked={handlePicked} onCleared={handleCleared} />
         ))}
       </View>
+      {/* Primary CTA, v5 shape — and it names what it's about to send, so a
+          member who picked two of three angles can see that before tapping. */}
       <Pressable
         onPress={handleUpload}
-        disabled={!hasSelection || uploading} style={{ opacity: !hasSelection || uploading ? 0.5 : 1 }}
-        className="mt-4 items-center rounded-lg bg-primary py-3.5"
+        disabled={!hasSelection || uploading}
+        className="mt-4 items-center py-4"
+        style={{
+          opacity: !hasSelection || uploading ? 0.5 : 1,
+          borderRadius: 15,
+          backgroundColor: colors.primary,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.25,
+          shadowRadius: 16,
+          elevation: 3,
+        }}
       >
-        {uploading ? <ActivityIndicator color="white" /> : <Text className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>Upload</Text>}
+        {uploading ? (
+          <ActivityIndicator color="white" />
+        ) : (
+          <Text maxFontSizeMultiplier={1.2} className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+            {selectedCount > 0 ? `Upload ${selectedCount} photo${selectedCount === 1 ? "" : "s"}` : "Upload"}
+          </Text>
+        )}
       </Pressable>
     </View>
   );

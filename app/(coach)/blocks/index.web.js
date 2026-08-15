@@ -604,6 +604,13 @@ export default function BlocksWeb() {
         <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 6 }}>
           <Text style={{ fontFamily: fonts.display, fontSize: 28, color: colors.primary }}>Group Programs</Text>
           <View style={{ flexDirection: "row", gap: 10 }}>
+            {/* Read view of the block, in the member's own language. */}
+            <PressFade
+              onPress={() => router.push(selectedProgramId ? `/(coach)/blocks/overview?program=${selectedProgramId}` : "/(coach)/blocks/overview")}
+              style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: "#fff" }}
+            >
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Preview</Text>
+            </PressFade>
             <PressFade
               onPress={() => selectedProgramId && router.push(`/(coach)/blocks/history?program=${selectedProgramId}`)}
               style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: "#fff" }}

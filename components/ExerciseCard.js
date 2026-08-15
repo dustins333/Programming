@@ -75,12 +75,13 @@ export function getTargetSets(item) {
 }
 
 // Prescription only — the coach's free-text note deliberately gets its own
-// labelled line rather than being glued on with "·" in the same muted color.
+// labelled line rather than being glued on in the same muted color.
+// "|" is the house separator (v5 house rule 4), not "·" or an em-dash.
 export function targetLineFor(item) {
   const parts = [`${getTargetSets(item)} × ${repSchemeSummary(item.repScheme) ?? item.targetReps ?? "–"}`];
   if (item.tempo) parts.push(`tempo ${item.tempo}`);
   if (item.rest) parts.push(`rest ${item.rest}`);
-  return parts.join(" · ");
+  return parts.join(" | ");
 }
 
 export function coachNoteFor(item) {
@@ -469,7 +470,7 @@ export function ExerciseCard({
   } else if (lastSummary) {
     subtitle = (
       <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
-        Last time {formatDateMD(lastSession.date)} ·{" "}
+        Last time {formatDateMD(lastSession.date)} |{" "}
         <Text style={{ fontFamily: fonts.sansSemiBold, color: "#78716c" }}>{lastSummary}</Text>
       </Text>
     );

@@ -645,6 +645,15 @@ export default function SpcClientBlockWeb() {
                 as past blocks — the native page has always linked here, but
                 this .web.js sibling never did, so on the platform where
                 programming actually happens none of that was reachable. */}
+            {/* Read view of this client's block in the member's own
+                language — the builder is a build surface and doesn't hold up
+                on a phone. */}
+            <PressFade
+              onPress={() => router.push(`/(coach)/spc/overview/${userId}`)}
+              style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 15, backgroundColor: "#fff" }}
+            >
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Preview</Text>
+            </PressFade>
             <PressFade
               onPress={() => router.push(`/(coach)/spc/history/${userId}`)}
               style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 15, backgroundColor: "#fff" }}

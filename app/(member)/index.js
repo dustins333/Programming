@@ -4,14 +4,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
-import { todayInBoise, dayOfWeekInBoise, addDays } from "../../lib/boiseDate";
+import { todayInBoise, dayOfWeekInBoise, dateInBoise, addDays } from "../../lib/boiseDate";
 import { currentWeekNumber, sessionNumberForDate, formatSessionDays, blockLengthWeeks } from "../../lib/programming/schedule";
-import { listMyAssignments, getCurrentBlock, listWorkoutsForWeek } from "../../lib/programming/memberPlan";
+import { listMyAssignments, getCurrentBlock, listWorkoutsForWeek, listLogsForSession } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
 import { listSpcWorkoutExercises, listSpcWarmups } from "../../lib/programming/spcWorkouts";
-import { listGroupCompletionsForWorkouts, getCompletedSpcWorkoutIdsForWeek } from "../../lib/programming/sessionCompletions";
+import { listGroupCompletionDetailsForWorkouts, listSpcCompletionDetailsForWorkouts, finalizeGroupSession } from "../../lib/programming/sessionCompletions";
 import { listWeekOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import { hasUnreadMessages } from "../../lib/programming/messages";
 import { listLiveEventsForUser, listMyResponses } from "../../lib/programming/events";
@@ -19,7 +19,8 @@ import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettin
 import { listLogsForDateRange } from "../../lib/nutrition/dailyLog";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { retryOnce } from "../../lib/retry";
-import { SessionPreviewModal } from "../../components/SessionPreviewModal";
+import { formatDateMDY } from "../../lib/formatDate";
+import { SessionSheet } from "../../components/SessionSheet";
 import { ProgressRing } from "../../components/ProgressRing";
 import { PressFade } from "../../components/PressFade";
 import { fonts, colors } from "../../lib/theme";
@@ -79,6 +80,32 @@ function formatToday() {
 function firstDayName(days) {
   if (!Array.isArray(days) || days.length === 0) return null;
   return WEEKDAYS[days[0]] ?? null;
+}
+
+// logs → exerciseId → [{ reps, weight }] by set number, padded to the
+// prescribed set count so a set she never did shows as the missed box rather
+// than quietly shortening the row. Shared by all three session openers.
+function setsByExercise(logs, exerciseRows) {
+  const byExercise = new Map();
+  if (!logs) return byExercise;
+  for (const ex of exerciseRows) {
+    const exerciseId = ex.exercises?.id ?? ex.exercise_id;
+    const rows = logs.filter((l) => l.exercise_id === exerciseId);
+    if (rows.length === 0) {
+      byExercise.set(exerciseId, []);
+      continue;
+    }
+    const highest = Math.max(ex.sets ?? 0, ...rows.map((r) => r.set_number ?? 1));
+    byExercise.set(
+      exerciseId,
+      Array.from({ length: highest }, (_, i) => {
+        const row = rows.find((r) => (r.set_number ?? 1) === i + 1);
+        if (!row || (row.reps == null && row.weight == null)) return null;
+        return { reps: row.reps, weight: row.weight };
+      })
+    );
+  }
+  return byExercise;
 }
 
 function Eyebrow({ children, color = INK_MUTED, style }) {
@@ -270,7 +297,12 @@ function QuietHero({ eyebrow, title, titleColor = OLIVE, meta, ctaLabel, onPress
 // browser: the "TODAY" label rendered 10px tall while every " " sibling
 // rendered 0, dropping today's stripe 10px below the rest of its row. The
 // height/lineHeight pair below makes the slot exist whatever's in it.
-function SessionStripe({ completed, published, caption, isToday, onPress, accessibilityLabel }) {
+// `sessionLabel` ("S1", "S2", …) shares that same reserved row, per
+// design_handoff_member_block_v1: without it the stripe says WED / THU and the
+// sheet it opens says "Session 2", with nothing linking the two. Today's
+// stripe carries both, as "S2 | TODAY".
+function SessionStripe({ completed, published, caption, isToday, sessionLabel, onPress, accessibilityLabel }) {
+  const label = [sessionLabel, isToday ? "TODAY" : null].filter(Boolean).join(" | ");
   return (
     <PressFade
       onPress={published ? onPress : () => showToast("Not published yet — check back soon.")}
@@ -292,12 +324,12 @@ function SessionStripe({ completed, published, caption, isToday, onPress, access
           lineHeight: 11,
           height: 11,
           letterSpacing: 0.8,
-          color: BRAND_TEXT,
+          color: isToday ? BRAND_TEXT : "#c9c4bd",
           textAlign: "center",
           marginBottom: 5,
         }}
       >
-        {isToday ? "TODAY" : ""}
+        {label}
       </Text>
       <View
         style={{
@@ -374,6 +406,7 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
             published={row.published}
             caption={row.caption}
             isToday={row.isToday}
+            sessionLabel={row.sessionLabel}
             onPress={row.onPress}
             accessibilityLabel={`Preview ${row.label}${row.title && row.title !== "Untitled session" ? `, ${row.title}` : ""}`}
           />
@@ -695,7 +728,8 @@ export default function MemberHome() {
   // they live; this is just the nudge on the screen people actually open.
   const [pendingEvents, setPendingEvents] = useState([]);
   const [heroExerciseCount, setHeroExerciseCount] = useState(null);
-  const [preview, setPreview] = useState(null); // { visible, loading, title, subtitle, warmups, exercises }
+  const [preview, setPreview] = useState(null); // see the three open*Preview builders below
+  const [savingBacklog, setSavingBacklog] = useState(false);
 
   // Tabs stay mounted, and useFocusEffect below re-runs load() on every
   // focus — flipping tabs quickly (or any slow network response) can leave
@@ -738,7 +772,10 @@ export default function MemberHome() {
               const weekNumber = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), today);
               const workouts = await listWorkoutsForWeek(block.id, weekNumber);
               const workoutIds = workouts.map((w) => w.id);
-              const completedIds = await listGroupCompletionsForWorkouts(profile.id, workoutIds);
+              // The details variant (a Map of id -> completed_at) rather than the
+              // plain id Set: the session sheet's "LOGGED {date}" pill needs the
+              // day it happened, and .has() reads identically for the counts.
+              const completedIds = await listGroupCompletionDetailsForWorkouts(profile.id, workoutIds);
 
               // Every program owns its own session count and day-of-week map
               // now (migrations 0010/0011) — Flagship/BWA's 3-sessions-
@@ -761,11 +798,23 @@ export default function MemberHome() {
                   workout,
                   published: !!workout,
                   label: `Session ${sessionNumber}`,
+                  sessionLabel: `S${sessionNumber}`,
                   title: workout?.title || "Untitled session",
                   caption: formatSessionDays(program.session_days?.[sessionNumber - 1]),
                   dayName: firstDayName(program.session_days?.[sessionNumber - 1]),
                   completed: workout ? completedIds.has(workout.id) : false,
+                  completedAt: workout ? completedIds.get(workout.id) ?? null : null,
                   isToday: sessionNumber === todaysSessionNumber,
+                  // Both of this session's days are behind us in the current
+                  // week — so tapping it is a back-log, not a "log today".
+                  // Weekday ints are 0=Sun..6=Sat but the week runs Mon-Sun
+                  // here, so both sides shift to a Monday-based index first.
+                  dayPassed: (() => {
+                    const days = program.session_days?.[sessionNumber - 1];
+                    if (!Array.isArray(days) || days.length === 0) return false;
+                    const monBased = (d) => (d + 6) % 7;
+                    return Math.max(...days.map(monBased)) < monBased(dayOfWeekInBoise(today));
+                  })(),
                 };
               });
 
@@ -806,7 +855,7 @@ export default function MemberHome() {
 
         const sessionsPerWeek = spcClient.sessions_per_week;
         const workoutIds = workouts.map((w) => w.id);
-        const completedIds = await getCompletedSpcWorkoutIdsForWeek(profile.id, workoutIds, weekNumber);
+        const completedIds = await listSpcCompletionDetailsForWorkouts(profile.id, workoutIds);
 
         const rows = Array.from({ length: sessionsPerWeek }, (_, i) => i + 1).map((sessionNumber) => {
           const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
@@ -816,8 +865,10 @@ export default function MemberHome() {
             workout,
             published: !!workout,
             label: `Session ${sessionNumber}`,
+            sessionLabel: `S${sessionNumber}`,
             title: workout?.title || "Untitled session",
-            completed: workout ? completedIds.has(workout.id) : false,
+            completed: workout ? completedIds.has(`${workout.id}:${weekNumber}`) : false,
+            completedAt: workout ? completedIds.get(`${workout.id}:${weekNumber}`) ?? null : null,
           };
         });
 
@@ -1115,9 +1166,13 @@ export default function MemberHome() {
       visible: true,
       loading: true,
       error: null,
-      title: `${groupEntry.programName} — Week ${groupEntry.weekNumber}, ${row.label}`,
-      subtitle: row.title !== "Untitled session" ? row.title : null,
-      completed: row.completed,
+      eyebrow: `Week ${groupEntry.weekNumber} | ${row.label}`,
+      title: row.title !== "Untitled session" ? row.title : row.label,
+      // My Week only ever shows the current week, so a session here is
+      // logged, today's, already gone by (back-log) or still to come.
+      state: row.completed ? "logged" : row.isToday ? "today" : row.dayPassed ? "backlog" : "today",
+      completedDateLabel: row.completedAt ? formatDateMDY(dateInBoise(new Date(row.completedAt))) : null,
+      pillLabel: row.completed ? null : row.isToday ? null : row.dayPassed ? null : "LATER THIS WEEK",
       logParams: {
         session: "group",
         groupProgramId: groupEntry.groupProgramId,
@@ -1125,20 +1180,31 @@ export default function MemberHome() {
         sessionNumber: String(row.sessionNumber),
       },
       retry: () => openGroupPreview(groupEntry, row),
+      source: groupEntry.source,
+      session: { groupWorkoutId: row.workout.id },
       warmups: [],
       exercises: [],
     });
     try {
-      const [warmups, exercises] = await Promise.all([listWarmups(row.workout.id), listWorkoutExercises(row.workout.id)]);
+      const [warmups, exercises, logs] = await Promise.all([
+        listWarmups(row.workout.id),
+        listWorkoutExercises(row.workout.id),
+        row.completed ? listLogsForSession(profile.id, { groupWorkoutId: row.workout.id }) : Promise.resolve(null),
+      ]);
       setPreview((p) => ({
         ...p,
         loading: false,
         warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
         exercises: exercises.map((ex) => ({
           id: ex.id,
-          name: ex.exercises?.name,
-          detail: `${ex.sets}×${ex.reps}${ex.tempo ? ` · ${ex.tempo}` : ""}`,
+          exerciseId: ex.exercises?.id ?? ex.exercise_id,
+          name: ex.exercises?.name ?? "Exercise",
+          // Sets × reps only — rest lives on the logging screen, not here.
+          detail: `${ex.sets ?? "–"} × ${ex.reps ?? "–"}`,
+          supersetGroupId: ex.superset_group_id,
+          targetSets: ex.sets,
         })),
+        loggedSets: setsByExercise(logs, exercises),
       }));
     } catch (err) {
       setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));
@@ -1151,25 +1217,41 @@ export default function MemberHome() {
       visible: true,
       loading: true,
       error: null,
-      title: `SPC — ${row.label}`,
-      subtitle: row.title !== "Untitled session" ? row.title : null,
-      completed: row.completed,
+      eyebrow: `Week ${spcEntry.weekNumber} | ${row.label}`,
+      title: row.title !== "Untitled session" ? row.title : row.label,
+      // SPC has no day-of-week routing, so a session is either done or open.
+      state: row.completed ? "logged" : "today",
+      pillLabel: row.completed ? null : "THIS WEEK",
+      completedDateLabel: row.completedAt ? formatDateMDY(dateInBoise(new Date(row.completedAt))) : null,
       logParams: { session: "spc", weekNumber: String(spcEntry.weekNumber), sessionNumber: String(row.sessionNumber) },
       retry: () => openSpcPreview(spcEntry, row),
+      source: "spc",
+      session: { spcWorkoutId: row.workout.id, weekNumber: spcEntry.weekNumber },
       warmups: [],
       exercises: [],
     });
     try {
-      const [warmups, exerciseRows] = await Promise.all([listSpcWarmups(row.workout.id), listSpcWorkoutExercises(row.workout.id)]);
+      const [warmups, exerciseRows, logs] = await Promise.all([
+        listSpcWarmups(row.workout.id),
+        listSpcWorkoutExercises(row.workout.id),
+        row.completed
+          ? listLogsForSession(profile.id, { spcWorkoutId: row.workout.id, weekNumber: spcEntry.weekNumber })
+          : Promise.resolve(null),
+      ]);
       setPreview((p) => ({
         ...p,
         loading: false,
         warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
         exercises: exerciseRows.map((ex) => ({
           id: ex.id,
-          name: ex.exercises?.name,
-          detail: `${ex.sets ?? "–"}×${ex.reps ?? "–"}`,
+          exerciseId: ex.exercises?.id ?? ex.exercise_id,
+          name: ex.exercises?.name ?? "Exercise",
+          // Sets × reps only — rest lives on the logging screen, not here.
+          detail: `${ex.sets ?? "–"} × ${ex.reps ?? "–"}`,
+          supersetGroupId: ex.superset_group_id,
+          targetSets: ex.sets,
         })),
+        loggedSets: setsByExercise(logs, exerciseRows),
       }));
     } catch (err) {
       setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));
@@ -1181,25 +1263,37 @@ export default function MemberHome() {
       visible: true,
       loading: true,
       error: null,
+      eyebrow: "Extra session",
       title: item.label,
-      subtitle: null,
-      completed: item.completed,
+      state: item.completed ? "logged" : "today",
+      pillLabel: item.completed ? null : "ANYTIME",
       logParams: { session: "one_off", oneOffWorkoutId: item.workoutId },
       retry: () => openOneOffPreview(item),
+      source: "one_off",
+      session: { oneOffWorkoutId: item.workoutId },
       warmups: [],
       exercises: [],
     });
     try {
-      const [warmups, exercises] = await Promise.all([listOneOffWarmups(item.workoutId), listOneOffExercises(item.workoutId)]);
+      const [warmups, exercises, logs] = await Promise.all([
+        listOneOffWarmups(item.workoutId),
+        listOneOffExercises(item.workoutId),
+        item.completed ? listLogsForSession(profile.id, { oneOffWorkoutId: item.workoutId }) : Promise.resolve(null),
+      ]);
       setPreview((p) => ({
         ...p,
         loading: false,
         warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
         exercises: exercises.map((ex) => ({
           id: ex.id,
-          name: ex.exercises?.name,
-          detail: `${ex.sets}×${ex.reps}${ex.rest ? ` · rest ${ex.rest}` : ""}`,
+          exerciseId: ex.exercises?.id ?? ex.exercise_id,
+          name: ex.exercises?.name ?? "Exercise",
+          // Sets × reps only — rest lives on the logging screen, not here.
+          detail: `${ex.sets ?? "–"} × ${ex.reps ?? "–"}`,
+          supersetGroupId: ex.superset_group_id,
+          targetSets: ex.sets,
         })),
+        loggedSets: setsByExercise(logs, exercises),
       }));
     } catch (err) {
       setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));
@@ -1208,7 +1302,30 @@ export default function MemberHome() {
 
   const closePreview = () => setPreview((p) => (p ? { ...p, visible: false } : p));
 
-  const handleLogPress = () => {
+  // "Log this session" / "Update this session" hand off to My Fitness, which
+  // is where a session is actually worked through. "Save this session" is the
+  // back-log case and finishes here — the sets have already been typed into
+  // the sheet and autosaved against the date she picked, so all that's left is
+  // the completion row.
+  const handleLogPress = async (logDate) => {
+    if (preview?.state === "backlog" && preview?.session?.groupWorkoutId) {
+      setSavingBacklog(true);
+      try {
+        // 18:00Z is mid-day in Boise either side of DST — parsing without a
+        // zone would use the device's, which lands a back-log on the wrong
+        // Boise day from UTC+7 and later.
+        await finalizeGroupSession(profile.id, preview.session.groupWorkoutId, new Date(`${logDate}T18:00:00Z`).toISOString());
+        closePreview();
+        showToast("Session saved.");
+        load();
+      } catch (err) {
+        console.error("My Week: back-log finalize failed", err);
+        showToast("Couldn't save that session — try again.");
+      } finally {
+        setSavingBacklog(false);
+      }
+      return;
+    }
     const logParams = preview?.logParams;
     if (!logParams) return;
     closePreview();
@@ -1406,18 +1523,24 @@ export default function MemberHome() {
       )}
       {nutrition?.status === "onboarding" && <OnboardingNutritionCard onNavigate={() => router.push("/(member)/nutrition")} />}
 
-      <SessionPreviewModal
+      <SessionSheet
         visible={!!preview?.visible}
         onClose={closePreview}
+        eyebrow={preview?.eyebrow}
         title={preview?.title}
-        subtitle={preview?.subtitle}
+        state={preview?.state ?? "today"}
+        pillLabel={preview?.pillLabel}
+        completedDateLabel={preview?.completedDateLabel}
         loading={preview?.loading}
         error={preview?.error}
         onRetry={preview?.retry}
-        warmups={preview?.warmups}
         exercises={preview?.exercises}
-        completed={preview?.completed}
-        onLogPress={handleLogPress}
+        loggedSets={preview?.loggedSets}
+        userId={profile.id}
+        source={preview?.source}
+        session={preview?.session}
+        ctaBusy={savingBacklog}
+        onCta={handleLogPress}
       />
     </ScrollView>
   );

@@ -3369,6 +3369,172 @@ submission round trip, the Extra pay merge against real requests, a real
 finalize, and on the admin side a real approve / send-back / reopen round
 trip and a period close.
 
+## Member block overview + the four-state session sheet (2026-08-15)
+
+A handoff (`design_handoff_member_block_v1/` — README + `.dc.html` turns 13/14
++ 9 screenshots) covering the two connected surfaces that had never been
+designed: the screen behind *View full block ›*, and the sheet that opens when
+a member taps a session. **My Week itself is not redesigned** — hero, program
+cards, stripes and ring all stay; it gains exactly one thing (below).
+
+**The counting rule that drives the whole thing: a week is measured against
+the member's own `sessions_per_week`, never against how many sessions the
+coach published.** A 3× member who trained twice reads `1 missed`; a 2× member
+who trained twice reads `Complete` even with an untouched third session on
+screen. The shortfall is the number shown — a ratio would invite a 2× member
+to read her own finished week as incomplete. The block hero's denominator is
+`weeks × her target` for the same reason: it can't move as sessions get
+written. And **nothing unpublished is drawn** — a week with no published
+sessions isn't rendered at all, so the page ends where the program does; a
+week published 2-of-3 pads its row with an empty spacer so the two tiles keep
+their width.
+
+**Block overview** (`app/(member)/plan-block.js`, new `components/
+BlockProgressHero.js` + `BlockWeekCard.js`) — dark one-line hero (`Block 12 |
+Week 3 of 6`, thin bar, `9 of 18 sessions done`) over one status-tinted
+container per week: pale olive Complete, pale red `N missed`, clay This week,
+warm grey Coming up. Tiles say **`Session N`, never the coach's title** — a
+title is optional and a grid alternating between named and unnamed tiles reads
+as broken; the title lives on the session itself. "Block 12" is derived the
+same way SPC's `labelBlocks()` does it (chronological position via
+`listBlocksForProgram`, which members can read — same table `getCurrentBlock`
+already uses), in its own try/catch so a failure just drops to "Week 3 of 6".
+
+**The session sheet** — new `components/SessionSheet.js` + `components/
+session/` (`SessionSheetParts.js`, `BacklogDatePicker.js`, `BacklogSetGrid.js`).
+Four states switched on the session's **date and its completion row**, not one
+`completed` boolean: `today` → "Log this session"; `backlog` → date question
+then set entry, "Save this session"; `logged` → what she did, "Update this
+session"; `future` → **no button at all**, just a line. Row anatomy is shared
+by every state: position chip, lift name, prescription — nothing else, no
+history or last-time weights (those belong in the logger, where she's actually
+comparing). Consecutive singles share one card; each superset is its own
+bracketed card with a rounds header. Logged rows put the sets in a full-width
+row *beneath* the lift name, indented to the name column — structural, not
+decorative: a five-set lift crushes the name if they share the line. Sets are
+`flex: 1`, so three or five fit the same width.
+
+**Two real bugs this fixes, both behavioural:**
+1. **Back-logging recorded the wrong day.** The old sheet offered "Log
+   session" for any incomplete session with no date question at all, so a
+   session done last Thursday was stored as today. `BacklogDatePicker` asks
+   first — Today plus the two days behind it as one-tap chips, "Pick a date"
+   for anything older, and **never a day ahead**, since she can't have trained
+   on one. The date locks once she starts entering sets (changing it mid-entry
+   would split one session's log across two dates).
+2. **A future session could be logged.** A session in a week that hasn't
+   started now renders no button — deliberately removed rather than disabled,
+   because a disabled button gets tapped.
+
+**Set entry (14b) is a column per set** — reps on top, weight beneath, units
+labelled once down the left edge instead of repeated in twelve boxes; empty
+boxes stay dashed so an unfinished set is visible without an error state.
+Persistence is the **same per-set `logResult` upsert the live logger uses**, so
+a back-logged set is indistinguishable from one logged on the day — it just
+carries the chosen date. Deliberately thinner than the live logger: no rest
+timer, no last-time panel, no per-exercise ticks. She's catching up on
+something already done, not working through it at a rack.
+
+**My Week's one addition**: the session number in the label row that already
+existed for `TODAY` (`S1`, `S2 | TODAY`, `S3`). Without it the stripe says
+`WED / THU` and the sheet it opens says `Session 2`, with nothing shared
+between them. That row already had an explicit height (see the v5 note on why
+a `" "` placeholder collapses), so no layout risk. My Week's three preview
+openers now also feed the sheet real state — a current-week session whose days
+have already passed opens as `backlog` and finalizes right there; SPC and
+one-offs have no day-of-week routing so they're `today`-or-`logged` with their
+own pill (`THIS WEEK` / `ANYTIME`) via the sheet's `pillLabel` override.
+
+**Real bug caught by looking rather than reasoning**: the sheet's `maxHeight:
+"84%"` did **not** stop the ScrollView from sizing to its own content and
+pushing the footer CTA clean off the bottom of the screen — a flex child needs
+`overflow: "hidden"` on the container plus `flexShrink: 1` on the scroller to
+actually give way. Clean bundle, clean console, and it would have shipped a
+sheet whose button you could never reach on any session longer than about four
+lifts.
+
+**Deliberately left alone**: `SessionPreviewModal` still exists and is still
+used by four **coach** screens (both builders, SPC templates, CoachHomeDesktop)
+— the handoff's "replace" is scoped to the member surface. `plan-spc-block.js`
+still uses `SessionDetailModal`; the handoff is written against the group block
+page, and porting SPC is its own pass.
+
+**Open questions the handoff raises and this build does not answer** (worth
+Terra's call): whether a 2× member's untouched third session should be
+loggable as a bonus (currently yes), whether pale red is too strong for a week
+she was ill or travelling, and where a correction lives if a back-logged date
+turns out wrong (13d/14c show the date as fact with no edit affordance).
+
+**Verification**: all four sheet states and the block overview were rendered at
+390×844 through a throwaway `app/zz-harness.js` route and screenshotted against
+the mocks (harness deleted, `git status` confirmed clean); `npx expo export -p
+web` clean; a Babel scope pass over every touched file, since Metro doesn't
+resolve identifiers. **Not verified**: any of it behind a real login, or on
+native — standing limitation. Worth Terra's click-through of a real block, a
+real back-log save, and confirming the tile states against a week she actually
+missed.
+
+### Follow-ups from Terra's click-through
+
+- **"This week" was a third tint and read as the red one.** The mock gives the
+  current week a peach fill one shade off the pale red of a short week. It's a
+  **white card with a 3px clay border, a larger week label and a filled `THIS
+  WEEK` chip** instead — an outline, not a wash, which is also the app's own
+  selected-state language.
+- **Back-log dates run oldest→newest** (two days ago, yesterday, today) and
+  "Pick a date" opens a real month grid (`lib/monthGrid.js`, future days inert,
+  forward arrow stops at this month) rather than a 30-item dropdown.
+- **Rest is out of the overview and the sheet** — `4 × 8`, not `4 × 8 | rest
+  2:00`. It isn't set on every lift, so half the rows read as incomplete
+  prescriptions. It still shows in the logger, where she's timing against it.
+- **My Week's logged pill carries a real date.** It was fetching completions as
+  a bare id Set; both group and SPC now use the `…CompletionDetails…` variants,
+  so the pill reads `LOGGED AUG 11`.
+- **The logger already kept a completed session's original date** (it derives
+  `datePerformed` from `completed_at`, falling back to today only when there's
+  no completion), so "Update this session" edits the day it happened. No change
+  was needed — worth knowing before "fixing" it.
+
+### The coach preview, and why it isn't a Preview button
+
+The builder — even read-only — is a build surface, and doesn't hold up on a
+phone. Coaches get the member's own block view instead, via
+`components/coach/CoachBlockOverview.js` and `CoachSpcOverview.js` (one
+component each, so the pushed web routes and the embedded native screens can't
+drift).
+
+**On native the overview IS the screen**, with nothing to press first:
+`app/(coach)/blocks/index.js` (program pills + block) and
+`app/(coach)/spc/[userId].js` (that client's block). Both were large build
+grids and are now ~30-line screens; the grids survive untouched in their
+`.web.js` siblings, which shadow these entirely on web. Each keeps one
+`Manage blocks ›` link so a coach isn't locked out of block length / Extend /
+rolling / past blocks from a phone. **What native deliberately gives up on the
+SPC page** (Terra's explicit call): editing status, assigned coach and
+sessions-per-week, the coach notes, recent sessions, and building from the
+grid. The pre-restructure versions are in this session's scratchpad if either
+needs reviving.
+
+Two differences from the member view, both because it's a coach looking:
+drafts are **drawn** (as the dashed tile) where the member view hides
+unpublished sessions entirely, and the hero counts **published**, not
+completed — a group block is shared, so there's no one person's completion to
+report. `BlockWeekCard` gained a `neutral` tone for this; only the current
+week is marked.
+
+`components/BlockPicker.js` steps through blocks (a stepper, not a tab row —
+a client with a dozen blocks wraps tabs into three lines on a phone).
+`blockHeroTitle` keeps the hero honest across them: `Week 3 of 6` only for the
+block covering today, else `Finished 06/23` / `Starts 09/08`. The default block
+is **resolved, never written back to state** — setting it would change the
+loader's own dependency and double-fetch on every open.
+
+**Real bug worth remembering: `listBlocksForSpcClient` takes the USER id, not
+`spc_clients.id`.** `spc_blocks.spc_client_id` stores the user id despite the
+parameter name (every pre-existing call site passes `userId`; `getCurrentSpcBlock`
+does too). Passing `spcClient.id` returns zero rows silently — it hit both the
+new coach overview and, invisibly, the member SPC block page's hero label.
+
 ## Working notes for future sessions
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.

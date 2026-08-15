@@ -73,7 +73,7 @@ function QuestionnairePanel({ userId, questions, response, onSubmitted }) {
             <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold }}>
               {a.question}
             </Text>
-            <Text style={{ fontFamily: fonts.sans }}>{a.answer || "—"}</Text>
+            <Text style={{ fontFamily: fonts.sans }}>{a.answer || "–"}</Text>
           </View>
         ))}
       </View>
