@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, TextInput, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -11,6 +11,7 @@ import { listMembers } from "../../lib/programming/clients";
 import { formatDateMDY } from "../../lib/formatDate";
 import { CoachShell } from "../CoachShell";
 import { PressFade } from "../PressFade";
+import { useKeyboardInset } from "../../lib/useKeyboardInset";
 import { fonts, colors } from "../../lib/theme";
 
 // Coach home on a phone — the mobile web (PWA) build and the native app both
@@ -180,9 +181,13 @@ function StatCard({ icon, label, count, caption, tone, countIsIssue, hideCount, 
 // dead end when the thing you want isn't one of the listed rows. Outside the
 // ScrollView so a long list can't push it off the bottom.
 function Sheet({ visible, onClose, title, subtitle, footerLabel, onFooterPress, children }) {
+  const { keyboardInset, visibleHeight } = useKeyboardInset();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable onPress={onClose} style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(68,64,60,0.35)" }}>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, justifyContent: "flex-end", paddingBottom: keyboardInset, backgroundColor: "rgba(68,64,60,0.35)" }}
+      >
         <Pressable
           onPress={(e) => e.stopPropagation?.()}
           style={{
@@ -192,7 +197,11 @@ function Sheet({ visible, onClose, title, subtitle, footerLabel, onFooterPress, 
             paddingHorizontal: 16,
             paddingTop: 14,
             paddingBottom: 26,
-            maxHeight: "85%",
+            // px off the VISIBLE height on web, so the sheet keeps the same
+            // proportion of what's on screen instead of 85% of a layout
+            // viewport that never shrank. Falls back to the percentage on
+            // native, where the modal isn't position:fixed to begin with.
+            maxHeight: visibleHeight ? Math.round(visibleHeight * 0.85) : "85%",
           }}
         >
           <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 99, backgroundColor: "#dcd6ce", marginBottom: 14 }} />
@@ -266,48 +275,90 @@ function SheetEmpty({ children }) {
 // The phone-only affordance the desktop dashboard has no equivalent of, and
 // the reason it sits directly under the band rather than among the cards:
 // looking someone up is the single most common thing to want on a gym floor.
+const LOOKUP_LIMIT = 25;
+
 function ClientLookupSheet({ visible, onClose, router }) {
   const [query, setQuery] = useState("");
   const [members, setMembers] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const { keyboardInset, visibleHeight } = useKeyboardInset();
 
-  const open = async () => {
-    if (members) return;
+  // Fetch as soon as the sheet is asked for, NOT on the Modal's onShow —
+  // onShow fires when the slide animation finishes, so anyone who started
+  // typing during the slide hit `members === null` and got a spinner instead
+  // of matches. It read as "the filter doesn't work"; the filter was fine,
+  // there was just nothing to filter yet. Starting here overlaps the fetch
+  // with the animation instead of queueing behind it.
+  useEffect(() => {
+    if (!visible || members) return;
+    let cancelled = false;
     setLoadError(null);
-    try {
-      setMembers(await listMembers());
-    } catch (err) {
-      setLoadError(err.message ?? String(err));
-    }
-  };
+    listMembers()
+      .then((rows) => !cancelled && setMembers(rows))
+      .catch((err) => !cancelled && setLoadError(err.message ?? String(err)));
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, members]);
 
-  const results = useMemo(() => {
-    if (!members) return [];
+  // Clear the query on close so reopening starts fresh rather than showing
+  // whoever you looked up last. `members` is deliberately kept — it's the
+  // expensive half and the roster doesn't change between two taps.
+  useEffect(() => {
+    if (!visible) setQuery("");
+  }, [visible]);
+
+  const { rows, total } = useMemo(() => {
+    if (!members) return { rows: [], total: 0 };
     const q = query.trim().toLowerCase();
-    const rows = q
+    const matched = q
       ? members.filter((m) => (m.name ?? "").toLowerCase().includes(q) || (m.email ?? "").toLowerCase().includes(q))
       : members;
-    return rows.slice(0, 25);
+    return { rows: matched.slice(0, LOOKUP_LIMIT), total: matched.length };
   }, [members, query]);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose} onShow={open}>
-      <Pressable onPress={onClose} style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(68,64,60,0.35)" }}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, justifyContent: "flex-end", paddingBottom: keyboardInset, backgroundColor: "rgba(68,64,60,0.35)" }}
+      >
         <Pressable
           onPress={(e) => e.stopPropagation?.()}
-          style={{ backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 26, maxHeight: "85%" }}
+          style={{
+            backgroundColor: CANVAS,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            paddingHorizontal: 16,
+            paddingTop: 14,
+            paddingBottom: 26,
+            maxHeight: visibleHeight ? Math.round(visibleHeight * 0.85) : "85%",
+          }}
         >
           <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 99, backgroundColor: "#dcd6ce", marginBottom: 14 }} />
-          <Text style={{ fontFamily: fonts.display, fontSize: 19, color: colors.primary, marginBottom: 10 }}>Find a client</Text>
+          <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+            <Text style={{ fontFamily: fonts.display, fontSize: 19, color: colors.primary }}>Find a client</Text>
+            {members ? (
+              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
+                {total > LOOKUP_LIMIT ? `first ${LOOKUP_LIMIT} of ${total}` : `${total} ${total === 1 ? "match" : "matches"}`}
+              </Text>
+            ) : null}
+          </View>
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Name or email"
             placeholderTextColor="#a8a29e"
             autoCorrect={false}
+            autoCapitalize="none"
             style={{
               fontFamily: fonts.sans,
-              fontSize: 15,
+              // 16, not 15. iOS Safari auto-zooms any field under 16px on
+              // focus. WebKeyboardViewport pins maximum-scale to suppress
+              // that, but not tripping it at all is stronger than unwinding
+              // it — and a zoom that fails to unwind in a standalone PWA
+              // leaves the app askew with no browser chrome to reset from.
+              fontSize: 16,
               backgroundColor: "white",
               borderWidth: 1,
               borderColor: CARD_BORDER,
@@ -322,10 +373,10 @@ function ClientLookupSheet({ visible, onClose, router }) {
               <Text style={{ fontFamily: fonts.sans, color: "#b23a22", paddingVertical: 10 }}>Couldn't load clients: {loadError}</Text>
             ) : !members ? (
               <ActivityIndicator color={colors.primary} style={{ marginTop: 14 }} />
-            ) : results.length === 0 ? (
+            ) : rows.length === 0 ? (
               <SheetEmpty>No clients match "{query.trim()}".</SheetEmpty>
             ) : (
-              results.map((m) => (
+              rows.map((m) => (
                 <SheetRow
                   key={m.id}
                   title={m.name ?? "Unnamed"}
