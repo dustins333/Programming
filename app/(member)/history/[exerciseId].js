@@ -31,7 +31,19 @@ function groupByDate(logs) {
 }
 
 export default function ExerciseHistory() {
-  const { exerciseId } = useLocalSearchParams();
+  // `returnTo`/`before` are set when this was opened from a lift's history
+  // sheet mid-session (see ExerciseHistoryModal). Reached from My History
+  // itself, both are absent and nothing below changes.
+  const { exerciseId, before, returnTo } = useLocalSearchParams();
+  const backToSession = useMemo(() => {
+    if (!returnTo) return null;
+    try {
+      return JSON.parse(returnTo);
+    } catch {
+      // A malformed param shouldn't strand her on a screen with no way out.
+      return "/(member)/plan";
+    }
+  }, [returnTo]);
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -41,12 +53,12 @@ export default function ExerciseHistory() {
   const load = useCallback(async () => {
     try {
       setLoadError(null);
-      const data = await listLogsForExercise(profile.id, exerciseId);
+      const data = await listLogsForExercise(profile.id, exerciseId, before ?? null);
       setLogs(data);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
-  }, [profile.id, exerciseId]);
+  }, [profile.id, exerciseId, before]);
 
   useEffect(() => {
     load();
@@ -56,8 +68,22 @@ export default function ExerciseHistory() {
 
   return (
     <View className="flex-1 px-6 pb-8" style={{ backgroundColor: CANVAS, paddingTop: insets.top + 6 }}>
-      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)/history"))} className="mb-3 self-start" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>‹ My History</Text>
+      {/* Opened mid-session, this pushes into the History tab's own stack, so
+          router.back() surrenders to the tab navigator and lands on My Week —
+          not where she actually came from. When we know the origin, navigate
+          to it explicitly instead of trusting the stack. */}
+      <Pressable
+        onPress={() => {
+          if (backToSession) router.push(backToSession);
+          else if (router.canGoBack()) router.back();
+          else router.push("/(member)/history");
+        }}
+        className="mb-3 self-start"
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>
+          {backToSession ? "‹ My Fitness" : "‹ My History"}
+        </Text>
       </Pressable>
 
       {loadError ? (

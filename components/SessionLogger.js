@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text } from "react-native";
-import { listLastLoggedSessions } from "../lib/programming/memberPlan";
 import {
   listGroupExerciseCompletionsForItems,
   listSpcExerciseCompletionsForItems,
@@ -59,11 +58,6 @@ export function SessionLogger({
   scrollViewRef,
   scrollOffsetRef,
   onDataChanged,
-  // Which reference the ghost value in every empty box comes from — the
-  // page header's own toggle drives this (see GhostSourceToggle). Defaulted
-  // rather than required so the read-only viewer in My History, which has no
-  // header to put a switch in, keeps the original behaviour.
-  ghostMode = "last",
 }) {
   // Drop any row whose exercises join came back null — an archived or
   // RLS-invisible exercise. Guarding here rather than at each of the ~6
@@ -78,11 +72,6 @@ export function SessionLogger({
   // null (not an empty Set) when the feature's off for this caller — that's
   // what tells ExerciseCard to render no checkbox at all.
   const [completions, setCompletions] = useState(null);
-  // Map<exerciseId, { date, sets, topSet }> — one batched query for the whole
-  // session, feeding both each card's "Last time …" header line and the grey
-  // ghost value in every not-yet-logged box. Firing getLastLoggedSession per
-  // card would be a real N+1 on a page that re-renders on every focus.
-  const [lastSessions, setLastSessions] = useState(null);
 
   // Superset pairs render adjacently regardless of stored position — group by
   // supersetGroupId (falling back to the item's own id so an unlinked
@@ -116,15 +105,10 @@ export function SessionLogger({
   // identity) can't stomp expansions the member has made by hand since.
   const seededKeyRef = useRef(null);
 
-  useEffect(() => {
-    if (exercises.length === 0) return;
-    // Own isolated catch — the cards are still fully usable without their
-    // last-time reference, so a failure here shouldn't blank the list.
-    listLastLoggedSessions(userId, exercises.map((item) => item.exercise.id), datePerformed)
-      .then(setLastSessions)
-      .catch((err) => console.error("Failed to load last-time sets:", err));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exerciseIdsKey, datePerformed, userId]);
+  // The batched last-time fetch that used to run here is gone with the in-box
+  // ghost it fed (design_handoff_member_lasttime_v1) — history is now loaded
+  // lazily, for one lift, only when the member actually opens the sheet. That
+  // takes a whole query off every session load and every refocus.
 
   // Batched, one round trip for the whole session — keyed by the join-row id
   // (item.id), not the raw exercise id, since that's what
@@ -239,8 +223,6 @@ export function SessionLogger({
       onToggleExpanded={handleToggleExpanded}
       completed={completions ? completions.has(item.id) : undefined}
       onToggleComplete={exerciseCompletionType ? (next, src) => handleToggleComplete(item, next, src) : undefined}
-      lastSession={lastSessions?.get(item.exercise.id) ?? null}
-      ghostMode={ghostMode}
       hideVideo={hideVideo}
       scrollViewRef={scrollViewRef}
       scrollOffsetRef={scrollOffsetRef}

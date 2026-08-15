@@ -1,7 +1,6 @@
 import { View, Text, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "./PressFade";
-import { GhostSourceToggle } from "./GhostSourceToggle";
 import { fonts, colors } from "../lib/theme";
 
 // My Fitness's session header (design_handoff_member_lift_v1).
@@ -39,8 +38,6 @@ export function SessionHeroBar({
   tabs,
   selectedTab,
   onSelectTab,
-  ghostMode,
-  onGhostModeChange,
 }) {
   // "{PROGRAM} | SESSION n" — "|" is the house separator (v5 house rule 4).
   const eyebrow = [programLabel, eyebrowDetail].filter(Boolean).join(" | ").toUpperCase();
@@ -125,16 +122,6 @@ export function SessionHeroBar({
           <Image source={require("../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
         </View>
       </View>
-
-      {/* Sits under "Full block ›" rather than in the row itself: it belongs
-          to the lift cards below, and hanging it off the right edge of the
-          header keeps that reading without stealing width from a two-line
-          session title. */}
-      {onGhostModeChange ? (
-        <View style={{ marginTop: 10 }}>
-          <GhostSourceToggle mode={ghostMode} onChange={onGhostModeChange} />
-        </View>
-      ) : null}
 
       {tabs && tabs.length > 1 ? (
         <View style={{ flexDirection: "row", gap: 6, marginTop: 12 }}>

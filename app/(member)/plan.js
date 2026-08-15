@@ -178,14 +178,6 @@ export default function MyFitness() {
   // by definition the chip is only ever tapped once something already is —
   // so reusing that gate meant the chip did nothing at all.
   const [pickerOpen, setPickerOpen] = useState(false);
-  // Which reference the grey shadow value in every empty reps/weight box comes
-  // from — "this" (the coach's programmed reps) or "last" (that set number
-  // from the last logged session). Defaulted to "last" so nothing about the
-  // boxes changes until she actually flips it. Lives here rather than in
-  // SessionLogger so the header's toggle and every card on the page agree, and
-  // so the choice survives a focus reload (load() unmounts the cards, not
-  // this screen).
-  const [ghostMode, setGhostMode] = useState("last");
   // The page's own ScrollView is what a focused reps/weight/notes field
   // scrolls itself above the keyboard inside — this used to be the focus
   // overlay's ScrollView, but with the session on one page the page is the
@@ -797,8 +789,6 @@ export default function MyFitness() {
           tabs={activeFinalize.tabs}
           selectedTab={activeFinalize.selectedTab}
           onSelectTab={activeFinalize.onSelectTab}
-          ghostMode={ghostMode}
-          onGhostModeChange={setGhostMode}
         />
       </View>
     ) : focus?.type === "extras" && oneOffs.length > 0 ? (
@@ -811,8 +801,6 @@ export default function MyFitness() {
           onPickProgram={candidates.length > 1 ? () => setPickerOpen(true) : null}
           title={oneOffs.length === 1 ? oneOffs[0].workout.title || "One-off workout" : `${oneOffs.length} one-off workouts`}
           onOpenSettings={() => router.push("/(member)/settings")}
-          ghostMode={ghostMode}
-          onGhostModeChange={setGhostMode}
         />
       </View>
     ) : (
@@ -927,7 +915,6 @@ export default function MyFitness() {
                   isCompleted={groupEntry.completed}
                   session={{ groupWorkoutId: groupEntry.workout.id }}
                   onFinalize={() => handleFinalizeGroup(groupEntry)}
-                  ghostMode={ghostMode}
                   layout="session"
                   exerciseCompletionType="group"
                   scrollViewRef={scrollViewRef}
@@ -1011,7 +998,6 @@ export default function MyFitness() {
                     weekNumber: spc.weekNumber,
                   }}
                   onFinalize={handleFinalizeSpc}
-                  ghostMode={ghostMode}
                   layout="session"
                   exerciseCompletionType="spc"
                   weekNumber={spc.weekNumber}
@@ -1055,7 +1041,6 @@ export default function MyFitness() {
               isCompleted={false}
               session={{ oneOffWorkoutId: workout.id }}
               onFinalize={() => handleFinalizeOneOff(workout.id)}
-              ghostMode={ghostMode}
               layout="session"
               exerciseCompletionType="one_off"
               scrollViewRef={scrollViewRef}

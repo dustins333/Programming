@@ -3620,6 +3620,130 @@ path that commit had replaced outright, so there was nothing to reapply. See the
 staging rule in the working notes below; it cuts both ways, and a file of yours
 vanishing from `git status` means it was committed by someone else, not reverted.
 
+## Last time comes out of the input boxes (2026-08-15)
+
+`design_handoff_member_lasttime_v1/` (README + 5 screenshots, no `.dc.html`),
+prompted by a real report: members were confused by the grey number sitting in
+each not-yet-logged reps/weight box. **This is the third attempt at the same
+problem and the first that removes it rather than relabelling it** — worth
+knowing before anyone reaches for a fourth. v5 put last time in as a plain
+ghost; 2026-08-13 added `GhostSourceToggle`, a This time/Last time switch
+picking the ghost's *source* with the ghost text colour-coded to match. Neither
+worked, because the problem was never which reference it drew from — **anything
+sitting inside an empty input reads as already-entered.** Terra's own read:
+"its confusing to have them inside of the fields like that."
+
+Direction **B** of the handoff (blank card, tap for everything) was chosen over
+A (a one-line `last: 3 × 10 @ 135` under the name); A stays in the file as the
+fallback if testing shows the tap is being skipped rather than taken.
+
+**The card.** An empty reps box now holds the one thing that is unambiguously
+NOT hers — the coach's prescription, tagged: `TARGET 8–10`, label first (a
+trailing tag read as a unit), 1.5px dashed `#ddd6cd` on `#fdfbf8`, value
+`#d5cdc4`. Empty weight boxes hold an en dash, since weight is never prescribed
+in this gym and there is nothing honest to put there. Keyed boxes go solid
+`#dbe8cf` on `#f3f6ef` at full size/weight. **Keyed is per BOX, not per row** —
+typing reps without a weight settles the reps box and leaves the weight box
+still asking; the clay border marks whichever box she's on. Nothing under the
+lift name but `Logged 3 × 8 @ 185`, and only once the card is closed over it.
+
+Two implementation notes that are load-bearing:
+- **The target is an overlay (`TargetHint`), not the TextInput's placeholder.**
+  A placeholder is one string in one style; the tag has to stay small enough
+  that the number is still what you read. Its position is written out longhand
+  — `StyleSheet.absoluteFillObject` inside a style array renders the view
+  invisible on this app's Fabric build, which cost a whole session once
+  already. `pointerEvents` lives in the style object so the tap still reaches
+  the input.
+- **Per-set targets are the strongest argument for the whole design**: a
+  `10/8/8` scheme reads `TARGET 10 / 8 / 8` down the column, which is exactly
+  what one summary line could never say. That's why `targetLineFor` was deleted
+  rather than kept alongside.
+
+**The sheet** (`ExerciseHistoryModal`, rewritten) is now the ONLY place a
+member sees what she lifted last time. Three sessions, one row each, date +
+"10 days ago", every set as its own pill in columns that align across the three
+rows; most recent tinted peach and tagged `LAST TIME`; `View full history ›`
+into My History. Three rather than one because the question is "should I go up
+today", not "what did I do"; set-by-set rather than a summary because the
+summary hides the case that decides it, where last week's third set dropped
+off. The chart and full log deliberately did NOT get rebuilt thinner in here.
+
+**Deleted**: `GhostSourceToggle.js` and its threading through `plan.js` →
+`SessionHeroBar` → `SessionLogger` → `ExerciseCard`; `targetLineFor`;
+`SessionLogger`'s batched `listLastLoggedSessions` call. That last one is a
+real efficiency win — history is now fetched lazily, for one lift, only when
+the sheet opens, taking a query off every session load and every refocus.
+
+**Kept, though the mock doesn't picture them**: `Coach note:` / `Cues:`, which
+only render when the coach wrote something (their absence in the mock is the
+example lift, not a decision), and a **new `Tempo:` line** — tempo lived only
+in the deleted `targetLineFor`, so without it it would silently stop reaching
+members, exactly how cues went unseen for months. Sets/reps moved into the
+boxes and rest is already under the stopwatch, so neither needed a home. Also
+kept the collapsed `Logged …` line, which screenshot `15b-1` omits: the README
+rules out "no last-time line, no per-set chip, no summary of what was asked
+for", and a record of what she *did* is none of those three.
+
+**Answers to the README's five open questions**, decided rather than sent back:
+last time = the last time she **logged** it (same-slot-previous-week breaks the
+moment she misses a session); fewer than three sessions shows what exists, with
+a first-time lift getting "First time logging this lift." and the name still
+tappable so the affordance doesn't silently vanish on some lifts; uneven set
+counts stay exactly as logged, since an invented empty pill reads as a set she
+skipped rather than one never asked for; `GOAL` → **`TARGET`**, because
+nutrition already uses "target" throughout and Terra confirmed; rest unchanged.
+
+**Three real bugs found after the first pass, two of them mine:**
+1. **`daysBetween` is A minus B, so today comes FIRST.** The other order made
+   every past session render as "today". CLAUDE.md already warns that the five
+   copies of this helper have three different rounding/offset semantics — this
+   is what that warning looks like in practice. Check the signature, don't
+   infer it from the name.
+2. **`listLogsForExercise` had no date cutoff**, so her own autosaved sets came
+   back as the most recent entry and got tagged `LAST TIME` within seconds of
+   typing them. The old ghost query (`getLastLoggedSession`) took a `today`
+   parameter for exactly this reason and it wasn't carried over. Now takes an
+   optional `before`, passed by the sheet and by the full-history screen when
+   either is reading history *of* a session she's currently in. **It's the
+   session's date, not literally today** — back-logging Thursday's workout has
+   to compare against what came before Thursday. My History reached normally
+   still shows everything, since a finished session today is genuinely history.
+3. **The full-history screen's back button landed on My Week.** Pushing
+   `history/[exerciseId]` from My Fitness enters the History tab's own stack,
+   so `router.back()` hands control to the tab navigator rather than returning
+   where she came from — the existing `canGoBack()` guard was doing what it was
+   told, the stack just doesn't mean what it looks like it means across tabs.
+   Fixed by carrying the origin explicitly: the sheet passes **`restReturnTo`**
+   (JSON-stringified, since route params must be strings), which already
+   existed for the rest timer's "Back to lift ›" and resolves the *specific*
+   session. That mattered — a plain push to `/(member)/plan` would have
+   silently dropped her onto today's session even when she'd deep-linked in to
+   update a past one. Label reads "‹ My Fitness" when it's set, "‹ My History"
+   otherwise; the read-only card in My History is untouched.
+   **Worth generalising: `router.back()` is not trustworthy for a push that
+   crosses tab stacks — carry the origin.**
+
+**Verification**: driven and screenshotted at 375px via a throwaway
+`app/zz-harness.js` route (a top-level route rather than mounting on
+`login.js` — it can't strand sign-in if teardown goes wrong), covering the
+target boxes, per-set schemes, the keyed/current/unkeyed treatments, the sheet
+at 3 and 5 sets, the first-time empty state, and the title colours measured out
+of the DOM (`rgb(164,106,87)` name, `rgb(213,205,196)` target label) rather
+than eyeballed. `expo export -p web` clean, plus a Babel parse/scope pass over
+every touched file — Metro resolves no identifiers, so a clean export is weaker
+evidence than it looks. **A measurement gotcha worth remembering**: the sheet's
+footer button measured at y=1552 in an 812 viewport and looked like the
+classic flex-child overflow bug — it was the Modal's own slide-up animation
+caught mid-flight. Re-measure after it settles before "fixing" a non-bug.
+
+**Not verified**: anything behind a real login, or on native. The two
+navigation behaviours (back landing on the right session, the sheet excluding
+today) both need real logged sets. Dashed borders with a corner radius render
+solid on iOS in some RN versions — other screens here use them fine, so
+probably OK, but the target overlay is exactly the kind of absolutely-
+positioned element this codebase has been bitten by twice.
+
 ## Working notes for future sessions
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.

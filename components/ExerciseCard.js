@@ -2,14 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, Linking, Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
-import { formatDateMD } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
 import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
 import { WeightCalculator } from "./WeightCalculator";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
 import { PressFade } from "./PressFade";
-import { ghostTint } from "./GhostSourceToggle";
 import { autofillSuppressedRef } from "../lib/webAutofillSuppression";
 import { useRestTimer, parseRestSeconds, formatSeconds } from "../lib/restTimer";
 
@@ -26,25 +24,44 @@ const AUTOSAVE_DELAY_MS = 900;
 //  - Sets are full-width rows (SET n | reps | lb) with REPS/LB said once per
 //    lift, rather than v5's four-across columns, which got cramped fast on a
 //    four-set lift.
-//  - "Last time" is one grey line in the header, not a red band (which read
-//    as a warning) — and the per-set reference is now the grey ghost value
-//    sitting in each not-yet-logged box.
 //  - The History and Video links are gone as pills. The lift title itself is
 //    the way into history + chart (chevron after the name); video is a small
 //    ▶ beside it.
+//
+// design_handoff_member_lasttime_v1 then took the last-time reference OFF the
+// card entirely, because two attempts at putting it *in* the boxes both read
+// as ambiguous to members ("is that number mine or last week's?"): first as a
+// plain grey ghost, then as a ghost with a This time/Last time toggle picking
+// its source (GhostSourceToggle, deleted with this pass). The problem was
+// never which reference it drew from — it was that anything sitting inside an
+// empty input reads as already-entered.
+//
+// So an empty box now holds the one thing that is unambiguously NOT hers: the
+// coach's prescription, explicitly tagged. Everything historical moved one tap
+// away, into the sheet behind the lift name.
+//  - Unkeyed reps box: dashed, tinted, "TARGET 8–10" in near-white clay.
+//  - Unkeyed weight box: an en dash. Weight is never prescribed in this gym,
+//    so there is no target to state and nothing to borrow from history.
+//  - Keyed box: solid olive-tinted, her number at full size and weight.
+// The dashed/solid split is v5 house rule "dashed = not logged, solid =
+// logged", and it carries the state on its own — the tint and the TARGET tag
+// are what make it unmistakable rather than merely different.
 //  - The rest timer no longer lives here at all. Tapping the stopwatch hands
 //    off to the app-level rest timer (lib/restTimer.js) so it survives
 //    leaving this card, this session, and this tab — the old local-state
 //    version died on unmount, which is exactly what this replaces.
 const CARD_BORDER = "#ece7e1";
 const INPUT_BORDER = "#d9d4cd";
-const BOX_BORDER = "#ece7e1";
 const GHOST = "#c9c4bd";
 const OLIVE = "#4d6142";
 const LOGGED_BG = "#f3f6ef";
 const LOGGED_BORDER = "#dbe8cf";
 const MUTED = "#a8a29e";
 const SOFT = "#fdfbf8";
+// The unkeyed box: dashed border, barely-there ground, near-white clay value.
+const TARGET_BORDER = "#ddd6cd";
+const TARGET_BG = "#fdfbf8";
+const TARGET_TEXT = "#d5cdc4";
 
 // "3 × 10 @ 135" when the sets are uniform, otherwise spelled out. Takes
 // either strings (this card's own live rows) or numbers (a logged history
@@ -72,16 +89,6 @@ export function repSchemeSummary(repScheme) {
 
 export function getTargetSets(item) {
   return item.targetSets && item.targetSets > 0 ? item.targetSets : 3;
-}
-
-// Prescription only — the coach's free-text note deliberately gets its own
-// labelled line rather than being glued on in the same muted color.
-// "|" is the house separator (v5 house rule 4), not "·" or an em-dash.
-export function targetLineFor(item) {
-  const parts = [`${getTargetSets(item)} × ${repSchemeSummary(item.repScheme) ?? item.targetReps ?? "–"}`];
-  if (item.tempo) parts.push(`tempo ${item.tempo}`);
-  if (item.rest) parts.push(`rest ${item.rest}`);
-  return parts.join(" | ");
 }
 
 export function coachNoteFor(item) {
@@ -282,6 +289,43 @@ function CalculatorMark() {
   );
 }
 
+// What an empty reps box says: "TARGET 8–10", label first (a trailing tag read
+// as a unit). It has to be an overlay rather than the TextInput's own
+// placeholder because a placeholder is one string in one style, and the tag
+// and the number are deliberately different sizes — the tag has to stay small
+// enough that the number is still the thing you read.
+//
+// Position is written out longhand rather than via StyleSheet.absoluteFillObject:
+// inside a style array that helper renders the view completely invisible on
+// this app's Fabric build (see the member v5 notes — it cost a whole debugging
+// session once already). pointerEvents lives in the style object, not as a
+// prop, so the tap still reaches the input underneath it.
+function TargetHint({ label, compact }) {
+  return (
+    <View
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        pointerEvents: "none",
+      }}
+    >
+      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.9, color: TARGET_TEXT }}>
+        TARGET
+      </Text>
+      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.display, fontSize: compact ? 15.5 : 17, color: TARGET_TEXT }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 export function ExerciseCard({
   userId,
   datePerformed,
@@ -297,8 +341,6 @@ export function ExerciseCard({
   onToggleExpanded,
   completed,
   onToggleComplete,
-  lastSession,
-  ghostMode = "last",
   hideVideo,
   scrollViewRef,
   scrollOffsetRef,
@@ -443,12 +485,7 @@ export function ExerciseCard({
   const isLogged = (r) => r.reps !== "" && r.weight !== "";
   const currentIndex = rows.findIndex((r) => !isLogged(r));
   const loggedSummary = summarizeSets(rows);
-  const lastSummary = lastSession ? summarizeSets(lastSession.sets) : null;
-  // Same hue as the toggle's thumb, so the boxes say where their numbers came
-  // from without needing a legend.
-  const ghostColor = ghostTint(ghostMode);
 
-  const title = `${numberLabel ? `${numberLabel}. ` : ""}${item.exercise.name}`;
   const titleSize = compact ? 19 : 21;
 
   const handleStartRest = (seconds) => {
@@ -461,22 +498,18 @@ export function ExerciseCard({
     });
   };
 
-  // Header subtitle, in priority order: what's logged today (once the card
-  // is closed and there's something to show), else last time, else the
-  // coach's prescription.
-  let subtitle = null;
-  if (!expanded && loggedSummary) {
-    subtitle = <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Logged {loggedSummary}</Text>;
-  } else if (lastSummary) {
-    subtitle = (
+  // Nothing under the lift name but what she actually did, and only once the
+  // card is closed over it. The last-time line and the prescription line both
+  // went with this pass: the prescription now lives per-set in the boxes
+  // themselves (where it can differ set to set, which one summary line could
+  // never say), and last time is a tap away behind the name. What's left is a
+  // record, not a reference — there's nothing to disambiguate.
+  const subtitle =
+    !expanded && loggedSummary ? (
       <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
-        Last time {formatDateMD(lastSession.date)} |{" "}
-        <Text style={{ fontFamily: fonts.sansSemiBold, color: "#78716c" }}>{lastSummary}</Text>
+        Logged {loggedSummary}
       </Text>
-    );
-  } else {
-    subtitle = <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: MUTED, marginTop: 2 }}>{targetLineFor(item)}</Text>;
-  }
+    ) : null;
 
   const boxHeight = compact ? 40 : 44;
   const boxRadius = compact ? 11 : 12;
@@ -509,17 +542,40 @@ export function ExerciseCard({
       <View style={{ flexDirection: "row", alignItems: expanded ? "flex-start" : "center", gap: 11 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {/* The title is the way into history + chart — there's no
-                separate link on the card anymore. */}
+            {/* The title is the way into history — there's no separate link
+                on the card anymore. The NAME is clay because the name is the
+                tap target; the set number stays dark because it's a label,
+                not a control. That split is the whole affordance, so don't
+                collapse it back into one colour. */}
             <PressFade
               onPress={() => setHistoryOpen(true)}
-              accessibilityLabel={`${item.exercise.name} history and progress`}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, minWidth: 0 }}
+              accessibilityLabel={`${item.exercise.name} history`}
+              style={{ flexDirection: "row", alignItems: "center", gap: 7, flexShrink: 1, minWidth: 0 }}
             >
-              <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: titleSize, lineHeight: titleSize * 1.15, color: "#44403c", flexShrink: 1 }}>
-                {title}
+              <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: titleSize, lineHeight: titleSize * 1.15, flexShrink: 1 }}>
+                {numberLabel ? <Text style={{ color: "#44403c" }}>{numberLabel}. </Text> : null}
+                <Text style={{ color: colors.primary }}>{item.exercise.name}</Text>
               </Text>
-              <Ionicons name="chevron-forward" size={13} color={GHOST} style={{ flexShrink: 0 }} />
+              {/* Only on the open lift: the affordance shows up where she can
+                  act on it, instead of putting a mark beside every name in a
+                  collapsed list. */}
+              {expanded ? (
+                <View
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: "#f0ddd2",
+                    backgroundColor: "#fdf6f2",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Ionicons name="chevron-forward" size={11} color={colors.primary} />
+                </View>
+              ) : null}
             </PressFade>
             {expanded && !hideVideo && item.exercise.video_url ? (
               <PressFade
@@ -588,6 +644,17 @@ export function ExerciseCard({
               {item.exercise.cues}
             </Text>
           ) : null}
+          {/* Sets and reps moved into the boxes and rest is under the
+              stopwatch, but tempo has no box of its own — without a line here
+              it would simply stop reaching the member, which is the same way
+              coach cues went unseen for months. Only rendered when the coach
+              actually set one, so a lift without tempo carries no extra line. */}
+          {item.tempo ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#57534e", marginBottom: 8 }}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Tempo: </Text>
+              {item.tempo}
+            </Text>
+          ) : null}
 
           {/* REPS / LB said once for the whole lift. */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: rowGap, marginBottom: 5 }}>
@@ -602,25 +669,21 @@ export function ExerciseCard({
           </View>
 
           {rows.map((row, i) => {
-            const logged = isLogged(row);
             const isCurrent = i === currentIndex;
             const isLast = i === rows.length - 1;
-            // Where the ghost value in an empty box comes from, driven by the
-            // header's toggle:
-            //  - "this": what the coach programmed for that set. Weight is
-            //    never prescribed in this gym, so that box stays empty by
-            //    design rather than borrowing a number from history and
-            //    presenting it as the plan.
-            //  - "last": that set number from the last logged session, with
-            //    the programmed reps as a fallback so a first-time lift still
-            //    shows something to aim for.
-            const histSet = lastSession?.sets.find((s) => s.set_number === i + 1) ?? null;
-            const targetReps = String(item.repScheme?.[i] ?? item.targetReps ?? "");
-            const useLast = ghostMode !== "this";
-            const repsGhost = useLast && histSet?.reps != null ? String(histSet.reps) : targetReps;
-            const weightGhost = useLast && histSet?.weight != null ? String(histSet.weight) : "";
+            // The coach's prescription for THIS set. repScheme carries a
+            // per-set scheme (3x10/3x8/3x8 asks different things of set 1 and
+            // set 3), targetReps is the flat fallback — which is exactly why
+            // the target belongs in the boxes and not in one summary line.
+            // A set the member added herself past the programmed count has no
+            // target at all, so it gets the same en dash weight always gets.
+            const targetReps = item.repScheme?.[i] ?? item.targetReps ?? null;
+            const targetLabel = targetReps === null || targetReps === "" ? null : String(targetReps);
 
-            const boxStyle = {
+            // Keyed or not is per BOX, not per row: typing reps without a
+            // weight yet should settle the reps box and leave the weight box
+            // still asking. The clay border marks whichever box she's on.
+            const boxStyle = (hasValue) => ({
               flex: 1,
               minWidth: 0,
               height: boxHeight,
@@ -630,10 +693,12 @@ export function ExerciseCard({
               fontSize: compact ? 18 : 20,
               color: "#44403c",
               paddingHorizontal: 8,
-              ...(logged
+              ...(hasValue
                 ? { backgroundColor: LOGGED_BG, borderWidth: 1, borderColor: LOGGED_BORDER }
-                : { backgroundColor: "#fff", borderWidth: 1, borderColor: BOX_BORDER }),
-            };
+                : isCurrent
+                  ? { backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.primary }
+                  : { backgroundColor: TARGET_BG, borderWidth: 1.5, borderStyle: "dashed", borderColor: TARGET_BORDER }),
+            });
 
             return (
               <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: rowGap, marginBottom: 7 }}>
@@ -643,19 +708,26 @@ export function ExerciseCard({
                 >
                   SET {i + 1}
                 </Text>
-                <TextInput
-                  ref={autofillSuppressedRef}
-                  value={row.reps}
-                  onChangeText={(v) => updateRow(i, "reps", v)}
-                  onFocus={() => scrollFieldIntoView(cardRef.current)}
-                  keyboardType="decimal-pad"
-                  inputAccessoryViewID={NUMERIC_DONE_ID}
-                  placeholder={repsGhost}
-                  placeholderTextColor={ghostColor}
-                  maxFontSizeMultiplier={1}
-                  accessibilityLabel={`Set ${i + 1} reps`}
-                  style={{ ...boxStyle, ...(isCurrent && !logged ? { borderWidth: 1.5, borderColor: colors.primary } : null) }}
-                />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <TextInput
+                    ref={autofillSuppressedRef}
+                    value={row.reps}
+                    onChangeText={(v) => updateRow(i, "reps", v)}
+                    onFocus={() => scrollFieldIntoView(cardRef.current)}
+                    keyboardType="decimal-pad"
+                    inputAccessoryViewID={NUMERIC_DONE_ID}
+                    // The target is drawn over the box, not put in the
+                    // placeholder — see TargetHint. An empty set with no
+                    // prescription falls back to the plain en dash, which a
+                    // placeholder handles fine on its own.
+                    placeholder={targetLabel ? "" : "–"}
+                    placeholderTextColor={TARGET_TEXT}
+                    maxFontSizeMultiplier={1}
+                    accessibilityLabel={targetLabel ? `Set ${i + 1} reps, target ${targetLabel}` : `Set ${i + 1} reps`}
+                    style={{ ...boxStyle(row.reps !== ""), flex: undefined, width: "100%" }}
+                  />
+                  {row.reps === "" && targetLabel ? <TargetHint label={targetLabel} compact={compact} /> : null}
+                </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <TextInput
                     ref={autofillSuppressedRef}
@@ -664,11 +736,13 @@ export function ExerciseCard({
                     onFocus={() => scrollFieldIntoView(cardRef.current)}
                     keyboardType="decimal-pad"
                     inputAccessoryViewID={NUMERIC_DONE_ID}
-                    placeholder={weightGhost}
-                    placeholderTextColor={ghostColor}
+                    // Weight is never prescribed in this gym, so there is no
+                    // target to state and nothing honest to put here.
+                    placeholder="–"
+                    placeholderTextColor={TARGET_TEXT}
                     maxFontSizeMultiplier={1}
                     accessibilityLabel={`Set ${i + 1} weight`}
-                    style={{ ...boxStyle, flex: undefined, width: "100%", paddingRight: 30 }}
+                    style={{ ...boxStyle(row.weight !== ""), flex: undefined, width: "100%", paddingRight: 30 }}
                   />
                   <PressFade
                     onPress={() => {
@@ -780,6 +854,8 @@ export function ExerciseCard({
         userId={userId}
         exerciseId={item.exercise.id}
         exerciseName={item.exercise.name}
+        datePerformed={datePerformed}
+        returnTo={restReturnTo ?? null}
       />
 
       <WeightCalculator

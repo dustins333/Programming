@@ -31,7 +31,7 @@ const CANVAS = "#faf8f6";
 // Sets × reps only. Rest is deliberately NOT shown here — it isn't set on
 // every lift, so it made the overview read as though some prescriptions were
 // incomplete. It belongs on the logging screen, where she's actually timing
-// against it (see ExerciseCard's targetLineFor, which still carries it).
+// against it (the logging card shows it under the rest stopwatch).
 function prescriptionLine(ex) {
   const reps = Array.isArray(ex.rep_scheme) && new Set(ex.rep_scheme).size > 1 ? ex.rep_scheme.join(", ") : ex.reps;
   return `${ex.sets ?? "–"} × ${reps ?? "–"}`;
