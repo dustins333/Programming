@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import {
   listGroupPrograms,
@@ -29,7 +29,8 @@ import { useAuth } from "../../../lib/auth/AuthProvider";
 import { NewBlockModal } from "../../../components/NewBlockModal";
 import { NewGroupProgramModal } from "../../../components/NewGroupProgramModal";
 import { FinalizeBlockModal } from "../../../components/FinalizeBlockModal";
-import { CoachShell } from "../../../components/CoachShell";
+import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
+import { CoachBlockOverview } from "../../../components/coach/CoachBlockOverview";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
 
@@ -309,7 +310,7 @@ function BuildCard({ width, onPress, duplicateHint }) {
 
 /* ------------------------------------------------------------------- page */
 
-export default function BlocksWeb() {
+function BlocksDesktop() {
   const { profile } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -917,4 +918,36 @@ export default function BlocksWeb() {
       )}
     </CoachShell>
   );
+}
+
+// A .web.js sibling shadows its native file on web at ANY width, so without
+// this a coach on the installed PWA got the full desktop calendar grid on a
+// phone — the build surface, not the overview. Below the breakpoint we render
+// exactly what native renders (app/(coach)/blocks/index.js).
+//
+// Split into two components rather than an early return inside one: the
+// desktop grid runs a long list of hooks, and only one of these is ever
+// mounted, so each keeps its own stable hook order.
+function BlocksMobileWeb() {
+  const router = useRouter();
+  return (
+    <CoachShell>
+      <CoachBlockOverview
+        footer={
+          <View style={{ marginTop: 18, alignItems: "center" }}>
+            <PressFade onPress={() => router.push("/(coach)/blocks/history")} hitSlop={10} style={{}}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+                Manage blocks ›
+              </Text>
+            </PressFade>
+          </View>
+        }
+      />
+    </CoachShell>
+  );
+}
+
+export default function BlocksWeb() {
+  const { width } = useWindowDimensions();
+  return width < MOBILE_BREAKPOINT ? <BlocksMobileWeb /> : <BlocksDesktop />;
 }

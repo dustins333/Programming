@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getUser, listCoaches } from "../../../lib/programming/clients";
@@ -21,7 +21,8 @@ import { SpcSessionReadout } from "../../../components/SpcSessionReadout";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
 import { PrintSessionPickerModal } from "../../../components/PrintSessionPickerModal";
 import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
-import { CoachShell } from "../../../components/CoachShell";
+import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
+import { CoachSpcOverview } from "../../../components/coach/CoachSpcOverview";
 import { PressFade } from "../../../components/PressFade";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { STATUS_LABELS, STATUS_ORDER } from "../../../lib/programming/spcStatus";
@@ -325,7 +326,7 @@ function WhatSheSaid({ notes }) {
 
 /* ------------------------------------------------------------------ page */
 
-export default function SpcClientBlockWeb() {
+function SpcClientDesktop() {
   const { userId } = useLocalSearchParams();
   const { profile } = useAuth();
   const router = useRouter();
@@ -1034,4 +1035,38 @@ export default function SpcClientBlockWeb() {
       <CoachMessageBubble userId={userId} clientName={member.name} />
     </CoachShell>
   );
+}
+
+// See the same split in app/(coach)/blocks/index.web.js: a .web.js sibling
+// shadows its native file on web at any width, so the installed PWA served a
+// coach the desktop build grid on a phone. Below the breakpoint this renders
+// what native renders (app/(coach)/spc/[userId].js). Two components rather
+// than one early return, so the desktop screen's hooks keep a stable order.
+function SpcClientMobileWeb() {
+  const router = useRouter();
+  const { userId } = useLocalSearchParams();
+  return (
+    <CoachShell>
+      <CoachSpcOverview
+        userId={userId}
+        showBack
+        backTo="/(coach)/spc"
+        footer={
+          <View style={{ marginTop: 18, alignItems: "center" }}>
+            <PressFade onPress={() => router.push(`/(coach)/spc/history/${userId}`)} hitSlop={10} style={{}}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+                Manage blocks ›
+              </Text>
+            </PressFade>
+          </View>
+        }
+      />
+      <CoachMessageBubble userId={userId} />
+    </CoachShell>
+  );
+}
+
+export default function SpcClientDetailWeb() {
+  const { width } = useWindowDimensions();
+  return width < MOBILE_BREAKPOINT ? <SpcClientMobileWeb /> : <SpcClientDesktop />;
 }

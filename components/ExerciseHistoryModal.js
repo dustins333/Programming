@@ -24,12 +24,21 @@ const PEACH_BG = "#fdf6f2";
 const PEACH_BORDER = "#f0ddd2";
 const SESSIONS_SHOWN = 3;
 
+// A set she typed into and then cleared leaves a real row behind with both
+// reps and weight null — logResult updates an existing row even to null, on
+// purpose, because clearing a field you'd already filled in is a genuine edit
+// that has to persist. Those husks are not history, so they're dropped here,
+// and a date left with nothing real in it drops out entirely rather than
+// showing as a session of dashes. getLastLoggedSession has always skipped
+// them the same way; this is the same guard, applied where history is read.
+const isRealSet = (row) => row.reps !== null || row.weight !== null;
+
 // Same grouping as My History's "By Workout" screen (history/[exerciseId].js) —
 // one row per date instead of one row per set.
 function groupByDate(logs) {
   const groups = [];
   const byDate = new Map();
-  for (const row of logs) {
+  for (const row of logs.filter(isRealSet)) {
     if (!byDate.has(row.date_performed)) {
       const group = { date: row.date_performed, sets: [], notes: null };
       byDate.set(row.date_performed, group);

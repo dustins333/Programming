@@ -12,12 +12,20 @@ const CANVAS = "#faf8f6";
 const CARD_BORDER = "#ece7e1";
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 };
 
+// A set typed into and then cleared leaves a row behind with both reps and
+// weight null — logResult updates an existing row even to null on purpose, so
+// that clearing a filled-in field persists. Those husks aren't history; drop
+// them, and drop a date left with nothing real rather than rendering it as a
+// session of dashes. The chart (LiftProgress) and the PR stats already skip
+// them; this list was the one place they still surfaced.
+const isRealSet = (row) => row.reps !== null || row.weight !== null;
+
 // Groups per-set rows under one date header instead of one flat row per
 // set — a 3-set session would otherwise show as 3 near-identical rows.
 function groupByDate(logs) {
   const groups = [];
   const byDate = new Map();
-  for (const row of logs) {
+  for (const row of logs.filter(isRealSet)) {
     if (!byDate.has(row.date_performed)) {
       const group = { date: row.date_performed, sets: [], notes: null };
       byDate.set(row.date_performed, group);

@@ -3744,6 +3744,53 @@ solid on iOS in some RN versions — other screens here use them fine, so
 probably OK, but the target overlay is exactly the kind of absolutely-
 positioned element this codebase has been bitten by twice.
 
+### Follow-ups from Terra's click-through
+
+Back button and the today-cutoff both confirmed working on her side. Three more
+reports, only one of which was a bug in this pass:
+
+- **History showed a session of dashes.** Real regression, mine. `logResult`
+  updates an existing row **even to null**, deliberately — clearing a field you
+  had already filled in is a genuine edit that has to persist — so typing `10`
+  and deleting it leaves a row with reps AND weight null. The insert path is
+  already guarded against creating blank rows; it's the update path that leaves
+  husks, and that's correct. `getLastLoggedSession` has always skipped them,
+  and the rewritten sheet never got that guard. Both the sheet and
+  `history/[exerciseId].js` now filter `reps !== null || weight !== null`
+  before grouping, and a date left with nothing real drops out rather than
+  rendering as dashes. `LiftProgress` (`weight == null` continue) and
+  `exerciseStats.topSetOf` already guarded, so the per-date lists were the only
+  surface still showing them. **Filtering at read also fixes the junk already
+  in the table, with no cleanup migration.**
+- **"Dustin's SPC sessions aren't pulling" was not a bug.** Checked against the
+  live DB rather than guessed: his block runs 2026-08-01 → 08-28, today is week
+  3, and **both of week 3's sessions are drafts with zero exercises** (week 2
+  session 2 likewise, with one). Member RLS requires `status = 'published'`, so
+  drafts are invisible at the database level — an empty member view is the app
+  being right. Worth reaching for this check first whenever "a member can't see
+  their session" comes in: query `spc_workouts.status`/exercise count before
+  reading any code.
+- **A `.web.js` sibling shadows its native file on web at ANY width — the
+  platform extension splits web from native, NOT desktop from phone.** This is
+  the trap worth remembering. `d2ecefa` put the new coach block overviews in
+  `blocks/index.js` and `spc/[userId].js` (native-only), so the installed PWA —
+  which is web — kept serving the 40KB desktop build grid on a phone, and Terra
+  reported the mobile coach view as "showing the desktop version of the
+  builder". Fixed with the pattern `CoachShell` already uses: both `.web.js`
+  screens now branch on `useWindowDimensions()` against `MOBILE_BREAKPOINT`
+  (now **exported** from `CoachShell` so there's one definition, not a third
+  copy) and render exactly what native renders below it. **Each screen is two
+  components with a branch, not an early return inside one** — the desktop grid
+  runs a long list of hooks and an early return would break hook order; only
+  one component is ever mounted, so each keeps its own stable order.
+  - The overview was already reachable on web via a "Preview" button on the
+    desktop grid (`blocks/overview.js` / `spc/overview/[userId].js`), so this
+    isn't new surface — it just makes phone-width land there directly instead
+    of expecting a coach to find a button inside a grid she can't use.
+  - **Applies to every future native/web split**: if a screen has a `.web.js`
+    sibling and the native version is the phone design, the web sibling needs
+    this branch or the PWA silently gets the desktop build.
+
 ## Working notes for future sessions
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.

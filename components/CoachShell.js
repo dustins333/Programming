@@ -25,7 +25,11 @@ const NAV_ITEMS = [
 // Below this width, the persistent 232px sidebar doesn't fit — this is the
 // same breakpoint this project's own preview tooling treats as "mobile" vs
 // "tablet" (see the Browser pane's resize_window presets).
-const MOBILE_BREAKPOINT = 768;
+// Exported because the coach screens that have a .web.js sibling need the
+// same cutoff: a platform extension splits web from native, NOT desktop from
+// phone, so on the installed PWA a coach gets the desktop build at any width
+// unless the screen itself branches here too.
+export const MOBILE_BREAKPOINT = 768;
 
 // Strips the route-group segment (e.g. "(coach)") since expo-router's
 // usePathname() resolves it out of the actual URL on web, but hrefs in this
