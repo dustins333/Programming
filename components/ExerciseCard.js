@@ -255,11 +255,13 @@ function RestTimerButton({ seconds, onStart, compact, open, onOpenChange }) {
   );
 }
 
-// The little keypad mark that rides the right edge of the weight box on the
-// set you're on — the plate calculator's only entry point now. It used to
-// also hang off the floating keyboard accessory bar, which is iOS-native
-// only: on the installed web PWA the OS renders Safari's own keyboard
-// toolbar instead, so that path simply didn't exist there.
+// The little keypad mark that rides the right edge of every weight box —
+// the plate calculator's only entry point now. It used to also hang off the
+// floating keyboard accessory bar, which is iOS-native only: on the
+// installed web PWA the OS renders Safari's own keyboard toolbar instead, so
+// that path simply didn't exist there. It sits on every set rather than only
+// the current one — one row wearing a control its neighbours don't read as
+// an oddity rather than as a hint.
 function CalculatorMark() {
   return (
     <View
@@ -659,21 +661,19 @@ export function ExerciseCard({
                     placeholderTextColor={ghostColor}
                     maxFontSizeMultiplier={1}
                     accessibilityLabel={`Set ${i + 1} weight`}
-                    style={{ ...boxStyle, flex: undefined, width: "100%", paddingRight: isCurrent ? 30 : 8 }}
+                    style={{ ...boxStyle, flex: undefined, width: "100%", paddingRight: 30 }}
                   />
-                  {isCurrent ? (
-                    <PressFade
-                      onPress={() => {
-                        Keyboard.dismiss();
-                        setCalcRowIndex(i);
-                      }}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 8 }}
-                      accessibilityLabel={`Plate calculator for set ${i + 1}`}
-                      style={{ position: "absolute", right: 6, top: 0, bottom: 0, justifyContent: "center" }}
-                    >
-                      <CalculatorMark />
-                    </PressFade>
-                  ) : null}
+                  <PressFade
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setCalcRowIndex(i);
+                    }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 8 }}
+                    accessibilityLabel={`Plate calculator for set ${i + 1}`}
+                    style={{ position: "absolute", right: 6, top: 0, bottom: 0, justifyContent: "center" }}
+                  >
+                    <CalculatorMark />
+                  </PressFade>
                 </View>
                 <View style={{ width: trailingWidth, alignItems: "flex-end" }}>
                   {/* Kept in the layout (opacity, not unmounted) while the
