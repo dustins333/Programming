@@ -52,8 +52,11 @@ export default function PayrollLanding() {
               Log your own hours, requests, and pay
             </Text>
           </Pressable>
+          {/* Lands on This period, not Requests: reviewing and closing the
+              open period is the job an admin comes here to do, and requests
+              are usually empty. */}
           <Pressable
-            onPress={() => router.push("/(coach)/payroll/admin/requests")}
+            onPress={() => router.push("/(coach)/payroll/admin/periods")}
             className="flex-1 items-center rounded-2xl bg-white px-6 py-10"
             style={{ borderWidth: 1, borderColor: "#ece7e1" }}
           >
@@ -62,7 +65,7 @@ export default function PayrollLanding() {
               Admin View
             </Text>
             <Text className="mt-1 text-center text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-              Requests, pay periods, report, settings
+              Review and close periods, requests, report
             </Text>
           </Pressable>
         </View>

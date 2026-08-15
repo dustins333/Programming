@@ -27,20 +27,32 @@ import {
 } from "../../../../lib/payroll/finalizations";
 import { listPendingRequestsForPeriod } from "../../../../lib/payroll/requests";
 import { listEntriesForPeriodAllStaff } from "../../../../lib/payroll/entries";
-import { computeTotals, formatMoney } from "../../../../lib/payroll/calc";
+import { computeTotals, formatMoney, formatQuantity } from "../../../../lib/payroll/calc";
 import { buildPeriodCsv, downloadCsv } from "../../../../lib/payroll/csvExport";
-import { formatDateMD, formatDateMDY } from "../../../../lib/formatDate";
+import { formatDateMDY, formatDateRange } from "../../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../../lib/toast";
 import { confirmClosePayPeriod } from "../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
 import { AdminPayrollTabBar } from "../../../../components/AdminPayrollTabBar";
-import { StaffReviewRow, REVIEW_COLUMNS, COL_WIDTH, PAY_WIDTH, ACTION_WIDTH, COL_LABEL_STYLE } from "../../../../components/payroll/StaffReviewRow";
+import {
+  StaffReviewRow,
+  REVIEW_COLUMNS,
+  COL_WIDTH,
+  PAY_WIDTH,
+  ACTION_WIDTH,
+  STAFF_WIDTH,
+  STAFF_CELL,
+  CELL_GAP,
+  COL_LABEL_STYLE,
+} from "../../../../components/payroll/StaffReviewRow";
 
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 };
 
+// Month-name range, matching the Log header, My Pay's band and the finalize
+// sheet — this is a heading, not a grid cell.
 function periodLabel(p) {
-  return p ? `${formatDateMD(p.start_date)} – ${formatDateMD(p.end_date)}` : "";
+  return p ? formatDateRange(p.start_date, p.end_date) : "";
 }
 
 function HeaderButton({ label, onPress, disabled }) {
@@ -61,7 +73,7 @@ function HeaderButton({ label, onPress, disabled }) {
 // it. The button states its own blocker rather than just going grey — the
 // old version disabled nothing and only told you what was wrong after you
 // clicked.
-function PeriodBand({ period, approvedCount, staffCount, approvedTotal, closed, closing, blockedReason, onPrev, onNext, onClose }) {
+function PeriodBand({ period, approvedCount, staffCount, approvedTotal, closed, closing, blockedReason, outstandingNote, onPrev, onNext, onClose }) {
   const fraction = staffCount > 0 ? approvedCount / staffCount : 0;
   return (
     <View className="mb-2.5 overflow-hidden rounded-2xl" style={{ backgroundColor: "#3b3531" }}>
@@ -105,19 +117,29 @@ function PeriodBand({ period, approvedCount, staffCount, approvedTotal, closed, 
         </View>
 
         {closed ? (
-          <View className="rounded-lg px-5 py-3" style={{ backgroundColor: "#544c46" }}>
+          <View className="items-center rounded-[10px] px-5 py-3" style={{ backgroundColor: "#544c46" }}>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#c9beb4" }}>Closed</Text>
           </View>
         ) : (
+          // The button carries its own blocker rather than just going grey.
+          // Un-submitted coaches are a warning, not a blocker (payroll goes
+          // out on payday regardless), so `outstandingNote` reads as
+          // information under a live button; only an undecided custom
+          // request actually disables it.
           <Pressable
             onPress={onClose}
             disabled={closing || Boolean(blockedReason)}
-            className="rounded-lg px-5 py-3"
+            className="items-center rounded-[10px] px-5 py-3"
             style={{ backgroundColor: blockedReason ? "#544c46" : "#8fb473", opacity: closing ? 0.6 : 1 }}
           >
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: blockedReason ? "#c9beb4" : "#26301d" }}>
               {closing ? "Closing…" : "Close period"}
             </Text>
+            {!closing && (blockedReason || outstandingNote) ? (
+              <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 10.5, color: blockedReason ? "#a99f96" : "#3f5231", marginTop: 3 }}>
+                {blockedReason ? "requests undecided" : outstandingNote}
+              </Text>
+            ) : null}
           </Pressable>
         )}
       </View>
@@ -355,7 +377,15 @@ export default function AdminPayrollPeriods() {
     }
   };
 
-  const tableWidth = 190 + REVIEW_COLUMNS.length * COL_WIDTH + PAY_WIDTH + ACTION_WIDTH + 30;
+  // The narrowest the table can get before it has to scroll: every cell at
+  // its minimum, plus the gaps, plus the card's 20px padding AND its 1px
+  // border on each side. The border is easy to forget and not harmless —
+  // leave it out and the row's content needs two more pixels than its box
+  // has, so flex quietly shrinks a cell and the rows stop lining up with
+  // the header and footer. Measured, not guessed.
+  const cellCount = 1 + REVIEW_COLUMNS.length + 2;
+  const minTableWidth =
+    STAFF_WIDTH + REVIEW_COLUMNS.length * COL_WIDTH + PAY_WIDTH + ACTION_WIDTH + (cellCount - 1) * CELL_GAP + 40 + 2;
 
   return (
     <CoachShell>
@@ -398,6 +428,7 @@ export default function AdminPayrollPeriods() {
               closed={closed}
               closing={closing}
               blockedReason={closed ? null : blockedReason}
+              outstandingNote={outstanding.length ? `${outstanding.length} not approved` : null}
               onPrev={() => stepPeriod(-1)}
               onNext={() => stepPeriod(1)}
               onClose={handleClose}
@@ -418,10 +449,21 @@ export default function AdminPayrollPeriods() {
                 on every page load was noise; the confirm dialog names them
                 at the one moment it matters. */}
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={Platform.OS === "web"}>
-              <View className="rounded-2xl border bg-white" style={[{ borderColor: "#ece7e1", overflow: "hidden", width: tableWidth }, CARD_SHADOW]}>
-                <View className="flex-row items-end px-[15px] py-3" style={{ borderBottomWidth: 1, borderBottomColor: "#ece7e1", borderLeftWidth: 3, borderLeftColor: "transparent" }}>
-                  <Text className="flex-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5, minWidth: 190 }}>
+            {/* flexGrow on the content container lets the table fill a wide
+                window; minWidth is what makes it scroll instead of squashing
+                on a narrow one. All the extra width lands in the staff
+                column (STAFF_CELL), so rows get wider rather than taller. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={Platform.OS === "web"}
+              contentContainerStyle={{ flexGrow: 1, minWidth: minTableWidth }}
+            >
+              <View className="rounded-2xl border bg-white" style={[{ borderColor: "#ece7e1", overflow: "hidden", flex: 1 }, CARD_SHADOW]}>
+                <View
+                  className="flex-row items-center px-5 py-3"
+                  style={{ gap: CELL_GAP, backgroundColor: "#faf8f6", borderBottomWidth: 1, borderBottomColor: "#f4f0ec" }}
+                >
+                  <Text className="uppercase text-stone-400" style={[COL_LABEL_STYLE, STAFF_CELL]}>
                     Staff
                   </Text>
                   {REVIEW_COLUMNS.map((col) => (
@@ -429,15 +471,16 @@ export default function AdminPayrollPeriods() {
                       <Text className="uppercase text-stone-400" style={COL_LABEL_STYLE} numberOfLines={1}>
                         {col.label}
                       </Text>
-                      <Text className="text-stone-300" style={{ fontFamily: fonts.sans, fontSize: 10 }}>
-                        {col.unit}
-                      </Text>
                     </View>
                   ))}
-                  <View style={{ width: ACTION_WIDTH }} />
                   <View style={{ width: PAY_WIDTH, alignItems: "flex-end" }}>
                     <Text className="uppercase text-stone-400" style={COL_LABEL_STYLE}>
-                      Status / Pay
+                      Pay
+                    </Text>
+                  </View>
+                  <View style={{ width: ACTION_WIDTH, alignItems: "flex-end" }}>
+                    <Text className="uppercase text-stone-400" style={COL_LABEL_STYLE}>
+                      Review
                     </Text>
                   </View>
                 </View>
@@ -448,7 +491,7 @@ export default function AdminPayrollPeriods() {
                   </Text>
                 ) : (
                   rows.map((row, idx) => (
-                    <View key={row.staff.id} style={idx < rows.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f2efeb" } : undefined}>
+                    <View key={row.staff.id} style={idx < rows.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f4f0ec" } : undefined}>
                       <StaffReviewRow
                         staff={row.staff}
                         totals={row.totals}
@@ -473,8 +516,11 @@ export default function AdminPayrollPeriods() {
                   ))
                 )}
 
-                <View className="flex-row items-center px-[15px] py-3.5" style={{ backgroundColor: "#faf8f6", borderTopWidth: 1, borderTopColor: "#ece7e1", borderLeftWidth: 3, borderLeftColor: "transparent" }}>
-                  <Text className="flex-1 text-stone-600" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, minWidth: 190 }}>
+                <View
+                  className="flex-row items-center px-5 py-3.5"
+                  style={{ gap: CELL_GAP, backgroundColor: "#faf8f6", borderTopWidth: 1, borderTopColor: "#ece7e1" }}
+                >
+                  <Text className="text-stone-600" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, ...STAFF_CELL }}>
                     {rows.length} staff · {outstanding.length} outstanding
                   </Text>
                   {REVIEW_COLUMNS.map((col) => {
@@ -482,15 +528,15 @@ export default function AdminPayrollPeriods() {
                     return (
                       <View key={col.key} style={{ width: COL_WIDTH, alignItems: "flex-end" }}>
                         <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: total ? "#57534e" : "#c9c4bd" }}>
-                          {!total ? "—" : col.money ? formatMoney(total) : total}
+                          {!total ? "—" : col.money ? formatMoney(total) : formatQuantity(total)}
                         </Text>
                       </View>
                     );
                   })}
-                  <View style={{ width: ACTION_WIDTH }} />
                   <View style={{ width: PAY_WIDTH, alignItems: "flex-end" }}>
-                    <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: colors.primaryOnWhite }}>{formatMoney(grandTotals.total)}</Text>
+                    <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: colors.primaryOnWhite }}>{formatMoney(grandTotals.total)}</Text>
                   </View>
+                  <View style={{ width: ACTION_WIDTH }} />
                 </View>
               </View>
             </ScrollView>

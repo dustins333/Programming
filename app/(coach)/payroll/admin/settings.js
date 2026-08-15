@@ -30,6 +30,29 @@ function FieldToggle({ label, value, onToggle }) {
   );
 }
 
+// One column of the rates grid. `flexBasis` with a `minWidth` is what makes
+// three columns collapse to two and then one as the window narrows, rather
+// than three columns squeezing until the rate fields are unusable.
+function RateCard({ title, subtitle, action, children }) {
+  return (
+    <View
+      className="rounded-2xl border bg-white p-5"
+      style={{ flexGrow: 1, flexBasis: 300, minWidth: 280, maxWidth: 420, borderColor: "#ece7e1" }}
+    >
+      <View className="flex-row items-start justify-between" style={{ gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#2a211c" }}>{title}</Text>
+          <Text className="mb-3.5" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 2 }}>
+            {subtitle}
+          </Text>
+        </View>
+        {action}
+      </View>
+      {children}
+    </View>
+  );
+}
+
 const CORE_LABELS = {
   group_session: "Group session",
   program_written: "Program written",
@@ -76,27 +99,27 @@ function AddOtherRateForm({ onAdded, scrollViewRef, scrollOffsetRef }) {
     }
   };
 
+  // Stacked, not three inputs abreast: this lives inside a ~300px column
+  // now, where a row of three would leave each field too narrow to read
+  // what you'd typed.
   return (
-    <View ref={cardRef} className="mb-4 max-w-xl rounded-xl border border-stone-200 p-4">
-      <Text className="mb-2 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
-        Add a new type
-      </Text>
-      <View className="mb-2 flex-row gap-2">
-        <TextInput
-          value={otherType}
-          onChangeText={setOtherType}
-          onFocus={() => scrollFieldIntoView(cardRef.current)}
-          placeholder="Type name"
-          className="flex-1 rounded-lg border border-stone-300 px-3 py-2"
-          style={{ fontFamily: fonts.sans }}
-        />
+    <View ref={cardRef} className="mb-3 rounded-xl border p-3.5" style={{ borderColor: "#f0ddd2", backgroundColor: "#fdf6f2" }}>
+      <TextInput
+        value={otherType}
+        onChangeText={setOtherType}
+        onFocus={() => scrollFieldIntoView(cardRef.current)}
+        placeholder="Type name"
+        className="mb-2 rounded-lg border bg-white px-3 py-2"
+        style={{ fontFamily: fonts.sans, borderColor: "#e7ddd5" }}
+      />
+      <View className="mb-2.5 flex-row" style={{ gap: 8 }}>
         <TextInput
           value={unit}
           onChangeText={setUnit}
           onFocus={() => scrollFieldIntoView(cardRef.current)}
           placeholder="Unit (e.g. hour)"
-          className="flex-1 rounded-lg border border-stone-300 px-3 py-2"
-          style={{ fontFamily: fonts.sans }}
+          className="flex-1 rounded-lg border bg-white px-3 py-2"
+          style={{ fontFamily: fonts.sans, borderColor: "#e7ddd5" }}
         />
         <TextInput
           value={rate}
@@ -105,14 +128,14 @@ function AddOtherRateForm({ onAdded, scrollViewRef, scrollOffsetRef }) {
           placeholder="Rate"
           keyboardType="decimal-pad"
           inputAccessoryViewID={NUMERIC_DONE_ID}
-          className="w-24 rounded-lg border border-stone-300 px-3 py-2"
-          style={{ fontFamily: fonts.sans }}
+          className="rounded-lg border bg-white px-3 py-2"
+          style={{ fontFamily: fonts.sans, borderColor: "#e7ddd5", width: 84 }}
         />
       </View>
       <Pressable
         onPress={handleAdd}
         disabled={saving}
-        className="items-center self-start rounded-lg px-4 py-2"
+        className="items-center rounded-lg px-4 py-2.5"
         style={{ backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 }}
       >
         <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
@@ -131,6 +154,7 @@ export default function AdminPayrollSettings() {
   const [rates, setRates] = useState({ coreRates: [], otherRates: [], spcTiers: [] });
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
+  const [addingOther, setAddingOther] = useState(false);
 
   // This page runs Rates → SPC Tiers → Other (new-type form + list) — by
   // the time a coach reaches the Add-a-new-type fields there's often not
@@ -212,115 +236,137 @@ export default function AdminPayrollSettings() {
           <ActivityIndicator color={colors.primary} />
         ) : (
           <>
-            {/* First rather than below the rate tables: it's short, and the
-                Other section below it ends in a long archived list that
-                would bury it. */}
-            <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-              Reminders
-            </Text>
-            <DeadlineReminderCard />
+            {/* Three columns rather than one long scroll: this page is only
+                ever touched at a desk, and the three groups are independent
+                — nobody reads them in sequence, they come here to change one
+                number. Wraps to a single column below the breakpoint. */}
+            <View className="flex-row flex-wrap items-start" style={{ gap: 14 }}>
+              <RateCard title="Core rates" subtitle="What each logged item pays">
+                {rates.coreRates.map((r) => (
+                  <RateRow
+                    key={r.work_type}
+                    label={CORE_LABELS[r.work_type] || r.work_type}
+                    unit={r.unit}
+                    value={r.rate}
+                    onSave={(n) => saveRate(() => updateCoreRate(r.work_type, n))}
+                  />
+                ))}
+              </RateCard>
 
-            <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-              Rates
-            </Text>
-            <View className="mb-6 max-w-xl">
-              {rates.coreRates.map((r) => (
-                <RateRow
-                  key={r.work_type}
-                  label={CORE_LABELS[r.work_type] || r.work_type}
-                  unit={r.unit}
-                  value={r.rate}
-                  onSave={(n) => saveRate(() => updateCoreRate(r.work_type, n))}
-                />
-              ))}
-            </View>
+              <RateCard title="SPC tiers" subtitle="Paid by head count per session">
+                {rates.spcTiers.map((t) => (
+                  <RateRow
+                    key={t.attendees}
+                    label={`${t.attendees} attendee${t.attendees === 1 ? "" : "s"}`}
+                    unit="session"
+                    value={t.rate_per_session}
+                    onSave={(n) => saveRate(() => updateSpcTier(t.attendees, n))}
+                  />
+                ))}
+              </RateCard>
 
-            <Text className="mb-2 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: "#78716c" }}>
-              SPC (per session, by attendee count)
-            </Text>
-            <View className="mb-6 max-w-xl">
-              {rates.spcTiers.map((t) => (
-                <RateRow
-                  key={t.attendees}
-                  label={`${t.attendees} attendee${t.attendees === 1 ? "" : "s"}`}
-                  unit="session"
-                  value={t.rate_per_session}
-                  onSave={(n) => saveRate(() => updateSpcTier(t.attendees, n))}
-                />
-              ))}
-            </View>
-
-            <Text className="mb-2 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: "#78716c" }}>
-              Other
-            </Text>
-            <Text className="mb-3 max-w-xl text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-              Quantity/Notes control which fields show on the entry form for that type — turn either off for a type that
-              doesn't need it (e.g. a flat one-time item with no notes).
-            </Text>
-            <AddOtherRateForm onAdded={load} scrollViewRef={scrollViewRef} scrollOffsetRef={scrollOffsetRef} />
-            <View className="mb-2 max-w-xl">
-              {activeOther.map((r) => (
-                <View key={r.other_type} className="mb-2 rounded-lg border border-stone-200 px-3 py-2.5">
-                  <View className="mb-2 flex-row items-center gap-2">
-                    <View style={{ flex: 1 }}>
-                      <RateRow
-                        label={r.other_type}
-                        unit={r.unit}
-                        value={r.rate}
-                        onSave={(n) => saveRate(() => updateOtherRate(r.other_type, { rate: n }))}
+              <RateCard
+                title="Other types"
+                subtitle={`${activeOther.length} active · which fields each one collects`}
+                action={
+                  <Pressable onPress={() => setAddingOther((v) => !v)} hitSlop={6}>
+                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+                      {addingOther ? "Cancel" : "+ Add"}
+                    </Text>
+                  </Pressable>
+                }
+              >
+                {/* Behind a toggle rather than permanently open — adding a
+                    type is rare next to editing one, and the form sitting
+                    open pushed the actual list below the fold. */}
+                {addingOther ? (
+                  <AddOtherRateForm
+                    onAdded={async () => {
+                      await load();
+                      setAddingOther(false);
+                    }}
+                    scrollViewRef={scrollViewRef}
+                    scrollOffsetRef={scrollOffsetRef}
+                  />
+                ) : null}
+                {activeOther.map((r) => (
+                  <View key={r.other_type} className="mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "#ece7e1" }}>
+                    <View className="mb-2 flex-row items-center gap-2">
+                      <View style={{ flex: 1 }}>
+                        <RateRow
+                          label={r.other_type}
+                          unit={r.unit}
+                          value={r.rate}
+                          onSave={(n) => saveRate(() => updateOtherRate(r.other_type, { rate: n }))}
+                        />
+                      </View>
+                      <Pressable
+                        onPress={async () => {
+                          if (!(await confirmArchiveOtherRate(r.other_type))) return;
+                          await saveRate(() => updateOtherRate(r.other_type, { active: false }));
+                        }}
+                        hitSlop={6}
+                      >
+                        <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#a8a29e" }}>
+                          Archive
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <View className="flex-row gap-4">
+                      <FieldToggle
+                        label="Qty"
+                        value={r.has_qty}
+                        onToggle={() => saveRate(() => updateOtherRate(r.other_type, { has_qty: !r.has_qty }))}
+                      />
+                      <FieldToggle
+                        label="Notes"
+                        value={r.has_notes}
+                        onToggle={() => saveRate(() => updateOtherRate(r.other_type, { has_notes: !r.has_notes }))}
                       />
                     </View>
-                    <Pressable
-                      onPress={async () => {
-                        if (!(await confirmArchiveOtherRate(r.other_type))) return;
-                        await saveRate(() => updateOtherRate(r.other_type, { active: false }));
-                      }}
-                    >
-                      <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#a8a29e" }}>
-                        Archive
-                      </Text>
-                    </Pressable>
-                  </View>
-                  <View className="flex-row gap-4">
-                    <FieldToggle
-                      label="Quantity"
-                      value={r.has_qty}
-                      onToggle={() => saveRate(() => updateOtherRate(r.other_type, { has_qty: !r.has_qty }))}
-                    />
-                    <FieldToggle
-                      label="Notes"
-                      value={r.has_notes}
-                      onToggle={() => saveRate(() => updateOtherRate(r.other_type, { has_notes: !r.has_notes }))}
-                    />
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            <Pressable onPress={() => setShowArchived((v) => !v)} className="mb-3 self-start">
-              <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                {showArchived ? "Hide" : "Show"} archived ({archivedOther.length})
-              </Text>
-            </Pressable>
-            {showArchived ? (
-              <View className="max-w-xl">
-                {archivedOther.map((r) => (
-                  <View key={r.other_type} className="mb-2 flex-row items-center justify-between rounded-lg border border-stone-200 px-3 py-2.5" style={{ opacity: 0.6 }}>
-                    <View>
-                      <Text style={{ fontFamily: fonts.sansMedium, color: "#44403c" }}>{r.other_type}</Text>
-                      <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                        ${Number(r.rate).toFixed(2)} per {r.unit}
-                      </Text>
-                    </View>
-                    <Pressable onPress={() => saveRate(() => updateOtherRate(r.other_type, { active: true }))}>
-                      <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                        Restore
-                      </Text>
-                    </Pressable>
                   </View>
                 ))}
-              </View>
-            ) : null}
+
+                <Pressable onPress={() => setShowArchived((v) => !v)} className="mt-1 self-start" hitSlop={6}>
+                  <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                    {showArchived ? "Hide" : "Show"} archived ({archivedOther.length})
+                  </Text>
+                </Pressable>
+                {showArchived
+                  ? archivedOther.map((r) => (
+                      <View
+                        key={r.other_type}
+                        className="mt-2 flex-row items-center justify-between rounded-xl border px-3 py-2.5"
+                        style={{ borderColor: "#ece7e1", opacity: 0.6 }}
+                      >
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <Text numberOfLines={1} style={{ fontFamily: fonts.sansMedium, color: "#44403c" }}>
+                            {r.other_type}
+                          </Text>
+                          <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                            ${Number(r.rate).toFixed(2)} per {r.unit}
+                          </Text>
+                        </View>
+                        <Pressable onPress={() => saveRate(() => updateOtherRate(r.other_type, { active: true }))} hitSlop={6}>
+                          <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+                            Restore
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ))
+                  : null}
+              </RateCard>
+            </View>
+
+            {/* Full width under the three columns. The mock draws a
+                "push N days before the period closes" field here; that
+                setting doesn't exist and re-adding it would undo the fix
+                that stopped the reminder firing a week early — it's
+                anchored to the period boundary now, so this card keeps its
+                two real times. */}
+            <View className="mt-4">
+              <DeadlineReminderCard />
+            </View>
           </>
         )}
       </ScrollView>

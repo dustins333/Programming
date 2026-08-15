@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { entriesForCategory, formatMoney } from "../../lib/payroll/calc";
-import { formatDateMD, formatDateMDY } from "../../lib/formatDate";
+import { entriesForCategory, formatMoney, formatQuantity } from "../../lib/payroll/calc";
+import { formatDateMD, formatDateMDY, formatDateRange } from "../../lib/formatDate";
+import { daysBetween } from "../../lib/boiseDate";
 import { fonts, colors } from "../../lib/theme";
 import { PayrollBottomSheet } from "./PayrollBottomSheet";
 
@@ -49,6 +50,81 @@ export function PeriodPicker({ options, selected, onChange }) {
   );
 }
 
+// My Pay's header — the one dark surface in the whole payroll flow, because
+// this is the screen a coach opens to see what they've earned and the money
+// should be the first and largest thing on it. The period stepper and the
+// open/closed state ride in the same band so the number is never ambiguous
+// about which fortnight it belongs to.
+//
+// The bar is ELAPSED PERIOD TIME, not days logged — deliberate, per direct
+// call: most coaches don't work every day, so a bar that filled with
+// submissions would imply a daily submit is owed and read as "behind" to
+// someone who simply wasn't rostered. It answers "how much of this period
+// is left", nothing more.
+export function PayPeriodBand({ options, selected, onChange, total, today }) {
+  const index = options.findIndex((p) => p.start_date === selected);
+  const current = options[index];
+  const goPrev = () => {
+    if (index < options.length - 1) onChange(options[index + 1].start_date);
+  };
+  const goNext = () => {
+    if (index > 0) onChange(options[index - 1].start_date);
+  };
+
+  const start = current?.start_date;
+  const end = current?.end_date;
+  // Month-name range here rather than periodLabel's MM/DD — this is a
+  // heading, not a grid cell, and it should read the same as the Log
+  // header and the finalize sheet.
+  const label = formatDateRange(start, end) || periodLabel(current);
+  const length = start && end ? daysBetween(end, start) + 1 : 0;
+  // Only the period that actually contains today gets a progress bar: on a
+  // finished period it would always read full, and on a future one empty,
+  // neither of which tells anyone anything.
+  const elapsed = start && today ? daysBetween(today, start) + 1 : null;
+  const showProgress = Boolean(length && elapsed !== null && elapsed >= 1 && elapsed <= length);
+  const pct = showProgress ? Math.round((elapsed / length) * 100) : 0;
+
+  const statusLabel = current?.closed ? "Closed" : showProgress ? "Open" : "Ended";
+
+  return (
+    <View style={{ backgroundColor: "#3b3531", borderRadius: 20, paddingVertical: 16, paddingHorizontal: 18 }}>
+      <View className="mb-3 flex-row items-center justify-between">
+        <View className="flex-row items-center" style={{ gap: 10 }}>
+          <Pressable onPress={goPrev} disabled={index >= options.length - 1} hitSlop={10} style={{ opacity: index >= options.length - 1 ? 0.4 : 1 }}>
+            <Text style={{ fontSize: 15, color: "#a99f96", fontFamily: fonts.sansMedium }}>‹</Text>
+          </Pressable>
+          <Text style={{ fontSize: 12.5, fontFamily: fonts.sansSemiBold, color: "white" }}>{label}</Text>
+          <Pressable onPress={goNext} disabled={index <= 0} hitSlop={10} style={{ opacity: index <= 0 ? 0.4 : 1 }}>
+            <Text style={{ fontSize: 15, color: "#a99f96", fontFamily: fonts.sansMedium }}>›</Text>
+          </Pressable>
+        </View>
+        <View style={{ borderWidth: 1, borderColor: "#6b625b", borderRadius: 99, paddingVertical: 3, paddingHorizontal: 9 }}>
+          <Text maxFontSizeMultiplier={1.1} style={{ fontSize: 10, fontFamily: fonts.sansSemiBold, color: "#c9beb4" }}>
+            {statusLabel}
+          </Text>
+        </View>
+      </View>
+
+      <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 9.5, fontFamily: fonts.sansBold, letterSpacing: 1.1, color: "#a99f96", marginBottom: 3 }}>
+        PAY THIS PERIOD
+      </Text>
+      <Text style={{ fontSize: 38, fontFamily: fonts.sansBold, color: "white", lineHeight: 42 }}>{formatMoney(total)}</Text>
+
+      {showProgress ? (
+        <View className="mt-3 flex-row items-center" style={{ gap: 7 }}>
+          <View style={{ flex: 1, height: 6, borderRadius: 99, backgroundColor: "#544c46", overflow: "hidden" }}>
+            <View style={{ width: `${pct}%`, height: "100%", borderRadius: 99, backgroundColor: "#8fb473" }} />
+          </View>
+          <Text maxFontSizeMultiplier={1.1} style={{ fontSize: 10.5, fontFamily: fonts.sansSemiBold, color: "#c9beb4" }}>
+            Day {elapsed} of {length}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const ROWS = [
   { key: "group", label: "Group", amountKey: "groupAmount", countKey: "groupCount", countLabel: "sessions" },
   { key: "strategy", label: "Strategy sessions", amountKey: "strategyAmount", countKey: "strategyCount", countLabel: "sessions" },
@@ -74,40 +150,48 @@ export function CategoryBreakdown({ totals, entries, rateMaps }) {
   const openRow = ROWS.find((r) => r.key === openCategoryKey);
   const drillItems = openRow && drillable ? entriesForCategory(entries, openRow.key, rateMaps) : [];
 
+  const visible = ROWS.filter((row) => (totals[row.amountKey] || 0) || (row.countKey && totals[row.countKey]));
+
   return (
-    <View className="max-w-md rounded-2xl border border-stone-200 p-5">
-      {ROWS.map((row) => {
+    <View style={{ maxWidth: 460, backgroundColor: "white", borderWidth: 1, borderColor: "#ece7e1", borderRadius: 16, paddingHorizontal: 14 }}>
+      {visible.map((row, i) => {
         const amount = totals[row.amountKey] || 0;
-        if (!amount && (!row.countKey || !totals[row.countKey])) return null;
         const RowWrapper = drillable ? Pressable : View;
         return (
           <RowWrapper
             key={row.key}
-            className="mb-3 flex-row items-center justify-between"
+            className="flex-row items-center justify-between"
+            style={{
+              paddingVertical: 11,
+              // Every row but the last carries the hairline, so the card
+              // never ends on a divider with nothing under it.
+              ...(i < visible.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#f4f0ec" } : null),
+            }}
             {...(drillable ? { onPress: () => setOpenCategoryKey(row.key) } : {})}
           >
-            <View>
-              <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-                {row.label}
-              </Text>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={{ fontSize: 12.5, fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{row.label}</Text>
               {row.countKey ? (
-                <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                  {totals[row.countKey]} {row.countLabel}
+                <Text numberOfLines={1} style={{ fontSize: 10.5, fontFamily: fonts.sans, color: "#b5aea7", marginTop: 2 }}>
+                  {formatQuantity(totals[row.countKey])} {row.countLabel}
                 </Text>
               ) : null}
             </View>
-            <View className="flex-row items-center gap-1.5">
-              <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{formatMoney(amount)}</Text>
-              {drillable ? <Ionicons name="chevron-forward" size={14} color="#d6d3d1" /> : null}
+            <View className="flex-row items-center" style={{ gap: 6 }}>
+              <Text style={{ fontSize: 13, fontFamily: fonts.sansBold, color: "#2a211c" }}>{formatMoney(amount)}</Text>
+              {drillable ? <Ionicons name="chevron-forward" size={13} color="#d6cec7" /> : null}
             </View>
           </RowWrapper>
         );
       })}
-      <View className="mt-2 flex-row items-center justify-between border-t border-stone-200 pt-3">
-        <Text style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>Total</Text>
-        <Text className="text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-          {formatMoney(totals.total)}
+      {visible.length === 0 ? (
+        <Text style={{ paddingVertical: 14, fontSize: 12.5, fontFamily: fonts.sans, color: "#a8a29e" }}>
+          Nothing logged for this period yet.
         </Text>
+      ) : null}
+      <View className="flex-row items-center justify-between" style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#ece7e1" }}>
+        <Text style={{ fontSize: 12.5, fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>Total</Text>
+        <Text style={{ fontSize: 15, fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>{formatMoney(totals.total)}</Text>
       </View>
 
       {drillable ? (

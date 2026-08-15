@@ -3091,6 +3091,284 @@ Added `app/+html.js` — Expo Router's static-export root-document override (onl
 
 Verified for real, not just bundle-checked: ran a real `npx expo export -p web` and confirmed the manifest link/icons/meta tags all land in the generated `dist/index.html`, served the export locally, and screenshotted the login screen rendering normally (no regression from the new root document).
 
+## Coach payroll v1 design pass — staff screens (2026-08-14)
+
+A handoff (`design_handoff_coach_payroll_v1/` — README + `Kova Coach
+Payroll.dc.html` + 12 screenshots) restyles every payroll screen. Terra's
+brief: *"keep all the functionality here, especially with the finalizing, but
+i just want it to look good like the rest of the app does."* Phone-first,
+because coaches log at the end of each day on a phone. **All 12 screens are
+built** — staff (01-07) and admin (08-12), in that order, same session.
+Nothing about how pay is calculated, submitted, finalized, approved or closed
+changed — no migration, no Edge Function, no schema.
+
+**All three of the handoff's own open questions were already answered by live
+data**, checked against the database rather than assumed: `payroll.spc_tiers`
+holds exactly five rows (0-4), so there is no "6 or more" tier to trim and
+`SpcAttendeePicker` was already 0-4; the 0-attendee rate is a real **$10.00**,
+not the `$0.00` placeholder drawn in screenshot 12; and `spc_notes` already
+exists and already holds free text, so per-attendee names are newline-joined
+into it with no migration, matching what `program_notes`/`welcome_notes`/
+`strategy_notes` already do.
+
+**One thing in the mock was deliberately NOT built.** Screenshot 12's rates
+screen shows a "Deadline reminder — push this many days before the period
+closes · [2] days" field. That setting does not exist and re-adding it would
+be a regression: the reminder was rebuilt on 2026-08-12 (see that section)
+because the weekday version fired a week early, and it now anchors to the
+period boundary via `payroll_deadline_time` / `payroll_deadline_followup_time`
+with no days-before concept. `DeadlineReminderCard` keeps its two time
+pickers.
+
+**Tile anatomy, the headline fix.** `PayrollTile` is rebuilt: label (+ count
+chip) top-left, value bottom-left, control bottom-right, and one **always-
+reserved** 15px caption line, at a static `TILE_HEIGHT = 112`. `TileCheckmark`
+and its `paddingBottom: 28` reserve zone are gone — that floating badge, which
+sat half off the tile edge on its own white backdrop circle purely so the
+tile's border didn't cut through it, is what made the screen read as
+unfinished. State is now carried by fill and border alone, three explicit
+tones via `tileTone(state)` / `tileState(hasData, submitted)`: **empty**
+(white / `#ece7e1`), **entered** (peach `#fdf6f2` / `#f0ddd2`), **submitted**
+(sage `#eef1e7` / `#4d6142`, plus an inline 11px tick top-right). Both
+non-empty tones already existed in the app. Measured after the rebuild: every
+tile is exactly 112px and every value in a row shares a baseline **including
+rows where one tile has a caption and the other doesn't** (Group/SPC, Admin/
+Ops) — that mismatch was the original complaint.
+
+**Three date mechanisms became one.** `PayrollDateNav` is now a five-day
+window over the 14-day period; `PayrollDatePicker` and its bounded calendar
+modal are deleted. Window rule is `clamp(selected - 2, 0, length - 5)`: pinned
+at the period's start, riding the centre from day 3, drifting right over the
+last two days so the strip finishes the period out rather than stranding it.
+Dots carry submitted (olive) / entered (clay) state for the neighbouring days
+for free.
+
+**Sheets share one shell.** `PayrollBottomSheet` gained a grabber, an optional
+subtitle (the day being edited), and a single full-width primary whose label
+says what it will do (`Save 1h 30m`, `Finalize $928.50`) — previously each
+sheet drew its own header and its own button, so none of them agreed. It's an
+inset card rather than the member app's edge-to-edge sheet, per the mock;
+still bottom-anchored and scrim-dismissed. New shared `SheetLabel` /
+`SheetNameRow` / `SheetTextInput` so the names sheet and the SPC sheet can't
+drift. Hours gained quick presets. **Two real interaction changes**: the names
+sheet's rows ARE the count now (add a row and the tile's counter goes up,
+delete one and it goes down — `onSave(joined, rowCount)`, mirrored back into
+local state so the counter autosave doesn't then schedule a redundant write of
+what was just saved), and SPC's 0-4 chips build that many optional name rows
+with deleting a row decrementing the head count. Both verified by driving real
+clicks: picking 4 built four rows, deleting one left three rows and chip 3.
+
+**Four staff tabs became three.** `Log · Extra pay · My Pay`, equal width, no
+ScrollView. `app/(coach)/payroll/requests.js` and `nutrition.js` are deleted,
+merged into new **`extra.js`** with two segments — `can_view_nutrition` gates
+the *segment*, so a coach without it sees Requests as the whole screen and
+never an empty tab. The nutrition roster is only fetched once that segment is
+actually opened. **The staff side renders no approval queue at all** now
+(admins approve in Admin View → Requests, which was always the real home);
+`listPendingRequests` went dead with it and was deleted.
+
+**My Pay gets the one dark surface in the flow** — new `PayPeriodBand`
+(period stepper, open/closed pill, `PAY THIS PERIOD`, the money at 38px, and a
+progress bar). **The bar is elapsed period time, not days logged** — deliberate
+per direct call: most coaches don't work every day, so a bar that filled with
+submissions would imply a daily submit is owed and read as "behind" to someone
+who simply wasn't rostered. It only renders for the period actually containing
+today. `CategoryBreakdown` restyled to one hairline-divided row per category;
+the drill-down popup is untouched, so the admin per-coach view that reuses it
+came along for free.
+
+**FinalizeModal is a sheet that restates what you're signing**, not a generic
+"are you sure": the period in the title, every count as a line, the amount on
+the button. The separate native `confirmFinalizePayroll` popup was **removed**
+and its attestation copy moved verbatim into the sheet — it used to layer on
+top of the modal, which meant the wording you were agreeing to only appeared
+*after* you'd decided. `confirmFinalizePayroll` is deleted from
+`lib/confirmDialog.js`. Also added an accurate line the old copy lacked: an
+admin has to send the period back before anything in it can change.
+
+**New `formatDateRange(start, end)` in `lib/formatDate.js`** — "Aug 6 – 19",
+or "Jul 30 – Aug 12" across a month boundary. Three copies of this had
+appeared in one session; `formatDateMD`'s MM/DD stays for the calendar grids,
+where columns are tight. Split off the ISO string, never through `new Date`.
+
+**A real bug the clean bundle did not catch, worth remembering as a class**:
+`openEditOther` still called `setOtherListOpen` after that state was deleted
+(the Other panel lists its items inline now, so there's no list popup to
+close). `expo export` passed clean five times over it — **Metro does not
+resolve identifiers**, exactly as this file's v5 notes warn. Found by running
+a throwaway Babel `path.scope.globals` pass over every touched file; the only
+other hit was `window` in `confirmDialog.js`, which is legitimately guarded.
+Worth doing that sweep on any pass that deletes state or helpers.
+
+### Admin screens (08-12)
+
+**One grid, shared by both admin tables.** `StaffReviewRow` exports
+`STAFF_WIDTH` (200) / `COL_WIDTH` / `PAY_WIDTH` (88) / `ACTION_WIDTH` (194) /
+`CELL_GAP`, and `admin/closed.js`'s expanded breakdown now reuses them rather
+than inventing its own — two admin tables of the same data reading
+differently is worse than either being a few pixels wider. Status moved out
+of the Pay column and under the staff name (with the avatar tinted to match),
+which leaves Pay as money and nothing else. The review rail is a fixed
+two-slot 194 = 96 + 8 + 90; a row with one action (`Waiting on Avery`,
+`View note`, `Closed`) spans the full 194 rather than sitting at one end.
+
+**Two measured deviations from the mock, both deliberate:**
+- **`COL_WIDTH` is 66, not the mock's 58.** Measured in the browser: at
+  9.5px bold with 0.9 letter-spacing, "PROGRAMS" renders **66px**, and at 58
+  it ellipsised to `PROGRA…` (as did `WELCO…` and `STRATE…`). The mock gets
+  away with 58 because a bare HTML div overflows silently; RN's
+  `numberOfLines={1}` truncates instead.
+- **`CELL_GAP` is 8, not 16.** The mock lays out six numeric columns
+  (merging Admin+Ops into "HOURS", dropping Welcome and Strategy); those are
+  real pay categories with their own rates, so all eight are kept. At gap 16
+  the table came out *wider* than the version it replaces, which would have
+  made the restyle a regression on the one axis that matters. At 8 it fits a
+  1440 window without scrolling, and the horizontal ScrollView remains for
+  narrower ones.
+
+**A real 2px alignment bug, found by measuring rather than looking.** The
+`tableWidth` formula summed the cells, the gaps and the card's 20px padding —
+but not the card's own **1px border on each side**. So the row's content
+needed 1090px in a 1088px box, and flex quietly shrank the one shrinkable
+cell (the header/footer's staff `Text`; the rows' staff cell is a
+non-shrinking `Pressable`), leaving the rows 2px right of the header and
+footer. Invisible in a screenshot, obvious in
+`getBoundingClientRect()`. After the fix all six Pay cells report a single
+right edge and all six staff cells measure the full 200. **Worth remembering:
+when a fixed-width table lives inside a bordered card, the border is part of
+the width budget.**
+
+**Requests regrouped by decision, not by period.** `admin/requests.js` split
+"this period" vs "history"; a pending request from a *previous* fortnight
+therefore sat under History, which is the one request that most needs
+deciding — and an undecided request is also the only thing that hard-blocks
+closing the period it belongs to. Now: `Waiting on you` (dark cards, three
+across, amount repeated on the approve button because approving writes the
+linked pay entry immediately) over a plain `Decided` table. A pending
+request from another period names that period on its card; the common case
+stays quiet. The Decided table shows `approved_amount` where it differs from
+what was asked, since those can legitimately disagree.
+
+**Closed periods read as receipts** — owner / staff / taxes / grand total
+lead the row, with the taxes field **dashed while empty** so an unfilled
+figure reads as outstanding rather than a real zero, and Save appearing only
+once the value actually differs from what's stored. Expanding re-reads that
+period at its frozen rates (unchanged behaviour) into the shared grid.
+
+**Admin report: share bars replace the nine-column money grid.** That grid
+needed a horizontal scroll to read and made comparing two people an exercise
+in counting columns; a bar answers "who's carrying the load" with no
+arithmetic, and the detail moved into a panel one click away whose category
+rows still drill into individual entries. Sorted by pay, not name — bars only
+read as a ranking if they're ordered. On web the breakdown is an **inline
+side panel** (a sheet covers the list it's meant to be read against); native
+keeps the bottom sheet, and gets the same bars. The panel also loads
+`listFinalizationsForPeriod` to say whether the figure being read is approved
+or still moving.
+
+**Rates in three columns** (`RateCard`, `flexGrow/flexBasis 300/minWidth
+280`), collapsing to two and then one as the window narrows — verified at
+1440 and 900. The add-a-type form stacks instead of three inputs abreast
+(unreadable at 300px) and hides behind the mock's `+ Add`, since adding a
+type is rare next to editing one. **The mock's "push N days before the period
+closes" field was NOT built** — see the deadline-reminder note above.
+
+### Admin follow-ups from Terra's click-through
+
+- **Admin View lands on This period, not Requests** (`payroll/index.js`) —
+  reviewing and closing the open period is the job; requests are usually
+  empty.
+- **The table now grows with the window instead of sitting at a fixed
+  width.** The ScrollView's content container is `flexGrow: 1` with
+  `minWidth: minTableWidth`, so it fills a wide window and scrolls a narrow
+  one; every numeric column stays fixed (the figures have to line up) and
+  the staff column is the flexible one, so rows get **wider, not taller**.
+  `STAFF_CELL` (`flexGrow 1 / flexBasis 200 / minWidth 200`) is spread into
+  the header, every row and the footer — a fixed width on one and a flex on
+  another is exactly how the grid drifts. Measured at 1600: card 1552, all
+  three staff cells 620, Pay cells still on a single right edge. At 900: the
+  card holds its 1132 minimum, staff back to 200, one horizontal scroller,
+  page body does not overflow.
+- **Closed periods' totals were showing $0.00 — real data, not a view
+  bug.** `owner_pay`/`staff_pay` are written by the app's own close flow,
+  and **all 22 closed periods are the historical Glide import**, closed by
+  SQL rather than through the app (confirmed live: 22 closed periods, **0**
+  rows in `closed_period_rate_snapshots`). So both columns are null on every
+  one of them, and `Number(null) || 0` rendered that as a confident $0.00 on
+  a period that plainly had entries. The Report tab looked fine because it
+  computes live from entries. Now `closed.js` recomputes owner/staff from
+  the entries whenever the stored value is missing — new
+  `listEntriesForPeriods(starts)` fetches every period's entries in one `in`
+  query, plus one `listStaff()` for the admin/coach split and one
+  `listAllRates()` (no period has a snapshot, so `getRateMapsForPeriod`
+  would fall back to live rates for all of them anyway). Two queries for the
+  page rather than a pair per row. A recomputed row is labelled
+  "recalculated from entries"; a figure that genuinely can't be derived
+  shows "—", never a fabricated zero.
+- **Report's dark band carries owner pay / staff pay / taxes / grand
+  total.** Taxes are entered on Closed periods after a close, so an open
+  period shows "—  set at close" rather than a $0.00 that would read as "no
+  tax on this payroll".
+- **Share bars got a category toggle, and then a second axis.** The list
+  has two: `BY_COACH` (or a category key) puts one row per coach on screen;
+  **`BY_TYPE` puts one row per pay type** — SPC, Group, Admin and the rest
+  on the same bars as the coaches, which is what was actually wanted. Both
+  read off the same `PAY_TYPES` table, once per coach for the per-coach
+  views and once against the whole team's totals for by-type, so there's no
+  extra query for any of it. The two axis pills sit ahead of a divider rule
+  so they don't read as two more of the ten category options.
+  - Picking anything re-sorts (bars only read as a ranking if ordered by
+    what they draw), shows the count under the amount (a count is checkable
+    in a way a dollar figure isn't), and the footer states that list's
+    total. **Verified arithmetically**: the by-type rows summed to exactly
+    the grand total, so they account for every dollar.
+  - A pay type with nothing in it is dropped rather than carried as a
+    permanent zero row; a genuine zero within a list draws no bar at all,
+    as against the 2% floor used for small-but-real amounts.
+  - **Tapping a type row drills into who did it** — which is exactly what
+    that type's own pill shows, so the two views connect rather than sitting
+    apart. In by-type mode the side panel widens to the whole team, which is
+    the only place a category's entries can be read across everyone at once.
+
+- **Two decimals, everywhere a payroll number renders.** New
+  `formatQuantity` in `calc.js` sits next to `formatMoney` and handles every
+  non-money figure: integers stay integers ("31", not "31.00"), a trailing
+  zero is trimmed ("6.5", not "6.50"), and anything longer rounds to 2dp.
+  **Not cosmetic** — 174 real imported entries carry non-quarter hours
+  (0.15, 0.67, 1.08…), and summing those in floating point gives
+  `10.680000000000001`, which is what a column of summed hours was actually
+  rendering. Verified against the real values, not assumed. Routed through
+  it: `StaffReviewRow`'s `Num`, the This-period footer, the closed-period
+  breakdown, `CategoryBreakdown`'s counts, the report's bar counts, the
+  Other row's `×qty`, and `calc.js`'s own `CATEGORY_LABELERS`. Money was
+  already fine (`formatMoney` → `toLocaleString`), as were rate rows
+  (`toFixed(2)`) and the CSV (raw stored `numeric(10,2)` values, which is
+  what an export should carry).
+
+**Not carried to native** (`admin/report.js`): the band's owner/staff/taxes
+split and the share-mode toggle are web-only. Native's admin report is a
+secondary surface — the handoff's own framing is that admin work happens at
+a desk — and both would need a `listStaff()` fetch there for a screen that
+isn't used that way. It keeps the dark total band and the share bars.
+
+### Verification
+
+`npx expo export -p web` clean after every batch, plus real click-through of
+the staff side at 375px (tile grid in both states, day strip, all four
+sheets, My Pay, finalize) and the admin side at 1440 and 900 (review table
+with all four row states, approval cards, three-column rates). Done via a
+**throwaway `app/zz-harness.js` route rather than mounting on `login.js`** —
+safer for exactly the reason this file's teardown note gives: a top-level
+route outside the auth/member/coach groups is reachable unauthenticated, and
+deleting it can't leave sign-in broken. Deleted after; `git status` confirms
+only intended files.
+
+**Not verified**: anything behind a real login — standing limitation. Worth
+Terra's click-through of a real day's autosave → submit → edit-clears-
+submission round trip, the Extra pay merge against real requests, a real
+finalize, and on the admin side a real approve / send-back / reopen round
+trip and a period close.
+
 ## Working notes for future sessions
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.

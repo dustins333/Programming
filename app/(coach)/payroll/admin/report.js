@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Redirect, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listPayPeriodOptions, getCurrentPeriodStart } from "../../../../lib/payroll/periods";
@@ -72,6 +72,9 @@ export default function AdminPayrollReport() {
 
   const allStaffTotals = rateMaps ? computeTotalsByStaff(entries, rateMaps).sort((a, b) => b.totals.total - a.totals.total) : [];
   const grandTotal = allStaffTotals.reduce((sum, s) => sum + s.totals.total, 0);
+  // Already sorted highest-first, so the leader is the head — every other
+  // bar is drawn as a fraction of it.
+  const leaderTotal = allStaffTotals.length ? allStaffTotals[0].totals.total : 0;
   const openStaff = allStaffTotals.find((s) => s.key === openStaffKey);
   const openStaffEntries = openStaff ? entries.filter((e) => (e.user_id || e.staff_email) === openStaff.key) : [];
 
@@ -98,20 +101,44 @@ export default function AdminPayrollReport() {
           </Text>
         ) : (
           <>
-            <Text className="mb-3" style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
-              Total payroll: {formatMoney(grandTotal)}
-            </Text>
-            {allStaffTotals.map((s) => (
-              <Pressable
-                key={s.key}
-                onPress={() => setOpenStaffKey(s.key)}
-                className="mb-2 max-w-md flex-row items-center justify-between rounded-xl border border-stone-200 p-4"
-                style={{ backgroundColor: "white" }}
-              >
-                <Text style={{ fontFamily: fonts.sansMedium, color: "#44403c" }}>{s.staffName}</Text>
-                <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>{formatMoney(s.totals.total)}</Text>
-              </Pressable>
-            ))}
+            <View className="mb-3.5 rounded-2xl px-5 py-4" style={{ backgroundColor: "#3b3531" }}>
+              <Text className="uppercase" style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.1, color: "#a99f96" }}>
+                Total payroll
+              </Text>
+              <Text className="mt-1" style={{ fontFamily: fonts.sansBold, fontSize: 26, color: "white" }}>
+                {formatMoney(grandTotal)}
+              </Text>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a99f96", marginTop: 2 }}>
+                {allStaffTotals.length} staff logging
+              </Text>
+            </View>
+
+            {/* Same share bars as web, since "who's carrying the load" is
+                the question either way — but the breakdown still opens as a
+                bottom sheet here, because a side panel needs a desk. */}
+            <View className="overflow-hidden rounded-2xl border bg-white" style={{ borderColor: "#ece7e1" }}>
+              {allStaffTotals.map((s, i) => {
+                const fraction = leaderTotal > 0 ? s.totals.total / leaderTotal : 0;
+                return (
+                  <Pressable
+                    key={s.key}
+                    onPress={() => setOpenStaffKey(s.key)}
+                    className="px-5 py-3.5"
+                    style={i > 0 ? { borderTopWidth: 1, borderTopColor: "#f4f0ec" } : undefined}
+                  >
+                    <View className="mb-2 flex-row items-center justify-between" style={{ gap: 12 }}>
+                      <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c" }}>
+                        {s.staffName}
+                      </Text>
+                      <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#2a211c" }}>{formatMoney(s.totals.total)}</Text>
+                    </View>
+                    <View style={{ height: 8, borderRadius: 99, backgroundColor: "#f4f0ec", overflow: "hidden" }}>
+                      <View style={{ width: `${Math.max(2, Math.round(fraction * 100))}%`, height: "100%", borderRadius: 99, backgroundColor: "#e2c9bb" }} />
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           </>
         )}
       </ScrollView>

@@ -1,77 +1,145 @@
-// Top-of-page date navigation for My Entries — a centered date tile
-// (MM-DD-YYYY, tap to open the bounded calendar picker) flanked by day-step
-// arrows, both mechanisms present since a coach might want to nudge one day
-// at a time OR jump straight to a specific date.
-import { useState } from "react";
+// The Log screen's day picker — a five-day window sliding over the 14-day
+// period, flanked by step arrows.
+//
+// This replaces three separate mechanisms that all answered the same
+// question ("which day am I logging"): a 150×72 date tile, a pair of step
+// arrows, and a bounded calendar modal behind the tile. One strip does all
+// of it, shows the neighbouring days' state for free, and needs no modal.
+//
+// Window rule: windowStart = clamp(selected - 2, 0, LEN - VIS). At the start
+// of the period the window is pinned to day 1 and the selection moves within
+// it; from day 3 onward the selection rides the centre; over the last two
+// days the window holds at the end and the selection drifts right, so the
+// strip finishes the period out instead of stranding the final days.
 import { View, Text, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { fonts, colors } from "../../lib/theme";
-import { formatDateMDY } from "../../lib/formatDate";
-import { addDays } from "../../lib/boiseDate";
-import { PayrollDatePicker } from "./PayrollDatePicker";
+import { fonts } from "../../lib/theme";
+import { addDays, daysBetween } from "../../lib/boiseDate";
 
-export function PayrollDateNav({ selectedDate, onSelectDate, periodStart, periodEnd, datesWithEntries, submittedDates }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
+const VISIBLE_DAYS = 5;
+const CENTER_OFFSET = 2;
+const WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
-  const canGoPrev = selectedDate > periodStart;
-  const canGoNext = selectedDate < periodEnd;
-  const hasEntriesToday = datesWithEntries.has(selectedDate);
-  const submittedToday = submittedDates?.has(selectedDate) ?? false;
+const SELECTED_FILL = { entered: "#a46a57", submitted: "#4d6142" };
+const DOT = { submitted: "#4d6142", entered: "#c98a6b" };
+
+function clamp(n, min, max) {
+  return Math.min(Math.max(n, min), max);
+}
+
+// Weekday/day-of-month straight off the ISO string — never `new Date(...)`
+// on a bare date, which resolves in the device's zone rather than Boise.
+function partsOf(dateString) {
+  const d = new Date(`${dateString}T00:00:00Z`);
+  return { weekday: WEEKDAYS[d.getUTCDay()], dayOfMonth: d.getUTCDate() };
+}
+
+function DayCell({ date, selected, submitted, entered, future, onPress }) {
+  const { weekday, dayOfMonth } = partsOf(date);
+  const fill = submitted ? SELECTED_FILL.submitted : SELECTED_FILL.entered;
+  const dotColor = selected ? "rgba(255,255,255,0.85)" : submitted ? DOT.submitted : entered ? DOT.entered : "transparent";
 
   return (
-    <View className="mb-6 items-center">
-      <View className="flex-row items-center" style={{ gap: 18 }}>
-        <Pressable
-          onPress={() => canGoPrev && onSelectDate(addDays(selectedDate, -1))}
-          disabled={!canGoPrev}
-          hitSlop={10}
-          className="items-center justify-center rounded-full"
-          style={{ width: 36, height: 36, borderWidth: 1, borderColor: "#e7e5e4", backgroundColor: "white", opacity: canGoPrev ? 1 : 0.35 }}
-        >
-          <Ionicons name="chevron-back" size={18} color={colors.primaryOnWhite} />
-        </Pressable>
-
-        <Pressable
-          onPress={() => setPickerOpen(true)}
-          className="items-center justify-center rounded-2xl"
-          style={{ width: 150, height: 72, backgroundColor: "white", borderWidth: submittedToday ? 2 : 1, borderColor: submittedToday ? "#4d6142" : "#ece7e1" }}
-        >
-          <Ionicons name="calendar-outline" size={14} color="#a8a29e" style={{ marginBottom: 3 }} />
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>{formatDateMDY(selectedDate)}</Text>
-          {submittedToday ? (
-            <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sansMedium, color: "#4d6142" }}>
-              Submitted
-            </Text>
-          ) : hasEntriesToday ? (
-            <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
-              Not submitted
-            </Text>
-          ) : null}
-        </Pressable>
-
-        <Pressable
-          onPress={() => canGoNext && onSelectDate(addDays(selectedDate, 1))}
-          disabled={!canGoNext}
-          hitSlop={10}
-          className="items-center justify-center rounded-full"
-          style={{ width: 36, height: 36, borderWidth: 1, borderColor: "#e7e5e4", backgroundColor: "white", opacity: canGoNext ? 1 : 0.35 }}
-        >
-          <Ionicons name="chevron-forward" size={18} color={colors.primaryOnWhite} />
-        </Pressable>
-      </View>
-
-      <PayrollDatePicker
-        visible={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        periodStart={periodStart}
-        periodEnd={periodEnd}
-        datesWithEntries={datesWithEntries}
-        selectedDate={selectedDate}
-        onSelectDate={(date) => {
-          onSelectDate(date);
-          setPickerOpen(false);
+    <Pressable
+      onPress={onPress}
+      accessibilityLabel={`${weekday} ${dayOfMonth}${submitted ? ", submitted" : entered ? ", not submitted" : ""}`}
+      style={{
+        width: 46,
+        paddingVertical: 7,
+        borderRadius: 12,
+        alignItems: "center",
+        backgroundColor: selected ? fill : "transparent",
+        opacity: future && !selected ? 0.45 : 1,
+        ...(selected
+          ? {
+              shadowColor: "#2a211c",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.22,
+              shadowRadius: 7,
+            }
+          : null),
+      }}
+    >
+      <Text
+        maxFontSizeMultiplier={1}
+        style={{
+          fontSize: 8.5,
+          fontFamily: fonts.sansBold,
+          letterSpacing: 0.6,
+          color: selected ? "rgba(255,255,255,0.78)" : future ? "#c8c2bb" : "#a8a29e",
         }}
-      />
+      >
+        {weekday}
+      </Text>
+      <Text
+        maxFontSizeMultiplier={1.1}
+        style={{ marginTop: 4, fontSize: 15, fontFamily: fonts.sansBold, color: selected ? "white" : future ? "#c8c2bb" : "#44403c" }}
+      >
+        {dayOfMonth}
+      </Text>
+      <View style={{ marginTop: 4, width: 5, height: 5, borderRadius: 99, backgroundColor: dotColor }} />
+    </Pressable>
+  );
+}
+
+function StepArrow({ direction, enabled, onPress }) {
+  return (
+    <Pressable
+      onPress={enabled ? onPress : undefined}
+      disabled={!enabled}
+      hitSlop={8}
+      accessibilityLabel={direction === "back" ? "Previous day" : "Next day"}
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 99,
+        borderWidth: 1,
+        borderColor: "#ece7e1",
+        backgroundColor: "white",
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: enabled ? 1 : 0.35,
+      }}
+    >
+      <Text style={{ fontSize: 15, color: "#8a5140", fontFamily: fonts.sansMedium, lineHeight: 18 }}>
+        {direction === "back" ? "‹" : "›"}
+      </Text>
+    </Pressable>
+  );
+}
+
+export function PayrollDateNav({ selectedDate, onSelectDate, periodStart, periodEnd, datesWithEntries, submittedDates, today }) {
+  const periodLength = daysBetween(periodEnd, periodStart) + 1;
+  const selectedIndex = clamp(daysBetween(selectedDate, periodStart), 0, periodLength - 1);
+  // A period shorter than the window (shouldn't happen at 14 days, but the
+  // clamp would go negative and produce a bogus start if it ever did) simply
+  // shows every day it has.
+  const windowStart = clamp(selectedIndex - CENTER_OFFSET, 0, Math.max(0, periodLength - VISIBLE_DAYS));
+  const visible = Math.min(VISIBLE_DAYS, periodLength);
+
+  const canGoPrev = selectedIndex > 0;
+  const canGoNext = selectedIndex < periodLength - 1;
+
+  return (
+    <View className="mb-1 flex-row items-center" style={{ gap: 6 }}>
+      <StepArrow direction="back" enabled={canGoPrev} onPress={() => onSelectDate(addDays(selectedDate, -1))} />
+      <View className="flex-row justify-center" style={{ flex: 1, gap: 5, overflow: "hidden" }}>
+        {Array.from({ length: visible }, (_, i) => {
+          const date = addDays(periodStart, windowStart + i);
+          const submitted = submittedDates?.has(date) ?? false;
+          return (
+            <DayCell
+              key={date}
+              date={date}
+              selected={date === selectedDate}
+              submitted={submitted}
+              entered={!submitted && datesWithEntries.has(date)}
+              future={today ? date > today : false}
+              onPress={() => onSelectDate(date)}
+            />
+          );
+        })}
+      </View>
+      <StepArrow direction="forward" enabled={canGoNext} onPress={() => onSelectDate(addDays(selectedDate, 1))} />
     </View>
   );
 }

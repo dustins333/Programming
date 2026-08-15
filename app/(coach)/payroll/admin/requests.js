@@ -4,7 +4,7 @@ import { Redirect, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { getCurrentPeriodStart, computePeriodEnd } from "../../../../lib/payroll/periods";
 import { listAllRequests, approveRequest, denyRequest } from "../../../../lib/payroll/requests";
-import { formatDateMD, formatDateMDY } from "../../../../lib/formatDate";
+import { formatDateMDY, formatDateRange } from "../../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
@@ -25,41 +25,89 @@ function StatusPill({ status }) {
   );
 }
 
-function RequestRow({ r, decidingId, onApprove, onDeny }) {
+function money(v) {
+  return `$${Number(v || 0).toFixed(2)}`;
+}
+
+// A request awaiting a decision. Dark, because these are the only rows on
+// the screen that need doing — everything below is a record. The amount is
+// repeated on the approve button because approving writes the linked pay
+// entry immediately: what you press is what gets paid.
+function ApprovalCard({ r, busy, onApprove, onDeny, periodLabelFor }) {
   return (
-    <View key={r.id} className="mb-2 max-w-xl rounded-xl border border-stone-200 p-4">
-      <View className="mb-2 flex-row items-start justify-between">
-        <View className="flex-1 pr-3">
-          <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{r.staff_name}</Text>
-          <Text className="mt-0.5 text-sm text-stone-600" style={{ fontFamily: fonts.sans }}>
-            {r.description}
+    <View style={{ backgroundColor: "#3b3531", borderRadius: 16, padding: 18, minWidth: 260, flexGrow: 1, flexBasis: 260 }}>
+      <View className="mb-3.5 flex-row items-start justify-between" style={{ gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "white" }}>
+            {r.staff_name}
           </Text>
-          <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#c9beb4", marginTop: 3 }}>{r.description}</Text>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#8d8279", marginTop: 5 }}>
             Requested {formatDateMDY(r.created_at?.slice(0, 10))}
+            {periodLabelFor ? ` · ${periodLabelFor}` : ""}
           </Text>
         </View>
-        <View className="items-end gap-1.5">
-          <Text style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>${Number(r.amount_requested).toFixed(2)}</Text>
-          {r.status !== "pending" ? <StatusPill status={r.status} /> : null}
-        </View>
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 19, color: "white" }}>{money(r.amount_requested)}</Text>
       </View>
-      {r.status === "pending" && onApprove ? (
-        <View className="flex-row gap-2">
-          <Pressable
-            onPress={() => onApprove(r)}
-            disabled={decidingId === r.id}
-            className="rounded-lg px-4 py-2"
-            style={{ backgroundColor: colors.primary, opacity: decidingId === r.id ? 0.6 : 1 }}
-          >
-            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
-              Approve ${Number(r.amount_requested).toFixed(2)}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => onDeny(r)} disabled={decidingId === r.id} className="rounded-lg border border-stone-300 px-4 py-2">
-            <Text style={{ fontFamily: fonts.sansMedium, color: "#78716c", fontSize: 13 }}>Deny</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      <View className="flex-row" style={{ gap: 8 }}>
+        <Pressable
+          onPress={() => onApprove(r)}
+          disabled={busy}
+          className="items-center"
+          style={{ flex: 1, backgroundColor: "#8fb473", borderRadius: 9, paddingVertical: 10, opacity: busy ? 0.6 : 1 }}
+        >
+          <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#26301d" }}>
+            {busy ? "Working…" : `Approve ${money(r.amount_requested)}`}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => onDeny(r)}
+          disabled={busy}
+          style={{ borderWidth: 1, borderColor: "#6b625b", borderRadius: 9, paddingVertical: 10, paddingHorizontal: 18, opacity: busy ? 0.6 : 1 }}
+        >
+          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#c9beb4" }}>Deny</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const HISTORY_COLS = { staff: 170, amount: 96, status: 92, decided: 104 };
+
+function HistoryHeader() {
+  const label = { fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.9, color: "#a8a29e" };
+  return (
+    <View className="flex-row items-center px-5 py-3" style={{ gap: 16, backgroundColor: "#faf8f6" }}>
+      <Text style={[label, { width: HISTORY_COLS.staff }]}>STAFF</Text>
+      <Text style={[label, { flex: 1 }]}>REQUEST</Text>
+      <Text style={[label, { width: HISTORY_COLS.amount, textAlign: "right" }]}>AMOUNT</Text>
+      <Text style={[label, { width: HISTORY_COLS.status, textAlign: "right" }]}>STATUS</Text>
+      <Text style={[label, { width: HISTORY_COLS.decided, textAlign: "right" }]}>DECIDED</Text>
+    </View>
+  );
+}
+
+function HistoryRow({ r }) {
+  // What was actually paid, which is not always what was asked for — an
+  // admin can approve a different amount than requested.
+  const settled = r.status === "approved" ? r.approved_amount ?? r.amount_requested : r.amount_requested;
+  return (
+    <View className="flex-row items-center px-5 py-3" style={{ gap: 16, borderTopWidth: 1, borderTopColor: "#f4f0ec" }}>
+      <Text numberOfLines={1} style={{ width: HISTORY_COLS.staff, fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#2a211c" }}>
+        {r.staff_name}
+      </Text>
+      <Text numberOfLines={2} style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12.5, color: "#57534e" }}>
+        {r.description}
+      </Text>
+      <Text style={{ width: HISTORY_COLS.amount, textAlign: "right", fontFamily: fonts.sansBold, fontSize: 13, color: "#2a211c" }}>
+        {money(settled)}
+      </Text>
+      <View style={{ width: HISTORY_COLS.status, alignItems: "flex-end" }}>
+        <StatusPill status={r.status} />
+      </View>
+      <Text style={{ width: HISTORY_COLS.decided, textAlign: "right", fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>
+        {r.decided_at ? formatDateMDY(r.decided_at.slice(0, 10)) : "—"}
+      </Text>
     </View>
   );
 }
@@ -96,14 +144,13 @@ export default function AdminPayrollRequests() {
     return <Redirect href="/(coach)/payroll" />;
   }
 
-  const currentPeriodRequests = allRequests.filter((r) => r.pay_period_start === currentPeriodStart);
-  const historyRequests = allRequests.filter((r) => r.pay_period_start !== currentPeriodStart);
-  const historyByPeriod = new Map();
-  for (const r of historyRequests) {
-    if (!historyByPeriod.has(r.pay_period_start)) historyByPeriod.set(r.pay_period_start, []);
-    historyByPeriod.get(r.pay_period_start).push(r);
-  }
-  const historyPeriods = Array.from(historyByPeriod.keys()).sort((a, b) => (a < b ? 1 : -1));
+  // Split by decision, not by period. Grouping by period buried a pending
+  // request from a *previous* fortnight under "History", which is the one
+  // request that most needs deciding — an undecided request is also the
+  // only thing that hard-blocks closing the period it belongs to.
+  const pending = allRequests.filter((r) => r.status === "pending");
+  const decided = allRequests.filter((r) => r.status !== "pending");
+  const pendingTotal = pending.reduce((sum, r) => sum + Number(r.amount_requested || 0), 0);
 
   const handleApprove = async (request) => {
     setDecidingId(request.id);
@@ -148,39 +195,68 @@ export default function AdminPayrollRequests() {
           <ActivityIndicator color={colors.primary} />
         ) : (
           <>
-            <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-              This period{currentPeriodStart ? ` — ${formatDateMD(currentPeriodStart)} – ${formatDateMD(computePeriodEnd(currentPeriodStart))}` : ""}
-            </Text>
-            {currentPeriodRequests.length === 0 ? (
-              <Text className="mb-8 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                No requests for this period.
-              </Text>
+            <View className="mb-3.5 flex-row flex-wrap items-center justify-between" style={{ gap: 10 }}>
+              <View className="flex-row items-center" style={{ gap: 10 }}>
+                <Text className="text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
+                  Waiting on you
+                </Text>
+                {pending.length ? (
+                  <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: "#f4ede3" }}>
+                    <Text style={{ fontFamily: fonts.sansBold, fontSize: 11, color: "#8a5a2e" }}>{pending.length}</Text>
+                  </View>
+                ) : null}
+              </View>
+              {pending.length > 1 ? (
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#78716c" }}>
+                  {money(pendingTotal)} if you approve all {pending.length}
+                </Text>
+              ) : null}
+            </View>
+
+            {pending.length === 0 ? (
+              <View className="mb-7 rounded-2xl border p-5" style={{ borderColor: "#ece7e1", backgroundColor: "white" }}>
+                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: "#78716c" }}>
+                  Nothing waiting. Requests land here the moment a coach submits one.
+                </Text>
+              </View>
             ) : (
-              <View className="mb-8">
-                {currentPeriodRequests.map((r) => (
-                  <RequestRow key={r.id} r={r} decidingId={decidingId} onApprove={handleApprove} onDeny={handleDeny} />
+              <View className="mb-7 flex-row flex-wrap" style={{ gap: 14 }}>
+                {pending.map((r) => (
+                  <ApprovalCard
+                    key={r.id}
+                    r={r}
+                    busy={decidingId === r.id}
+                    onApprove={handleApprove}
+                    onDeny={handleDeny}
+                    // Only named when it isn't the period you're in, so the
+                    // common case stays quiet and a straggler stands out.
+                    periodLabelFor={
+                      r.pay_period_start !== currentPeriodStart && r.pay_period_start
+                        ? formatDateRange(r.pay_period_start, computePeriodEnd(r.pay_period_start))
+                        : null
+                    }
+                  />
                 ))}
               </View>
             )}
 
             <Text className="mb-3 text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-              History
+              Decided
             </Text>
-            {historyPeriods.length === 0 ? (
+            {decided.length === 0 ? (
               <Text className="text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                No prior requests.
+                No decisions yet.
               </Text>
             ) : (
-              historyPeriods.map((periodStart) => (
-                <View key={periodStart} className="mb-6">
-                  <Text className="mb-2 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: "#78716c" }}>
-                    {formatDateMD(periodStart)} – {formatDateMD(computePeriodEnd(periodStart))}
-                  </Text>
-                  {historyByPeriod.get(periodStart).map((r) => (
-                    <RequestRow key={r.id} r={r} decidingId={decidingId} onApprove={null} onDeny={null} />
-                  ))}
-                </View>
-              ))
+              <View
+                className="overflow-hidden rounded-2xl border bg-white"
+                style={[{ borderColor: "#ece7e1" }, { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.045, shadowRadius: 14 }]}
+              >
+                <HistoryHeader />
+                {decided.map((r) => (
+                  <HistoryRow key={r.id} r={r} />
+                ))}
+              </View>
             )}
           </>
         )}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, TextInput, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { formatMoney, entriesForCategory } from "../../lib/payroll/calc";
+import { formatMoney, formatQuantity, entriesForCategory } from "../../lib/payroll/calc";
 import { REVIEW_APPROVED, REVIEW_SENT_BACK, REVIEW_SUBMITTED, REVIEW_NOT_SUBMITTED } from "../../lib/payroll/finalizations";
 import { formatDateMD } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
@@ -22,23 +22,88 @@ export const REVIEW_COLUMNS = [
   { key: "other", label: "Other", unit: "amt", value: (t) => t.otherAmount, money: true },
 ];
 
-// 86, not 74: "STRATEGY" and "PROGRAMS" as uppercase header labels overflow
-// anything narrower and visibly run into the next column's label. Measured
-// in the browser rather than guessed.
-const COL_WIDTH = 86;
-const PAY_WIDTH = 110;
-// 196, measured not guessed: Send back (86) + gap (8) + Approve (76) =
-// 170, plus the cell's own 14px right padding and a little air. At 168 the
-// pair overflowed left into the Other column.
-const ACTION_WIDTH = 196;
-export const COL_LABEL_STYLE = { fontFamily: fonts.sansBold, letterSpacing: 0.3, fontSize: 10.5 };
+// Fixed metrics, so every row lands on the same grid whatever it contains.
+// The category labels dropped from 10.5px to 9.5px and lost their unit
+// sublines, which is what let the numeric columns come in from 86 to 58 —
+// the header label is the widest thing in these columns, and "PROGRAMS" at
+// 9.5px bold fits 58 where at 10.5px with "written" underneath it did not.
+// The staff column is the flexible one: every numeric column is a fixed
+// width because the figures have to line up, so any width the window has
+// beyond the table's minimum goes here. `STAFF_CELL` is spread into the
+// header, every row and the footer so all three flex identically — a fixed
+// width on one and a flex on another is exactly how the grid drifts.
+export const STAFF_WIDTH = 200;
+export const STAFF_CELL = { flexGrow: 1, flexShrink: 0, flexBasis: STAFF_WIDTH, minWidth: STAFF_WIDTH };
+// 66, measured not guessed: at 9.5px bold with 0.9 letter-spacing the
+// widest header label ("PROGRAMS") renders 66px, and anything narrower
+// ellipsises it to "PROGRA…". The mock's 58 works in HTML only because a
+// bare div overflows silently; RN's numberOfLines={1} truncates instead.
+const COL_WIDTH = 66;
+const PAY_WIDTH = 88;
+// 194 = 96 primary + 8 gap + 90 secondary. A row with only one action (a
+// coach who hasn't submitted, a sent-back row) spans the full 194 rather
+// than sitting at one end, so the rail's edges line up down the whole table.
+const ACTION_WIDTH = 194;
+// 8, not the mock's 16: the mock lays out six numeric columns and this
+// table keeps all eight, so the gap is where the extra width has to come
+// from. At 16 the whole table came out wider than the version this
+// replaces, which would have made the restyle a regression on the one axis
+// that matters here.
+export const CELL_GAP = 8;
+export const COL_LABEL_STYLE = { fontFamily: fonts.sansBold, letterSpacing: 0.9, fontSize: 9.5 };
 
+// Status moved out of the Pay column and under the staff name, where the
+// avatar can carry the same tone — that leaves Pay as money and nothing
+// else, so every figure on the screen (footer included) lands on one right
+// edge without competing with a status pill for the same cell.
 const STATE_STYLE = {
-  [REVIEW_APPROVED]: { label: "Approved", color: "#4d6142", dot: "#4d6142" },
-  [REVIEW_SUBMITTED]: { label: "Submitted", color: "#8a6d3b", dot: "#c08b3e" },
-  [REVIEW_SENT_BACK]: { label: "Sent back", color: "#b23a22", dot: "#b23a22" },
-  [REVIEW_NOT_SUBMITTED]: { label: "Not submitted", color: "#b23a22", dot: "#b23a22" },
+  [REVIEW_APPROVED]: { label: "Approved", color: "#4d6142", avatarBg: "#eef1e7", avatarFg: "#4d6142" },
+  [REVIEW_SUBMITTED]: { label: "Submitted · needs review", color: "#8a5a2e", avatarBg: "#f4ede3", avatarFg: "#8a5a2e" },
+  [REVIEW_SENT_BACK]: { label: "Sent back", color: "#b23a22", avatarBg: "#fdece5", avatarFg: "#b23a22" },
+  [REVIEW_NOT_SUBMITTED]: { label: "Not finalized yet", color: "#a8a29e", avatarBg: "#f1efed", avatarFg: "#78716c" },
 };
+
+// The two-slot review rail. `primary` is the 96px action, `secondary` the
+// 90px one; passing only `full` gives a single 194px control instead.
+function ReviewRail({ children }) {
+  return (
+    <View style={{ width: ACTION_WIDTH, flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>{children}</View>
+  );
+}
+
+function RailButton({ label, onPress, width, tone = "quiet", disabled }) {
+  const TONES = {
+    primary: { bg: colors.primary, border: colors.primary, fg: "#ffffff", font: fonts.sansSemiBold },
+    done: { bg: "#eef1e7", border: "#cbd6bd", fg: "#4d6142", font: fonts.sansSemiBold },
+    quiet: { bg: "#ffffff", border: "#e7e5e4", fg: "#78716c", font: fonts.sansMedium },
+    muted: { bg: "#ffffff", border: "#e7e5e4", fg: "#a8a29e", font: fonts.sansMedium },
+  };
+  const t = TONES[tone];
+  const body = (
+    <View
+      style={{
+        width,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: t.border,
+        backgroundColor: t.bg,
+        paddingVertical: 7,
+        alignItems: "center",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <Text numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ fontFamily: t.font, fontSize: 11.5, color: t.fg }}>
+        {label}
+      </Text>
+    </View>
+  );
+  if (!onPress) return body;
+  return (
+    <Pressable onPress={onPress} disabled={disabled}>
+      {body}
+    </Pressable>
+  );
+}
 
 function initials(name) {
   return (name ?? "")
@@ -67,7 +132,7 @@ function Num({ value, money, muted }) {
         color: empty ? "#c9c4bd" : muted ? "#78716c" : "#44403c",
       }}
     >
-      {empty ? "—" : money ? formatMoney(value) : value}
+      {empty ? "—" : money ? formatMoney(value) : formatQuantity(value)}
     </Text>
   );
 }
@@ -191,9 +256,11 @@ export function StaffReviewRow({
   onReopen,
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
+  const [noteShown, setNoteShown] = useState(false);
   const [note, setNote] = useState("");
   const tone = STATE_STYLE[state];
   const needsReview = state === REVIEW_SUBMITTED;
+  const firstName = (staff.name ?? "").split(/\s+/)[0] || "them";
 
   const handleSendBack = async () => {
     await onSendBack(note);
@@ -202,21 +269,23 @@ export function StaffReviewRow({
   };
 
   return (
-    <View style={needsReview ? { borderLeftWidth: 3, borderLeftColor: colors.primary } : { borderLeftWidth: 3, borderLeftColor: "transparent" }}>
-      <View className="flex-row items-center px-[15px] py-3.5">
-        <Pressable onPress={onToggleExpand} className="flex-1 flex-row items-center gap-3" style={{ minWidth: 190 }}>
-          <View className="items-center justify-center rounded-full" style={{ width: 34, height: 34, backgroundColor: "#fdf6f2" }}>
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: colors.primaryOnWhite }}>{initials(staff.name)}</Text>
+    <View style={{ backgroundColor: needsReview ? "#fdf6f2" : undefined }}>
+      <View className="flex-row items-center px-5 py-3.5" style={{ gap: CELL_GAP }}>
+        <Pressable onPress={onToggleExpand} className="flex-row items-center" style={{ ...STAFF_CELL, gap: 10 }}>
+          <View className="items-center justify-center rounded-full" style={{ width: 30, height: 30, backgroundColor: tone.avatarBg }}>
+            <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color: tone.avatarFg }}>
+              {initials(staff.name)}
+            </Text>
           </View>
-          <View className="flex-1">
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }} className="text-stone-700" numberOfLines={1}>
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c" }}>
               {staff.name}
             </Text>
-            <Text className="mt-0.5 text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 11.5 }} numberOfLines={1}>
-              {staff.role === "admin" ? "Admin" : "Coach"}
+            <Text numberOfLines={1} style={{ fontFamily: fonts.sansMedium, fontSize: 10.5, color: tone.color }}>
+              {tone.label}
             </Text>
           </View>
-          <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color="#c9c4bd" />
+          <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={13} color="#c9c4bd" />
         </Pressable>
 
         {REVIEW_COLUMNS.map((col) => (
@@ -225,56 +294,51 @@ export function StaffReviewRow({
           </Cell>
         ))}
 
-        {/* Actions get their own column so the money column stays pure —
-            a row with buttons and a row without must not push their totals
-            to different x positions. */}
-        <Cell width={ACTION_WIDTH} align="right" style={{ paddingRight: 14 }}>
-          {busy ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : periodClosed ? null : state === REVIEW_SUBMITTED ? (
-            <View className="flex-row items-center gap-2">
-              {/* Plain unlock, no note. Send back is for "fix this specific
-                  thing"; this is for "they just asked to add a day", which
-                  previously forced the admin to invent a rejection reason. */}
-              {onReopen ? (
-                <Pressable onPress={onReopen} hitSlop={6}>
-                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: "#a8a29e" }}>Reopen</Text>
-                </Pressable>
-              ) : null}
-              <Pressable onPress={() => setNoteOpen((v) => !v)} className="rounded-lg border px-2.5 py-1.5" style={{ borderColor: "#d9d4cd" }}>
-                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: "#57534e" }}>Send back</Text>
-              </Pressable>
-              <Pressable onPress={onApprove} className="rounded-lg px-3 py-1.5" style={{ backgroundColor: "#4d6142" }}>
-                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 12 }}>
-                  Approve
-                </Text>
-              </Pressable>
-            </View>
-          ) : state === REVIEW_APPROVED ? (
-            <Pressable onPress={onUnapprove} hitSlop={6}>
-              <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: "#a8a29e" }}>undo</Text>
-            </Pressable>
-          ) : null}
-        </Cell>
-
-        {/* Status sits above the money, and the money is the last thing on
-            the row — so every total on this screen, the footer's included,
-            lands on one right edge. */}
         <Cell width={PAY_WIDTH}>
-          <View className="flex-row items-center gap-1.5">
-            <View className="rounded-full" style={{ width: 6, height: 6, backgroundColor: tone.dot }} />
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: tone.color }}>{tone.label}</Text>
-          </View>
-          <Text className="mt-0.5" style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#44403c" }}>
+          <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 14, color: state === REVIEW_NOT_SUBMITTED ? "#78716c" : "#2a211c" }}>
             {formatMoney(totals.total)}
           </Text>
         </Cell>
+
+        {busy ? (
+          <View style={{ width: ACTION_WIDTH, alignItems: "flex-end" }}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : periodClosed ? (
+          <ReviewRail>
+            <RailButton label="Closed" width={ACTION_WIDTH} tone="muted" />
+          </ReviewRail>
+        ) : state === REVIEW_SUBMITTED ? (
+          <ReviewRail>
+            <RailButton label="Approve" width={96} tone="primary" onPress={onApprove} />
+            <RailButton label="Send back" width={90} onPress={() => setNoteOpen((v) => !v)} />
+          </ReviewRail>
+        ) : state === REVIEW_APPROVED ? (
+          <ReviewRail>
+            <RailButton label="✓ Approved" width={96} tone="done" />
+            <RailButton label="Undo" width={90} onPress={onUnapprove} />
+          </ReviewRail>
+        ) : state === REVIEW_SENT_BACK ? (
+          <ReviewRail>
+            <RailButton
+              label={finalization?.send_back_note ? (noteShown ? "Hide note" : "View note") : "Sent back"}
+              width={ACTION_WIDTH}
+              onPress={finalization?.send_back_note ? () => setNoteShown((v) => !v) : undefined}
+            />
+          </ReviewRail>
+        ) : (
+          <ReviewRail>
+            <RailButton label={`Waiting on ${firstName}`} width={ACTION_WIDTH} tone="muted" />
+          </ReviewRail>
+        )}
       </View>
 
       {/* A send-back note is prose, so it gets a full-width line under the
-          row rather than being squeezed into a column. */}
-      {state === REVIEW_SENT_BACK && finalization?.send_back_note ? (
-        <View className="px-[15px] pb-3">
+          row rather than being squeezed into a column. Behind the rail's
+          View note toggle now — on a table this dense, a note on every
+          sent-back row was reading as an error state on the whole screen. */}
+      {state === REVIEW_SENT_BACK && noteShown && finalization?.send_back_note ? (
+        <View className="px-5 pb-3">
           <Text className="text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 12 }}>
             Sent back — “{finalization.send_back_note}”
           </Text>
@@ -282,12 +346,12 @@ export function StaffReviewRow({
       ) : null}
 
       {noteOpen ? (
-        <View className="px-[15px] pb-4">
+        <View className="px-5 pb-4">
           <View className="rounded-xl border p-3.5" style={{ borderColor: "#f0ddd2", backgroundColor: "#fdf6f2", maxWidth: 560 }}>
             <Text className="mb-2" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>
               {/* Guarded the same way initials() above is — a staff row can
                   carry a null name. */}
-              What should {(staff.name ?? "").split(/\s+/)[0] || "they"} fix?
+              What should {firstName} fix?
             </Text>
             <TextInput
               value={note}
@@ -300,21 +364,40 @@ export function StaffReviewRow({
             <Text className="mb-2.5 text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 11.5 }}>
               Sending back unlocks their entries for this period so they can edit and re-submit.
             </Text>
-            <View className="flex-row justify-end gap-2">
-              <Pressable onPress={() => setNoteOpen(false)} className="rounded-lg border px-3 py-2" style={{ borderColor: "#d9d4cd" }}>
-                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#57534e" }}>Cancel</Text>
-              </Pressable>
-              <Pressable onPress={handleSendBack} disabled={!note.trim()} className="rounded-lg px-3 py-2" style={{ backgroundColor: "#b23a22", opacity: note.trim() ? 1 : 0.5 }}>
-                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5 }}>
-                  Send back
-                </Text>
-              </Pressable>
+            <View className="flex-row items-center justify-between">
+              {/* The rail only has two slots, so the plain unlock lives here
+                  — at the moment it's relevant. Send back is for "fix this
+                  specific thing"; this is for "they just asked to add a
+                  day", which otherwise forces an admin to invent a
+                  rejection reason to grant. */}
+              {onReopen ? (
+                <Pressable onPress={onReopen} hitSlop={6}>
+                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: "#8a5140" }}>Just reopen it, no note</Text>
+                </Pressable>
+              ) : (
+                <View />
+              )}
+              <View className="flex-row gap-2">
+                <Pressable onPress={() => setNoteOpen(false)} className="rounded-lg border px-3 py-2" style={{ borderColor: "#d9d4cd" }}>
+                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#57534e" }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleSendBack}
+                  disabled={!note.trim()}
+                  className="rounded-lg px-3 py-2"
+                  style={{ backgroundColor: "#b23a22", opacity: note.trim() ? 1 : 0.5 }}
+                >
+                  <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5 }}>
+                    Send back
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
       ) : null}
 
-      {expanded ? <View className="px-[15px] pb-4">{<EntryDetail entries={entries} rateMaps={rateMaps} totals={totals} />}</View> : null}
+      {expanded ? <View className="px-5 pb-4">{<EntryDetail entries={entries} rateMaps={rateMaps} totals={totals} />}</View> : null}
     </View>
   );
 }

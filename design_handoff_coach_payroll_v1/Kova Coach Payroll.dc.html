@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&amp;family=Protest+Strike&amp;display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#f1ede9; font-family:Montserrat,sans-serif; }
+  a { color:#8a5140; text-decoration:none; }
+  a:hover { color:#a46a57; text-decoration:underline; }
+</style>
+</helmet>
+
+<section style="padding:56px 64px 96px;display:flex;flex-direction:column;gap:14px">
+
+<div style="display:flex;align-items:center;gap:14px">
+<a href="#1a" style="font-family:'Protest Strike',sans-serif;font-size:15px;color:#fff;background:#a46a57;border-radius:8px;padding:4px 11px">1</a>
+<div style="font-family:'Protest Strike',sans-serif;font-size:26px;color:#2a211c">Coach payroll — tightened</div>
+</div>
+<div style="max-width:920px;font-size:14px;line-height:1.65;color:#57534e;text-wrap:pretty;margin-bottom:26px">
+Every mechanic stays: autosave-as-you-tap, per-day submit, the names and hours sheets, Other line items, period finalize, admin review and close. What changes is the anatomy. Every tile now reads the same way — label top-left, value bottom-left, action bottom-right, one reserved caption line — so nothing sits at a different height from its neighbour. The floating checkmark that half-hung off each tile's edge is gone; state is carried by the tile's own fill and border, the convention already used in My Fitness. The staff bar drops from four tabs to three: <strong style="font-weight:600">Requests</strong> and <strong style="font-weight:600">1:1 Nutrition</strong> are both "pay that isn't logged daily," so they became one <strong style="font-weight:600">Extra pay</strong> screen, and <em>My Entries → Log</em>, <em>Pay Stubs → My Pay</em>.
+</div>
+
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+<div style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#a8a29e">STAFF · PHONE</div>
+<div style="flex:1;height:1px;background:#ddd6cf"></div>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+
+<!-- ============ 1a — LOG, mid-day ============ -->
+<div id="1a" style="display:flex;flex-direction:column;gap:9px;width:390px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1a" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1a</a>
+<div style="font-size:13px;font-weight:600;color:#44403c">Log · day in progress</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;min-height:50px;text-wrap:pretty">Peach fill = entered, saved, not submitted yet. <strong style="font-weight:600">The arrows work</strong> — step through the period and watch the window slide. Tiles below are drawn for one day.</div>
+
+<div style="width:390px;height:844px;box-sizing:border-box;background:#faf8f6;border-radius:26px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-size:11px;font-weight:600;color:#78716c"><div>9:41</div><div style="width:15px;height:8px;border:1px solid #a8a29e;border-radius:2px"></div></div>
+
+  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+    <div style="padding:6px 20px 0;display:flex;align-items:flex-end;justify-content:space-between">
+      <div style="font-family:'Protest Strike',sans-serif;font-size:26px;color:#a46a57;line-height:1">Payroll</div>
+      <div style="text-align:right">
+        <div style="font-size:16px;font-weight:700;color:#8a5140;line-height:1">$742.50</div>
+        <div style="font-size:10px;font-weight:500;color:#a8a29e;margin-top:2px">Aug 6 – 19 · open</div>
+      </div>
+    </div>
+
+    <div style="display:flex;margin:14px 20px 0;border-bottom:1px solid #ece7e1">
+      <div style="flex:1;text-align:center;padding-bottom:9px;border-bottom:2px solid #a46a57;margin-bottom:-1px;font-size:13px;font-weight:600;color:#8a5140">Log</div>
+      <div style="flex:1;text-align:center;padding-bottom:9px;font-size:13px;font-weight:500;color:#78716c">Extra pay</div>
+      <div style="flex:1;text-align:center;padding-bottom:9px;font-size:13px;font-weight:500;color:#78716c">My Pay</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:6px;padding:14px 20px 0">
+      <div onClick="{{ prevA }}" style="{{ prevStyleA }}">‹</div>
+      <div style="flex:1;display:flex;gap:5px;justify-content:center;overflow:hidden">
+        <sc-for list="{{ stripA }}" as="d" hint-placeholder-count="5">
+          <div onClick="{{ d.onPress }}" style="{{ d.tile }}">
+            <div style="{{ d.wdStyle }}">{{ d.wd }}</div>
+            <div style="{{ d.numStyle }}">{{ d.num }}</div>
+            <div style="{{ d.dot }}"></div>
+          </div>
+        </sc-for>
+      </div>
+      <div onClick="{{ nextA }}" style="{{ nextStyleA }}">›</div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px 8px">
+      <div style="font-size:12px;font-weight:600;color:#44403c">{{ dateLabelA }}</div>
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:6px;height:6px;border-radius:99px;background:#c98a6b"></div><div style="font-size:11px;font-weight:500;color:#a8a29e">Not submitted</div></div>
+    </div>
+
+    <div style="flex:1;overflow:hidden;padding:0 20px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+        <div style="background:#fdf6f2;border:1px solid #f0ddd2;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="font-size:11.5px;font-weight:500;color:#78716c">Group</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:30px;font-weight:700;color:#2a211c;line-height:.9">3</div>
+            <div style="display:flex;gap:6px">
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #ead9cd;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#8a5140">−</div>
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #ead9cd;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#8a5140">+</div>
+            </div>
+          </div>
+          <div style="height:15px;margin-top:6px"></div>
+        </div>
+
+        <div style="background:#fdf6f2;border:1px solid #f0ddd2;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="font-size:11.5px;font-weight:500;color:#78716c">SPC</div>
+            <div style="min-width:17px;height:17px;border-radius:99px;background:#a46a57;display:flex;align-items:center;justify-content:center;padding:0 5px;font-size:10px;font-weight:700;color:#fff">2</div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:30px;font-weight:700;color:#2a211c;line-height:.9">2</div>
+            <div style="width:29px;height:29px;border-radius:99px;border:1px solid #ead9cd;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#8a5140">+</div>
+          </div>
+          <div style="height:15px;margin-top:6px;font-size:11px;font-weight:500;color:#8a5140;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">4 &amp; 6 attendees</div>
+        </div>
+
+        <div style="grid-column:1 / -1;background:#fdf6f2;border:1px solid #f0ddd2;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="font-size:11.5px;font-weight:500;color:#78716c">Programs written</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:30px;font-weight:700;color:#2a211c;line-height:.9">2</div>
+            <div style="display:flex;gap:6px">
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #ead9cd;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#8a5140">−</div>
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #ead9cd;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#8a5140">+</div>
+            </div>
+          </div>
+          <div style="height:15px;margin-top:6px;font-size:11px;font-weight:500;color:#8a5140;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">Marcus Hill, Dana Reyes</div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="font-size:11.5px;font-weight:500;color:#78716c">Welcome</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:30px;font-weight:700;color:#d6cec7;line-height:.9">0</div>
+            <div style="display:flex;gap:6px">
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #ece7e1;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#d6cec7">−</div>
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #e7e5e4;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#8a5140">+</div>
+            </div>
+          </div>
+          <div style="height:15px;margin-top:6px"></div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="font-size:11.5px;font-weight:500;color:#78716c">Strategy</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:30px;font-weight:700;color:#d6cec7;line-height:.9">0</div>
+            <div style="display:flex;gap:6px">
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #ece7e1;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#d6cec7">−</div>
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #e7e5e4;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#8a5140">+</div>
+            </div>
+          </div>
+          <div style="height:15px;margin-top:6px"></div>
+        </div>
+
+        <div style="background:#fdf6f2;border:1px solid #f0ddd2;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="font-size:11.5px;font-weight:500;color:#78716c">Admin hours</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:26px;font-weight:700;color:#2a211c;line-height:.9">1<span style="font-size:16px">h</span> 30<span style="font-size:16px">m</span></div>
+            <div style="width:29px;height:29px;border-radius:9px;border:1px solid #ead9cd;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;color:#8a5140">✎</div>
+          </div>
+          <div style="height:15px;margin-top:6px"></div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="font-size:11.5px;font-weight:500;color:#78716c">Ops hours</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:26px;font-weight:700;color:#d6cec7;line-height:.9">—</div>
+            <div style="width:29px;height:29px;border-radius:9px;border:1px solid #e7e5e4;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;color:#8a5140">✎</div>
+          </div>
+          <div style="height:15px;margin-top:6px;font-size:11px;font-weight:400;color:#b5aea7">Tap to log</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="flex:none;border-top:1px solid #ece7e1;background:#fff;padding:11px 20px 22px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+        <div style="font-size:11.5px;font-weight:500;color:#78716c">{{ shortLabelA }} · 4 items</div>
+        <div style="font-size:15px;font-weight:700;color:#8a5140">$186.00</div>
+      </div>
+      <div style="background:#a46a57;border-radius:14px;padding:14px;text-align:center;font-size:14px;font-weight:600;color:#fff">Submit this day</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============ 1b — LOG, submitted ============ -->
+<div id="1b" style="display:flex;flex-direction:column;gap:9px;width:390px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1b" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1b</a>
+<div style="font-size:13px;font-weight:600;color:#44403c">Log · day submitted</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;min-height:50px;text-wrap:pretty">Submitting fills the day sage — tile borders, strip pill, and footer all flip together, so one glance answers "did I send Friday." Editing anything drops it back to <a href="#1a">1a</a>, exactly as the current code does.</div>
+
+<div style="width:390px;height:844px;box-sizing:border-box;background:#faf8f6;border-radius:26px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-size:11px;font-weight:600;color:#78716c"><div>9:41</div><div style="width:15px;height:8px;border:1px solid #a8a29e;border-radius:2px"></div></div>
+
+  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+    <div style="padding:6px 20px 0;display:flex;align-items:flex-end;justify-content:space-between">
+      <div style="font-family:'Protest Strike',sans-serif;font-size:26px;color:#a46a57;line-height:1">Payroll</div>
+      <div style="text-align:right">
+        <div style="font-size:16px;font-weight:700;color:#8a5140;line-height:1">$928.50</div>
+        <div style="font-size:10px;font-weight:500;color:#a8a29e;margin-top:2px">Aug 6 – 19 · open</div>
+      </div>
+    </div>
+
+    <div style="display:flex;margin:14px 20px 0;border-bottom:1px solid #ece7e1">
+      <div style="flex:1;text-align:center;padding-bottom:9px;border-bottom:2px solid #a46a57;margin-bottom:-1px;font-size:13px;font-weight:600;color:#8a5140">Log</div>
+      <div style="flex:1;text-align:center;padding-bottom:9px;font-size:13px;font-weight:500;color:#78716c">Extra pay</div>
+      <div style="flex:1;text-align:center;padding-bottom:9px;font-size:13px;font-weight:500;color:#78716c">My Pay</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:6px;padding:14px 20px 0">
+      <div onClick="{{ prevB }}" style="{{ prevStyleB }}">‹</div>
+      <div style="flex:1;display:flex;gap:5px;justify-content:center;overflow:hidden">
+        <sc-for list="{{ stripB }}" as="d" hint-placeholder-count="5">
+          <div onClick="{{ d.onPress }}" style="{{ d.tile }}">
+            <div style="{{ d.wdStyle }}">{{ d.wd }}</div>
+            <div style="{{ d.numStyle }}">{{ d.num }}</div>
+            <div style="{{ d.dot }}"></div>
+          </div>
+        </sc-for>
+      </div>
+      <div onClick="{{ nextB }}" style="{{ nextStyleB }}">›</div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px 8px">
+      <div style="font-size:12px;font-weight:600;color:#44403c">{{ dateLabelB }}</div>
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:14px;height:14px;border-radius:99px;background:#4d6142;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff">✓</div><div style="font-size:11px;font-weight:600;color:#4d6142">Submitted</div></div>
+    </div>
+
+    <div style="flex:1;overflow:hidden;padding:0 20px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+        <div style="background:#eef1e7;border:1px solid #4d6142;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:11.5px;font-weight:500;color:#5f6b53">Group</div><div style="font-size:11px;color:#4d6142">✓</div></div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:30px;font-weight:700;color:#2f3a27;line-height:.9">3</div>
+            <div style="display:flex;gap:6px">
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #cbd6bd;background:#f7faf3;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#4d6142">−</div>
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #cbd6bd;background:#f7faf3;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#4d6142">+</div>
+            </div>
+          </div>
+          <div style="height:15px;margin-top:6px"></div>
+        </div>
+
+        <div style="background:#eef1e7;border:1px solid #4d6142;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:6px"><div style="font-size:11.5px;font-weight:500;color:#5f6b53">SPC</div><div style="min-width:17px;height:17px;border-radius:99px;background:#4d6142;display:flex;align-items:center;justify-content:center;padding:0 5px;font-size:10px;font-weight:700;color:#fff">2</div></div>
+            <div style="font-size:11px;color:#4d6142">✓</div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:30px;font-weight:700;color:#2f3a27;line-height:.9">2</div>
+            <div style="width:29px;height:29px;border-radius:99px;border:1px solid #cbd6bd;background:#f7faf3;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#4d6142">+</div>
+          </div>
+          <div style="height:15px;margin-top:6px;font-size:11px;font-weight:500;color:#4d6142;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">4 &amp; 6 attendees</div>
+        </div>
+
+        <div style="grid-column:1 / -1;background:#eef1e7;border:1px solid #4d6142;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:11.5px;font-weight:500;color:#5f6b53">Programs written</div><div style="font-size:11px;color:#4d6142">✓</div></div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:30px;font-weight:700;color:#2f3a27;line-height:.9">2</div>
+            <div style="display:flex;gap:6px">
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #cbd6bd;background:#f7faf3;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#4d6142">−</div>
+              <div style="width:29px;height:29px;border-radius:99px;border:1px solid #cbd6bd;background:#f7faf3;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#4d6142">+</div>
+            </div>
+          </div>
+          <div style="height:15px;margin-top:6px;font-size:11px;font-weight:500;color:#4d6142;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">Marcus Hill, Dana Reyes</div>
+        </div>
+
+        <div style="background:#eef1e7;border:1px solid #4d6142;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:11.5px;font-weight:500;color:#5f6b53">Admin hours</div><div style="font-size:11px;color:#4d6142">✓</div></div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:26px;font-weight:700;color:#2f3a27;line-height:.9">1<span style="font-size:16px">h</span> 30<span style="font-size:16px">m</span></div>
+            <div style="width:29px;height:29px;border-radius:9px;border:1px solid #cbd6bd;background:#f7faf3;display:flex;align-items:center;justify-content:center;font-size:12px;color:#4d6142">✎</div>
+          </div>
+          <div style="height:15px;margin-top:6px"></div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:11px 12px 9px;height:112px;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="font-size:11.5px;font-weight:500;color:#78716c">Ops hours</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="font-size:26px;font-weight:700;color:#d6cec7;line-height:.9">—</div>
+            <div style="width:29px;height:29px;border-radius:9px;border:1px solid #e7e5e4;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;color:#8a5140">✎</div>
+          </div>
+          <div style="height:15px;margin-top:6px;font-size:11px;color:#b5aea7">Tap to log</div>
+        </div>
+
+        <div style="grid-column:1 / -1;background:#eef1e7;border:1px solid #4d6142;border-radius:16px;padding:11px 12px 10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+            <div style="display:flex;align-items:center;gap:6px"><div style="font-size:11.5px;font-weight:500;color:#5f6b53">Other</div><div style="min-width:17px;height:17px;border-radius:99px;background:#4d6142;display:flex;align-items:center;justify-content:center;padding:0 5px;font-size:10px;font-weight:700;color:#fff">1</div></div>
+            <div style="font-size:11px;color:#4d6142">✓</div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:#f7faf3;border:1px solid #cbd6bd;border-radius:11px;padding:9px 11px">
+            <div style="font-size:12.5px;font-weight:600;color:#2f3a27">Facility cleaning ×2</div>
+            <div style="font-size:11.5px;font-weight:500;color:#4d6142">Edit</div>
+          </div>
+          <div style="margin-top:8px;font-size:11px;font-weight:500;color:#4d6142">+ Add another item</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="flex:none;border-top:1px solid #dfe5d6;background:#eef1e7;padding:14px 20px 24px;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:20px;height:20px;border-radius:99px;background:#4d6142;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff">✓</div>
+        <div style="font-size:13px;font-weight:600;color:#4d6142">{{ shortLabelB }} submitted</div>
+      </div>
+      <div style="font-size:15px;font-weight:700;color:#4d6142">$186.00</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============ 1c — SHEETS ============ -->
+<div id="1c" style="display:flex;flex-direction:column;gap:9px;width:390px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1c" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1c</a>
+<div style="font-size:13px;font-weight:600;color:#44403c">Hours &amp; names sheets</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;min-height:50px;text-wrap:pretty">One shell for every sheet in the flow — grabber, title, one job, one full-width primary. Hours keeps the hour/minute stepper; names get a delete each and an add row that moves the tile count with them.</div>
+
+<div style="width:390px;height:844px;box-sizing:border-box;background:#faf8f6;border-radius:26px;overflow:hidden;display:flex;flex-direction:column;gap:12px;padding:16px;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+
+  <div style="background:#fff;border:1px solid #ece7e1;border-radius:22px;padding:14px 18px 18px;box-shadow:0 6px 18px rgba(42,33,28,.05)">
+    <div style="width:36px;height:4px;border-radius:99px;background:#e2dbd4;margin:0 auto 14px"></div>
+    <div style="font-size:15px;font-weight:700;color:#2a211c;margin-bottom:2px">Admin hours</div>
+    <div style="font-size:11.5px;color:#a8a29e;margin-bottom:14px">Friday, Aug 14</div>
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <div style="flex:1;border:1px solid #ece7e1;border-radius:14px;padding:10px;text-align:center;background:#faf8f6">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e;margin-bottom:6px">HOURS</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="width:28px;height:28px;border-radius:99px;border:1px solid #e7e5e4;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;color:#8a5140">−</div>
+          <div style="font-size:26px;font-weight:700;color:#2a211c">1</div>
+          <div style="width:28px;height:28px;border-radius:99px;border:1px solid #e7e5e4;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;color:#8a5140">+</div>
+        </div>
+      </div>
+      <div style="flex:1;border:1px solid #ece7e1;border-radius:14px;padding:10px;text-align:center;background:#faf8f6">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e;margin-bottom:6px">MINUTES</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="width:28px;height:28px;border-radius:99px;border:1px solid #e7e5e4;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;color:#8a5140">−</div>
+          <div style="font-size:26px;font-weight:700;color:#2a211c">30</div>
+          <div style="width:28px;height:28px;border-radius:99px;border:1px solid #e7e5e4;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;color:#8a5140">+</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:7px;margin-bottom:14px">
+      <div style="flex:1;text-align:center;border:1px solid #ece7e1;border-radius:99px;padding:7px;font-size:11.5px;font-weight:600;color:#78716c">30m</div>
+      <div style="flex:1;text-align:center;border:1px solid #ead9cd;background:#fdf6f2;border-radius:99px;padding:7px;font-size:11.5px;font-weight:600;color:#8a5140">1h 30m</div>
+      <div style="flex:1;text-align:center;border:1px solid #ece7e1;border-radius:99px;padding:7px;font-size:11.5px;font-weight:600;color:#78716c">2h</div>
+      <div style="flex:1;text-align:center;border:1px solid #ece7e1;border-radius:99px;padding:7px;font-size:11.5px;font-weight:600;color:#78716c">4h</div>
+    </div>
+    <div style="background:#a46a57;border-radius:13px;padding:13px;text-align:center;font-size:13.5px;font-weight:600;color:#fff">Save 1h 30m</div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #ece7e1;border-radius:22px;padding:14px 18px 18px;box-shadow:0 6px 18px rgba(42,33,28,.05)">
+    <div style="width:36px;height:4px;border-radius:99px;background:#e2dbd4;margin:0 auto 14px"></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:700;color:#2a211c">Programs written for</div>
+      <div style="font-size:11.5px;font-weight:500;color:#a8a29e">2 of 2</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:9px">
+        <div style="width:20px;height:20px;border-radius:99px;background:#f4ede3;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#8a5a2e">1</div>
+        <div style="flex:1;border:1px solid #ece7e1;border-radius:11px;padding:10px 12px;font-size:13px;font-weight:500;color:#44403c;background:#faf8f6">Marcus Hill</div>
+        <div style="flex:none;width:30px;height:30px;border-radius:99px;border:1px solid #ece7e1;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;color:#b23a22">×</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px">
+        <div style="width:20px;height:20px;border-radius:99px;background:#f4ede3;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#8a5a2e">2</div>
+        <div style="flex:1;border:1px solid #ece7e1;border-radius:11px;padding:10px 12px;font-size:13px;font-weight:500;color:#44403c;background:#faf8f6">Dana Reyes</div>
+        <div style="flex:none;width:30px;height:30px;border-radius:99px;border:1px solid #ece7e1;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;color:#b23a22">×</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px">
+        <div style="width:20px;height:20px;border-radius:99px;border:1px dashed #ddd6cf;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#c8c2bb">3</div>
+        <div style="flex:1;border:1px dashed #e2dbd4;border-radius:11px;padding:10px 12px;font-size:13px;font-weight:500;color:#b5aea7;background:#fff">Add a name</div>
+        <div style="flex:none;width:30px;height:30px;border-radius:99px;border:1px solid #ead9cd;background:#fdf6f2;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#8a5140">+</div>
+      </div>
+    </div>
+    <div style="font-size:10.5px;line-height:1.45;color:#b5aea7;margin-bottom:12px">Adding or removing a name moves the count on the tile with it — the two never disagree.</div>
+    <div style="background:#a46a57;border-radius:13px;padding:13px;text-align:center;font-size:13.5px;font-weight:600;color:#fff">Save names</div>
+  </div>
+
+
+
+</div>
+</div>
+
+<!-- ============ 1d — EXTRA PAY ============ -->
+<div id="1i" style="display:flex;flex-direction:column;gap:9px;width:390px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1i" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1i</a>
+<div style="font-size:13px;font-weight:600;color:#44403c">SPC sheet · head count builds the rows</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;min-height:50px;text-wrap:pretty"><strong style="font-weight:600">The chips work</strong> — 0 to 4 attendees, and the name rows build to match: pick 4 and there are four, delete one and the count drops with it, so the two can never disagree. Names stay optional; a session logs on head count alone.</div>
+
+<div style="width:390px;height:844px;box-sizing:border-box;background:#faf8f6;border-radius:26px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:16px;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="background:#fff;border:1px solid #ece7e1;border-radius:22px;padding:14px 18px 18px;box-shadow:0 6px 18px rgba(42,33,28,.05)">
+    <div style="width:36px;height:4px;border-radius:99px;background:#e2dbd4;margin:0 auto 14px"></div>
+    <div style="font-size:15px;font-weight:700;color:#2a211c;margin-bottom:12px">SPC session</div>
+    <div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e;margin-bottom:7px">ATTENDEES</div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <sc-for list="{{ spcChips }}" as="c" hint-placeholder-count="6">
+        <div onClick="{{ c.onPress }}" style="{{ c.style }}">{{ c.label }}</div>
+      </sc-for>
+    </div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:7px">
+      <div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">WHO CAME</div>
+      <div style="font-size:10.5px;font-weight:500;color:#b5aea7">Optional</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px">
+      <sc-for list="{{ spcRows }}" as="r" hint-placeholder-count="4">
+        <div style="display:flex;align-items:center;gap:9px">
+          <div style="flex:none;width:20px;height:20px;border-radius:99px;background:#f4ede3;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#8a5a2e">{{ r.num }}</div>
+          <div style="flex:1;border:1px solid #ece7e1;border-radius:11px;padding:9px 12px;font-size:12.5px;color:#b5aea7;background:#faf8f6">Name</div>
+          <div onClick="{{ r.onDelete }}" style="flex:none;width:30px;height:30px;border-radius:99px;border:1px solid #ece7e1;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;color:#b23a22;cursor:pointer">×</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="border:1px solid #ece7e1;border-radius:11px;padding:10px 12px;font-size:12.5px;color:#b5aea7;background:#faf8f6;margin-bottom:13px">Note (optional)</div>
+    <div style="background:#a46a57;border-radius:13px;padding:13px;text-align:center;font-size:13.5px;font-weight:600;color:#fff">Log session</div>
+  </div>
+</div>
+</div>
+
+<div id="1d" style="display:flex;flex-direction:column;gap:9px;width:390px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1d" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1d</a>
+<div style="font-size:13px;font-weight:600;color:#44403c">Extra pay · two tabs folded into one</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;min-height:50px;text-wrap:pretty">Requests and 1:1 Nutrition were both "pay that isn't logged daily," and both are usually short or empty — so they're segments of one screen. Every expandable card, approval action, and billing-day field survives.</div>
+
+<div style="width:390px;height:844px;box-sizing:border-box;background:#faf8f6;border-radius:26px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-size:11px;font-weight:600;color:#78716c"><div>9:41</div><div style="width:15px;height:8px;border:1px solid #a8a29e;border-radius:2px"></div></div>
+
+  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+    <div style="padding:6px 20px 0;display:flex;align-items:flex-end;justify-content:space-between">
+      <div style="font-family:'Protest Strike',sans-serif;font-size:26px;color:#a46a57;line-height:1">Payroll</div>
+      <div style="text-align:right"><div style="font-size:16px;font-weight:700;color:#8a5140;line-height:1">$928.50</div><div style="font-size:10px;font-weight:500;color:#a8a29e;margin-top:2px">Aug 6 – 19 · open</div></div>
+    </div>
+
+    <div style="display:flex;margin:14px 20px 0;border-bottom:1px solid #ece7e1">
+      <div style="flex:1;text-align:center;padding-bottom:9px;font-size:13px;font-weight:500;color:#78716c">Log</div>
+      <div style="flex:1;text-align:center;padding-bottom:9px;border-bottom:2px solid #a46a57;margin-bottom:-1px;font-size:13px;font-weight:600;color:#8a5140">Extra pay</div>
+      <div style="flex:1;text-align:center;padding-bottom:9px;font-size:13px;font-weight:500;color:#78716c">My Pay</div>
+    </div>
+
+    <div style="display:flex;gap:6px;padding:16px 20px 0">
+      <div style="flex:1;text-align:center;border-radius:10px;background:#2a211c;padding:9px 0;font-size:12px;font-weight:600;color:#fff">Requests</div>
+      <div style="flex:1;text-align:center;border-radius:10px;border:1px solid #ece7e1;background:#fff;padding:9px 0;font-size:12px;font-weight:500;color:#78716c">1:1 Nutrition · 6</div>
+    </div>
+
+    <div style="flex:1;overflow:hidden;padding:16px 20px 0;display:flex;flex-direction:column;gap:10px">
+      <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:14px;box-shadow:0 2px 8px rgba(42,33,28,.03)">
+        <div style="font-size:13px;font-weight:600;color:#2a211c;margin-bottom:11px">New request</div>
+        <div style="border:1px solid #ece7e1;border-radius:11px;padding:10px 12px;font-size:12.5px;color:#b5aea7;background:#faf8f6;margin-bottom:8px">e.g. CPR training reimbursement</div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;border:1px solid #ece7e1;border-radius:11px;padding:10px 12px;font-size:12.5px;color:#b5aea7;background:#faf8f6">$ 0.00</div>
+          <div style="background:#a46a57;border-radius:11px;padding:10px 18px;font-size:12.5px;font-weight:600;color:#fff;display:flex;align-items:center">Submit</div>
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #f0ddd2;border-radius:16px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
+          <div style="font-size:13px;font-weight:600;color:#2a211c">Pending</div>
+          <div style="min-width:19px;height:19px;border-radius:99px;background:#f4ede3;display:flex;align-items:center;justify-content:center;padding:0 6px;font-size:10.5px;font-weight:700;color:#8a5a2e">1</div>
+          <div style="flex:1"></div>
+          <div style="font-size:12px;color:#a8a29e">▾</div>
+        </div>
+        <div style="border:1px solid #ece7e1;border-radius:12px;padding:11px 12px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div style="font-size:12.5px;font-weight:600;color:#44403c">CPR recert course</div>
+            <div style="font-size:13px;font-weight:700;color:#8a5140">$85.00</div>
+          </div>
+          <div style="white-space:nowrap;font-size:10.5px;color:#b5aea7;margin-top:4px">Requested Aug 9</div>
+          <div style="font-size:11px;font-weight:500;color:#b23a22;margin-top:8px">Cancel request</div>
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:14px;display:flex;align-items:center;gap:8px">
+        <div style="font-size:13px;font-weight:600;color:#2a211c">Approved</div>
+        <div style="min-width:19px;height:19px;border-radius:99px;background:#eef1e7;display:flex;align-items:center;justify-content:center;padding:0 6px;font-size:10.5px;font-weight:700;color:#4d6142">3</div>
+        <div style="flex:1"></div>
+        <div style="font-size:12.5px;font-weight:700;color:#4d6142">$240.00</div>
+        <div style="font-size:12px;color:#a8a29e">▾</div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:14px;display:flex;align-items:center;gap:8px">
+        <div style="font-size:13px;font-weight:600;color:#2a211c">Denied</div>
+        <div style="min-width:19px;height:19px;border-radius:99px;background:#f1efed;display:flex;align-items:center;justify-content:center;padding:0 6px;font-size:10.5px;font-weight:700;color:#78716c">1</div>
+        <div style="flex:1"></div>
+        <div style="font-size:12px;color:#a8a29e">▾</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============ 1e — MY PAY ============ -->
+<div id="1e" style="display:flex;flex-direction:column;gap:9px;width:390px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1e" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1e</a>
+<div style="font-size:13px;font-weight:600;color:#44403c">My Pay · finalize</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;min-height:50px;text-wrap:pretty">The one screen that gets the dark band — this is the money, and it's where the period ends. The bar is elapsed days in the period, not days logged. Finalize stays a hard confirm because it snapshots rates.</div>
+
+<div style="width:390px;height:844px;box-sizing:border-box;background:#faf8f6;border-radius:26px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-size:11px;font-weight:600;color:#78716c"><div>9:41</div><div style="width:15px;height:8px;border:1px solid #a8a29e;border-radius:2px"></div></div>
+
+  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+    <div style="padding:6px 20px 0">
+      <div style="font-family:'Protest Strike',sans-serif;font-size:26px;color:#a46a57;line-height:1">Payroll</div>
+    </div>
+
+    <div style="display:flex;margin:14px 20px 0;border-bottom:1px solid #ece7e1">
+      <div style="flex:1;text-align:center;padding-bottom:9px;font-size:13px;font-weight:500;color:#78716c">Log</div>
+      <div style="flex:1;text-align:center;padding-bottom:9px;font-size:13px;font-weight:500;color:#78716c">Extra pay</div>
+      <div style="flex:1;text-align:center;padding-bottom:9px;border-bottom:2px solid #a46a57;margin-bottom:-1px;font-size:13px;font-weight:600;color:#8a5140">My Pay</div>
+    </div>
+
+    <div style="flex:1;overflow:hidden;padding:16px 20px 0;display:flex;flex-direction:column;gap:11px">
+
+      <div style="background:#3b3531;border-radius:20px;padding:16px 18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-size:13px;color:#a99f96">‹</div>
+            <div style="font-size:12.5px;font-weight:600;color:#fff">Aug 6 – 19</div>
+            <div style="font-size:13px;color:#a99f96">›</div>
+          </div>
+          <div style="border:1px solid #6b625b;border-radius:99px;padding:3px 9px;font-size:10px;font-weight:600;color:#c9beb4">Open</div>
+        </div>
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a99f96;margin-bottom:3px">PAY THIS PERIOD</div>
+        <div style="font-size:38px;font-weight:700;color:#fff;line-height:1.05">$928.50</div>
+        <div style="display:flex;align-items:center;gap:7px;margin-top:12px">
+          <div style="flex:1;height:6px;border-radius:99px;background:#544c46;overflow:hidden"><div style="width:64%;height:100%;background:#8fb473;border-radius:99px"></div></div>
+          <div style="font-size:10.5px;font-weight:600;color:#c9beb4">Day 9 of 14</div>
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:6px 14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c">Group sessions</div><div style="white-space:nowrap;font-size:10.5px;color:#b5aea7;margin-top:2px">31 × $18.00</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c">$558.00</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c">SPC sessions</div><div style="white-space:nowrap;font-size:10.5px;color:#b5aea7;margin-top:2px">6 sessions · tiered</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c">$186.00</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c">Programs written</div><div style="white-space:nowrap;font-size:10.5px;color:#b5aea7;margin-top:2px">5 × $12.00</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c">$60.00</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c">Admin hours</div><div style="white-space:nowrap;font-size:10.5px;color:#b5aea7;margin-top:2px">6h 30m × $22.00</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c">$143.00</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c">Approved extras</div><div style="white-space:nowrap;font-size:10.5px;color:#b5aea7;margin-top:2px">3 requests</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c">$240.00</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="flex:none;border-top:1px solid #ece7e1;background:#fff;padding:12px 20px 24px">
+      
+      
+    <div style="background:#a46a57;border-radius:14px;padding:14px;text-align:center;font-size:14px;font-weight:600;color:#fff;margin-bottom:8px">Finalize this period</div></div>
+  </div>
+</div>
+</div>
+
+<div id="1h" style="display:flex;flex-direction:column;gap:9px;width:390px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1h" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1h</a>
+<div style="font-size:13px;font-weight:600;color:#44403c">Finalize · the one hard confirm</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;min-height:50px;text-wrap:pretty">Yes — <a href="#1e">1e</a>'s button opens this, same as <code style="font-family:ui-monospace,monospace;font-size:11px;background:#f4f0ec;padding:1px 5px;border-radius:4px">FinalizeModal</code> does today. It's the only confirm in the whole flow, because it's the only step that snapshots rates and takes the period out of your hands. It restates what you're signing, not just "are you sure."</div>
+
+<div style="width:390px;height:844px;box-sizing:border-box;background:#faf8f6;border-radius:26px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4;position:relative">
+  <div style="position:absolute;inset:0;background:#2a211c;opacity:.42"></div>
+
+  <div style="position:relative;background:#fff;border-radius:26px 26px 0 0;padding:16px 20px 26px;box-shadow:0 -10px 40px rgba(42,33,28,.2)">
+    <div style="width:36px;height:4px;border-radius:99px;background:#e2dbd4;margin:0 auto 16px"></div>
+
+    <div style="font-family:'Protest Strike',sans-serif;font-size:22px;color:#2a211c;line-height:1.1;margin-bottom:5px">Finalize Aug 6 – 19</div>
+    
+
+    <div style="background:#faf8f6;border:1px solid #ece7e1;border-radius:16px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a8a29e">YOU'RE SUBMITTING</div>
+        <div style="font-size:20px;font-weight:700;color:#2a211c">$928.50</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:11.5px;font-weight:500;color:#78716c">Group sessions</div><div style="font-size:11.5px;font-weight:600;color:#44403c">31</div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:11.5px;font-weight:500;color:#78716c">SPC sessions</div><div style="font-size:11.5px;font-weight:600;color:#44403c">6</div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:11.5px;font-weight:500;color:#78716c">Programs written</div><div style="font-size:11.5px;font-weight:600;color:#44403c">5</div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:11.5px;font-weight:500;color:#78716c">Admin hours</div><div style="font-size:11.5px;font-weight:600;color:#44403c">6h 30m</div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:11.5px;font-weight:500;color:#78716c">Other items</div><div style="font-size:11.5px;font-weight:600;color:#44403c">4</div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:11.5px;font-weight:500;color:#78716c">Approved extras</div><div style="font-size:11.5px;font-weight:600;color:#44403c">3</div></div>
+      </div>
+    </div>
+
+    <div style="background:#fdf6f2;border:1px solid #f0ddd2;border-radius:14px;padding:12px 14px;margin-bottom:16px">
+      <div style="font-size: 11.5px; line-height: 1.5; color: #8a5140; text-wrap: pretty; text-align: center">By clicking Finalize, I confirm that all payroll entries for this period are correct. This action is final and cannot be undone.</div>
+    </div>
+
+    <div style="background:#a46a57;border-radius:14px;padding:14px;text-align:center;font-size:14px;font-weight:600;color:#fff;margin-bottom:9px">Finalize $928.50</div>
+    <div style="text-align:center;padding:6px;font-size:13px;font-weight:500;color:#78716c">Not yet</div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<div style="display:flex;align-items:center;gap:12px;margin:34px 0 6px">
+<div style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#a8a29e">ADMIN · DESK</div>
+<div style="flex:1;height:1px;background:#ddd6cf"></div>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+
+<!-- ============ 1f — ADMIN THIS PERIOD ============ -->
+<div id="1f" style="display:flex;flex-direction:column;gap:9px;width:1024px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1f" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1f</a>
+<div style="font-size:13px;font-weight:600;color:#44403c">Admin · this period</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;max-width:700px;text-wrap:pretty">Unchanged in behaviour — review each person, approve or send back, close once. The band keeps stating its own blocker rather than going grey. Restyled to the same card, border, and status vocabulary as the staff screens; the five admin tabs stay as they are, since splitting closed periods out was a deliberate call.</div>
+
+<div style="width:1024px;background:#faf8f6;border-radius:20px;overflow:hidden;padding:26px 30px 30px;box-sizing:border-box;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px">
+    <div style="font-family:'Protest Strike',sans-serif;font-size:28px;color:#a46a57;line-height:1">Payroll · Admin</div>
+    <div style="display:flex;gap:9px">
+      <div style="border:1px solid #d9d4cd;background:#fff;border-radius:9px;padding:8px 15px;font-size:12.5px;font-weight:600;color:#44403c">Export CSV</div>
+      <div style="border:1px solid #d9d4cd;background:#fff;border-radius:9px;padding:8px 15px;font-size:12.5px;font-weight:600;color:#44403c">Staff View</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:26px;border-bottom:1px solid #ece7e1;margin-bottom:18px">
+    <div style="padding-bottom:10px;border-bottom:2px solid #a46a57;margin-bottom:-1px;font-size:13.5px;font-weight:600;color:#8a5140">This period</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c">Requests</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c">Closed periods</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c">Report</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c">Rates</div>
+  </div>
+
+  <div style="background:#3b3531;border-radius:18px;padding:20px 24px;display:flex;align-items:center;gap:38px;margin-bottom:14px">
+    <div>
+      <div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a99f96">PAY PERIOD · OPEN</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:5px">
+        <div style="font-size:15px;color:#a99f96">‹</div>
+        <div style="font-size:21px;font-weight:700;color:#fff">Aug 6 – 19</div>
+        <div style="font-size:15px;color:#a99f96">›</div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:240px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:14px;font-weight:600;color:#fff">5 of 7 staff approved</div>
+        <div style="font-size:12.5px;color:#a99f96">Closes Aug 19</div>
+      </div>
+      <div style="height:7px;border-radius:99px;background:#544c46;overflow:hidden"><div style="width:71%;height:100%;background:#8fb473;border-radius:99px"></div></div>
+    </div>
+    <div>
+      <div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a99f96">APPROVED SO FAR</div>
+      <div style="font-size:21px;font-weight:700;color:#fff;margin-top:5px">$5,412.00</div>
+    </div>
+    <div style="background:#544c46;border-radius:10px;padding:12px 20px;text-align:center;flex:none;white-space:nowrap">
+      <div style="font-size:13px;font-weight:600;color:#c9beb4">Close period</div>
+      <div style="white-space:nowrap;font-size:10.5px;color:#a99f96;margin-top:3px">2 staff not approved</div>
+    </div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #ece7e1;border-radius:18px;overflow:hidden;box-shadow:0 4px 14px rgba(68,64,60,.045)">
+    <div style="display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid #f4f0ec;background:#faf8f6">
+      <div style="width:200px;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a8a29e">STAFF</div>
+      <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">GROUP</div>
+      <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">SPC</div>
+      <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">PROGRAMS</div>
+      <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">HOURS</div>
+      <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">OTHER</div>
+      <div style="width:88px;flex:none;text-align:right;white-space:nowrap;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">PAY</div>
+      <div style="width:194px;flex:none;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a8a29e">REVIEW</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid #f4f0ec">
+      <div style="width:200px;display:flex;align-items:center;gap:10px">
+        <div style="width:30px;height:30px;border-radius:99px;background:#eef1e7;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#4d6142">TN</div>
+        <div style="white-space:nowrap"><div style="font-size:13px;font-weight:600;color:#2a211c">Tessa Nolan</div><div style="white-space:nowrap;font-size:10.5px;color:#4d6142;font-weight:500">Approved</div></div>
+      </div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">31</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">6</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">5</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">6.5</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">2</div>
+      <div style="width:88px;flex:none;text-align:right;white-space:nowrap;font-size:14px;font-weight:700;color:#2a211c">$1,187.00</div>
+      <div style="width:194px;flex:none;display:flex;justify-content:flex-end;gap:8px">
+        <div style="width:96px;box-sizing:border-box;text-align:center;white-space:nowrap;border:1px solid #cbd6bd;background:#eef1e7;border-radius:8px;padding:7px 0;font-size:11.5px;font-weight:600;color:#4d6142">✓ Approved</div>
+        <div style="width:90px;box-sizing:border-box;text-align:center;white-space:nowrap;border:1px solid #e7e5e4;background:#fff;border-radius:8px;padding:7px 0;font-size:11.5px;font-weight:500;color:#78716c">Undo</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid #f4f0ec;background:#fdf6f2">
+      <div style="width:200px;display:flex;align-items:center;gap:10px">
+        <div style="width:30px;height:30px;border-radius:99px;background:#f4ede3;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#8a5a2e">JR</div>
+        <div style="white-space:nowrap"><div style="font-size:13px;font-weight:600;color:#2a211c">Jordan Ruiz</div><div style="white-space:nowrap;font-size:10.5px;color:#8a5a2e;font-weight:500">Submitted · needs review</div></div>
+      </div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">24</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">11</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">3</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">12.0</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">1</div>
+      <div style="width:88px;flex:none;text-align:right;white-space:nowrap;font-size:14px;font-weight:700;color:#2a211c">$1,043.50</div>
+      <div style="width:194px;flex:none;display:flex;justify-content:flex-end;gap:8px">
+        <div style="width:96px;box-sizing:border-box;text-align:center;white-space:nowrap;background:#a46a57;border-radius:8px;padding:7px 0;font-size:11.5px;font-weight:600;color:#fff">Approve</div>
+        <div style="width:90px;box-sizing:border-box;text-align:center;white-space:nowrap;border:1px solid #e7e5e4;background:#fff;border-radius:8px;padding:7px 0;font-size:11.5px;font-weight:500;color:#78716c">Send back</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid #f4f0ec">
+      <div style="width:200px;display:flex;align-items:center;gap:10px">
+        <div style="width:30px;height:30px;border-radius:99px;background:#f1efed;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#78716c">AK</div>
+        <div style="white-space:nowrap"><div style="font-size:13px;font-weight:600;color:#2a211c">Avery Kim</div><div style="white-space:nowrap;font-size:10.5px;color:#a8a29e;font-weight:500">Not finalized yet</div></div>
+      </div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">18</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">0</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">2</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">4.0</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#c8c2bb">—</div>
+      <div style="width:88px;flex:none;text-align:right;white-space:nowrap;font-size:14px;font-weight:700;color:#78716c">$436.00</div>
+      <div style="width:194px;flex:none;display:flex;justify-content:flex-end;gap:8px">
+        <div style="width:194px;box-sizing:border-box;text-align:center;white-space:nowrap;border:1px solid #e7e5e4;background:#fff;border-radius:8px;padding:7px 0;font-size:11.5px;font-weight:500;color:#a8a29e">Waiting on Avery</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;padding:14px 20px">
+      <div style="width:200px;display:flex;align-items:center;gap:10px">
+        <div style="width:30px;height:30px;border-radius:99px;background:#fdece5;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#b23a22">DM</div>
+        <div style="white-space:nowrap"><div style="font-size:13px;font-weight:600;color:#2a211c">Dev Malik</div><div style="white-space:nowrap;font-size:10.5px;color:#b23a22;font-weight:500">Sent back Aug 12</div></div>
+      </div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">27</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">4</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">6</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">3.5</div>
+      <div style="width:58px;text-align:right;font-size:13px;font-weight:600;color:#44403c">3</div>
+      <div style="width:88px;flex:none;text-align:right;white-space:nowrap;font-size:14px;font-weight:700;color:#2a211c">$918.00</div>
+      <div style="width:194px;flex:none;display:flex;justify-content:flex-end;gap:8px">
+        <div style="width:194px;box-sizing:border-box;text-align:center;white-space:nowrap;border:1px solid #e7e5e4;background:#fff;border-radius:8px;padding:7px 0;font-size:11.5px;font-weight:500;color:#78716c">View note</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============ 1g — ADMIN RATES ============ -->
+<div id="1j" style="display:flex;flex-direction:column;gap:9px;width:1024px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1j" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1j</a>
+<div style="font-size:13px;font-weight:600;color:#44403c;white-space:nowrap">Admin · requests</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;max-width:700px;text-wrap:pretty">Every custom-pay request in one queue. The dark card is the treatment you liked — it lives here, on the admin side, and never on a coach's own Extra pay screen. Approving writes the linked pay entry immediately, which is why the amount is repeated on the button.</div>
+<div style="width:1024px;background:#faf8f6;border-radius:20px;overflow:hidden;padding:26px 30px 30px;box-sizing:border-box;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="font-family:'Protest Strike',sans-serif;font-size:28px;color:#a46a57;line-height:1;margin-bottom:16px">Payroll · Admin</div>
+  <div style="display:flex;gap:26px;border-bottom:1px solid #ece7e1;margin-bottom:18px">
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">This period</div>
+    <div style="padding-bottom:10px;border-bottom:2px solid #a46a57;margin-bottom:-1px;font-size:13.5px;font-weight:600;color:#8a5140;white-space:nowrap">Requests</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">Closed periods</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">Report</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">Rates</div>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div style="display:flex;align-items:baseline;gap:10px">
+      <div style="font-size:16px;font-weight:700;color:#2a211c">Waiting on you</div>
+      <div style="min-width:21px;height:21px;border-radius:99px;background:#f4ede3;display:flex;align-items:center;justify-content:center;padding:0 7px;font-size:11px;font-weight:700;color:#8a5a2e">3</div>
+    </div>
+    <div style="font-size:12.5px;font-weight:600;color:#78716c;white-space:nowrap">$212.00 if you approve all three</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:22px">
+      <div style="background:#3b3531;border-radius:16px;padding:16px 18px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
+          <div><div style="font-size:14px;font-weight:600;color:#fff;white-space:nowrap">Tessa Nolan</div><div style="font-size:11.5px;color:#c9beb4;margin-top:3px">Equipment mileage — 3 pickups</div><div style="font-size:10.5px;color:#8d8279;margin-top:5px">Requested Aug 12</div></div>
+          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap">$42.00</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;text-align:center;background:#8fb473;border-radius:9px;padding:10px;font-size:12.5px;font-weight:600;color:#26301d;white-space:nowrap">Approve $42.00</div>
+          <div style="flex:none;border:1px solid #6b625b;border-radius:9px;padding:10px 18px;font-size:12.5px;font-weight:500;color:#c9beb4">Deny</div>
+        </div>
+      </div>
+      <div style="background:#3b3531;border-radius:16px;padding:16px 18px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
+          <div><div style="font-size:14px;font-weight:600;color:#fff;white-space:nowrap">Jordan Ruiz</div><div style="font-size:11.5px;color:#c9beb4;margin-top:3px">CPR recert course</div><div style="font-size:10.5px;color:#8d8279;margin-top:5px">Requested Aug 9</div></div>
+          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap">$85.00</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;text-align:center;background:#8fb473;border-radius:9px;padding:10px;font-size:12.5px;font-weight:600;color:#26301d;white-space:nowrap">Approve $85.00</div>
+          <div style="flex:none;border:1px solid #6b625b;border-radius:9px;padding:10px 18px;font-size:12.5px;font-weight:500;color:#c9beb4">Deny</div>
+        </div>
+      </div>
+      <div style="background:#3b3531;border-radius:16px;padding:16px 18px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
+          <div><div style="font-size:14px;font-weight:600;color:#fff;white-space:nowrap">Dev Malik</div><div style="font-size:11.5px;color:#c9beb4;margin-top:3px">Cover shift — Sat open</div><div style="font-size:10.5px;color:#8d8279;margin-top:5px">Requested Aug 8</div></div>
+          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap">$85.00</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;text-align:center;background:#8fb473;border-radius:9px;padding:10px;font-size:12.5px;font-weight:600;color:#26301d;white-space:nowrap">Approve $85.00</div>
+          <div style="flex:none;border:1px solid #6b625b;border-radius:9px;padding:10px 18px;font-size:12.5px;font-weight:500;color:#c9beb4">Deny</div>
+        </div>
+      </div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;box-shadow:0 4px 14px rgba(68,64,60,.045);overflow:hidden">
+    <div style="display:flex;align-items:center;gap:16px;padding:13px 20px;background:#faf8f6">
+      <div style="width:170px;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a8a29e">STAFF</div>
+      <div style="flex:1;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a8a29e">REQUEST</div>
+      <div style="width:96px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">AMOUNT</div>
+      <div style="width:92px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">STATUS</div>
+      <div style="width:104px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">DECIDED</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;padding:13px 20px;border-top:1px solid #f4f0ec">
+      <div style="width:170px;font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap">Tessa Nolan</div>
+      <div style="flex:1;font-size:12.5px;color:#57534e">Nutrition cert renewal</div>
+      <div style="width:96px;text-align:right;font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$120.00</div>
+      <div style="width:92px;display:flex;justify-content:flex-end"><div style="border-radius:99px;padding:3px 10px;background:#eef1e7;font-size:10.5px;font-weight:600;color:#4d6142;white-space:nowrap">approved</div></div>
+      <div style="width:104px;text-align:right;font-size:11px;color:#a8a29e;white-space:nowrap">Aug 4</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;padding:13px 20px;border-top:1px solid #f4f0ec">
+      <div style="width:170px;font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap">Avery Kim</div>
+      <div style="flex:1;font-size:12.5px;color:#57534e">Parking — team offsite</div>
+      <div style="width:96px;text-align:right;font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$18.00</div>
+      <div style="width:92px;display:flex;justify-content:flex-end"><div style="border-radius:99px;padding:3px 10px;background:#eef1e7;font-size:10.5px;font-weight:600;color:#4d6142;white-space:nowrap">approved</div></div>
+      <div style="width:104px;text-align:right;font-size:11px;color:#a8a29e;white-space:nowrap">Aug 4</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;padding:13px 20px;border-top:1px solid #f4f0ec">
+      <div style="width:170px;font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap">Jordan Ruiz</div>
+      <div style="flex:1;font-size:12.5px;color:#57534e">New shoes</div>
+      <div style="width:96px;text-align:right;font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$140.00</div>
+      <div style="width:92px;display:flex;justify-content:flex-end"><div style="border-radius:99px;padding:3px 10px;background:#fdece5;font-size:10.5px;font-weight:600;color:#b23a22;white-space:nowrap">denied</div></div>
+      <div style="width:104px;text-align:right;font-size:11px;color:#a8a29e;white-space:nowrap">Jul 30</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;padding:13px 20px;border-top:1px solid #f4f0ec">
+      <div style="width:170px;font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap">Dev Malik</div>
+      <div style="flex:1;font-size:12.5px;color:#57534e">Bonus — member referral</div>
+      <div style="width:96px;text-align:right;font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$50.00</div>
+      <div style="width:92px;display:flex;justify-content:flex-end"><div style="border-radius:99px;padding:3px 10px;background:#eef1e7;font-size:10.5px;font-weight:600;color:#4d6142;white-space:nowrap">approved</div></div>
+      <div style="width:104px;text-align:right;font-size:11px;color:#a8a29e;white-space:nowrap">Jul 28</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="1k" style="display:flex;flex-direction:column;gap:9px;width:1024px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1k" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1k</a>
+<div style="font-size:13px;font-weight:600;color:#44403c;white-space:nowrap">Admin · closed periods</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;max-width:700px;text-wrap:pretty">A finished period is a receipt, so each row leads with the four numbers that make it one — owner pay, staff pay, taxes, grand total — with taxes still editable after the close. Expanding re-reads that period at its <em>frozen</em> rates, so it can never drift from what was true on closing day.</div>
+<div style="width:1024px;background:#faf8f6;border-radius:20px;overflow:hidden;padding:26px 30px 30px;box-sizing:border-box;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="font-family:'Protest Strike',sans-serif;font-size:28px;color:#a46a57;line-height:1;margin-bottom:16px">Payroll · Admin</div>
+  <div style="display:flex;gap:26px;border-bottom:1px solid #ece7e1;margin-bottom:18px">
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">This period</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">Requests</div>
+    <div style="padding-bottom:10px;border-bottom:2px solid #a46a57;margin-bottom:-1px;font-size:13.5px;font-weight:600;color:#8a5140;white-space:nowrap">Closed periods</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">Report</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">Rates</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+
+    <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;box-shadow:0 4px 14px rgba(68,64,60,.045);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:20px;padding:18px 20px">
+        <div style="width:150px">
+          <div style="font-size:15px;font-weight:700;color:#2a211c;white-space:nowrap">Jul 23 – Aug 5</div>
+          <div style="font-size:10.5px;color:#a8a29e;margin-top:3px;white-space:nowrap">Closed Aug 6</div>
+        </div>
+        <div style="width:110px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">OWNER PAY</div><div style="font-size:14px;font-weight:700;color:#44403c;margin-top:4px">$2,400.00</div></div>
+        <div style="width:110px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">STAFF PAY</div><div style="font-size:14px;font-weight:700;color:#44403c;margin-top:4px">$6,318.50</div></div>
+        <div style="width:132px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">TAXES</div><div style="display:flex;align-items:center;gap:7px;margin-top:4px"><div style="width:86px;border:1px solid #ece7e1;border-radius:9px;padding:6px 9px;font-size:13px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$1,842.10</div><div style="font-size:11px;font-weight:600;color:#8a5140">Save</div></div></div>
+        <div style="flex:1;text-align:right"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">GRAND TOTAL</div><div style="font-size:19px;font-weight:700;color:#2a211c;margin-top:2px;white-space:nowrap">$10,560.60</div></div>
+        <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end">
+          <div style="border:1px solid #d9d4cd;background:#fff;border-radius:9px;padding:7px 13px;font-size:11.5px;font-weight:600;color:#44403c;white-space:nowrap">Export CSV</div>
+          <div style="font-size:11.5px;font-weight:600;color:#8a5140;white-space:nowrap">Hide breakdown ▴</div>
+        </div>
+      </div>
+
+      <div style="background:#faf8f6;border-top:1px solid #ece7e1">
+        <div style="display:flex;align-items:center;gap:16px;padding:11px 20px">
+          <div style="width:200px;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a8a29e">STAFF</div>
+          <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">GRP</div>
+          <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">SPC</div>
+          <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">PROG</div>
+          <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">HRS</div>
+          <div style="width:58px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">OTHER</div>
+          <div style="flex:1;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">PAY · FROZEN RATES</div>
+        </div>
+      <div style="display:flex;align-items:center;gap:16px;padding:12px 20px;border-top:1px solid #f4f0ec">
+        <div style="width:200px;display:flex;align-items:center;gap:10px">
+          <div style="width:28px;height:28px;border-radius:99px;background:#eef1e7;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#57534e">TN</div>
+          <div style="font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap">Tessa Nolan</div>
+        </div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">34</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">7</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">6</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">8.0</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">3</div>
+        <div style="flex:1;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$1,342.00</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;padding:12px 20px;border-top:1px solid #f4f0ec">
+        <div style="width:200px;display:flex;align-items:center;gap:10px">
+          <div style="width:28px;height:28px;border-radius:99px;background:#f4ede3;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#57534e">JR</div>
+          <div style="font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap">Jordan Ruiz</div>
+        </div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">29</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">9</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">4</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">11.5</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">2</div>
+        <div style="flex:1;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$1,178.50</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;padding:12px 20px;border-top:1px solid #f4f0ec">
+        <div style="width:200px;display:flex;align-items:center;gap:10px">
+          <div style="width:28px;height:28px;border-radius:99px;background:#fdece5;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#57534e">DM</div>
+          <div style="font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap">Dev Malik</div>
+        </div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">31</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">5</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">5</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">6.0</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">4</div>
+        <div style="flex:1;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$1,044.00</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;padding:12px 20px;border-top:1px solid #f4f0ec">
+        <div style="width:200px;display:flex;align-items:center;gap:10px">
+          <div style="width:28px;height:28px;border-radius:99px;background:#f1efed;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#57534e">AK</div>
+          <div style="font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap">Avery Kim</div>
+        </div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">22</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">0</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">3</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">9.0</div>
+        <div style="width:58px;text-align:right;font-size:12.5px;font-weight:600;color:#44403c">1</div>
+        <div style="flex:1;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$726.00</div>
+      </div>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 20px;border-top:1px solid #ece7e1">
+          <div style="font-size:11.5px;font-weight:600;color:#78716c">7 staff · rates as of Aug 6</div>
+          <div style="font-size:14px;font-weight:700;color:#2a211c">$6,318.50</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;box-shadow:0 4px 14px rgba(68,64,60,.045);display:flex;align-items:center;gap:20px;padding:18px 20px">
+      <div style="width:150px"><div style="font-size:15px;font-weight:700;color:#2a211c;white-space:nowrap">Jul 9 – 22</div><div style="font-size:10.5px;color:#a8a29e;margin-top:3px;white-space:nowrap">Closed Jul 23</div></div>
+      <div style="width:110px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">OWNER PAY</div><div style="font-size:14px;font-weight:700;color:#44403c;margin-top:4px">$2,400.00</div></div>
+      <div style="width:110px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">STAFF PAY</div><div style="font-size:14px;font-weight:700;color:#44403c;margin-top:4px">$5,904.00</div></div>
+      <div style="width:132px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">TAXES</div><div style="display:flex;align-items:center;gap:7px;margin-top:4px"><div style="width:86px;border:1px dashed #e2dbd4;border-radius:9px;padding:6px 9px;font-size:13px;font-weight:500;color:#b5aea7;text-align:right;background:#fff">Add</div></div></div>
+      <div style="flex:1;text-align:right"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">GRAND TOTAL</div><div style="font-size:19px;font-weight:700;color:#78716c;margin-top:2px;white-space:nowrap">$8,304.00</div></div>
+      <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end">
+        <div style="border:1px solid #d9d4cd;background:#fff;border-radius:9px;padding:7px 13px;font-size:11.5px;font-weight:600;color:#44403c;white-space:nowrap">Export CSV</div>
+        <div style="font-size:11.5px;font-weight:600;color:#8a5140;white-space:nowrap">Show breakdown ▾</div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;box-shadow:0 4px 14px rgba(68,64,60,.045);display:flex;align-items:center;gap:20px;padding:18px 20px">
+      <div style="width:150px"><div style="font-size:15px;font-weight:700;color:#2a211c;white-space:nowrap">Jun 25 – Jul 8</div><div style="font-size:10.5px;color:#a8a29e;margin-top:3px;white-space:nowrap">Closed Jul 9</div></div>
+      <div style="width:110px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">OWNER PAY</div><div style="font-size:14px;font-weight:700;color:#44403c;margin-top:4px">$2,400.00</div></div>
+      <div style="width:110px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">STAFF PAY</div><div style="font-size:14px;font-weight:700;color:#44403c;margin-top:4px">$6,102.50</div></div>
+      <div style="width:132px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">TAXES</div><div style="display:flex;align-items:center;gap:7px;margin-top:4px"><div style="width:86px;border:1px solid #ece7e1;border-radius:9px;padding:6px 9px;font-size:13px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$1,790.40</div></div></div>
+      <div style="flex:1;text-align:right"><div style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">GRAND TOTAL</div><div style="font-size:19px;font-weight:700;color:#2a211c;margin-top:2px;white-space:nowrap">$10,292.90</div></div>
+      <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end">
+        <div style="border:1px solid #d9d4cd;background:#fff;border-radius:9px;padding:7px 13px;font-size:11.5px;font-weight:600;color:#44403c;white-space:nowrap">Export CSV</div>
+        <div style="font-size:11.5px;font-weight:600;color:#8a5140;white-space:nowrap">Show breakdown ▾</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<div id="1l" style="display:flex;flex-direction:column;gap:9px;width:1024px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1l" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1l</a>
+<div style="font-size:13px;font-weight:600;color:#44403c;white-space:nowrap">Admin · report</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;max-width:700px;text-wrap:pretty">The same per-staff read as today, but the breakdown opens as a panel beside the list instead of a bottom sheet — at a desk you compare people, and a sheet that covers the list makes that impossible. Bars are share of the period, so who is carrying the load is legible without doing arithmetic.</div>
+<div style="width:1024px;background:#faf8f6;border-radius:20px;overflow:hidden;padding:26px 30px 30px;box-sizing:border-box;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="font-family:'Protest Strike',sans-serif;font-size:28px;color:#a46a57;line-height:1;margin-bottom:16px">Payroll · Admin</div>
+  <div style="display:flex;gap:26px;border-bottom:1px solid #ece7e1;margin-bottom:18px">
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">This period</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">Requests</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">Closed periods</div>
+    <div style="padding-bottom:10px;border-bottom:2px solid #a46a57;margin-bottom:-1px;font-size:13.5px;font-weight:600;color:#8a5140;white-space:nowrap">Report</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c;white-space:nowrap">Rates</div>
+  </div>
+
+  <div style="background:#3b3531;border-radius:18px;padding:18px 24px;display:flex;align-items:center;gap:32px;margin-bottom:14px">
+    <div>
+      <div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a99f96">PERIOD</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:5px">
+        <div style="font-size:15px;color:#a99f96">‹</div>
+        <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap">Aug 6 – 19</div>
+        <div style="font-size:15px;color:#a99f96">›</div>
+      </div>
+    </div>
+    <div style="flex:1"></div>
+    <div><div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a99f96">STAFF LOGGING</div><div style="font-size:19px;font-weight:700;color:#fff;margin-top:5px">7</div></div>
+    <div><div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a99f96">TOTAL PAYROLL</div><div style="font-size:19px;font-weight:700;color:#fff;margin-top:5px;white-space:nowrap">$5,848.50</div></div>
+    <div style="border:1px solid #6b625b;border-radius:10px;padding:11px 18px;font-size:12.5px;font-weight:600;color:#c9beb4;white-space:nowrap">Export CSV</div>
+  </div>
+
+  <div style="display:flex;gap:14px;align-items:flex-start">
+    <div style="flex:1;background:#fff;border:1px solid #ece7e1;border-radius:16px;box-shadow:0 4px 14px rgba(68,64,60,.045);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:#faf8f6">
+        <div style="flex:1;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#a8a29e">STAFF</div>
+        <div style="width:120px;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">SHARE</div>
+        <div style="width:88px;text-align:right;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:#a8a29e">PAY</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-top:1px solid #f4f0ec;background:#fdf6f2">
+        <div style="flex:1;font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">Tessa Nolan</div>
+        <div style="width:120px;height:6px;border-radius:99px;background:#f1ede9;overflow:hidden"><div style="width:100%;height:100%;background:#a46a57;border-radius:99px"></div></div>
+        <div style="width:88px;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$1,187.00</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-top:1px solid #f4f0ec;background:transparent">
+        <div style="flex:1;font-size:13px;font-weight:600;color:#2a211c;white-space:nowrap">Jordan Ruiz</div>
+        <div style="width:120px;height:6px;border-radius:99px;background:#f1ede9;overflow:hidden"><div style="width:88%;height:100%;background:#d9c3b7;border-radius:99px"></div></div>
+        <div style="width:88px;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$1,043.50</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-top:1px solid #f4f0ec;background:transparent">
+        <div style="flex:1;font-size:13px;font-weight:600;color:#2a211c;white-space:nowrap">Dev Malik</div>
+        <div style="width:120px;height:6px;border-radius:99px;background:#f1ede9;overflow:hidden"><div style="width:77%;height:100%;background:#d9c3b7;border-radius:99px"></div></div>
+        <div style="width:88px;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$918.00</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-top:1px solid #f4f0ec;background:transparent">
+        <div style="flex:1;font-size:13px;font-weight:600;color:#2a211c;white-space:nowrap">Avery Kim</div>
+        <div style="width:120px;height:6px;border-radius:99px;background:#f1ede9;overflow:hidden"><div style="width:62%;height:100%;background:#d9c3b7;border-radius:99px"></div></div>
+        <div style="width:88px;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$736.00</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-top:1px solid #f4f0ec;background:transparent">
+        <div style="flex:1;font-size:13px;font-weight:600;color:#2a211c;white-space:nowrap">Sam Ortiz</div>
+        <div style="width:120px;height:6px;border-radius:99px;background:#f1ede9;overflow:hidden"><div style="width:58%;height:100%;background:#d9c3b7;border-radius:99px"></div></div>
+        <div style="width:88px;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$684.00</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-top:1px solid #f4f0ec;background:transparent">
+        <div style="flex:1;font-size:13px;font-weight:600;color:#2a211c;white-space:nowrap">Riley Chen</div>
+        <div style="width:120px;height:6px;border-radius:99px;background:#f1ede9;overflow:hidden"><div style="width:55%;height:100%;background:#d9c3b7;border-radius:99px"></div></div>
+        <div style="width:88px;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$652.00</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-top:1px solid #f4f0ec;background:transparent">
+        <div style="flex:1;font-size:13px;font-weight:600;color:#2a211c;white-space:nowrap">Noa Fisher</div>
+        <div style="width:120px;height:6px;border-radius:99px;background:#f1ede9;overflow:hidden"><div style="width:53%;height:100%;background:#d9c3b7;border-radius:99px"></div></div>
+        <div style="width:88px;text-align:right;font-size:13.5px;font-weight:700;color:#2a211c;white-space:nowrap">$628.00</div>
+      </div>
+    </div>
+
+    <div style="width:380px;flex:none;background:#fff;border:1px solid #ece7e1;border-radius:16px;box-shadow:0 4px 14px rgba(68,64,60,.045);padding:18px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px">
+        <div style="font-size:16px;font-weight:700;color:#2a211c;white-space:nowrap">Tessa Nolan</div>
+        <div style="font-size:18px;font-weight:700;color:#8a5140;white-space:nowrap">$1,187.00</div>
+      </div>
+      <div style="font-size:11px;color:#a8a29e;margin-bottom:12px">Aug 6 – 19 · approved Aug 13</div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c;white-space:nowrap">Group sessions</div><div style="font-size:10.5px;color:#b5aea7;margin-top:2px;white-space:nowrap">31 × $18.00</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$558.00</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c;white-space:nowrap">SPC sessions</div><div style="font-size:10.5px;color:#b5aea7;margin-top:2px;white-space:nowrap">7 sessions · tiered</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$212.00</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c;white-space:nowrap">Programs written</div><div style="font-size:10.5px;color:#b5aea7;margin-top:2px;white-space:nowrap">6 × $12.00</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$72.00</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c;white-space:nowrap">Welcome sessions</div><div style="font-size:10.5px;color:#b5aea7;margin-top:2px;white-space:nowrap">2 × $25.00</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$50.00</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c;white-space:nowrap">Admin hours</div><div style="font-size:10.5px;color:#b5aea7;margin-top:2px;white-space:nowrap">8h 0m × $22.00</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$176.00</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f4f0ec">
+          <div><div style="font-size:12.5px;font-weight:600;color:#44403c;white-space:nowrap">Other items</div><div style="font-size:10.5px;color:#b5aea7;margin-top:2px;white-space:nowrap">3 items</div></div>
+          <div style="font-size:13px;font-weight:700;color:#2a211c;white-space:nowrap">$119.00</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:12px">
+        <div style="font-size:12px;font-weight:600;color:#78716c">14 days logged</div>
+        <div style="border:1px solid #d9d4cd;background:#fff;border-radius:9px;padding:7px 13px;font-size:11.5px;font-weight:600;color:#44403c;white-space:nowrap">Open their entries</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="1g" style="display:flex;flex-direction:column;gap:9px;width:1024px">
+<div style="display:flex;align-items:baseline;gap:9px">
+<a href="#1g" style="font-size:11px;font-weight:700;color:#fff;background:#2a211c;border-radius:6px;padding:3px 7px">1g</a>
+<div style="font-size:13px;font-weight:600;color:#44403c">Admin · rates</div>
+</div>
+<div style="font-size:11.5px;line-height:1.55;color:#78716c;max-width:700px;text-wrap:pretty">Same three groups as today — core rates, SPC tiers, Other types with their Quantity/Notes switches — laid out as three columns instead of one long scroll, since this is only ever touched at a desk. Rate edits still save per row.</div>
+
+<div style="width:1024px;background:#faf8f6;border-radius:20px;overflow:hidden;padding:26px 30px 30px;box-sizing:border-box;box-shadow:0 18px 44px rgba(42,33,28,.13);border:1px solid #e2dbd4">
+  <div style="font-family:'Protest Strike',sans-serif;font-size:28px;color:#a46a57;line-height:1;margin-bottom:16px">Payroll · Admin</div>
+
+  <div style="display:flex;gap:26px;border-bottom:1px solid #ece7e1;margin-bottom:20px">
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c">This period</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c">Requests</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c">Closed periods</div>
+    <div style="padding-bottom:10px;font-size:13.5px;font-weight:500;color:#78716c">Report</div>
+    <div style="padding-bottom:10px;border-bottom:2px solid #a46a57;margin-bottom:-1px;font-size:13.5px;font-weight:600;color:#8a5140">Rates</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+
+    <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:18px;box-shadow:0 4px 14px rgba(68,64,60,.045)">
+      <div style="font-size:14px;font-weight:700;color:#2a211c;margin-bottom:3px">Core rates</div>
+      <div style="font-size:11px;color:#a8a29e;margin-bottom:14px">What each logged item pays</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">Group session</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$18.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">Program written</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$12.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">Welcome session</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$25.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">Strategy session</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$30.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">Admin hours</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$22.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">Ops hours</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$20.00</div></div>
+      </div>
+      
+    </div>
+
+    <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:18px;box-shadow:0 4px 14px rgba(68,64,60,.045)">
+      <div style="font-size:14px;font-weight:700;color:#2a211c;margin-bottom:3px">SPC tiers</div>
+      <div style="font-size:11px;color:#a8a29e;margin-bottom:14px">Paid by head count per session</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">0 attendees</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$0.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">1 attendee</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$22.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">2 attendees</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$26.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">3 attendees</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$29.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:12.5px;font-weight:500;color:#44403c">4 attendees</div><div style="width:78px;border:1px solid #ece7e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$31.00</div></div>
+        <div style="display:flex;align-items:center;gap:10px"></div>
+        <div style="display:flex;align-items:center;gap:10px"></div>
+      </div>
+      
+    </div>
+
+    <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:18px;box-shadow:0 4px 14px rgba(68,64,60,.045)">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:3px">
+        <div style="font-size:14px;font-weight:700;color:#2a211c">Other types</div>
+        <div style="font-size:11.5px;font-weight:600;color:#8a5140">+ Add</div>
+      </div>
+      <div style="font-size:11px;color:#a8a29e;margin-bottom:14px">19 active · which fields each one collects</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="border:1px solid #ece7e1;border-radius:11px;padding:10px 11px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px"><div style="flex:1;font-size:12.5px;font-weight:600;color:#44403c">Facility cleaning</div><div style="width:66px;border:1px solid #ece7e1;border-radius:8px;padding:5px 8px;font-size:12px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$16.00</div></div>
+          <div style="display:flex;align-items:center;gap:12px"><div style="white-space:nowrap;font-size:10.5px;color:#a8a29e">per hour</div><div style="flex:1"></div><div style="display:flex;align-items:center;gap:4px"><div style="width:13px;height:13px;border-radius:3px;background:#8a5140"></div><div style="font-size:10.5px;font-weight:500;color:#44403c">Qty</div></div><div style="display:flex;align-items:center;gap:4px"><div style="width:13px;height:13px;border-radius:3px;border:1px solid #d6d3d1"></div><div style="font-size:10.5px;font-weight:500;color:#a8a29e">Notes</div></div></div>
+        </div>
+        <div style="border:1px solid #ece7e1;border-radius:11px;padding:10px 11px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px"><div style="flex:1;font-size:12.5px;font-weight:600;color:#44403c">Event coverage</div><div style="width:66px;border:1px solid #ece7e1;border-radius:8px;padding:5px 8px;font-size:12px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$45.00</div></div>
+          <div style="display:flex;align-items:center;gap:12px"><div style="white-space:nowrap;font-size:10.5px;color:#a8a29e">per event</div><div style="flex:1"></div><div style="display:flex;align-items:center;gap:4px"><div style="width:13px;height:13px;border-radius:3px;background:#8a5140"></div><div style="font-size:10.5px;font-weight:500;color:#44403c">Qty</div></div><div style="display:flex;align-items:center;gap:4px"><div style="width:13px;height:13px;border-radius:3px;background:#8a5140"></div><div style="font-size:10.5px;font-weight:500;color:#44403c">Notes</div></div></div>
+        </div>
+        <div style="border:1px solid #ece7e1;border-radius:11px;padding:10px 11px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px"><div style="flex:1;font-size:12.5px;font-weight:600;color:#44403c">Social content</div><div style="width:66px;border:1px solid #ece7e1;border-radius:8px;padding:5px 8px;font-size:12px;font-weight:600;color:#2a211c;text-align:right;background:#faf8f6">$10.00</div></div>
+          <div style="display:flex;align-items:center;gap:12px"><div style="white-space:nowrap;font-size:10.5px;color:#a8a29e">per post</div><div style="flex:1"></div><div style="display:flex;align-items:center;gap:4px"><div style="width:13px;height:13px;border-radius:3px;background:#8a5140"></div><div style="font-size:10.5px;font-weight:500;color:#44403c">Qty</div></div><div style="display:flex;align-items:center;gap:4px"><div style="width:13px;height:13px;border-radius:3px;border:1px solid #d6d3d1"></div><div style="font-size:10.5px;font-weight:500;color:#a8a29e">Notes</div></div></div>
+        </div>
+        <div style="text-align:center;padding:9px;font-size:11.5px;font-weight:600;color:#8a5140">Show all 19</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:16px;background:#fdf6f2;border:1px solid #f0ddd2;border-radius:16px;padding:16px 18px;display:flex;align-items:center;gap:16px">
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:600;color:#8a5140;margin-bottom:3px">Deadline reminder</div>
+      <div style="font-size:11.5px;color:#78716c">Staff get a push notification to finalize this many days before the period closes.</div>
+    </div>
+    <div style="width:64px;border:1px solid #ead9cd;background:#fff;border-radius:9px;padding:8px 10px;font-size:13px;font-weight:600;color:#2a211c;text-align:center">2</div>
+    <div style="font-size:12px;color:#78716c">days</div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<div style="margin-top:40px;max-width:920px;background:#fff;border:1px solid #e2dbd4;border-radius:18px;padding:22px 26px">
+<div style="font-family:'Protest Strike',sans-serif;font-size:19px;color:#2a211c;margin-bottom:12px">What this changes in code</div>
+<div style="display:flex;flex-direction:column;gap:9px;font-size:12.5px;line-height:1.6;color:#57534e">
+<div><strong style="font-weight:600">PayrollTile.js</strong> — <span style="color:#78716c">drop <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">TileCheckmark</code> and its absolute positioning entirely; state becomes fill + border + an 11px inline tick. Anatomy goes label-top / value-bottom-left / control-bottom-right / reserved caption, so <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">TILE_HEIGHT</code> can stay static without <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">paddingBottom:28</code> reserving space for a floating badge.</span></div>
+<div><strong style="font-weight:600">PayrollDateNav.js</strong> — <span style="color:#78716c">the 150×72 date tile, the two arrows, and the calendar button all collapse into one component: a 5-day window inside the 14-day Thursday→Wednesday period, arrows stepping the selected day, the window sliding so the selected day sits centre once it's past day 3 and holding still again at the tail. <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">windowStart = clamp(selectedIndex - 2, 0, 9)</code> — no scroll container, no <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">PayrollDatePicker</code>, no new data (<code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">datesWithEntries</code> and <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">submittedDates</code> already carry the dot states).</span></div>
+<div><strong style="font-weight:600">PayrollTabBar.js</strong> — <span style="color:#78716c">four tabs to three, equal-width flex instead of a horizontal ScrollView. <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">can_view_nutrition</code> now gates the Nutrition <em>segment</em> inside Extra pay rather than a whole tab, so a coach without it sees Requests only and no empty tab.</span></div>
+<div><strong style="font-weight:600">nutrition.js + requests.js</strong> — <span style="color:#78716c">merge into one route with a two-segment switch. Both keep their own loaders; nothing about assignments, approvals, or <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">approveRequest</code> changes.</span></div>
+<div><strong style="font-weight:600">report.js</strong> — <span style="color:#78716c">restyle only, no new data. "Day 9 of 14" is elapsed days in the period, computed from the period's own start and end — deliberately not days logged, since most coaches don't work every day and the bar shouldn't imply a daily submit is owed.</span></div>
+<div><strong style="font-weight:600">Admin, five tabs kept</strong> — <span style="color:#78716c">the closed-periods split was a deliberate call, so this pass only restyles. Two behavioural notes: the report's <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">PayrollBottomSheet</code> becomes an inline side panel on web (the sheet stays on native), and the share bars are each staff member's total over the period leader's — no new query, just <code style="font-family:ui-monospace,monospace;font-size:11.5px;background:#f4f0ec;padding:1px 5px;border-radius:4px">computeTotalsByStaff</code> output it already has.</span></div>
+</div>
+</div>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const WD = ["THU", "FRI", "SAT", "SUN", "MON", "TUE", "WED"];
+const FULL = ["Thursday", "Friday", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"];
+const SHORT = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"];
+// Period runs Thursday Aug 6 → Wednesday Aug 19. Index 0 = Aug 6.
+const DAY1 = 6;
+const LEN = 14;
+const VIS = 5;
+const CENTER = 2;
+// Sunday of week one (index 4) is a day off — no entries, no submission.
+const SUBMITTED = [0, 1, 2, 3, 5, 6, 7];
+const TODAY = 8;
+
+class Component extends DCLogic {
+  state = { selA: TODAY, selB: TODAY, spcN: 4 };
+
+  spcChips() {
+    const labels = ["0", "1", "2", "3", "4"];
+    return labels.map((label, idx) => {
+      const n = idx;
+      const on = this.state.spcN === n;
+      return {
+        label,
+        onPress: () => this.setState({ spcN: n }),
+        style: {
+          flex: 1,
+          textAlign: "center",
+          border: on ? "1px solid #a46a57" : "1px solid #ece7e1",
+          background: on ? "#a46a57" : "#fff",
+          borderRadius: 11,
+          padding: "10px 0",
+          fontSize: 13.5,
+          fontWeight: on ? 700 : 600,
+          color: on ? "#fff" : "#78716c",
+          cursor: "pointer",
+        },
+      };
+    });
+  }
+
+  spcRows() {
+    const rows = [];
+    for (let i = 1; i <= this.state.spcN; i++) {
+      rows.push({
+        num: i,
+        onDelete: () => this.setState((s) => ({ spcN: Math.max(0, s.spcN - 1) })),
+      });
+    }
+    return rows;
+  }
+
+  strip(sel, key, submittedSet, selectedFill) {
+    const start = Math.min(Math.max(sel - CENTER, 0), LEN - VIS);
+    const out = [];
+    for (let i = start; i < start + VIS; i++) {
+      const isSel = i === sel;
+      const future = i > TODAY;
+      const submitted = submittedSet.includes(i);
+      const entered = i === TODAY && !submitted;
+      out.push({
+        wd: WD[i % 7],
+        num: DAY1 + i,
+        onPress: () => this.setState({ [key]: i }),
+        tile: {
+          flex: "none",
+          width: 46,
+          padding: "7px 0",
+          borderRadius: 12,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 4,
+          cursor: "pointer",
+          background: isSel ? selectedFill : "transparent",
+          boxShadow: isSel ? "0 2px 7px rgba(42,33,28,.22)" : "none",
+          opacity: future && !isSel ? 0.45 : 1,
+        },
+        wdStyle: {
+          fontSize: 8.5,
+          fontWeight: 700,
+          letterSpacing: ".07em",
+          color: isSel ? "rgba(255,255,255,.78)" : future ? "#c8c2bb" : "#a8a29e",
+        },
+        numStyle: { fontSize: 15, fontWeight: 700, color: isSel ? "#fff" : future ? "#c8c2bb" : "#44403c" },
+        dot: {
+          width: 5,
+          height: 5,
+          borderRadius: 99,
+          background: isSel ? "rgba(255,255,255,.85)" : submitted ? "#4d6142" : entered ? "#c98a6b" : "transparent",
+        },
+      });
+    }
+    return out;
+  }
+
+  arrow(enabled, fn) {
+    return {
+      handler: enabled ? fn : () => {},
+      style: {
+        flex: "none",
+        width: 30,
+        height: 30,
+        borderRadius: 99,
+        border: "1px solid #ece7e1",
+        background: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 15,
+        color: "#8a5140",
+        cursor: enabled ? "pointer" : "default",
+        opacity: enabled ? 1 : 0.35,
+      },
+    };
+  }
+
+  renderVals() {
+    const { selA, selB } = this.state;
+    const step = (key, cur, delta) => () => this.setState({ [key]: Math.min(Math.max(cur + delta, 0), LEN - 1) });
+    const pa = this.arrow(selA > 0, step("selA", selA, -1));
+    const na = this.arrow(selA < LEN - 1, step("selA", selA, 1));
+    const pb = this.arrow(selB > 0, step("selB", selB, -1));
+    const nb = this.arrow(selB < LEN - 1, step("selB", selB, 1));
+    return {
+      stripA: this.strip(selA, "selA", SUBMITTED, "#a46a57"),
+      stripB: this.strip(selB, "selB", SUBMITTED.concat([TODAY]), "#4d6142"),
+      prevA: pa.handler,
+      prevStyleA: pa.style,
+      nextA: na.handler,
+      nextStyleA: na.style,
+      prevB: pb.handler,
+      prevStyleB: pb.style,
+      nextB: nb.handler,
+      nextStyleB: nb.style,
+      dateLabelA: `${FULL[selA % 7]}, Aug ${DAY1 + selA}`,
+      dateLabelB: `${FULL[selB % 7]}, Aug ${DAY1 + selB}`,
+      shortLabelA: `${SHORT[selA % 7]}, Aug ${DAY1 + selA}`,
+      shortLabelB: `Aug ${DAY1 + selB}`,
+      spcChips: this.spcChips(),
+      spcRows: this.spcRows(),
+      spcCountLabel: `${this.state.spcN} ${this.state.spcN === 1 ? "attendee" : "attendees"}`,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getCurrentPeriodStart, getPayPeriod, computePeriodEnd, isPeriodClosed } from "../../../lib/payroll/periods";
 import { listAllRates } from "../../../lib/payroll/rates";
@@ -22,13 +21,13 @@ import {
   listOwnFinalizations,
 } from "../../../lib/payroll/finalizations";
 import { todayInBoise } from "../../../lib/boiseDate";
-import { formatDateMD, formatDateMDY } from "../../../lib/formatDate";
+import { formatDateMD, formatDateMDY, formatDateRange } from "../../../lib/formatDate";
 import { toastError } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
 import { CoachShell } from "../../../components/CoachShell";
 import { PayrollTabBar } from "../../../components/PayrollTabBar";
 import { PayrollDateNav } from "../../../components/payroll/PayrollDateNav";
-import { PayrollTile } from "../../../components/payroll/PayrollTile";
+import { PayrollTile, TileButton, tileTone, tileState, CONTROL_DISABLED } from "../../../components/payroll/PayrollTile";
 import { PayrollOtherRow } from "../../../components/payroll/PayrollOtherRow";
 import { SpcSessionPopup } from "../../../components/payroll/SpcSessionPopup";
 import { EntryListPopup } from "../../../components/payroll/EntryListPopup";
@@ -42,140 +41,102 @@ import { DaySubmittedCelebration } from "../../../components/payroll/DaySubmitte
 // tapping a count up to 4 is one write rather than four.
 const COUNTER_SAVE_DELAY = 600;
 
-// Every tile's checkmark means the same thing across this whole screen:
-// "none" = nothing entered, "hollow" = entered and already saved but the
-// day hasn't been submitted, "solid" = the day has been submitted. Per
-// direct ask, the checkmark is no longer a per-tile save button — data
-// autosaves as it's entered, and the one sticky Submit button at the bottom
-// is what fills every checkmark in at once. Editing anything afterwards
-// clears the submission again (see persistDay), so a solid checkmark always
-// describes exactly what's saved right now.
-function checkState(hasData, submitted) {
-  if (!hasData) return "none";
-  return submitted ? "solid" : "hollow";
+const WEEKDAYS_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// "Friday, Aug 14" / "Fri, Aug 14". Deliberately local to this screen rather
+// than added to lib/formatDate — the app's one text date format is
+// formatDateMDY's MM-DD-YYYY, and this weekday phrasing exists only because
+// the day strip needs to name the day you're standing on. Parsed as UTC off
+// the ISO string, never `new Date(bare)`, which resolves in the device zone.
+function formatDayLabel(dateString, { short = false } = {}) {
+  if (!dateString) return "";
+  const d = new Date(`${dateString}T00:00:00Z`);
+  const weekday = WEEKDAYS_LONG[d.getUTCDay()];
+  return `${short ? weekday.slice(0, 3) : weekday}, ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
-function formatHoursDisplay(decimal) {
-  if (!decimal) return "—";
+// Hours read as a number with small unit suffixes rather than a plain
+// string, so "1h 30m" carries the same visual weight as a bare count on the
+// tile beside it.
+function HoursValue({ decimal, tone }) {
+  if (!decimal) {
+    return <Text style={{ fontSize: 26, fontFamily: fonts.sansBold, color: tone.value, lineHeight: 26 }}>—</Text>;
+  }
   const h = Math.floor(decimal);
   const m = Math.round((decimal - h) * 60);
-  if (h && m) return `${h}h ${m}m`;
-  if (h) return `${h}h`;
-  return `${m}m`;
-}
-
-// Every tile lays itself out the same way — label pinned to the top,
-// control centered in whatever's left, caption slot pinned to the bottom
-// (reserved whether or not that tile has a caption). Centering the whole
-// stack instead, which is what this did originally, put the label of a tile
-// with a caption at a visibly different height from the one beside it
-// without. Same fix as My Week's SessionBubble.
-const TILE_CAPTION_HEIGHT = 18;
-
-function TileLayout({ label, control, caption }) {
+  const unit = { fontSize: 16, fontFamily: fonts.sansBold, color: tone.value };
   return (
-    <View className="flex-1">
-      <Text className="text-center text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-        {label}
-      </Text>
-      <View className="flex-1 items-center justify-center">{control}</View>
-      <View style={{ height: TILE_CAPTION_HEIGHT, justifyContent: "center" }}>{caption}</View>
-    </View>
+    <Text style={{ fontSize: 26, fontFamily: fonts.sansBold, color: tone.value, lineHeight: 26 }}>
+      {h ? (
+        <>
+          {h}
+          <Text style={unit}>h</Text>
+        </>
+      ) : null}
+      {h && m ? " " : null}
+      {m ? (
+        <>
+          {m}
+          <Text style={unit}>m</Text>
+        </>
+      ) : null}
+    </Text>
   );
 }
 
-// Shown under the counter on the tiles that collect client names
-// (Programs Written / Welcome / Strategy). This is where the names popup is
-// reached now that the checkmark isn't a button — it's also a better
-// affordance than the checkmark ever was, since it says what it opens and
-// shows what's already there.
-function NamesFooter({ count, notes, onPress }) {
-  if (!count) return null;
-  const entered = (notes || "").split("\n").filter(Boolean);
+// The +/- pair. The minus half goes quiet at zero rather than disappearing,
+// so the control doesn't reflow as the count crosses 1.
+function CounterTile({ label, value, state, onIncrement, onDecrement, caption }) {
+  const tone = tileTone(state);
   return (
-    <Pressable onPress={onPress} hitSlop={6} className="w-full">
-      <Text numberOfLines={1} className="text-center" style={{ fontFamily: fonts.sansMedium, fontSize: 11, color: colors.primaryOnWhite }}>
-        {entered.length ? entered.join(", ") : "+ Add names"}
+    <PayrollTile
+      state={state}
+      label={label}
+      value={String(value)}
+      caption={caption}
+      control={
+        <>
+          <TileButton icon="−" tone={value > 0 ? tone.control : CONTROL_DISABLED} onPress={onDecrement} accessibilityLabel={`One fewer ${label}`} />
+          <TileButton icon="+" tone={tone.control} onPress={onIncrement} accessibilityLabel={`One more ${label}`} />
+        </>
+      }
+    />
+  );
+}
+
+// A caption that's also the tile's secondary action — used for the names
+// sheets and SPC's "add another". Better affordance than the old checkmark
+// was, since it says what it opens and shows what's already there.
+function CaptionLink({ text, onPress, state }) {
+  const tone = tileTone(state);
+  return (
+    <Pressable onPress={onPress} hitSlop={6}>
+      <Text numberOfLines={1} style={{ fontSize: 11, fontFamily: fonts.sansMedium, color: tone.caption }}>
+        {text}
       </Text>
     </Pressable>
   );
 }
 
-function CounterTileContent({ label, value, onIncrement, onDecrement, footer }) {
-  return (
-    <TileLayout
-      label={label}
-      caption={footer}
-      control={
-        <View className="w-full flex-row items-center justify-between">
-          <Pressable
-            onPress={onDecrement}
-            hitSlop={10}
-            className="items-center justify-center rounded-full"
-            style={{ width: 30, height: 30, borderWidth: 1, borderColor: "#e7e5e4" }}
-          >
-            <Ionicons name="remove" size={16} color={colors.primaryOnWhite} />
-          </Pressable>
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 28, color: "#44403c" }}>{value}</Text>
-          <Pressable
-            onPress={onIncrement}
-            hitSlop={10}
-            className="items-center justify-center rounded-full"
-            style={{ width: 30, height: 30, borderWidth: 1, borderColor: "#e7e5e4" }}
-          >
-            <Ionicons name="add" size={16} color={colors.primaryOnWhite} />
-          </Pressable>
-        </View>
-      }
-    />
-  );
+// Names already entered on a tile, or a prompt to add them. Null when the
+// counter is still at zero — there's nobody to name yet.
+function namesText(count, notes) {
+  if (!count) return null;
+  const entered = (notes || "").split("\n").filter(Boolean);
+  return entered.length ? entered.join(", ") : "+ Add names";
 }
 
-// The caption is an invitation to add another, not a count — the badge in
-// the corner already says how many are logged, and saying it twice buried
-// the one thing that wasn't obvious: that you can log more than one SPC
-// session on the same day. Per direct ask.
-function SpcTileContent({ sessionCount, onAddPress }) {
-  return (
-    <TileLayout
-      label="SPC"
-      control={
-        <Pressable
-          onPress={onAddPress}
-          hitSlop={8}
-          className="items-center justify-center rounded-full"
-          style={{ width: 40, height: 40, borderWidth: 1, borderColor: "#e7e5e4", backgroundColor: "white" }}
-        >
-          <Ionicons name="add" size={20} color={colors.primaryOnWhite} />
-        </Pressable>
-      }
-      caption={
-        <Pressable onPress={onAddPress} hitSlop={6} className="w-full">
-          {/* 11px, not the 12px used elsewhere: at half a phone's width this
-              tile has ~118px of usable room and "Add another session"
-              truncated at 12. The round + button directly above already
-              signals "tappable", so the caption doesn't need a + of its own. */}
-          <Text numberOfLines={1} className="text-center" style={{ fontFamily: fonts.sansMedium, fontSize: 11, color: colors.primaryOnWhite }}>
-            {sessionCount > 0 ? "Add another session" : "Log a session"}
-          </Text>
-        </Pressable>
-      }
-    />
-  );
-}
-
-function HoursTileContent({ label, decimal }) {
-  return (
-    <TileLayout
-      label={label}
-      control={<Text style={{ fontFamily: fonts.sansBold, fontSize: 24, color: "#44403c" }}>{formatHoursDisplay(decimal)}</Text>}
-      caption={
-        <Text className="text-center" style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>
-          Tap to log
-        </Text>
-      }
-    />
-  );
+// "4 attendees" for one session, "4 & 2 attendees" once there are several —
+// the count chip already says how many sessions, so this says who was in
+// them rather than repeating the number.
+function spcCaption(sessions) {
+  if (!sessions.length) return "Log a session";
+  if (sessions.length === 1) {
+    const n = sessions[0].spc_attendees;
+    return n == null ? "Add attendees" : `${n} attendee${n === 1 ? "" : "s"}`;
+  }
+  return `${sessions.map((s) => s.spc_attendees ?? "?").join(" & ")} attendees`;
 }
 
 export default function PayrollEntries() {
@@ -199,7 +160,6 @@ export default function PayrollEntries() {
   const [spcPopup, setSpcPopup] = useState({ open: false, session: null });
   const [spcListOpen, setSpcListOpen] = useState(false);
   const [otherPopup, setOtherPopup] = useState({ open: false, type: null, item: null, qty: null });
-  const [otherListOpen, setOtherListOpen] = useState(false);
   const [namesPopup, setNamesPopup] = useState({ open: false, kind: null });
   const [hoursPopup, setHoursPopup] = useState({ open: false, kind: null });
 
@@ -293,6 +253,10 @@ export default function PayrollEntries() {
     setSubmissions(daySubmissions);
     return entries;
   }, [profile?.id, periodStart]);
+
+  // Only used to dim days the period hasn't reached yet — a coach can still
+  // select one (logging ahead is legitimate), it just reads as not-yet.
+  const today = todayInBoise();
 
   const rateMaps = useMemo(() => buildRateMaps(rates), [rates]);
   const totals = useMemo(() => computeTotals(allEntries, rateMaps), [allEntries, rateMaps]);
@@ -453,8 +417,10 @@ export default function PayrollEntries() {
     }
     setOtherPopup({ open: true, type, item: null, qty });
   };
+  // Reached by tapping a line item inside the Other panel itself now — the
+  // items are listed there directly, so there's no separate list popup to
+  // close first.
   const openEditOther = (item) => {
-    setOtherListOpen(false);
     setOtherPopup({ open: true, type: item.other_type, item, qty: null });
   };
   const handleSaveOther = async ({ qty, notes }) => {
@@ -470,16 +436,28 @@ export default function PayrollEntries() {
     await persistDay(item.entry_date, () => deleteDayEntry(item.id));
   };
 
-  const handleSaveNames = async (joinedNames) => {
+  // The sheet's rows are what set the count now — adding or removing one
+  // there moves the tile's counter with it, so this writes both the notes
+  // and the new count in a single upsert and mirrors the count back into
+  // local state. Mirroring matters: the counter autosave diffs pending vs.
+  // saved, and leaving the two out of step would schedule a redundant write
+  // of the value we just persisted.
+  const handleSaveNames = async (joinedNames, rowCount) => {
+    const kind = namesPopup.kind;
     const fields =
-      namesPopup.kind === "welcome"
-        ? { welcome_sessions: pendingWelcome, welcome_notes: joinedNames }
-        : namesPopup.kind === "strategy"
-          ? { strategy_sessions: pendingStrategy, strategy_notes: joinedNames }
-          : { programs_written: pendingPrograms, program_notes: joinedNames };
+      kind === "welcome"
+        ? { welcome_sessions: rowCount, welcome_notes: joinedNames }
+        : kind === "strategy"
+          ? { strategy_sessions: rowCount, strategy_notes: joinedNames }
+          : { programs_written: rowCount, program_notes: joinedNames };
     const date = selectedDate;
     const saved = await persistDay(date, () => upsertCoreEntryFields(profile.id, periodStart, date, coreRowRef.current, fields));
-    if (saved && date === selectedDate) coreRowRef.current = saved;
+    if (saved && date === selectedDate) {
+      coreRowRef.current = saved;
+      if (kind === "welcome") setPendingWelcome(rowCount);
+      else if (kind === "strategy") setPendingStrategy(rowCount);
+      else setPendingPrograms(rowCount);
+    }
   };
 
   const handleSaveHours = async (decimal) => {
@@ -510,15 +488,22 @@ export default function PayrollEntries() {
   // approved custom request lands on its own pay_entries row for whatever
   // date it was approved, and "Submit this day" shouldn't light up for a
   // day the coach hasn't logged anything on themselves.
-  const hasDayData =
-    pendingGroup > 0 ||
-    pendingPrograms > 0 ||
-    pendingWelcome > 0 ||
-    pendingStrategy > 0 ||
-    partition.spcSessions.length > 0 ||
-    partition.otherItems.length > 0 ||
-    Boolean(partition.core?.admin_hours) ||
-    Boolean(partition.core?.ops_hours);
+  const filled = [
+    pendingGroup > 0,
+    pendingPrograms > 0,
+    pendingWelcome > 0,
+    pendingStrategy > 0,
+    partition.spcSessions.length > 0,
+    partition.otherItems.length > 0,
+    Boolean(partition.core?.admin_hours),
+    Boolean(partition.core?.ops_hours),
+  ];
+  const filledCount = filled.filter(Boolean).length;
+  const hasDayData = filledCount > 0;
+
+  const spcState = tileState(partition.spcSessions.length > 0, daySubmitted);
+  const adminHoursState = tileState(Boolean(partition.core?.admin_hours), daySubmitted);
+  const opsHoursState = tileState(Boolean(partition.core?.ops_hours), daySubmitted);
 
   return (
     <CoachShell>
@@ -529,29 +514,29 @@ export default function PayrollEntries() {
               <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
             </Pressable>
           ) : null}
-          <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-            Payroll
-          </Text>
-          <PayrollTabBar active="entries" profile={profile} />
+          {/* Period money sits with the title rather than in a band of its
+              own below the tabs — it's the one number a coach opens this
+              screen wanting, and pairing it with the title buys back a whole
+              row of vertical space on a phone. */}
+          <View className="flex-row items-end justify-between">
+            <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
+              Payroll
+            </Text>
+            {!loading ? (
+              <View className="items-end">
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: colors.primaryOnWhite }}>{formatMoney(totals.total)}</Text>
+                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 10, color: "#a8a29e", marginTop: 2 }}>
+                  {formatDateRange(periodStart, periodEnd)} · {closed ? "closed" : locked ? "finalized" : "open"}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <PayrollTabBar active="entries" />
 
           {loading ? (
             <ActivityIndicator color={colors.primary} />
           ) : (
             <>
-              <View className="mb-5 flex-row items-center justify-between">
-                <View>
-                  <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
-                    {periodStart ? `${formatDateMD(periodStart)} – ${formatDateMD(periodEnd)}` : ""}
-                  </Text>
-                  <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                    {closed ? "Closed" : locked ? "Finalized — locked" : "Open"}
-                  </Text>
-                </View>
-                <Text className="text-xl" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-                  {formatMoney(totals.total)}
-                </Text>
-              </View>
-
               {/* Only appears when an admin has actually sent a past period
                   back. Until this existed, a coach asked to fix an entry
                   after the period rolled over had no screen that could
@@ -605,134 +590,174 @@ export default function PayrollEntries() {
                 </View>
               ) : (
                 <>
-                  <PayrollDateNav
-                    selectedDate={selectedDate}
-                    onSelectDate={setSelectedDate}
-                    periodStart={periodStart}
-                    periodEnd={periodEnd}
-                    datesWithEntries={datesWithEntries}
-                    submittedDates={submittedDates}
-                  />
-
                   <View className="mx-auto w-full" style={{ maxWidth: 460 }}>
-                    <View className="mb-3 flex-row" style={{ gap: 12 }}>
+                    <PayrollDateNav
+                      selectedDate={selectedDate}
+                      onSelectDate={setSelectedDate}
+                      periodStart={periodStart}
+                      periodEnd={periodEnd}
+                      datesWithEntries={datesWithEntries}
+                      submittedDates={submittedDates}
+                      today={today}
+                    />
+
+                    {/* Names the day the tiles below belong to, and says in
+                        words what the strip's dot says in colour. */}
+                    <View className="mb-2 mt-3 flex-row items-center justify-between">
+                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#44403c" }}>{formatDayLabel(selectedDate)}</Text>
+                      {daySubmitted ? (
+                        <View className="flex-row items-center" style={{ gap: 5 }}>
+                          <View
+                            className="items-center justify-center"
+                            style={{ width: 14, height: 14, borderRadius: 99, backgroundColor: "#4d6142" }}
+                          >
+                            <Text style={{ fontSize: 9, color: "white", fontFamily: fonts.sansBold }}>✓</Text>
+                          </View>
+                          <Text style={{ fontSize: 11, fontFamily: fonts.sansSemiBold, color: "#4d6142" }}>Submitted</Text>
+                        </View>
+                      ) : (
+                        <View className="flex-row items-center" style={{ gap: 5 }}>
+                          <View style={{ width: 6, height: 6, borderRadius: 99, backgroundColor: hasDayData ? "#c98a6b" : "#d6cec7" }} />
+                          <Text style={{ fontSize: 11, fontFamily: fonts.sansMedium, color: "#a8a29e" }}>
+                            {hasDayData ? "Not submitted" : "Nothing logged"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View className="mb-2.5 flex-row" style={{ gap: 10 }}>
                       <View style={{ flex: 1 }}>
-                        <PayrollTile checkState={checkState(pendingGroup > 0, daySubmitted)}>
-                          <CounterTileContent
-                            label="Group"
-                            value={pendingGroup}
-                            onIncrement={() => setPendingGroup((v) => v + 1)}
-                            onDecrement={() => setPendingGroup((v) => Math.max(0, v - 1))}
-                          />
-                        </PayrollTile>
+                        <CounterTile
+                          label="Group"
+                          value={pendingGroup}
+                          state={tileState(pendingGroup > 0, daySubmitted)}
+                          onIncrement={() => setPendingGroup((v) => v + 1)}
+                          onDecrement={() => setPendingGroup((v) => Math.max(0, v - 1))}
+                        />
                       </View>
                       {canSpc ? (
                         <View style={{ flex: 1 }}>
                           <PayrollTile
-                            checkState={checkState(partition.spcSessions.length > 0, daySubmitted)}
-                            badgeCount={partition.spcSessions.length}
-                            onBadgePress={() => setSpcListOpen(true)}
-                          >
-                            <SpcTileContent sessionCount={partition.spcSessions.length} onAddPress={openNewSpc} />
-                          </PayrollTile>
+                            state={spcState}
+                            label="SPC"
+                            chipCount={partition.spcSessions.length}
+                            onChipPress={() => setSpcListOpen(true)}
+                            value={String(partition.spcSessions.length)}
+                            control={<TileButton icon="+" tone={tileTone(spcState).control} onPress={openNewSpc} accessibilityLabel="Log an SPC session" />}
+                            caption={<CaptionLink text={spcCaption(partition.spcSessions)} state={spcState} onPress={openNewSpc} />}
+                          />
                         </View>
                       ) : null}
                     </View>
 
                     {canSpc ? (
-                      <View className="mb-3 flex-row" style={{ gap: 12 }}>
-                        <View style={{ flex: 1 }}>
-                          <PayrollTile checkState={checkState(pendingPrograms > 0, daySubmitted)}>
-                            <CounterTileContent
-                              label="Programs Written"
-                              value={pendingPrograms}
-                              onIncrement={() => setPendingPrograms((v) => v + 1)}
-                              onDecrement={() => setPendingPrograms((v) => Math.max(0, v - 1))}
-                              footer={
-                                <NamesFooter
-                                  count={pendingPrograms}
-                                  notes={partition.core?.program_notes}
-                                  onPress={() => setNamesPopup({ open: true, kind: "programs" })}
-                                />
-                              }
-                            />
-                          </PayrollTile>
-                        </View>
+                      <View className="mb-2.5">
+                        <CounterTile
+                          label="Programs written"
+                          value={pendingPrograms}
+                          state={tileState(pendingPrograms > 0, daySubmitted)}
+                          onIncrement={() => setPendingPrograms((v) => v + 1)}
+                          onDecrement={() => setPendingPrograms((v) => Math.max(0, v - 1))}
+                          caption={
+                            namesText(pendingPrograms, partition.core?.program_notes) ? (
+                              <CaptionLink
+                                text={namesText(pendingPrograms, partition.core?.program_notes)}
+                                state={tileState(pendingPrograms > 0, daySubmitted)}
+                                onPress={() => setNamesPopup({ open: true, kind: "programs" })}
+                              />
+                            ) : null
+                          }
+                        />
                       </View>
                     ) : null}
 
-                    <View className="mb-3 flex-row" style={{ gap: 12 }}>
+                    <View className="mb-2.5 flex-row" style={{ gap: 10 }}>
                       <View style={{ flex: 1 }}>
-                        <PayrollTile checkState={checkState(pendingWelcome > 0, daySubmitted)}>
-                          <CounterTileContent
-                            label="Welcome Session"
-                            value={pendingWelcome}
-                            onIncrement={() => setPendingWelcome((v) => v + 1)}
-                            onDecrement={() => setPendingWelcome((v) => Math.max(0, v - 1))}
-                            footer={
-                              <NamesFooter
-                                count={pendingWelcome}
-                                notes={partition.core?.welcome_notes}
+                        <CounterTile
+                          label="Welcome"
+                          value={pendingWelcome}
+                          state={tileState(pendingWelcome > 0, daySubmitted)}
+                          onIncrement={() => setPendingWelcome((v) => v + 1)}
+                          onDecrement={() => setPendingWelcome((v) => Math.max(0, v - 1))}
+                          caption={
+                            namesText(pendingWelcome, partition.core?.welcome_notes) ? (
+                              <CaptionLink
+                                text={namesText(pendingWelcome, partition.core?.welcome_notes)}
+                                state={tileState(pendingWelcome > 0, daySubmitted)}
                                 onPress={() => setNamesPopup({ open: true, kind: "welcome" })}
                               />
-                            }
-                          />
-                        </PayrollTile>
+                            ) : null
+                          }
+                        />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <PayrollTile checkState={checkState(pendingStrategy > 0, daySubmitted)}>
-                          <CounterTileContent
-                            label="Strategy Session"
-                            value={pendingStrategy}
-                            onIncrement={() => setPendingStrategy((v) => v + 1)}
-                            onDecrement={() => setPendingStrategy((v) => Math.max(0, v - 1))}
-                            footer={
-                              <NamesFooter
-                                count={pendingStrategy}
-                                notes={partition.core?.strategy_notes}
+                        <CounterTile
+                          label="Strategy"
+                          value={pendingStrategy}
+                          state={tileState(pendingStrategy > 0, daySubmitted)}
+                          onIncrement={() => setPendingStrategy((v) => v + 1)}
+                          onDecrement={() => setPendingStrategy((v) => Math.max(0, v - 1))}
+                          caption={
+                            namesText(pendingStrategy, partition.core?.strategy_notes) ? (
+                              <CaptionLink
+                                text={namesText(pendingStrategy, partition.core?.strategy_notes)}
+                                state={tileState(pendingStrategy > 0, daySubmitted)}
                                 onPress={() => setNamesPopup({ open: true, kind: "strategy" })}
                               />
-                            }
-                          />
-                        </PayrollTile>
+                            ) : null
+                          }
+                        />
                       </View>
                     </View>
 
-                    <View className="mb-3 flex-row" style={{ gap: 12 }}>
+                    <View className="mb-2.5 flex-row" style={{ gap: 10 }}>
                       <View style={{ flex: 1 }}>
                         <PayrollTile
-                          checkState={checkState(Boolean(partition.core?.admin_hours), daySubmitted)}
+                          state={adminHoursState}
+                          label="Admin hours"
                           onPress={() => setHoursPopup({ open: true, kind: "admin" })}
-                        >
-                          <HoursTileContent label="Admin Hours" decimal={partition.core?.admin_hours} />
-                        </PayrollTile>
+                          value={<HoursValue decimal={partition.core?.admin_hours} tone={tileTone(adminHoursState)} />}
+                          control={
+                            <TileButton
+                              icon="✎"
+                              variant="square"
+                              tone={tileTone(adminHoursState).control}
+                              onPress={() => setHoursPopup({ open: true, kind: "admin" })}
+                              accessibilityLabel="Log admin hours"
+                            />
+                          }
+                          caption={partition.core?.admin_hours ? null : "Tap to log"}
+                        />
                       </View>
                       {canOps ? (
                         <View style={{ flex: 1 }}>
                           <PayrollTile
-                            checkState={checkState(Boolean(partition.core?.ops_hours), daySubmitted)}
+                            state={opsHoursState}
+                            label="Ops hours"
                             onPress={() => setHoursPopup({ open: true, kind: "ops" })}
-                          >
-                            <HoursTileContent label="Ops Hours" decimal={partition.core?.ops_hours} />
-                          </PayrollTile>
+                            value={<HoursValue decimal={partition.core?.ops_hours} tone={tileTone(opsHoursState)} />}
+                            control={
+                              <TileButton
+                                icon="✎"
+                                variant="square"
+                                tone={tileTone(opsHoursState).control}
+                                onPress={() => setHoursPopup({ open: true, kind: "ops" })}
+                                accessibilityLabel="Log ops hours"
+                              />
+                            }
+                            caption={partition.core?.ops_hours ? null : "Tap to log"}
+                          />
                         </View>
                       ) : null}
                     </View>
 
-                    <View className="mb-3">
-                      <PayrollOtherRow
-                        otherRates={rates.otherRates.filter((r) => r.active)}
-                        items={partition.otherItems}
-                        onOpenNewItem={handleConfirmOtherRow}
-                        onViewList={() => setOtherListOpen(true)}
-                        submitted={daySubmitted}
-                      />
-                    </View>
-
-                    <Text className="mt-2 text-center text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                      Everything saves as you go. Submit the day below when it's done — then head to Pay Stubs at the end of
-                      the period to review and finalize.
-                    </Text>
+                    <PayrollOtherRow
+                      otherRates={rates.otherRates.filter((r) => r.active)}
+                      items={partition.otherItems}
+                      onOpenNewItem={handleConfirmOtherRow}
+                      onEditItem={openEditOther}
+                      state={tileState(partition.otherItems.length > 0, daySubmitted)}
+                    />
                   </View>
                 </>
               )}
@@ -744,36 +769,42 @@ export default function PayrollEntries() {
           <View
             style={{
               borderTopWidth: 1,
-              borderTopColor: "#ece7e1",
+              borderTopColor: daySubmitted ? "#dfe5d6" : "#ece7e1",
               backgroundColor: daySubmitted ? "#eef1e7" : "white",
               paddingHorizontal: 20,
-              paddingTop: 12,
-              paddingBottom: 16,
+              paddingTop: daySubmitted ? 14 : 11,
+              paddingBottom: 20,
             }}
           >
             <View className="mx-auto w-full" style={{ maxWidth: 460 }}>
               {daySubmitted ? (
-                <View className="flex-row items-center justify-center" style={{ gap: 8 }}>
-                  <Ionicons name="checkmark-circle" size={22} color="#4d6142" />
-                  <Text style={{ fontFamily: fonts.sansSemiBold, color: "#4d6142" }}>
-                    {formatDateMDY(selectedDate)} submitted · {formatMoney(dayTotal)}
-                  </Text>
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center" style={{ gap: 8 }}>
+                    <View className="items-center justify-center" style={{ width: 20, height: 20, borderRadius: 99, backgroundColor: "#4d6142" }}>
+                      <Text style={{ fontSize: 12, color: "white", fontFamily: fonts.sansBold }}>✓</Text>
+                    </View>
+                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#4d6142" }}>
+                      {formatDayLabel(selectedDate, { short: true })} submitted
+                    </Text>
+                  </View>
+                  <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#4d6142" }}>{formatMoney(dayTotal)}</Text>
                 </View>
               ) : (
                 <>
-                  <View className="mb-2 flex-row items-center justify-between">
-                    <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-                      {formatDateMDY(selectedDate)}
+                  <View className="mb-2.5 flex-row items-center justify-between">
+                    <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: "#78716c" }}>
+                      {formatDayLabel(selectedDate, { short: true })}
+                      {filledCount ? ` · ${filledCount} item${filledCount === 1 ? "" : "s"}` : ""}
                     </Text>
-                    <Text style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>{formatMoney(dayTotal)}</Text>
+                    <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: colors.primaryOnWhite }}>{formatMoney(dayTotal)}</Text>
                   </View>
                   <Pressable
                     onPress={handleSubmitDay}
                     disabled={!hasDayData || submitting}
-                    className="items-center rounded-xl px-5 py-3.5"
-                    style={{ backgroundColor: colors.primary, opacity: !hasDayData || submitting ? 0.45 : 1 }}
+                    className="items-center"
+                    style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 14, opacity: !hasDayData || submitting ? 0.45 : 1 }}
                   >
-                    <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                    <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }}>
                       {submitting ? "Submitting…" : hasDayData ? "Submit this day" : "Nothing logged yet"}
                     </Text>
                   </Pressable>
@@ -790,6 +821,7 @@ export default function PayrollEntries() {
         onSave={handleSaveSpc}
         onDelete={spcPopup.session ? () => handleDeleteEntry(spcPopup.session) : undefined}
         initial={spcPopup.session ? { attendees: spcPopup.session.spc_attendees, notes: spcPopup.session.spc_notes } : null}
+        subtitle={formatDayLabel(selectedDate)}
       />
       <EntryListPopup
         visible={spcListOpen}
@@ -821,26 +853,13 @@ export default function PayrollEntries() {
         onSave={handleSaveOther}
         onDelete={otherPopup.item ? () => handleDeleteEntry(otherPopup.item) : undefined}
       />
-      <EntryListPopup
-        visible={otherListOpen}
-        onClose={() => setOtherListOpen(false)}
-        title="Other items logged"
-        items={partition.otherItems.map((item) => ({
-          id: item.id,
-          label: `${item.other_type} ×${item.other_qty ?? 1}`,
-          sublabel: item.notes || undefined,
-          raw: item,
-        }))}
-        onSelectItem={(item) => openEditOther(item.raw)}
-        onDeleteItem={handleDeleteEntry}
-      />
-
       <NamesListPopup
         visible={namesPopup.open}
         onClose={() => setNamesPopup({ open: false, kind: null })}
         title={
-          namesPopup.kind === "welcome" ? "Welcome session names" : namesPopup.kind === "strategy" ? "Strategy session names" : "Programs written for"
+          namesPopup.kind === "welcome" ? "Welcome sessions for" : namesPopup.kind === "strategy" ? "Strategy sessions for" : "Programs written for"
         }
+        subtitle={formatDayLabel(selectedDate)}
         count={namesPopup.kind === "welcome" ? pendingWelcome : namesPopup.kind === "strategy" ? pendingStrategy : pendingPrograms}
         initialNotes={
           namesPopup.kind === "welcome"
@@ -855,7 +874,8 @@ export default function PayrollEntries() {
       <HourMinuteStepperPopup
         visible={hoursPopup.open}
         onClose={() => setHoursPopup({ open: false, kind: null })}
-        title={hoursPopup.kind === "admin" ? "Admin Hours" : "Ops Hours"}
+        title={hoursPopup.kind === "admin" ? "Admin hours" : "Ops hours"}
+        subtitle={formatDayLabel(selectedDate)}
         initialDecimal={hoursPopup.kind === "admin" ? partition.core?.admin_hours : partition.core?.ops_hours}
         onSave={handleSaveHours}
       />

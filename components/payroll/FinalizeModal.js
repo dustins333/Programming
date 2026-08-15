@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, Modal, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { listOwnNutritionAssignments, assignmentsDueInPeriod, billingDateInPeriod } from "../../lib/payroll/nutritionAssignments";
 import { getClient } from "../../lib/nutrition/clients";
 import { createEntry } from "../../lib/payroll/entries";
 import { finalizeOwnPeriod } from "../../lib/payroll/finalizations";
 import { computeTotals, formatMoney } from "../../lib/payroll/calc";
-import { confirmFinalizePayroll } from "../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { fonts, colors } from "../../lib/theme";
+import { PayrollBottomSheet, SheetSaveButton } from "./PayrollBottomSheet";
+import { formatDateRange } from "../../lib/formatDate";
+
+function formatHours(decimal) {
+  const h = Math.floor(decimal);
+  const m = Math.round((decimal - h) * 60);
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  return `${m}m`;
+}
 
 // The other_rates row these billing entries are priced from. Kept as one
 // constant so the rate lookup, the row that gets created, and the
@@ -106,10 +115,26 @@ export function FinalizeModal({ visible, onClose, onFinalized, profile, periodSt
   const nutritionRate = rateMaps?.other?.[NUTRITION_OTHER_TYPE] ?? 0;
   const nutritionAddOn = confirmedCount * nutritionRate;
 
-  const handleFinalize = async () => {
-    const ok = await confirmFinalizePayroll(periodStart ? `${periodStart} – ${periodEnd}` : "this period");
-    if (!ok) return;
+  // What the coach is signing off, restated as counts. Only lines with
+  // something in them render — a period with no ops hours shouldn't make
+  // someone read a zero.
+  const summaryLines = [
+    { label: "Group sessions", value: totals.groupCount },
+    { label: "SPC sessions", value: totals.spcSessions },
+    { label: "Programs written", value: totals.programsCount },
+    { label: "Welcome sessions", value: totals.welcomeCount },
+    { label: "Strategy sessions", value: totals.strategyCount },
+    { label: "Admin hours", value: totals.adminHours ? formatHours(totals.adminHours) : 0 },
+    { label: "Ops hours", value: totals.opsHours ? formatHours(totals.opsHours) : 0 },
+    { label: "Other items", value: (entries || []).filter((e) => e.other_type).length },
+    { label: "Approved extras", value: (entries || []).filter((e) => e.custom_amt).length },
+  ].filter((l) => l.value);
 
+  // No second native confirm on top of this sheet. The sheet IS the
+  // confirm now — it names the period, restates every count, states the
+  // attestation, and puts the amount on the button — so a generic "are you
+  // sure?" popup over it only added a tap without adding information.
+  const handleFinalize = async () => {
     setSubmitting(true);
     try {
       for (const assignment of dueAssignments) {
@@ -144,33 +169,39 @@ export function FinalizeModal({ visible, onClose, onFinalized, profile, periodSt
     }
   };
 
+  const grandTotal = totals.total + nutritionAddOn;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View className="flex-1 items-center justify-center px-4" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
-        <View className="w-full max-w-lg rounded-2xl bg-white p-5" style={{ maxHeight: "88%" }}>
-          <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-lg" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-              Finalize payroll
-            </Text>
-            <Pressable onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={22} color="#78716c" />
-            </Pressable>
+    <PayrollBottomSheet visible={visible} onClose={onClose} title={`Finalize ${formatDateRange(periodStart, periodEnd) || "this period"}`}>
+      {loading ? (
+        <ActivityIndicator color={colors.primary} />
+      ) : (
+        <>
+          {/* Restates what's being signed rather than just asking "are you
+              sure" — this is the only hard confirm in the whole flow,
+              because it's the only step that snapshots rates and takes the
+              period out of the coach's hands. */}
+          <View style={{ backgroundColor: "#faf8f6", borderWidth: 1, borderColor: "#ece7e1", borderRadius: 14, padding: 14, marginBottom: 14 }}>
+            <View className="mb-2 flex-row items-start justify-between">
+              <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 9.5, fontFamily: fonts.sansBold, letterSpacing: 1.1, color: "#a8a29e", flex: 1, paddingRight: 10 }}>
+                YOU'RE SUBMITTING
+              </Text>
+              <Text style={{ fontSize: 24, fontFamily: fonts.sansBold, color: "#2a211c", lineHeight: 26 }}>{formatMoney(grandTotal)}</Text>
+            </View>
+            {summaryLines.map((line) => (
+              <View key={line.label} className="flex-row items-center justify-between" style={{ paddingVertical: 3 }}>
+                <Text numberOfLines={1} style={{ fontSize: 12.5, fontFamily: fonts.sans, color: "#78716c", flex: 1, paddingRight: 10 }}>
+                  {line.label}
+                </Text>
+                <Text style={{ fontSize: 12.5, fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{line.value}</Text>
+              </View>
+            ))}
+            {summaryLines.length === 0 ? (
+              <Text style={{ fontSize: 12.5, fontFamily: fonts.sans, color: "#a8a29e" }}>Nothing logged this period.</Text>
+            ) : null}
           </View>
 
-          {loading ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View className="mb-4 rounded-xl border border-stone-200 p-4">
-                <Text className="mb-1 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-                  {entries.length} entr{entries.length === 1 ? "y" : "ies"} logged this period
-                </Text>
-                <Text className="text-xl" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-                  {formatMoney(totals.total + nutritionAddOn)}
-                </Text>
-              </View>
-
-              {isNutritionCoach && dueAssignments.length > 0 ? (
+          {isNutritionCoach && dueAssignments.length > 0 ? (
                 <View className="mb-4">
                   <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
                     Confirm your nutrition roster
@@ -214,20 +245,30 @@ export function FinalizeModal({ visible, onClose, onFinalized, profile, periodSt
                 </View>
               ) : null}
 
-              <Pressable
-                onPress={handleFinalize}
-                disabled={submitting}
-                className="items-center rounded-lg px-5 py-3"
-                style={{ backgroundColor: colors.primary, opacity: submitting ? 0.6 : 1 }}
-              >
-                <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                  {submitting ? "Finalizing…" : "Confirm & finalize"}
-                </Text>
-              </Pressable>
-            </ScrollView>
-          )}
-        </View>
-      </View>
-    </Modal>
+          {/* The attestation, verbatim — it used to live in a native confirm
+              popup layered on top of this modal, which meant the thing you
+              were agreeing to appeared only after you'd already decided. */}
+          <View style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#f0ddd2", borderRadius: 14, padding: 13, marginBottom: 6 }}>
+            <Text style={{ fontSize: 11.5, lineHeight: 17, fontFamily: fonts.sans, color: "#8a5140" }}>
+              I've reviewed my payroll information and confirm that it's accurate to the best of my knowledge. By clicking
+              Submit Payroll, I understand that my payroll will be officially submitted for processing and changes may not
+              be possible after submission.
+            </Text>
+          </View>
+          <Text style={{ fontSize: 10.5, lineHeight: 15, fontFamily: fonts.sans, color: "#b5aea7", marginBottom: 12 }}>
+            Once you finalize, an admin has to send the period back to you before you can change anything in it.
+          </Text>
+
+          <SheetSaveButton
+            onPress={handleFinalize}
+            disabled={submitting}
+            label={submitting ? "Finalizing…" : `Finalize ${formatMoney(grandTotal)}`}
+          />
+          <Pressable onPress={onClose} disabled={submitting} className="mt-1 items-center py-3">
+            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: "#a8a29e" }}>Not yet</Text>
+          </Pressable>
+        </>
+      )}
+    </PayrollBottomSheet>
   );
 }
