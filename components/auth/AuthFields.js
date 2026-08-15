@@ -53,7 +53,12 @@ export const AuthField = forwardRef(function AuthField(
             height: "100%",
             color: "#fff",
             fontFamily: fonts.sans,
-            fontSize: 15,
+            // 16, not 15: iOS auto-zooms any focused field under 16px, and a
+            // zoomed viewport is one WebKeyboardViewport deliberately won't
+            // reflow (it can't tell that apart from a pinch). Belt-and-braces
+            // with the maximum-scale pin there — this is the screen we know
+            // was broken, so it should not depend on the meta trick landing.
+            fontSize: 16,
           }}
         />
         {secureToggle ? (

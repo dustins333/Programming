@@ -49,7 +49,20 @@ export default function Login() {
 
   return (
     <AuthScreen>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 32, paddingBottom: 8 }}>
+      {/* flexGrow, not `flex: 1` — the mark centres itself in whatever room
+          is spare, but keeps its natural height when the keyboard shrinks
+          the viewport, so the form below scrolls into reach rather than the
+          coin collapsing over it. */}
+      <View
+        style={{
+          flexGrow: 1,
+          flexShrink: 0,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingTop: 32,
+          paddingBottom: 8,
+        }}
+      >
         <KovaCoin size={140} />
         <Text
           maxFontSizeMultiplier={1.1}

@@ -18,7 +18,7 @@ import { AuthProvider } from "../lib/auth/AuthProvider";
 import { PushRegistrar } from "../lib/notifications/PushRegistrar";
 import { PushDeepLink } from "../lib/notifications/PushDeepLink";
 import { KeyboardDoneButton } from "../components/KeyboardDoneButton";
-import { ViewportZoomReset } from "../components/ViewportZoomReset";
+import { WebKeyboardViewport } from "../components/WebKeyboardViewport";
 import { ToastHost } from "../components/ToastHost";
 import { AppUpdateChecker } from "../components/AppUpdateChecker";
 import { WebPushBanner } from "../components/WebPushBanner";
@@ -56,7 +56,7 @@ export default function RootLayout() {
           <PushRegistrar />
           <PushDeepLink />
           <WebPushBanner />
-          <ViewportZoomReset />
+          <WebKeyboardViewport />
           <AppUpdateChecker />
           <Slot />
           <KeyboardDoneButton />

@@ -28,12 +28,24 @@ export const ERROR_TEXT = "#ffe4d8";
 export function AuthScreen({ children, contentStyle, scroll = true }) {
   const insets = useSafeAreaInsets();
 
+  // flexGrow (not `flex: 1`) so this fills the screen when the content fits
+  // but is free to exceed it when the keyboard shrinks the viewport. With
+  // `flex: 1` the basis is 0 and shrink is on, so the wrapper was pinned to
+  // the container's height and any overflow spilled out invisibly instead of
+  // adding to scrollHeight — i.e. the ScrollView could never scroll.
   const body = (
-    <View style={[{ flex: 1, paddingTop: insets.top }, contentStyle]}>{children}</View>
+    <View style={[{ flexGrow: 1, flexShrink: 0, paddingTop: insets.top }, contentStyle]}>
+      {children}
+    </View>
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: CLAY }}>
+    // overflow hidden clips the two decorative blobs below, which are
+    // deliberately positioned past the edges — unclipped, the bottom-right
+    // one pushed the document's scrollWidth to 486 against a 375 viewport
+    // (measured), and a page wider than the screen is one iOS will let you
+    // pan sideways, so the layout visibly drifts off-centre.
+    <View style={{ flex: 1, backgroundColor: CLAY, overflow: "hidden" }}>
       <StatusBar style="light" />
       <View
         pointerEvents="none"
@@ -66,11 +78,14 @@ export function AuthScreen({ children, contentStyle, scroll = true }) {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
-          // iOS-only; Android resizes the window (adjustResize) and web
-          // shrinks the visual viewport, so flexGrow handles both there.
-          // This replaces the KeyboardAvoidingView these screens used to
-          // wrap in — a KAV inside a ScrollView fights the scroll instead
-          // of helping it.
+          // iOS-native only. Android resizes the window itself
+          // (adjustResize); on web this prop does not exist at all
+          // (react-native-web's ScrollView never reads it) — the keyboard
+          // there is handled by components/WebKeyboardViewport.js, which
+          // shrinks the root to the visual viewport so this content can
+          // scroll. This replaces the KeyboardAvoidingView these screens
+          // used to wrap in — a KAV inside a ScrollView fights the scroll
+          // instead of helping it.
           automaticallyAdjustKeyboardInsets
         >
           {body}
