@@ -3535,6 +3535,91 @@ parameter name (every pre-existing call site passes `userId`; `getCurrentSpcBloc
 does too). Passing `spcClient.id` returns zero rows silently — it hit both the
 new coach overview and, invisibly, the member SPC block page's hero label.
 
+## Member mobile v5 — conformance pass over the four nutrition tabs (2026-08-15)
+
+Asked for "a new design pass, design_handoff_member_mobile_v5". **That handoff
+was already built** (2026-08-10, its own section above) — so this was an audit
+of all 12 screens against the README and a fix of what had drifted or never
+quite landed, not a rebuild. Worth knowing if the same ask comes again: read
+the built screens against the README first, because most of it is there. My
+Week, My Fitness, both My History views and Settings were already conformant
+and were left alone; everything below is the nutrition tabs plus one app-wide
+sweep.
+
+**Header parity.** Weekly, Check-In and Photos rendered a bare title, so
+switching sub-tab silently dropped the gear and the 34px Kova mark that Today —
+and every other member tab — carries. New `components/nutrition/NutritionTabHeader.js`
+holds the title row plus the segmented control; the four screens render it
+instead of four copies. It deliberately owns **no padding or safe-area inset**:
+Today puts it in a fixed block above its own ScrollView while the other three
+put it inside theirs, and each screen already handles that itself. Today passes
+its date-stepper/LOGGED-badge row as `children`, which render between the title
+and the tabs.
+
+**Today's slider cards.** The coach's cards above the log (focus list, game
+plan, plan phases, milestones, completed milestones) are the one thing the v5
+mock doesn't draw at all — they were deliberately kept in the original pass
+since nothing else surfaces what the coach wrote, and so they were still on the
+pre-v5 `rounded-lg`/`border-stone-200` chrome and read as a different app
+sitting on top of the one below them. New local `SliderCard` shares `LogCard`'s
+shell, with the tinted ones (plan phase, milestone) passing their own palette
+in rather than forking the component.
+
+**Photos (5b).** `PhotoUpload`'s slot framing is the mock now: empty is
+`#fdf1ea` on 1.5px dashed `#e0b6a5` at radius 16 with a 34px white `+` circle;
+filled carries the olive `FRONT ✓` chip top-left alongside the existing clear-×.
+The button says `Upload 2 photos` rather than a bare "Upload". **Two deliberate
+deviations, both commented in the file**: the angle label stays *under* the slot
+rather than inside it (the handoff keeps the pose illustrations, and they fill
+the slot — a label on top of one can't be relied on to stay legible), and a
+filled slot drops its caption entirely, since chip-plus-caption renders the word
+twice. That second one was only obvious once screenshotted.
+
+**Check-In (5a).** Task subtitles carry real state per the mock —
+`Submitted | front, side, back`, `6 questions | 2 answered`, and a partial
+`front in | side, back still needed` — instead of a bare "Submitted". The week
+band picked up the same decorative bleeding circle My Week's hero has (the app's
+two dark surfaces should read as one object). Finalize gets the primary CTA
+shape, reads "Finalize check-in", and sits at 0.45 while blocked — still
+deliberately **not** `disabled`, since tapping it is how a member finds out
+what's missing (`buildReadinessMessage`).
+
+**House-rule sweep, app-wide but member-only.** Rule 4 (`|` as the separator,
+never `·` or an em-dash; empty values as an en dash `–`) had never actually been
+applied. Fixed in `SessionHeroBar`'s eyebrow, `ExerciseCard`'s target and
+"Last time" lines, the session-preview detail strings, several meta lines, and
+the five `"—"` empty placeholders. **Deliberately not swept**: `RestTimerBar`,
+whose `REST · {LIFT}` is specced by the later lift_v1 handoff, and every
+coach-side surface (ActivityFeed, payroll, CoachHome, TargetsEditor…) — v5's own
+scope line is "member only. Coach web is untouched by this pass."
+
+**Real bug the bundle did not catch**: a `{/* … */}` comment placed directly in
+a ternary's consequent slot — an expression position, not a children position —
+is a hard syntax error, and `npx expo export -p web` reported clean over it
+anyway. Found by running `@babel/parser` over every touched file (the same
+throwaway scope-check the payroll pass used, which also confirms no unresolved
+identifiers). **Reinforces the standing lesson: a clean export is weaker
+evidence than it looks — Metro neither parses every file you touched nor
+resolves identifiers.** Run the Babel pass on any batch of edits.
+
+**Verification**: clean `expo export` after every batch, a Babel parse/scope
+pass over all touched files, and the header, both photo-slot states, the
+check-in band and task rows, and the slider-vs-log cards all rendered and
+screenshotted at 390×844 through a throwaway `app/zz-harness.js` route (deleted
+after; the top-level-route form is preferred over mounting on `login.js` for the
+reason given in the payroll section). **Not verified**: anything behind a real
+login — standing limitation. Worth Terra's own pass on a real photo upload and a
+real check-in submit.
+
+**Concurrent-session note, because it actually happened here**: a parallel
+session committed mid-write (`d2ecefa`) with a broad `git add` and swept 7 of
+this pass's in-flight files into its own commit. The right response is to
+**check `git show HEAD:<file>` rather than assume** — the sweep survived intact
+in six of them, and the two lines lost in `app/(member)/index.js` were in a code
+path that commit had replaced outright, so there was nothing to reapply. See the
+staging rule in the working notes below; it cuts both ways, and a file of yours
+vanishing from `git status` means it was committed by someone else, not reverted.
+
 ## Working notes for future sessions
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.
