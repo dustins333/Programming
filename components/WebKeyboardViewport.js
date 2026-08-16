@@ -59,21 +59,27 @@ export function WebKeyboardViewport() {
       original && standalone ? `${original}, maximum-scale=1, user-scalable=no` : original;
     if (meta && baseViewport && baseViewport !== original) meta.setAttribute("content", baseViewport);
 
+    // Something the keyboard is actually open for.
+    const isEditable = (el) =>
+      !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+
     let frame = 0;
     let zoomRestore = 0;
 
     const release = () => {
       root.style.height = "";
+      // Never scroll while a field is focused. On iOS a programmatic scroll
+      // during the focus/keyboard-open gesture drops the focus, which closes
+      // the keyboard the tap just opened — the "pops up and instantly
+      // disappears" report. Unwinding Safari's stale pan is only needed once
+      // the keyboard is actually gone, so defer it to that case.
+      if (isEditable(document.activeElement)) return;
       // Safari pans the visual viewport to follow the keyboard and does not
       // always pan back when it closes, which leaves the app scrolled down
       // inside a window that cannot scroll (body overflow is hidden), i.e.
       // the header simply gone.
       if (window.scrollY !== 0) window.scrollTo(0, 0);
     };
-
-    // Something the keyboard is actually open for.
-    const isEditable = (el) =>
-      !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 
     // Put the focused field on screen. Done here rather than left to the
     // browser because the field only becomes reachable *after* the resize
@@ -103,10 +109,11 @@ export function WebKeyboardViewport() {
       const occluded = window.innerHeight - vv.height;
       if (occluded > 80 && isEditable(document.activeElement)) {
         root.style.height = `${Math.round(vv.height)}px`;
-        // Safari pans the visual viewport down as it opens the keyboard;
-        // once the page is resized to fit, that pan is stale and leaves the
-        // layout offset by the amount it scrolled.
-        if (vv.offsetTop > 0 || window.scrollY > 0) window.scrollTo(0, 0);
+        // Deliberately does NOT scrollTo here. Safari's pan is stale once the
+        // page is resized to fit, but correcting it costs the focus (see
+        // release above) and a field you cannot type into beats a field
+        // that sits a few pixels off. revealFocused scrolls the element
+        // itself, which is survivable where a window-level scroll is not.
         revealFocused();
       } else {
         release();
