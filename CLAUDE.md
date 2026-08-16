@@ -3824,9 +3824,14 @@ nothing. That guard has to live in app code — the constraint can't be relaxed
 to `SET NULL`, since `session_completions` requires exactly one of its three
 workout ids.
 
-**UI: "End here" on the week row**, not an ✕ — Terra's own call, and it's the
-better label: an ✕ reads as "delete this row", which is exactly the semantic we
-can't support. **"End here" on week N keeps week N and removes everything
+**UI: "End here" in a trailing column to the RIGHT of the session cells**, not
+an ✕ and not in the week label — both Terra's calls. "End here" beats ✕ because
+an ✕ reads as "delete this row", which is exactly the semantic we can't
+support; and putting it after the last session cell means it reads left to
+right as "everything below and to the right of this stops", which is what the
+action actually does. The column is reserved on every row (and in the SPC
+grid's session-header row) even where the button can't show, or the grid's
+right edge would jump between rows. **"End here" on week N keeps week N and removes everything
 after it**, so it can never delete the week being pointed at, and trimming a
 runaway rolling block is one click rather than six. It renders only on weeks
 that are the current week or later AND have something after them; the confirm

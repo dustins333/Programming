@@ -51,6 +51,8 @@ const CANVAS = "#faf8f6";
 const CARD_BORDER = "#ece7e1";
 const CELL_MIN_HEIGHT = 104;
 const ROW_LABEL_WIDTH = 132;
+// Trailing column for "End here". Always reserved so every row ends flush.
+const END_HERE_WIDTH = 58;
 
 const STATE_STYLE = {
   published: { accent: "#4d6142", label: "Published", labelColor: "#4d6142" },
@@ -777,16 +779,6 @@ function BlocksDesktop() {
                             BLOCK WK {row.weekNum} OF {totalWeeks}
                           </Text>
                         </View>
-                        {row.weekNum >= currentWeekNumber(row.block.block_start_date, totalWeeks) && row.weekNum < totalWeeks ? (
-                          <PressFade
-                            onPress={() => handleEndBlockHere(row.block, row.weekNum, totalWeeks)}
-                            disabled={ending}
-                            hitSlop={6}
-                            style={{ alignSelf: "flex-start", marginTop: 6, opacity: ending ? 0.5 : 1 }}
-                          >
-                            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#b23a22" }}>End here</Text>
-                          </PressFade>
-                        ) : null}
                       </View>
 
                       {Array.from({ length: sessionsPerWeek }, (_, i) => i + 1).map((sessionNum) => {
@@ -837,6 +829,25 @@ function BlocksDesktop() {
                           />
                         );
                       })}
+
+                      {/* Trails the session cells rather than sitting in the
+                          week label: read left to right, "End here" lands
+                          after the last session it keeps, so what stops is
+                          everything below and to the right of it. The column
+                          is always reserved, even on rows that can't be
+                          trimmed, or the grid's right edge would jump around. */}
+                      <View style={{ width: END_HERE_WIDTH, justifyContent: "center" }}>
+                        {row.weekNum >= currentWeekNumber(row.block.block_start_date, totalWeeks) && row.weekNum < totalWeeks ? (
+                          <PressFade
+                            onPress={() => handleEndBlockHere(row.block, row.weekNum, totalWeeks)}
+                            disabled={ending}
+                            hitSlop={6}
+                            style={{ opacity: ending ? 0.5 : 1 }}
+                          >
+                            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#b23a22" }}>End here</Text>
+                          </PressFade>
+                        ) : null}
+                      </View>
                     </View>
                   );
                 })}

@@ -46,6 +46,8 @@ import { fonts, colors } from "../../../lib/theme";
 // same web/native split precedent as the roster and the clients list.
 
 const CANVAS = "#faf8f6";
+// Trailing column for "End here", reserved on every row so the grid ends flush.
+const END_HERE_WIDTH = 58;
 const CARD_BORDER = "#ece7e1";
 
 const CELL_STATES = {
@@ -766,6 +768,9 @@ function SpcClientDesktop() {
                     <Eyebrow>SESSION {n}</Eyebrow>
                   </View>
                 ))}
+                {/* Matches the End here column below so the session headings
+                    stay centred over their own cells. */}
+                <View style={{ width: END_HERE_WIDTH }} />
               </View>
 
               {weeks.map((week) => {
@@ -786,17 +791,6 @@ function SpcClientDesktop() {
                       <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: isThisWeek ? colors.primaryOnWhite : "#a8a29e" }}>
                         {isThisWeek ? "This week" : formatDateMD(start)}
                       </Text>
-                      {week >= currentWeekNumber(detail.block.block_start_date, detail.block.block_length_weeks, today) &&
-                      week < detail.block.block_length_weeks ? (
-                        <PressFade
-                          onPress={() => handleEndBlockHere(detail.block, week)}
-                          disabled={ending}
-                          hitSlop={6}
-                          style={{ alignSelf: "flex-start", marginTop: 5, opacity: ending ? 0.5 : 1 }}
-                        >
-                          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#b23a22" }}>End here</Text>
-                        </PressFade>
-                      ) : null}
                     </View>
                     {sessionNumbers.map((n) => {
                       const session = detail.sessions.find((s) => s.week_number === week && s.session_number === n);
@@ -820,6 +814,24 @@ function SpcClientDesktop() {
                         <View key={n} style={{ flex: 1, minWidth: 190 }} />
                       );
                     })}
+
+                    {/* After the session cells, not in the week label: read
+                        left to right it lands past the last session it keeps,
+                        so what stops is everything below and to the right.
+                        Column is always reserved so the grid ends flush. */}
+                    <View style={{ width: END_HERE_WIDTH, paddingTop: 11 }}>
+                      {week >= currentWeekNumber(detail.block.block_start_date, detail.block.block_length_weeks, today) &&
+                      week < detail.block.block_length_weeks ? (
+                        <PressFade
+                          onPress={() => handleEndBlockHere(detail.block, week)}
+                          disabled={ending}
+                          hitSlop={6}
+                          style={{ opacity: ending ? 0.5 : 1 }}
+                        >
+                          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#b23a22" }}>End here</Text>
+                        </PressFade>
+                      ) : null}
+                    </View>
                   </View>
                 );
               })}
