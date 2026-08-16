@@ -372,7 +372,7 @@ function SpcClientDesktop() {
         getSpcClient(userId),
         listCoaches(),
         listBlocksForSpcClient(userId),
-        getSetting("default_block_length_spc_weeks", 4).catch(() => 4),
+        getSetting("default_block_length_weeks", 4).catch(() => 4),
       ]);
       setDefaultLengthWeeks(Number(lengthSetting) || 4);
       setMember(memberRow);

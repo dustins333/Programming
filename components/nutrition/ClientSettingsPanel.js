@@ -7,7 +7,7 @@ import { addDays } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
 import { CADENCE_WEEKS } from "../../lib/nutrition/photos";
 import { checkinMondayForWeek, weekStartForCheckinMonday, mondayOnOrAfter } from "../../lib/nutrition/weekCycle";
-import { MondayPicker } from "./MondayPicker";
+import { MondayPicker } from "../MondayPicker";
 import { SegmentedControl } from "../SegmentedControl";
 import { QuestionListEditor } from "./QuestionListEditor";
 import { CheckinWeekTimeline } from "./CheckinWeekTimeline";

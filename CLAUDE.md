@@ -2959,6 +2959,145 @@ Rings and the note tap were screenshot- and DOM-verified at 375px and 1440px
 via the login-screen harness (reverted, `git diff` clean). `npx expo export -p
 web` clean. **Not verified behind a real login** — standing limitation.
 
+## Blocks start on Monday (2026-08-15)
+
+**A training block's weeks and a calendar week are now the same seven days.**
+They weren't: `currentWeekNumber` counts flat 7-day chunks from
+`block_start_date`, while `sessionNumberForDate` assigns sessions by weekday
+off each program's `session_days` (0011). Those only agree on a Monday start.
+A mid-week start split one calendar week's sessions across two block weeks —
+a Thursday-start block had Mon/Wed reading as week 1 while that same week's
+Thursday was already week 2 — so sessions were quietly skipped or repeated.
+**Neither piece was wrong on its own, which is why it never showed up as an
+error anywhere.** 8 of 12 live blocks were affected.
+
+**Snap direction is backward** (`mondayOnOrBefore`, new in `lib/boiseDate.js`
+— the forward counterpart `mondayOnOrAfter` stays in `weekCycle.js`, anchoring
+nutrition check-in cadences). Backward keeps a block covering the date it was
+asked to cover instead of opening a gap. It's also what disturbed live clients
+least, checked against the real rows before running: today's week number was
+**unchanged for every block with sessions logged against it**. Forward would
+have pushed four live clients back a week. The only block that shifted was the
+Apple review demo account (Sunday start, week 1→2, nothing logged); Terra chose
+one consistent rule over special-casing it.
+
+**Nothing historical moved.** `session_completions` keys off the workout row
+(plus `week_number` for SPC) and `logs` off `date_performed`, so no completed
+session was rewritten — only the calendar→week-number mapping changed.
+
+Enforced in four places, deliberately layered:
+- **`createBlock` / `createSpcBlock`** snap the incoming date. A no-op for
+  every gap-aware caller — blocks are whole weeks ending Sunday, so "day after
+  the last block" is already a Monday.
+- **`scan-spc-alerts`** carries its own copy of the snap (redeployed, v14,
+  `verify_jwt: false` preserved). It inserts blocks server-side without going
+  through the lib, so without this it would be the one path capable of hitting
+  the constraint and silently stalling a client's next block.
+- **`NewBlockModal`** replaces its free-text `YYYY-MM-DD` field with the
+  Monday-only `MondayPicker`, so a bad date can't be typed. It also shows the
+  resulting Mon–Sun range, which is how you'd catch a wrong length.
+- **CHECK constraints** on both tables. The app-side snap exists so a coach
+  never *sees* the error; the constraint is what actually guarantees it.
+
+`MondayPicker` moved `components/nutrition/` → `components/` (two callers now,
+one of them not nutrition). **Its opening month is seeded on first render
+only** — `NewBlockModal` keys it on `visible` to force a remount, or reopening
+the dialog lands on whatever month was last viewed.
+
+Extending and rolling blocks add whole weeks, so those already preserved
+alignment and needed no change.
+
+**Verified**: dry-run in a rolled-back transaction before the real run;
+`mondayOnOrBefore` exercised over 420 consecutive dates incl. both DST
+boundaries (Sunday is the case worth watching — it snaps 6 days back, not 1
+forward) with the lib and Edge-function copies agreeing on all of them; the
+constraint confirmed to reject a Wednesday insert; clean `expo export -p web`
+plus a Babel parse/scope pass (Metro resolves no identifiers, so a clean export
+alone is weak evidence). The modal was driven for real in the browser — a
+Wednesday click is inert, Mondays update the range, and the range tracks the
+program's length. **Not verified**: any of it behind a real coach login.
+
+## One home per setting: block length, sessions/week, session days (2026-08-15)
+
+Prompted by "there is block settings in two places — which one is real?"
+Answer: for group, **neither was fully real**. Settings → Program Defaults
+carried `default_block_length_flagship_weeks` / `_bwa_weeks`, and **nothing
+read either one.** They were hardcoded to two program names, which stopped
+being the whole list the moment programs became coach-creatable — LLYL had no
+key and could never have had one — and they had silently drifted: that tab
+claimed Flagship was 6 weeks while blocks were being created at 4. Only
+`_spc_weeks` and `alert_lead_time_days` were live.
+
+**The rule now, one sentence per tier:**
+- **Settings → Defaults** — gym-wide starting values. One `default_block_
+  length_weeks` (replacing all three) plus the alert lead time.
+- **⚙ {Program} settings** — what makes a program *that program*: name,
+  sessions/week, session days. **No defaults live here.**
+- **New block dialog** — this cycle: length, start date, rolling.
+
+**Block length is no longer stored as a per-program default at all**, because
+it was never really a setting: both the group and SPC dialogs already ask for
+it every time. The stepper now seeds from **that program's or client's most
+recent block** ("same as last time" — right nearly always, and it stays right
+as a cycle length changes with nobody maintaining anything), falling back to
+the one gym-wide default only for a first-ever block. New
+`listLatestBlockLengthByProgram()` does that in one query, first-row-wins over
+a newest-first order. SPC already seeded from the last block when *copying*;
+it now does so for a blank block too, so both program types behave identically.
+
+`group_programs.block_length_weeks` is **kept but no longer edited** — it's
+`not null` with no DB default and remains `createBlock`'s last-resort
+fallback, so `createGroupProgram` seeds it from the gym-wide default. The
+three superseded `core.settings` rows are left inert, per this repo's
+convention. The New block dialog's program chips stopped appending `(4wk)`,
+which would now contradict the stepper below them.
+
+**Real behaviour discovered while checking this, and the modal's copy was
+wrong about it**: `session_days` is read **live** by the member screens
+through `sessionNumberForDate`, so editing a program's days re-routes blocks
+that are **already running** — while `sessions_per_week` is baked into the
+session grid at `createBlock` time and so is genuinely future-only.
+`updateGroupProgram`'s comment claimed future-only for everything. Both the
+comment and the modal's subtitle now say which is which. Probably the desired
+behaviour for days; it is just neither documented nor tested.
+
+**Also worth knowing**: `sessions_per_week` means two different things under
+one name — on `group_programs` it decides how many sessions get *programmed*
+per week, on `client_program_assignments` it's how many a client is *expected
+to attend*. Not renamed, but don't assume they're the same number.
+
+**Follow-up the same day — the New block dialog shows what's taken.** The
+grid's per-gap "Start new block" button used to create a block outright with a
+computed date and no dialog (the band's own button already opened one), so a
+coach never saw or could change the length or start. It opens the dialog now,
+pre-selected to that program; `handleStartGapBlock`'s old gap-free date
+arithmetic is gone because the dialog's own default lands on the same Monday.
+
+`MondayPicker` gained `disabledDates`. The dialog passes every Monday a block
+of the chosen length couldn't start on, and `markedDates` for the narrower set
+that sit *inside* an existing block — so an occupied stretch reads as a filled
+run with markers ("this week already has a block"), and a week that's free but
+too close to the next block is simply unpickable. Both recompute as the length
+changes, so lengthening a block greys out more Mondays. Picking one anyway is
+impossible; if the length is raised until the *current* pick collides, the
+range line turns into a red explanation and Create disables. `createBlock`'s
+own overlap throw stays as the backstop — this just means a coach shouldn't
+ever reach it. Start defaults to the first Monday from this week on that the
+block actually fits, which for a program mid-block is the Monday after it
+ends — still fully editable, which was the explicit ask.
+
+**Verified**: clean `expo export -p web`, Babel parse/scope pass over all
+touched files, and every dialog driven in the browser via a throwaway
+`app/zz-harness.js` route — Flagship seeding to its last block's 6 rather than
+its stale program column's 4, LLYL (no prior block) falling back to the gym
+default 4 with a correct 4-week Mon–Sun range, clean program chips, and the ⚙
+modal showing no length field. The taken/blocked calendar was checked against
+Flagship's real block (07/20–08/30): Mondays 08/03–08/24 greyed and inert to a
+click, 08/31 auto-selected, and raising the length to 10 weeks — enough to
+reach a block queued in November — flipping the range line red and disabling
+Create. **Not verified**: the Settings → Defaults tab itself, which needs an
+admin login.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -3015,6 +3154,7 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0059_plan_phase_status.sql` — **run**, confirmed live 2026-08-12 (column, `nutrition_plan_phases_status_check`, and all 16 existing rows reading `planned` verified by direct query; `NOTIFY pgrst, 'reload schema'` sent and confirmed with a real REST select). Adds `programming.nutrition_plan_phases.status` (`planned`/`now`/`done`, default `planned`, so every existing row keeps rendering exactly as it does today with no backfill). Reverses 0050's deliberate "no status flag" decision — see the phase-5 section below for why order and status turned out to be different facts. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - `0060_announcement_graphics.sql` — **run**, confirmed live 2026-08-13 (column, bucket, and all 4 storage policies verified by direct query). Adds `programming.announcements.image_path` plus the **public** `graphics` storage bucket and its admin-write/public-read policies. See the announcement-graphics section above for why this bucket is public where nutrition's `photos` is not.
 - `0061_events.sql` — **run**, confirmed live 2026-08-13 (5 tables with the expected policy counts, plus a real REST select returning `[]` rather than PGRST205). Adds `programming.events` / `event_items` / `event_questions` / `event_responses` / `event_response_items`, and `announcements.event_id`. **Do not reorder this file** — the child tables' policies reference `programming.events` in an EXISTS subquery, and Postgres resolves those at CREATE POLICY time (the bug that broke 0036 in production). Uses `unique nulls not distinct` (Postgres 15+) on the response-items constraint so an options-less item can't accumulate duplicate rows.
+- `0063_blocks_start_on_monday.sql` — **run**, confirmed live 2026-08-15 (0 non-Monday blocks remaining, both CHECK constraints present, and a Wednesday insert verified rejected). Snaps every existing `group_blocks`/`spc_blocks` row back to its week's Monday and adds `group_blocks_start_monday` / `spc_blocks_start_monday`. Carries its own rollback UPDATEs in a comment. See "Blocks start on Monday" below.
 - `0062_event_signup_options.sql` — **run**, confirmed live 2026-08-13. Adds `programming.events.ask_guest_count` (boolean, default **false**) and `cta_label` (nullable). Both additive; every existing event keeps behaving as it did.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 

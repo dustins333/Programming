@@ -41,6 +41,17 @@ function addDays(dateString: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+// Mirrors lib/boiseDate.js's mondayOnOrBefore — every block runs
+// Monday–Sunday so a block week and a calendar week are the same seven
+// days, enforced for real by the CHECK constraint in migration 0063. The
+// snap is a no-op here in practice (a block ends Sunday, so +1 is already
+// Monday); it exists so this function can't be the one path that inserts a
+// row the constraint then rejects, silently stalling a client's next block.
+function mondayOnOrBefore(dateString: string) {
+  const dow = new Date(`${dateString}T12:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
+  return addDays(dateString, dow === 0 ? -6 : 1 - dow);
+}
+
 function rangesOverlap(startA: string, endA: string, startB: string, endB: string) {
   return startA <= endB && startB <= endA;
 }
@@ -116,7 +127,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const startDate = addDays(latest.block_end_date, 1);
+      const startDate = mondayOnOrBefore(addDays(latest.block_end_date, 1));
       const lengthWeeks = latest.block_length_weeks;
       const endDate = addDays(startDate, lengthWeeks * 7 - 1);
 

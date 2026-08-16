@@ -81,25 +81,33 @@ const CHECKIN_NOTIF_DEFAULTS = {
 // Object]", the check-in body's paragraph got squeezed into a one-line
 // numeric field, and saving rewrote `messaging_enabled: false` as the
 // string "false" (truthy — it would have silently turned messaging back on).
-// Program Defaults now owns exactly these four keys; everything else in
-// core.settings is edited from the tab that actually understands it.
+// This tab owns exactly these keys; everything else in core.settings is
+// edited from the tab that actually understands it.
+//
+// It used to carry a block-length default PER PROGRAM
+// (default_block_length_flagship_weeks / _bwa_weeks / _spc_weeks). Only the
+// SPC one was ever read — the two group keys were dead, hardcoded to two
+// program names that stopped being the whole list the moment group programs
+// became coach-creatable (LLYL had no key and never could have one), and
+// they drifted: this tab claimed Flagship was 6 weeks while the value
+// actually used was 4.
+//
+// Replaced by ONE gym-wide default, because block length isn't really a
+// setting: both the group and SPC block dialogs already ask for it every
+// time you create a block. The stored value is only what that stepper starts
+// at, and it's only reached for a program's or client's FIRST block — after
+// that the stepper seeds from their most recent block ("same as last time").
+// What genuinely varies per program (sessions/week, session days) lives on
+// the program itself, under "⚙ {Program} settings" on Group Programs.
+//
+// The three old rows are left inert in core.settings rather than deleted,
+// same convention as the rest of this codebase's superseded data.
 const PROGRAM_DEFAULTS = [
   {
-    key: "default_block_length_flagship_weeks",
-    label: "Flagship block length",
+    key: "default_block_length_weeks",
+    label: "Default block length",
     unit: "weeks",
-    fallback: 4,
-  },
-  {
-    key: "default_block_length_bwa_weeks",
-    label: "Better With Age block length",
-    unit: "weeks",
-    fallback: 6,
-  },
-  {
-    key: "default_block_length_spc_weeks",
-    label: "SPC block length",
-    unit: "weeks",
+    hint: "Where a new block's length starts when a program or client has no previous block. Every block dialog lets you change it.",
     fallback: 4,
   },
   {
@@ -116,7 +124,7 @@ const PROGRAM_DEFAULTS = [
 // page's TabBar (app/(coach)/nutrition/clients/[userId].js).
 const SETTINGS_TABS = [
   { key: "team", label: "Team" },
-  { key: "defaults", label: "Program Defaults" },
+  { key: "defaults", label: "Defaults" },
   { key: "equipment", label: "Equipment" },
   { key: "templates", label: "Nutrition" },
   { key: "notifications", label: "Notifications" },
@@ -360,7 +368,7 @@ export default function Settings() {
     return <Redirect href="/(coach)" />;
   }
 
-  // Combined save, per the mock: the 4 numeric defaults live in one card now
+  // Combined save, per the mock: the numeric defaults live in one card now
   // instead of one input+Save pair per row, so one button saves whichever of
   // them changed rather than requiring 4 separate taps. Every one of these is
   // a whole number of weeks/days — reject anything else up front instead of
@@ -714,10 +722,10 @@ export default function Settings() {
       {tab === "defaults" && (
       <View className="rounded-xl border border-stone-200 p-5">
         <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
-          Program Defaults
+          Gym-wide defaults
         </Text>
         <Text className="mb-5 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-          Starting values for new blocks. Changing one only affects blocks created from here on — existing blocks keep the length they were built with.
+          Starting values that apply everywhere. Anything that differs between programs — sessions a week, which days they run — lives on the program itself, under “⚙ {"{"}Program{"}"} settings” on Group Programs.
         </Text>
         <View className={narrow ? undefined : "flex-row flex-wrap"} style={narrow ? undefined : { marginHorizontal: -8 }}>
           {PROGRAM_DEFAULTS.map((d) => (

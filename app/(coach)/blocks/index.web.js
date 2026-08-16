@@ -8,6 +8,7 @@ import {
   createBlock,
   listWorkoutsForBlock,
   listBlocksForProgram,
+  listLatestBlockLengthByProgram,
   trimGroupBlockTo,
   addDays,
 } from "../../../lib/programming/blocks";
@@ -21,10 +22,11 @@ import {
 import { listAssignments } from "../../../lib/programming/clients";
 import { buildFinalizeChecks } from "../../../lib/programming/blockReadiness";
 import { currentWeekNumber, blockLengthWeeks } from "../../../lib/programming/schedule";
-import { WEEK_OFFSETS, groupRows, blockPrecedingGap } from "../../../lib/programming/gridRows";
+import { WEEK_OFFSETS, groupRows, blockPrecedingGap, weekStartForOffset, weekRangeLabel } from "../../../lib/programming/gridRows";
 import { todayInBoise, daysBetween } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
 import { confirmOverwrite, confirmBulkPublish, confirmClearLifts, confirmEndBlockHere } from "../../../lib/confirmDialog";
+import { getSetting } from "../../../lib/settings";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { NewBlockModal } from "../../../components/NewBlockModal";
@@ -80,7 +82,7 @@ async function loadProgramData(program) {
   const today = todayInBoise();
 
   const rows = WEEK_OFFSETS.map(({ offset, label }) => {
-    const weekDate = addDays(today, offset * 7);
+    const weekDate = weekStartForOffset(offset, today);
     const block = allBlocks.find((b) => b.block_start_date <= weekDate && weekDate <= b.block_end_date) ?? null;
     const weekNum = block ? currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), weekDate) : null;
     return { offset, label, weekDate, block, weekNum, sessions: [] };
@@ -322,8 +324,13 @@ function BlocksDesktop() {
   const [memberCounts, setMemberCounts] = useState({});
   const [selectedProgramId, setSelectedProgramId] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  // What a new block's length stepper starts at: that program's most recent
+  // block, falling back to the one gym-wide default for its first ever block.
+  const [lengthSeedByProgram, setLengthSeedByProgram] = useState({});
+  const [gymDefaultLength, setGymDefaultLength] = useState(4);
 
   const [newBlockOpen, setNewBlockOpen] = useState(false);
+  const [newBlockProgramId, setNewBlockProgramId] = useState(null);
   const [newProgramOpen, setNewProgramOpen] = useState(false);
   const [editProgramOpen, setEditProgramOpen] = useState(false);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
@@ -333,7 +340,6 @@ function BlocksDesktop() {
   const [copySource, setCopySource] = useState(null);
   const [copyTargets, setCopyTargets] = useState(new Set());
   const [busy, setBusy] = useState(false);
-  const [startingGap, setStartingGap] = useState(false);
 
   // "End here" on a week row: keep that week, remove every week after it.
   // Tail-only by design — see trimGroupBlockTo for why a middle week can't go.
@@ -380,6 +386,20 @@ function BlocksDesktop() {
     } catch {
       setMemberCounts({});
     }
+
+    // Isolated like the roster counts above — losing these costs the length
+    // stepper its head start, not the grid.
+    try {
+      const [seeds, gymDefault] = await Promise.all([
+        listLatestBlockLengthByProgram(),
+        getSetting("default_block_length_weeks", 4),
+      ]);
+      setLengthSeedByProgram(seeds);
+      setGymDefaultLength(Number(gymDefault) || 4);
+    } catch {
+      setLengthSeedByProgram({});
+      setGymDefaultLength(4);
+    }
   }, []);
 
   useFocusEffect(
@@ -396,6 +416,14 @@ function BlocksDesktop() {
       setSelectedProgramId(fromParam ?? programData[0].program.id);
     }
   }, [programData, selectedProgramId, params.program]);
+
+  // programId -> its existing blocks, so the New block dialog's calendar can
+  // grey out the weeks that already have one.
+  const blocksByProgram = useMemo(() => {
+    const map = {};
+    for (const d of programData ?? []) map[d.program.id] = d.allBlocks ?? [];
+    return map;
+  }, [programData]);
 
   const clearSelection = useCallback(() => {
     setSelection(new Set());
@@ -471,7 +499,10 @@ function BlocksDesktop() {
 
   const handleCreateProgram = async (fields) => {
     try {
-      const program = await createGroupProgram(fields);
+      // The program row still needs a block_length_weeks (not-null column,
+      // and createBlock's last-resort fallback) even though the modal no
+      // longer asks for one — seed it from the gym-wide default.
+      const program = await createGroupProgram({ ...fields, blockLengthWeeks: gymDefaultLength });
       await load();
       setSelectedProgramId(program.id);
     } catch (err) {
@@ -480,11 +511,12 @@ function BlocksDesktop() {
     }
   };
 
-  const handleUpdateProgram = async ({ name, blockLengthWeeks, sessionsPerWeek, sessionDays }) => {
+  const handleUpdateProgram = async ({ name, sessionsPerWeek, sessionDays }) => {
     try {
+      // block_length_weeks deliberately not written here — a program no
+      // longer carries an editable default length. It's picked per block.
       await updateGroupProgram(selectedProgramId, {
         name,
-        block_length_weeks: blockLengthWeeks,
         sessions_per_week: sessionsPerWeek,
         session_days: sessionDays,
       });
@@ -495,18 +527,14 @@ function BlocksDesktop() {
     }
   };
 
-  const handleStartGapBlock = async (gapRows) => {
-    setStartingGap(true);
-    try {
-      const preceding = blockPrecedingGap(selected.allBlocks, gapRows);
-      const startDate = preceding ? addDays(preceding.block_end_date, 1) : todayInBoise();
-      await createBlock({ groupProgramId: selected.program.id, startDate, createdBy: profile.id });
-      await load();
-    } catch (err) {
-      toastError("Failed to start new block", err);
-    } finally {
-      setStartingGap(false);
-    }
+  // Opens the same New block dialog the band's own button does, rather than
+  // silently creating a block with a computed date. The dialog defaults to
+  // the first Monday this program is actually free, which is the date this
+  // used to compute — the difference is that the coach now sees it, and can
+  // change the length or the start before committing.
+  const handleStartGapBlock = () => {
+    setNewBlockProgramId(selected?.program?.id ?? null);
+    setNewBlockOpen(true);
   };
 
   const handlePublishSelected = async () => {
@@ -695,7 +723,10 @@ function BlocksDesktop() {
               summaries={selected.summaries}
               today={today}
               onFinalize={() => setFinalizeOpen(true)}
-              onNewBlock={() => setNewBlockOpen(true)}
+              onNewBlock={() => {
+                setNewBlockProgramId(selected?.program?.id ?? null);
+                setNewBlockOpen(true);
+              }}
             />
 
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -748,11 +779,11 @@ function BlocksDesktop() {
                                 Nothing scheduled for {group.rows.length} week{group.rows.length === 1 ? "" : "s"}
                               </Text>
                               <PressFade
-                                onPress={() => handleStartGapBlock(group.rows)}
+                                onPress={handleStartGapBlock}
                                 style={{ marginTop: 10, backgroundColor: colors.primary, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 18 }}
                               >
                                 <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#fff" }}>
-                                  {startingGap ? "Starting…" : "Start new block"}
+                                  Start new block
                                 </Text>
                               </PressFade>
                             </>
@@ -772,7 +803,7 @@ function BlocksDesktop() {
                           {row.label}
                         </Text>
                         <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 2 }}>
-                          {formatDateMD(weekStart)}
+                          {weekRangeLabel(weekStart)}
                         </Text>
                         <View style={{ alignSelf: "flex-start", marginTop: 6, backgroundColor: "#f1efed", borderRadius: 5, paddingVertical: 3, paddingHorizontal: 7 }}>
                           <Text style={{ fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 0.6, color: "#78716c" }}>
@@ -859,6 +890,10 @@ function BlocksDesktop() {
         <NewBlockModal
           visible={newBlockOpen}
           programs={programData.map((d) => d.program)}
+          blocksByProgram={blocksByProgram}
+          initialProgramId={newBlockProgramId}
+          lengthSeedByProgram={lengthSeedByProgram}
+          gymDefaultLength={gymDefaultLength}
           onClose={() => setNewBlockOpen(false)}
           onSubmit={handleCreateBlock}
         />

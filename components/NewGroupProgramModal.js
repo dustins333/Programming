@@ -5,12 +5,11 @@ import { DEFAULT_SESSION_DAYS } from "../lib/programming/schedule";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { KeyboardDoneButton } from "./KeyboardDoneButton";
 
-const DEFAULTS = { name: "", blockLengthWeeks: "4", sessionsPerWeek: "3", sessionDays: DEFAULT_SESSION_DAYS };
+const DEFAULTS = { name: "", sessionsPerWeek: "3", sessionDays: DEFAULT_SESSION_DAYS };
 
 function fromProgram(program) {
   return {
     name: program.name,
-    blockLengthWeeks: String(program.block_length_weeks),
     sessionsPerWeek: String(program.sessions_per_week),
     sessionDays: resizeSessionDays(program.session_days ?? DEFAULT_SESSION_DAYS, program.sessions_per_week),
   };
@@ -43,9 +42,12 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
   const handleSubmit = async () => {
     setSaving(true);
     try {
+      // No block length here on purpose — it's chosen per block in the New
+      // block dialog, which seeds from this program's most recent block. This
+      // modal is only what makes a program that program: its name, how many
+      // sessions it runs, and which days those land on.
       await onSubmit({
         name: form.name.trim(),
-        blockLengthWeeks: Number(form.blockLengthWeeks) || 4,
         sessionsPerWeek: Number(form.sessionsPerWeek) || 3,
         sessionDays: form.sessionDays,
       });
@@ -64,7 +66,7 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
           </Text>
           <Text className="mb-4 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
             {isEdit
-              ? "Changes only affect blocks created from now on — existing blocks keep the schedule they were created with."
+              ? "Changing the days takes effect right away, including for blocks already running. Changing sessions per week only applies to blocks created from now on — existing blocks keep the sessions they were built with."
               : "Works just like Flagship or BWA — a shared calendar and shared coach-authored sessions that any client can be enrolled into, in addition to their other programs."}
           </Text>
 
@@ -75,18 +77,6 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
             value={form.name}
             onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
             placeholder="e.g. Look Like You Lift"
-            className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
-            style={{ fontFamily: "Montserrat_400Regular" }}
-          />
-
-          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-            Block length (weeks)
-          </Text>
-          <TextInput
-            value={form.blockLengthWeeks}
-            onChangeText={(v) => setForm((f) => ({ ...f, blockLengthWeeks: v }))}
-            keyboardType="numeric"
-            inputAccessoryViewID={NUMERIC_DONE_ID}
             className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
             style={{ fontFamily: "Montserrat_400Regular" }}
           />

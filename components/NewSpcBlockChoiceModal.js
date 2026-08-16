@@ -32,7 +32,12 @@ export function NewSpcBlockChoiceModal({
 
   useEffect(() => {
     if (!visible) return;
-    const seed = mode === "copy" && hasLastBlock ? lastBlockLengthWeeks : defaultLengthWeeks;
+    // Seeds from this client's most recent block whichever mode is picked —
+    // "same as last time" is the right starting point for a blank block too,
+    // not just a copied one. The gym-wide default (Settings → Defaults) is
+    // only reached for a client's very first block. Matches how the group
+    // block dialog seeds from that program's last block.
+    const seed = hasLastBlock ? lastBlockLengthWeeks : defaultLengthWeeks;
     setLengthWeeks(String(seed ?? defaultLengthWeeks ?? 4));
   }, [visible, mode, hasLastBlock, lastBlockLengthWeeks, defaultLengthWeeks]);
 
