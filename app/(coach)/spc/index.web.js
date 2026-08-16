@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { getSpcRosterDetail, describeLastSession } from "../../../lib/programming/spcRoster";
 import { checkAndAutoDraft } from "../../../lib/programming/spcDashboard";
-import { CoachShell } from "../../../components/CoachShell";
+import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
+import SpcRosterNative from "./index";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES, STATUS_ORDER } from "../../../lib/programming/spcStatus";
@@ -224,7 +225,7 @@ function ClientRow({ row, onOpen, onNextStep, last }) {
   );
 }
 
-export default function SpcRosterWeb() {
+function SpcRosterDesktop() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [rows, setRows] = useState([]);
@@ -426,4 +427,15 @@ export default function SpcRosterWeb() {
       </ScrollView>
     </CoachShell>
   );
+}
+
+// The desktop roster is a fixed-column table, and a .web.js sibling shadows
+// its native file on web at ANY width — so on the installed PWA this rendered
+// the full table squeezed into a phone, with the column headings breaking one
+// letter per line. Below the breakpoint, render the native roster, which is
+// the card list built for exactly this width. Same split as blocks/index.web.js
+// and spc/[userId].web.js; Coach Home has done it since it was built.
+export default function SpcRosterWeb() {
+  const { width } = useWindowDimensions();
+  return width < MOBILE_BREAKPOINT ? <SpcRosterNative /> : <SpcRosterDesktop />;
 }

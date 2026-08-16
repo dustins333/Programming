@@ -3790,6 +3790,19 @@ reports, only one of which was a bug in this pass:
   - **Applies to every future native/web split**: if a screen has a `.web.js`
     sibling and the native version is the phone design, the web sibling needs
     this branch or the PWA silently gets the desktop build.
+  - **Audited all 14 coach `.web.js` files** (2026-08-15). Branching correctly:
+    `index.web.js` (Coach Home, which has done this since it was built — its own
+    local `MOBILE_BREAKPOINT = 768`), `nutrition/index.web.js` (internal
+    `isMobile` at 900), `blocks/index.web.js`, `spc/[userId].web.js`,
+    `spc/index.web.js`. **Still unbranched with a fixed-width table**:
+    `clients/index.web.js` — it renders `ClientRosterTable`, whose `TABLE_WIDTH`
+    is the sum of six fixed columns, so it squeezes exactly the way the SPC
+    roster did. Not fixed unilaterally because the native clients list drops the
+    flag/last-session columns, which is a real trade for Terra to make rather
+    than a straight bug fix. Lower confidence: `exercises/index.web.js`
+    (a table, one fixed width) and `payroll/admin/report.web.js` (several, but
+    admin-only desk work). Deliberately desktop-only regardless: the three
+    builders, `spc/print/[blockId].web.js`, `_layout.web.js`.
 
 ## Blocks can be trimmed back: "End here" (2026-08-15)
 
