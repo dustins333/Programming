@@ -133,6 +133,15 @@ export function StaffPermissionMatrix({ coaches, currentUserId, savingPermKey, o
                       <Text style={{ fontFamily: fonts.sansBold, color: "#ffffff", fontSize: 9.5, letterSpacing: 0.4 }}>ADMIN</Text>
                     </View>
                   ) : null}
+                  {/* "You" belongs beside the name as an identity marker. It used
+                      to sit in the action column instead, where it REPLACED the
+                      "Own training ›" link — leaving an admin with no way to reach
+                      their own client page from the only screen that links to it. */}
+                  {isSelf ? (
+                    <View className="rounded-full px-2 py-[3px]" style={{ backgroundColor: "#f2efeb" }}>
+                      <Text style={{ fontFamily: fonts.sansBold, color: "#78716c", fontSize: 9.5, letterSpacing: 0.4 }}>YOU</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Text className="mt-0.5 text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 12 }} numberOfLines={1}>
                   {coach.email}
@@ -153,15 +162,9 @@ export function StaffPermissionMatrix({ coaches, currentUserId, savingPermKey, o
             ))}
 
             <View className="items-end" style={{ width: 108 }}>
-              {isSelf ? (
-                <Text className="text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 12.5 }}>
-                  you
-                </Text>
-              ) : (
-                <Pressable onPress={() => router.push(`/(coach)/clients/${coach.id}`)} hitSlop={6}>
-                  <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 12.5 }}>Own training ›</Text>
-                </Pressable>
-              )}
+              <Pressable onPress={() => router.push(`/(coach)/clients/${coach.id}`)} hitSlop={6}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 12.5 }}>Own training ›</Text>
+              </Pressable>
             </View>
           </View>
         );
