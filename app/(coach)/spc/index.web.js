@@ -4,7 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { getSpcRosterDetail, describeLastSession } from "../../../lib/programming/spcRoster";
 import { checkAndAutoDraft } from "../../../lib/programming/spcDashboard";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
-import SpcRosterNative from "./index";
+import { SpcRosterMobile } from "../../../components/coach/SpcRosterMobile";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
 import { STATUS_LABELS, STATUS_TONES, STATUS_ORDER } from "../../../lib/programming/spcStatus";
@@ -437,5 +437,5 @@ function SpcRosterDesktop() {
 // and spc/[userId].web.js; Coach Home has done it since it was built.
 export default function SpcRosterWeb() {
   const { width } = useWindowDimensions();
-  return width < MOBILE_BREAKPOINT ? <SpcRosterNative /> : <SpcRosterDesktop />;
+  return width < MOBILE_BREAKPOINT ? <SpcRosterMobile /> : <SpcRosterDesktop />;
 }
