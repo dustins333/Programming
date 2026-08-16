@@ -3844,6 +3844,22 @@ wrong week" and needs no migration either — the dates are all stored and
 writable. Deleting an arbitrary middle week was explicitly rejected, not
 deferred; every real case is a tail.
 
+**Shipped broken once, worth remembering how.** The `useState` backing the
+button's pending flag was added next to the handler that uses it, which on
+`spc/[userId].web.js` is *below* the component's `if (!ready)` and
+`if (loadError || !member)` early returns — so the hook ran on some renders and
+not others: "Rendered more hooks than during the previous render." Two things
+made it slip through: (1) `expo export`, the Babel scope pass and a bare route
+load are all clean, because nothing is wrong until the page finishes loading
+and re-renders down the full path; (2) the grep used to check for early returns
+was `^  if (.*) return`, which only matches a single-line return and silently
+missed both of these multi-line `if (…) {` / `return (` blocks — so the check
+came back "no early returns" and was believed. **If a hook is added to an
+existing component, put it with the other hooks at the top, and detect early
+returns by scanning for a `return` at component-body indent, not by matching
+`if … return` on one line.** Caught by reading the real error out of Terra's
+browser, which named the file and line directly.
+
 **Verified against real data rather than reasoned**: Dustin's SPC block (4
 weeks, currently week 3, `auto_extend` false) — End here renders on week 3
 alone, and a trim there would remove 2 week-4 sessions with

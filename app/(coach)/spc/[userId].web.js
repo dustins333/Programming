@@ -571,6 +571,14 @@ function SpcClientDesktop() {
     return stats.personalRecords.filter((p) => p.date >= start && p.date <= end);
   }, [stats, detail]);
 
+  // Has to be declared ABOVE the two early returns below, not down beside the
+  // handler that uses it: this component bails out early while loading and on
+  // error, so a hook after those returns runs on some renders and not others.
+  // That's "Rendered more hooks than during the previous render" — it only
+  // fires once the page finishes loading, so it looks like a data bug rather
+  // than a hooks bug. Keep every hook above this line.
+  const [ending, setEnding] = useState(false);
+
   if (!ready) {
     return (
       <CoachShell>
@@ -597,7 +605,8 @@ function SpcClientDesktop() {
   }
 
   // "End here": keep this week, drop every week after it. See trimSpcBlockTo.
-  const [ending, setEnding] = useState(false);
+  // The handler is a plain function so it can live here, but its useState
+  // cannot — see the declaration above the early returns.
   const handleEndBlockHere = async (block, lastWeek) => {
     const ok = await confirmEndBlockHere({
       lastWeek,
