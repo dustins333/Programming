@@ -10,6 +10,7 @@ import {
   createSpcBlock,
   addDays,
   listSpcWorkoutsForBlock,
+  trimSpcBlockTo,
 } from "../../../lib/programming/spcBlocks";
 import { copyLastBlockContent, copySpcWorkoutContent, listSpcWorkoutExercisesForWorkouts } from "../../../lib/programming/spcWorkouts";
 import { getSpcBlockDetail, weekWindow } from "../../../lib/programming/spcBlockDetail";
@@ -29,7 +30,7 @@ import { STATUS_LABELS, STATUS_ORDER } from "../../../lib/programming/spcStatus"
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../lib/toast";
-import { confirmOverwrite } from "../../../lib/confirmDialog";
+import { confirmOverwrite, confirmEndBlockHere } from "../../../lib/confirmDialog";
 import { fonts, colors } from "../../../lib/theme";
 
 // SPC client block view, coach web (design_handoff_coach_web_v2, screen 15).
@@ -595,6 +596,28 @@ function SpcClientDesktop() {
     );
   }
 
+  // "End here": keep this week, drop every week after it. See trimSpcBlockTo.
+  const [ending, setEnding] = useState(false);
+  const handleEndBlockHere = async (block, lastWeek) => {
+    const ok = await confirmEndBlockHere({
+      lastWeek,
+      removedWeeks: block.block_length_weeks - lastWeek,
+      endDate: formatDateMD(addDays(block.block_start_date, lastWeek * 7 - 1)),
+      wasRolling: Boolean(block.auto_extend),
+    });
+    if (!ok) return;
+    setEnding(true);
+    try {
+      const { removedWeeks } = await trimSpcBlockTo(block.id, lastWeek);
+      toastSuccess(`Block now ends after week ${lastWeek} — ${removedWeeks} week${removedWeeks === 1 ? "" : "s"} removed.`);
+      await load();
+    } catch (err) {
+      toastError(err.message ?? String(err));
+    } finally {
+      setEnding(false);
+    }
+  };
+
   const weeks = detail ? [...new Set(detail.sessions.map((s) => s.week_number))].sort((a, b) => a - b) : [];
   const sessionNumbers = detail ? [...new Set(detail.sessions.map((s) => s.session_number))].sort((a, b) => a - b) : [];
 
@@ -754,6 +777,17 @@ function SpcClientDesktop() {
                       <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: isThisWeek ? colors.primaryOnWhite : "#a8a29e" }}>
                         {isThisWeek ? "This week" : formatDateMD(start)}
                       </Text>
+                      {week >= currentWeekNumber(detail.block.block_start_date, detail.block.block_length_weeks, today) &&
+                      week < detail.block.block_length_weeks ? (
+                        <PressFade
+                          onPress={() => handleEndBlockHere(detail.block, week)}
+                          disabled={ending}
+                          hitSlop={6}
+                          style={{ alignSelf: "flex-start", marginTop: 5, opacity: ending ? 0.5 : 1 }}
+                        >
+                          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#b23a22" }}>End here</Text>
+                        </PressFade>
+                      ) : null}
                     </View>
                     {sessionNumbers.map((n) => {
                       const session = detail.sessions.find((s) => s.week_number === week && s.session_number === n);

@@ -8,6 +8,7 @@ import {
   createBlock,
   listWorkoutsForBlock,
   listBlocksForProgram,
+  trimGroupBlockTo,
   addDays,
 } from "../../../lib/programming/blocks";
 import {
@@ -23,7 +24,7 @@ import { currentWeekNumber, blockLengthWeeks } from "../../../lib/programming/sc
 import { WEEK_OFFSETS, groupRows, blockPrecedingGap } from "../../../lib/programming/gridRows";
 import { todayInBoise, daysBetween } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
-import { confirmOverwrite, confirmBulkPublish, confirmClearLifts } from "../../../lib/confirmDialog";
+import { confirmOverwrite, confirmBulkPublish, confirmClearLifts, confirmEndBlockHere } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { NewBlockModal } from "../../../components/NewBlockModal";
@@ -331,6 +332,31 @@ function BlocksDesktop() {
   const [copyTargets, setCopyTargets] = useState(new Set());
   const [busy, setBusy] = useState(false);
   const [startingGap, setStartingGap] = useState(false);
+
+  // "End here" on a week row: keep that week, remove every week after it.
+  // Tail-only by design — see trimGroupBlockTo for why a middle week can't go.
+  const [ending, setEnding] = useState(false);
+  const handleEndBlockHere = async (block, lastWeek, totalWeeks) => {
+    const ok = await confirmEndBlockHere({
+      lastWeek,
+      removedWeeks: totalWeeks - lastWeek,
+      endDate: formatDateMD(addDays(block.block_start_date, lastWeek * 7 - 1)),
+      wasRolling: Boolean(block.auto_extend),
+    });
+    if (!ok) return;
+    setEnding(true);
+    try {
+      const { removedWeeks } = await trimGroupBlockTo(block.id, lastWeek);
+      toastSuccess(`Block now ends after week ${lastWeek} — ${removedWeeks} week${removedWeeks === 1 ? "" : "s"} removed.`);
+      await load();
+    } catch (err) {
+      // The refusal path (a finished session in the removed weeks) comes
+      // through here with a real explanation, so surface it verbatim.
+      toastError(err.message ?? String(err));
+    } finally {
+      setEnding(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -751,6 +777,16 @@ function BlocksDesktop() {
                             BLOCK WK {row.weekNum} OF {totalWeeks}
                           </Text>
                         </View>
+                        {row.weekNum >= currentWeekNumber(row.block.block_start_date, totalWeeks) && row.weekNum < totalWeeks ? (
+                          <PressFade
+                            onPress={() => handleEndBlockHere(row.block, row.weekNum, totalWeeks)}
+                            disabled={ending}
+                            hitSlop={6}
+                            style={{ alignSelf: "flex-start", marginTop: 6, opacity: ending ? 0.5 : 1 }}
+                          >
+                            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#b23a22" }}>End here</Text>
+                          </PressFade>
+                        ) : null}
                       </View>
 
                       {Array.from({ length: sessionsPerWeek }, (_, i) => i + 1).map((sessionNum) => {

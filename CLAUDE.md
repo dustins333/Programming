@@ -3791,6 +3791,66 @@ reports, only one of which was a bug in this pass:
     sibling and the native version is the phone design, the web sibling needs
     this branch or the PWA silently gets the desktop build.
 
+## Blocks can be trimmed back: "End here" (2026-08-15)
+
+Terra on the rigidity of blocks: no way to change their dates, end one early,
+or undo an extend, and turning a rolling block off leaves the client stuck with
+whatever weeks it already grew. Scoped down to the highest-value piece —
+trimming the tail — after establishing what the schema actually allows.
+
+**The two facts that decided the design**, both worth knowing before touching
+blocks again:
+
+1. **A block's weeks are materialised rows, but its dates are arithmetic.**
+   `block_start_date` plus the week number *is* the calendar. So moving a block
+   is nearly free (change the start date and everything shifts), while removing
+   a week from the *middle* would either renumber everything after it — silently
+   turning week 5's programming into week 4 — or leave a hole. Hence tail-only.
+2. **Logged sets survive a deleted week; completion records don't.**
+   `logs.group_workout_id`/`spc_workout_id`/`one_off_workout_id` are `ON DELETE
+   SET NULL`, so her reps and weights persist (orphaned). But
+   `session_completions` is `ON DELETE CASCADE`, so deleting a week destroys
+   the record that she finished it — which is what My Week's counts, adherence
+   and the missed-session flags all read. The damage is invisible until a
+   completed week starts reading as missed.
+
+New `trimGroupBlockTo(blockId, lastWeek)` / `trimSpcBlockTo(...)`. They delete
+every week past `lastWeek`, set `block_length_weeks` and `block_end_date`, and
+**force `auto_extend` off** — trimming a rolling block without stopping it
+rolling is a no-op by the next scan, which would regrow exactly what was
+removed. They **refuse rather than cascade**: if any session in the removed
+weeks has a completion, the function throws naming the weeks and deletes
+nothing. That guard has to live in app code — the constraint can't be relaxed
+to `SET NULL`, since `session_completions` requires exactly one of its three
+workout ids.
+
+**UI: "End here" on the week row**, not an ✕ — Terra's own call, and it's the
+better label: an ✕ reads as "delete this row", which is exactly the semantic we
+can't support. **"End here" on week N keeps week N and removes everything
+after it**, so it can never delete the week being pointed at, and trimming a
+runaway rolling block is one click rather than six. It renders only on weeks
+that are the current week or later AND have something after them; the confirm
+(`confirmEndBlockHere`) names the week count and the new end date, and mentions
+rolling only when it applies.
+
+**Deliberately desktop-only** (confirmed with Terra). Both grids are `.web.js`;
+native shows the block overview instead and phone-width web now does too, so
+End here isn't reachable from a phone. Not a gap to fix — trimming is a
+restructuring action and restructuring happens at a desk.
+
+**Not built, and worth remembering as the other half of this**: moving a block
+(editing `block_start_date`), which is the cheap fix for "I started it in the
+wrong week" and needs no migration either — the dates are all stored and
+writable. Deleting an arbitrary middle week was explicitly rejected, not
+deferred; every real case is a tail.
+
+**Verified against real data rather than reasoned**: Dustin's SPC block (4
+weeks, currently week 3, `auto_extend` false) — End here renders on week 3
+alone, and a trim there would remove 2 week-4 sessions with
+`completions_after_wk3 = 0`, so the guard passes and the block would end 08-21.
+Read-only check, no mutation run. `expo export -p web` clean, Babel scope pass
+clean. **Not click-tested** — both grids need a coach login.
+
 ## Working notes for future sessions
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.
