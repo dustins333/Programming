@@ -4068,6 +4068,64 @@ unsolved again**; if either needs fixing, get a real device first. This has now
 been reasoned about wrongly twice from a desktop, and a desktop browser cannot
 reproduce any of it — with no on-screen keyboard the entire code path no-ops.
 
+## Auth fields behind the keyboard: the shell fix, then the hero collapse (2026-08-15)
+
+Two commits, and the second only exists because the first was half a fix.
+
+**`171a6b4` — the shell.** Expo pins the app to `#root,body,html{height:100%}`
++ `body{overflow:hidden}`, and iOS shrinks the VISUAL viewport on keyboard-open
+while leaving the LAYOUT viewport alone. So `height:100%` never changes, the
+page keeps rendering full-height, and the bottom ~45% sits under the keyboard.
+Measured on `/login` at 375x812: the email field's only scrollable ancestor
+reported `scrollHeight 720 === clientHeight 720` — nothing could scroll,
+anywhere. That's why it read as "a common theme" rather than one screen's bug.
+`WebKeyboardViewport` shrinks the root to `visualViewport.height` (the web
+equivalent of Android's adjustResize, which this codebase already assumes).
+Note `automaticallyAdjustKeyboardInsets` is an **iOS-native prop that
+react-native-web's ScrollView never reads** — it has always been a no-op on the
+PWA, so any comment claiming it covers web is wrong. Same commit: auth inputs
+15px → 16px (iOS auto-zooms anything smaller), `interactive-widget=resizes-content`
+so Android does this natively, and `overflow:hidden` on the auth shell — its
+bottom-right decorative blob (`right:-110`) was unclipped and pushed document
+scrollWidth to 486 against a 375 viewport, which iOS lets you pan sideways
+("it doesn't hold its shape").
+
+**`b7b0fe7` — the hero collapse.** Shrinking the root makes a screen
+*scrollable* but nothing scrolls the field into view, and per the section above
+nothing may. `/login` only looked fixed because its fields happen to land inside
+the strip already. On `/register`'s code step the visible strip is **377pt**
+while the password field sat at **429-477pt**. New `AuthHero` (in `AuthChrome`)
+drops the mark/heading/explainer while the keyboard is up, reclaiming ~152pt —
+a pure render, no scrolling, no focus contact. Applied to register (both steps),
+reset-password (both steps), set-password. Native gets a 0 inset from
+`useKeyboardInset` and keeps its hero.
+
+**Three things measured on device that are worth not rediscovering:**
+- **Deferring a scroll does not make it safe.** A `scrollIntoView` debounced
+  300ms — deliberately long after the focus gesture — still produced `focusout`
+  308ms after the keyboard opened. There is no safe moment to scroll while an
+  iOS keyboard is open, not merely no safe moment during focus.
+- **Collapse the minimum that works.** Also wrapping the back-button row
+  (~236pt) made Safari pan the visual viewport, which changes `vv.offsetTop`,
+  which flipped the hook to "no keyboard", which re-showed the hero — a visible
+  oscillation.
+- **`useKeyboardInset` and `WebKeyboardViewport` can disagree.** The hook
+  subtracts `vv.offsetTop` (correct for placing a bottom sheet) so it reads "no
+  keyboard" once Safari pans. `AuthHero` therefore compares `visibleHeight`
+  against the layout viewport — the shim's exact test, same 80px floor. The hook
+  is unchanged; its own callers need offsetTop. If a bottom sheet misbehaves
+  mid-pan, this is the thread.
+
+**How it was verified, since a desktop browser genuinely cannot reproduce any of
+this**: booted iPhone 17 Pro simulator, real Mobile Safari, dev server over
+`http://localhost:<port>` (the simulator reaches the host's localhost directly —
+`xcrun simctl openurl <udid> <url>`). The decisive tool was an **on-screen event
+log** rendered into the page (focusin/focusout/vv.resize with timestamps), which
+gives the whole story from a single screenshot even after the keyboard has
+closed — far better than tapping and guessing, and it's what pinned the 308ms
+focusout to the debounced scroll. Still unverified: set-password and
+reset-password's code step (structurally identical, not individually driven).
+
 ## Working notes for future sessions
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.
@@ -4080,5 +4138,14 @@ reproduce any of it — with no on-screen keyboard the entire code path no-ops.
 - **`git push` is NOT reliably available even in a session where Supabase/Vercel/EAS CLIs are authenticated** — hit this for real 2026-08-07 (the Web Push session): `git push origin main` failed with `could not read Username for 'https://github.com': Device not configured` (no reachable `osxkeychain` entry for github.com, no `gh` CLI installed). Don't assume a push will succeed just because other tool auth has — commit locally, then explicitly tell the user the commit is local-only and ask them to push (or fix git credentials) rather than silently treating "committed" as "deployed." This matters more than usual for this project specifically, since Vercel's connected-repo auto-deploy is the *only* deploy path (see the "real Vercel-deploy lesson" note above) — a local-only commit means nothing shipped at all, not even a stale-but-present deploy.
 
 - **Never commit unless Terra explicitly asks, and when you do, stage only the exact files you changed — never `git add -A`, `git add .`, or `git commit -a`.** Terra frequently runs **several sessions against this same working tree at once**, so at any moment another session may have unrelated files mid-edit, including throwaway test harnesses. Blanket staging sweeps them into your commit. This caused a real near-miss on 2026-08-10: a commit meant only for `lib/webAutofillSuppression.js` staged everything modified and picked up a temporary visual harness that had been mounted on `app/(auth)/login.js` (the standing preview trick documented above), plus two other files from a parallel session. That harness `return`s a static swatch page **before** the real login form — had it been pushed, every web user would have hit a dead sign-in screen. It was caught only because the other session went to revert its harness and found it already committed. Two habits prevent it: don't commit unasked, and always `git add <specific paths>`. Also worth a `git status` glance before committing — if files you never touched are modified, another session owns them, so leave them alone.
+
+- **Prefer a throwaway top-level route over the login-screen harness.** A file
+  like `app/zz-harness.js` (outside the `(auth)`/`(member)`/`(coach)` groups) is
+  reachable unauthenticated exactly like `login.js`, renders whatever components
+  you want to measure, and **deleting it cannot leave sign-in broken** — which is
+  the entire failure mode of the trick below. Used this way on 2026-08-15 to
+  measure `/register`'s code step without driving the real flow (which would have
+  texted a real person). Same teardown discipline applies: delete it and check
+  `git status` before committing.
 
 - **The login-screen harness trick has a matching teardown obligation.** Mounting components on `app/(auth)/login.js` to preview them (documented above, genuinely useful and used repeatedly) leaves the sign-in screen broken until reverted. Back the file up first (`cp` to the scratchpad), revert immediately after screenshotting, and verify with `git diff -- "app/(auth)/login.js"` that it's actually clean — don't just assume the restore worked. The longer a harness sits on disk, the wider the window for a parallel session to commit it.
