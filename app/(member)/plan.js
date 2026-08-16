@@ -31,7 +31,10 @@ import { retryOnce } from "../../lib/retry";
 import { SessionLogger } from "../../components/SessionLogger";
 import { SessionHeroBar } from "../../components/SessionHeroBar";
 import { ProgramPickerModal } from "../../components/ProgramPickerModal";
+import { FinalizePlate } from "../../components/session/FinalizePlate";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
+import { buildLiftFinalizePlate } from "../../lib/finalizePlate";
+import { getGroupWeeklyProgress, getSpcWeeklyProgress } from "../../lib/programming/weeklyProgress";
 import { fonts, colors } from "../../lib/theme";
 import { toastSuccess } from "../../lib/toast";
 
@@ -178,6 +181,12 @@ export default function MyFitness() {
   // by definition the chip is only ever tapped once something already is —
   // so reusing that gate meant the chip did nothing at all.
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The finalize plate (design_handoff_member_finalize_v1) — set by
+  // handleFinalizeGroup/handleFinalizeSpc right after a successful finalize,
+  // never on the un-finalize branch or from handleFinalizeOneOff (Extras
+  // have no weekly target to count against — see the README's "Extras /
+  // one-offs: no plate" rule).
+  const [finalizePlate, setFinalizePlate] = useState(null);
   // The page's own ScrollView is what a focused reps/weight/notes field
   // scrolls itself above the keyboard inside — this used to be the focus
   // overlay's ScrollView, but with the session on one page the page is the
@@ -544,7 +553,25 @@ export default function MyFitness() {
     }
     await finalizeGroupSession(profile.id, groupEntry.workout.id);
     setGroups((prev) => prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: true } : g)));
-    toastSuccess("Workout finalized — nice work!");
+    try {
+      const progress = await getGroupWeeklyProgress(profile.id, groupEntry.groupProgramId);
+      const plate = await buildLiftFinalizePlate({
+        userId: profile.id,
+        sessionKey: `group:${groupEntry.workout.id}`,
+        session: { groupWorkoutId: groupEntry.workout.id },
+        sessionName: groupEntry.workout.title || `Session ${groupEntry.sessionNumber}`,
+        weekNumber: groupEntry.weekNumber,
+        exerciseIds: groupEntry.exercises.map((ex) => ex.exercise?.id),
+        progress,
+      });
+      setFinalizePlate(plate);
+    } catch (err) {
+      // The finalize itself already succeeded — a failure computing the
+      // celebratory plate shouldn't look like the finalize failed, so this
+      // falls back to the plain toast instead of surfacing an error.
+      console.error("Finalize plate failed to build", err);
+      toastSuccess("Workout finalized — nice work!");
+    }
   };
 
   const handleFinalizeSpc = async () => {
@@ -563,7 +590,22 @@ export default function MyFitness() {
     }
     await finalizeSpcSession(profile.id, session.workout.id, spc.weekNumber);
     setCompleted(true);
-    toastSuccess("Workout finalized — nice work!");
+    try {
+      const progress = await getSpcWeeklyProgress(profile.id);
+      const plate = await buildLiftFinalizePlate({
+        userId: profile.id,
+        sessionKey: `spc:${session.workout.id}:${spc.weekNumber}`,
+        session: { spcWorkoutId: session.workout.id, weekNumber: spc.weekNumber },
+        sessionName: spcDetail?.title || session.workout.title || `Session ${session.sessionNumber}`,
+        weekNumber: spc.weekNumber,
+        exerciseIds: (spcDetail?.exercises ?? []).map((ex) => ex.exercise?.id),
+        progress,
+      });
+      setFinalizePlate(plate);
+    } catch (err) {
+      console.error("Finalize plate failed to build", err);
+      toastSuccess("Workout finalized — nice work!");
+    }
   };
 
   // One-offs are open-until-completed, no recurrence — once finalized it
@@ -1068,6 +1110,8 @@ export default function MyFitness() {
         setPickerDismissed(true);
       }}
     />
+
+    <FinalizePlate plate={finalizePlate} onDone={() => setFinalizePlate(null)} />
     </View>
   );
 }

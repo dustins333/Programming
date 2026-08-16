@@ -6,7 +6,7 @@ import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bo
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { todayInBoise, addDays, daysBetween } from "../../../lib/boiseDate";
-import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
+import { computeWeekWindows, currentCalendarWeek } from "../../../lib/nutrition/weekCycle";
 import { getCheckinForWeek } from "../../../lib/nutrition/checkin";
 import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
@@ -17,6 +17,8 @@ import { listActiveMilestones, listCompletedMilestones, getUnseenCompletedMilest
 import { listPhases } from "../../../lib/nutrition/planPhases";
 import { TodayCardSlider } from "../../../components/nutrition/TodayCardSlider";
 import { MilestoneCongratsModal } from "../../../components/nutrition/MilestoneCongratsModal";
+import { FinalizePlate } from "../../../components/session/FinalizePlate";
+import { buildNutritionWeekPlate } from "../../../lib/finalizePlate";
 import { MilestoneDetailModal } from "../../../components/nutrition/MilestoneDetailModal";
 import { CalorieOverrideModal } from "../../../components/nutrition/CalorieOverrideModal";
 import { MacroDial } from "../../../components/nutrition/MacroDial";
@@ -309,6 +311,10 @@ export default function NutritionToday() {
   const [finalizedAt, setFinalizedAt] = useState(null);
   const [finalizeError, setFinalizeError] = useState(null);
   const [finalizing, setFinalizing] = useState(false);
+  // The finalize plate (design_handoff_member_finalize_v1) — nutrition gets
+  // exactly one, forced-olive "7/7" variant, drawn only on the week's 7th
+  // finalized day; days 1-6 keep the plain toast.
+  const [finalizePlate, setFinalizePlate] = useState(null);
   const debounceRef = useRef(null);
   // The load effect below sets `values` from the server, which would
   // otherwise immediately re-trigger the autosave effect on first render —
@@ -450,6 +456,25 @@ export default function NutritionToday() {
       // the old `result.error` branch here was dead code.
       const result = await finalizeLog(profile.id, selectedDate, values);
       setFinalizedAt(result.data.finalized_at);
+
+      // Current week only — same guard the lifting side gets structurally
+      // for free (plan.js only ever finalizes the current week's session);
+      // nutrition's date stepper can reach arbitrary past days, so a
+      // back-filled old week's 7th day stays silent rather than surfacing a
+      // stale "week complete" plate long after that week is over.
+      const week = currentCalendarWeek(today);
+      if (selectedDate >= week.start && selectedDate <= week.end) {
+        try {
+          const weekLogs = await listLogsForDateRange(profile.id, week.start, week.end);
+          const finalizedCount = weekLogs.filter((l) => l.finalized_at).length;
+          if (finalizedCount >= 7) {
+            setFinalizePlate(buildNutritionWeekPlate({ weekStart: week.start, weekEnd: week.end }));
+            return;
+          }
+        } catch (err) {
+          console.error("Failed to check week completion for the finalize plate:", err);
+        }
+      }
       toastSuccess("Day finalized — nice work!");
     } catch (err) {
       setFinalizeError(err.message ?? String(err));
@@ -777,6 +802,7 @@ export default function NutritionToday() {
         </View>
       ) : null}
       <MilestoneCongratsModal milestone={congratsMilestone} onClose={handleCloseCongrats} />
+      <FinalizePlate plate={finalizePlate} onDone={() => setFinalizePlate(null)} />
       <MilestoneDetailModal milestone={selectedMilestone} onClose={() => setSelectedMilestone(null)} />
       <CalorieOverrideModal
         visible={calorieModalOpen}
