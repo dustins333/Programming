@@ -6,6 +6,7 @@ import { KovaDisc } from "../../components/auth/KovaCoin";
 import { AuthField } from "../../components/auth/AuthFields";
 import {
   AuthFooter,
+  AuthHero,
   AuthScreen,
   Body,
   ErrorLine,
@@ -59,12 +60,14 @@ export default function SetPassword() {
 
   return (
     <AuthScreen contentStyle={{ paddingHorizontal: 28 }}>
-      <View style={{ paddingTop: 44, marginBottom: 24 }}>
-        <KovaDisc />
-      </View>
+      <AuthHero>
+        <View style={{ paddingTop: 44, marginBottom: 24 }}>
+          <KovaDisc />
+        </View>
 
-      <Heading style={{ marginBottom: 10 }}>Set your password.</Heading>
-      <Body style={{ marginBottom: 26 }}>Choose a password for your Kova Strength account.</Body>
+        <Heading style={{ marginBottom: 10 }}>Set your password.</Heading>
+        <Body style={{ marginBottom: 26 }}>Choose a password for your Kova Strength account.</Body>
+      </AuthHero>
 
       {!tokenHash ? (
         <ErrorLine message="This link is missing or invalid. Request a new one from the sign-in screen." />

@@ -6,6 +6,7 @@ import { KovaDisc } from "../../components/auth/KovaCoin";
 import { AuthField, CodeInput } from "../../components/auth/AuthFields";
 import {
   AuthFooter,
+  AuthHero,
   AuthScreen,
   BackButton,
   Body,
@@ -110,11 +111,13 @@ export default function Register() {
 
       {isEmailStep ? (
         <>
-          <View style={{ marginBottom: 24 }}>
-            <KovaDisc />
-          </View>
-          <Heading style={{ marginBottom: 10 }}>Set up your account.</Heading>
-          <Body style={{ marginBottom: 26 }}>Enter your email and we'll text you a code.</Body>
+          <AuthHero>
+            <View style={{ marginBottom: 24 }}>
+              <KovaDisc />
+            </View>
+            <Heading style={{ marginBottom: 10 }}>Set up your account.</Heading>
+            <Body style={{ marginBottom: 26 }}>Enter your email and we'll text you a code.</Body>
+          </AuthHero>
 
           <AuthField
             label="EMAIL"
@@ -140,8 +143,10 @@ export default function Register() {
         </>
       ) : (
         <>
-          <Heading style={{ marginBottom: 10 }}>One code, one password.</Heading>
-          <Body style={{ marginBottom: 26 }}>Enter the code we texted you, and choose a password.</Body>
+          <AuthHero>
+            <Heading style={{ marginBottom: 10 }}>One code, one password.</Heading>
+            <Body style={{ marginBottom: 26 }}>Enter the code we texted you, and choose a password.</Body>
+          </AuthHero>
 
           <CodeInput value={code} onChangeText={setCode} style={{ marginBottom: 18 }} />
 
@@ -156,6 +161,12 @@ export default function Register() {
             textContentType="newPassword"
             // Stated, not just enforced by a dimmed button.
             hint="At least 8 characters."
+            // The Verify button sits below the keyboard while this field is
+            // focused (the hero collapses, but not by enough to lift a
+            // button that far down), so Go on the keyboard has to work —
+            // same as login's password field.
+            returnKeyType="go"
+            onSubmitEditing={verifyDisabled ? undefined : handleVerify}
             style={{ marginBottom: 18 }}
           />
 

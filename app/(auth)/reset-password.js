@@ -7,6 +7,7 @@ import { KovaDisc } from "../../components/auth/KovaCoin";
 import { AuthField, CodeInput } from "../../components/auth/AuthFields";
 import {
   AuthFooter,
+  AuthHero,
   AuthScreen,
   BackButton,
   Body,
@@ -199,13 +200,15 @@ export default function ResetPassword() {
 
       {isEmailStep ? (
         <>
-          <View style={{ marginBottom: 24 }}>
-            <KovaDisc />
-          </View>
-          <Heading style={{ marginBottom: 10 }}>Reset your password.</Heading>
-          <Body style={{ marginBottom: 26 }}>
-            Enter the email your gym has on file. We'll text a code to the phone number on your account.
-          </Body>
+          <AuthHero>
+            <View style={{ marginBottom: 24 }}>
+              <KovaDisc />
+            </View>
+            <Heading style={{ marginBottom: 10 }}>Reset your password.</Heading>
+            <Body style={{ marginBottom: 26 }}>
+              Enter the email your gym has on file. We'll text a code to the phone number on your account.
+            </Body>
+          </AuthHero>
 
           <AuthField
             label="EMAIL"
@@ -237,10 +240,12 @@ export default function ResetPassword() {
         </>
       ) : (
         <>
-          <Heading style={{ marginBottom: 10 }}>Check your texts.</Heading>
-          <Body style={{ marginBottom: 26 }}>
-            Enter the 6-digit code we sent, then pick a new password.
-          </Body>
+          <AuthHero>
+            <Heading style={{ marginBottom: 10 }}>Check your texts.</Heading>
+            <Body style={{ marginBottom: 26 }}>
+              Enter the 6-digit code we sent, then pick a new password.
+            </Body>
+          </AuthHero>
 
           <CodeInput value={code} onChangeText={setCode} style={{ marginBottom: 18 }} />
 
@@ -256,6 +261,10 @@ export default function ResetPassword() {
             // Stated, not just enforced by a dimmed button — the rule used
             // to be invisible until you'd already failed it.
             hint="At least 8 characters."
+            // The submit button sits below the keyboard while this field is
+            // focused, so Go on the keyboard has to work (see register.js).
+            returnKeyType="go"
+            onSubmitEditing={verifyDisabled ? undefined : handleVerify}
             style={{ marginBottom: 18 }}
           />
 

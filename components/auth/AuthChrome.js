@@ -2,6 +2,7 @@ import { Linking, Platform, ScrollView, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressFade } from "../PressFade";
+import { useKeyboardInset } from "../../lib/useKeyboardInset";
 import { fonts } from "../../lib/theme";
 
 // Shared shell for every (auth) screen: full-bleed clay, the two overlay
@@ -95,6 +96,45 @@ export function AuthScreen({ children, contentStyle, scroll = true }) {
       )}
     </View>
   );
+}
+
+// Wraps the decorative top of an auth screen — the mark, the big heading,
+// the explainer line — and drops it while the keyboard is up.
+//
+// This is the ONLY safe way to get a low-sitting field out from behind the
+// keyboard on the web build, and it is worth understanding why the obvious
+// alternative is not available. WebKeyboardViewport shrinks the root to the
+// visible strip, which makes the screen scrollable, but nothing then scrolls
+// the focused field into view: on iOS ANY programmatic scroll while the
+// keyboard is open blurs the field and closes it. That was measured twice —
+// once from a focusin handler, and once from a 300ms-debounced scroll long
+// after the focus gesture, which still produced `focusout` 308ms after the
+// keyboard opened. Deferring does not help; there is no safe moment.
+//
+// So the field has to already be inside the strip, which means the content
+// above it has to shrink. On /register's code step the visible strip is
+// 377pt while the password field sat at 429-477pt — entirely below it —
+// and dropping the heading and explainer reclaims ~152pt, which is what
+// brings it back on screen.
+//
+// Native returns a 0 inset from this hook and keeps its hero, because it
+// has real keyboard-aware scrolling and never needed any of this.
+export function AuthHero({ children }) {
+  // Deliberately NOT the hook's own `keyboardInset`, which subtracts
+  // vv.offsetTop because a bottom sheet has to know where the strip sits.
+  // Safari pans the visual viewport as well as shrinking it, and once
+  // offsetTop is large that subtraction reads as "no keyboard" — measured
+  // on device, the hero popped back mid-typing and the layout oscillated.
+  // Comparing the visible height against the layout viewport is exactly
+  // WebKeyboardViewport's own test, including the 80px floor, so the two
+  // cannot disagree about whether a keyboard is up.
+  const { visibleHeight } = useKeyboardInset();
+  const open =
+    Platform.OS === "web" && visibleHeight != null && visibleHeight < window.innerHeight - 80;
+  // Fragment, not a bare `children` — these call sites pass several
+  // siblings, and returning the raw array asks React for keys it has no
+  // reason to need.
+  return open ? null : <>{children}</>;
 }
 
 export function BackButton({ onPress }) {
