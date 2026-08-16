@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "./PressFade";
@@ -17,8 +17,21 @@ import { fonts } from "../lib/theme";
 //  - done:    olive, a ✓, "Rest done" + the lift and set, and "Back to lift ›".
 //    Holds a few seconds (lib/restTimer.js's DONE_HOLD_MS) then clears itself.
 //
-// Tapping the body returns to the lift in either state. Cancel is its own
-// press target so it can't be hit by accident on the way back.
+// The bar never navigates when the member is ALREADY on the screen the timer
+// came from (`onLiftScreen` below). Two real bugs, both reported off the PWA:
+// the done state offered "Back to lift ›" while standing on that very lift,
+// and — worse — a mis-tap on the running bar's body fired a navigation that
+// re-ran plan.js's load(), resetting the page's own session resolution ("it
+// asked me what session I was logging again"). On that screen the body is
+// plain text with no press target at all, and the done state offers Dismiss
+// instead. When it DOES navigate it uses router.navigate, not push, so
+// repeated taps update the existing screen rather than stacking copies of it.
+//
+// Cancel is a padded chip, not a bare word with hitSlop: react-native-web's
+// Pressable does not implement hitSlop at all (confirmed — the prop appears
+// nowhere in its source), so on the PWA the old target was literally the
+// glyph box of an 11px word. That is why Cancel "took a few taps" to land.
+// Any tap target on this bar has to earn its size from real padding.
 //
 // The 250ms tick lives here rather than in the provider on purpose: a
 // provider re-render re-renders every member screen beneath it, and there's
@@ -30,9 +43,16 @@ const SAND = "#beac95";
 const OCHRE = "#e0b070";
 const OLIVE = "#4d6142";
 
+// Route groups aren't part of the URL, so usePathname() gives "/plan" where a
+// returnTo href gives "/(member)/plan". Compare them on the same footing.
+function stripGroups(path) {
+  return String(path || "").replace(/\/\([^)]*\)/g, "");
+}
+
 export function RestTimerBar() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const pathname = usePathname();
   const { timer, cancelRest, markRestDone } = useRestTimer();
   const [, tick] = useState(0);
 
@@ -50,9 +70,14 @@ export function RestTimerBar() {
 
   if (!timer) return null;
 
+  // Already standing on the screen the rest came from? Then there is nowhere
+  // to go back to, and navigating would only reset it.
+  const onLiftScreen = !timer.returnTo || stripGroups(pathname) === stripGroups(timer.returnTo.pathname);
+  const canNavigate = !!timer.returnTo && !onLiftScreen;
+
   const goBackToLift = () => {
-    if (!timer.returnTo) return;
-    router.push(timer.returnTo);
+    if (!canNavigate) return;
+    router.navigate(timer.returnTo);
   };
 
   const setLine = [timer.liftName, timer.setNumber ? `set ${timer.setNumber}` : null].filter(Boolean).join(" · ");
@@ -60,23 +85,7 @@ export function RestTimerBar() {
   return (
     <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 16, paddingBottom: 6, backgroundColor: "#faf8f6" }}>
       {timer.done ? (
-        <PressFade
-          onPress={goBackToLift}
-          accessibilityLabel={`Rest done. ${setLine}. Back to lift`}
-          style={{
-            backgroundColor: OLIVE,
-            borderRadius: 16,
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 12,
-            shadowColor: OLIVE,
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.28,
-            shadowRadius: 20,
-          }}
-        >
+        <Body onPress={canNavigate ? goBackToLift : null} tone={OLIVE} label={`Rest done. ${setLine}`}>
           <View
             style={{
               width: 28,
@@ -100,68 +109,96 @@ export function RestTimerBar() {
               </Text>
             ) : null}
           </View>
-          {timer.returnTo ? (
+          {canNavigate ? (
             <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: "#fff", flexShrink: 0 }}>
               Back to lift ›
             </Text>
-          ) : null}
-        </PressFade>
+          ) : (
+            <ChipButton onPress={cancelRest} label="Dismiss" color="#fff" borderColor="rgba(255,255,255,0.4)" />
+          )}
+        </Body>
       ) : (
-        <View
-          style={{
-            backgroundColor: DARK,
-            borderRadius: 16,
-            paddingHorizontal: 14,
-            paddingVertical: 11,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 12,
-            shadowColor: DARK,
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.22,
-            shadowRadius: 20,
-          }}
+        <Body
+          onPress={canNavigate ? goBackToLift : null}
+          tone={DARK}
+          label={`Resting, ${formatSeconds((timer.endsAt - Date.now()) / 1000)} left`}
         >
-          <PressFade
-            onPress={goBackToLift}
-            accessibilityLabel={`Resting, ${formatSeconds((timer.endsAt - Date.now()) / 1000)} left. Back to lift`}
-            style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12 }}
-          >
-            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: 24, color: CREAM, flexShrink: 0 }}>
-              {formatSeconds((timer.endsAt - Date.now()) / 1000)}
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: 24, color: CREAM, flexShrink: 0 }}>
+            {formatSeconds((timer.endsAt - Date.now()) / 1000)}
+          </Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.1}
+              style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.3, color: SAND, marginBottom: 5 }}
+            >
+              {timer.liftName ? `REST · ${String(timer.liftName).toUpperCase()}` : "REST"}
             </Text>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.1}
-                style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.3, color: SAND, marginBottom: 5 }}
-              >
-                {timer.liftName ? `REST · ${String(timer.liftName).toUpperCase()}` : "REST"}
-              </Text>
-              <View style={{ height: 4, borderRadius: 999, backgroundColor: "rgba(247,243,238,0.18)", overflow: "hidden" }}>
-                <View
-                  style={{
-                    width: `${Math.min(100, Math.max(0, ((timer.durationMs - (timer.endsAt - Date.now())) / timer.durationMs) * 100))}%`,
-                    height: 4,
-                    borderRadius: 999,
-                    backgroundColor: OCHRE,
-                  }}
-                />
-              </View>
+            <View style={{ height: 4, borderRadius: 999, backgroundColor: "rgba(247,243,238,0.18)", overflow: "hidden" }}>
+              <View
+                style={{
+                  width: `${Math.min(100, Math.max(0, ((timer.durationMs - (timer.endsAt - Date.now())) / timer.durationMs) * 100))}%`,
+                  height: 4,
+                  borderRadius: 999,
+                  backgroundColor: OCHRE,
+                }}
+              />
             </View>
-          </PressFade>
-          <PressFade
-            onPress={cancelRest}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Cancel rest timer"
-            style={{ flexShrink: 0 }}
-          >
-            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color: OCHRE }}>
-              Cancel
-            </Text>
-          </PressFade>
-        </View>
+          </View>
+          <ChipButton onPress={cancelRest} label="Stop" color={OCHRE} borderColor="rgba(224,176,112,0.45)" />
+        </Body>
       )}
     </View>
+  );
+}
+
+// The bar's card. Pressable only when there's somewhere to go — on the lift's
+// own screen it's a plain View, so a tap aimed at Stop that misses does
+// nothing instead of navigating.
+function Body({ onPress, tone, label, children }) {
+  const card = {
+    backgroundColor: tone,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    shadowColor: tone,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 20,
+  };
+  if (!onPress) return <View style={card}>{children}</View>;
+  return (
+    <PressFade onPress={onPress} accessibilityLabel={`${label}. Back to lift`} style={card}>
+      {children}
+    </PressFade>
+  );
+}
+
+// ~40pt of real padded target. Deliberately not hitSlop — see the header note:
+// react-native-web ignores it, which is what made Stop take several taps on
+// the PWA. The negative margin keeps the bar the same height it was.
+function ChipButton({ onPress, label, color, borderColor }) {
+  return (
+    <PressFade
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label === "Stop" ? "Stop rest timer" : "Dismiss rest timer"}
+      style={{
+        flexShrink: 0,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginVertical: -6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor,
+      }}
+    >
+      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color }}>
+        {label}
+      </Text>
+    </PressFade>
   );
 }

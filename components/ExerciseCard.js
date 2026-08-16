@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, Linking, Keyboard } from "react-native";
+import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { fonts, colors } from "../lib/theme";
@@ -99,6 +99,8 @@ export function coachNoteFor(item) {
 // under it. Never auto-starts — a rest only ever begins on a real tap. With
 // no programmed rest there's no number to start from, so it offers the same
 // three presets the old inline timer did rather than inventing a default.
+// The presets are reachable either way now: with no programmed rest a tap
+// opens the fan, and with one a press-and-hold does (see RestTimerButton).
 // The three presets fan out as circles riding the button's own circumference
 // — up and to the left, which is the only free space (the button sits
 // bottom-right of the card). They used to be a rectangular strip floating
@@ -186,10 +188,23 @@ function RestFanGutter({ children }) {
 // exact frame the page moves left ghost tiles behind on iOS: reported as the
 // white circles staying put after the tap, minus their text. Toggling
 // opacity keeps the layer stable and gives the compositor nothing to strand.
-function RestPresetFan({ open, compact, onPick }) {
+//
+// `hoverIndex` is the bubble the member's finger is currently over during a
+// hold-and-drag (see RestTimerButton). It grows via `transform: scale` rather
+// than a bigger width/height on purpose: these are anchored by their right and
+// bottom edges, so growing the box would walk the bubble up and to the left
+// and move the very target being aimed at. Scale is about the centre, so the
+// centre — which is what the hit test uses — stays put.
+//
+// It grows a LOT (1.35×) and inverts to a solid fill because the thing it's
+// competing with is the member's own fingertip: a 38px bubble is smaller than
+// the contact patch covering it, so a colour change alone would be invisible
+// under the finger. The point of the scale is to put a visible rim outside it.
+function RestPresetFan({ open, compact, onPick, hoverIndex }) {
   const { bubble, radius } = restFanGeometry(compact);
   return REST_PRESETS.map((s, i) => {
     const theta = (PRESET_ANGLES[i] * Math.PI) / 180;
+    const hovered = open && hoverIndex === i;
     return (
       <PressFade
         key={s}
@@ -199,6 +214,7 @@ function RestPresetFan({ open, compact, onPick }) {
         style={{
           position: "absolute",
           opacity: open ? 1 : 0,
+          transform: [{ scale: hovered ? 1.35 : 1 }],
           // RNW compiles this to `pointer-events: none !important`, so it
           // beats the box-none polyfill's `> * { pointer-events: auto }` on
           // the gutter and a hidden bubble can't be tapped.
@@ -212,16 +228,16 @@ function RestPresetFan({ open, compact, onPick }) {
           borderRadius: 999,
           borderWidth: 1.5,
           borderColor: colors.primary,
-          backgroundColor: "#fff",
+          backgroundColor: hovered ? colors.primary : "#fff",
           alignItems: "center",
           justifyContent: "center",
           shadowColor: "#44403c",
           shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.12,
-          shadowRadius: 8,
+          shadowOpacity: hovered ? 0.24 : 0.12,
+          shadowRadius: hovered ? 12 : 8,
         }}
       >
-        <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 12, color: "#8a5140" }}>
+        <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 12, color: hovered ? "#fff" : "#8a5140" }}>
           {formatSeconds(s)}
         </Text>
       </PressFade>
@@ -229,35 +245,171 @@ function RestPresetFan({ open, compact, onPick }) {
   });
 }
 
-function RestTimerButton({ seconds, onStart, compact, open, onOpenChange }) {
-  const { size } = restFanGeometry(compact);
-  const pickerOpen = open;
-  const setPickerOpen = (next) => onOpenChange(typeof next === "function" ? next(open) : next);
+// How long a press has to be held before the fan opens, and how far the
+// finger may drift in that time before it's read as a scroll instead.
+const REST_HOLD_MS = 450;
+const REST_HOLD_SLOP = 12;
+
+// The stopwatch. Tap behaviour is unchanged — start the programmed rest, or
+// (with no rest programmed) toggle the fan. What's new is press-and-hold:
+// hold for REST_HOLD_MS and the fan opens under your finger, drag to a bubble,
+// release to start it. That makes the presets reachable even when the coach
+// HAS programmed a rest, which a plain tap can't offer without stealing the
+// one-tap start.
+//
+// This is a PanResponder rather than a Pressable because the gesture has to
+// keep tracking after the finger leaves the button — and that's also what
+// makes drag-to-pick safe on native where tap-to-pick was not: the responder
+// keeps receiving moves wherever the finger goes, so the bubbles' own bounds
+// (and the parent-containment rule that once made them dead) don't come into
+// it at all. Release is hit-tested against the arc's own polar definition, so
+// nothing is measured and the target can't drift out of sync with what's
+// drawn.
+//
+// Two details that are load-bearing:
+//  - onPanResponderTerminationRequest yields the touch back to the ScrollView
+//    until the hold fires, so a thumb that happens to land here can still
+//    scroll the page; once the fan is open it refuses, so the drag can't turn
+//    into a scroll halfway through.
+//  - touchAction "none" (web only) is the same guarantee on the PWA, where
+//    scrolling is the browser's and not the responder system's to give up.
+//    It costs a 38px patch you can't start a scroll from, which is the right
+//    trade for a control.
+function RestTimerButton({ seconds, onStart, compact, open, onOpenChange, hoverIndex, onHoverChange }) {
+  const { size, bubble, radius } = restFanGeometry(compact);
+  const [pressed, setPressed] = useState(false);
+
+  // Everything the handlers need, refreshed every render — the PanResponder
+  // itself is created once, so it must not close over props.
+  const latest = useRef(null);
+  latest.current = { seconds, onStart, onOpenChange, onHoverChange, open, size, bubble, radius };
+
+  const held = useRef(false); // has the hold fired during this touch?
+  const moved = useRef(false); // has the finger travelled past the slop?
+  const holdTimer = useRef(null);
+  const origin = useRef({ x: 0, y: 0 }); // where in the button the touch began
+  const hover = useRef(null);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => !held.current,
+      onPanResponderGrant: (evt) => {
+        const l = latest.current;
+        setPressed(true);
+        const { locationX, locationY } = evt.nativeEvent;
+        origin.current = {
+          x: Number.isFinite(locationX) ? locationX : l.size / 2,
+          y: Number.isFinite(locationY) ? locationY : l.size / 2,
+        };
+        held.current = false;
+        moved.current = false;
+        clearTimeout(holdTimer.current);
+        holdTimer.current = setTimeout(() => {
+          if (moved.current) return;
+          held.current = true;
+          latest.current.onOpenChange(true);
+        }, REST_HOLD_MS);
+      },
+      onPanResponderMove: (evt, g) => {
+        const l = latest.current;
+        if (Math.hypot(g.dx, g.dy) > REST_HOLD_SLOP) moved.current = true;
+        if (!held.current) return;
+        // Finger position relative to the button's centre — the same origin
+        // the arc is drawn from, so a bubble's centre is just (r·cosθ, −r·sinθ).
+        const fx = origin.current.x - l.size / 2 + g.dx;
+        const fy = origin.current.y - l.size / 2 + g.dy;
+        let best = null;
+        let bestDist = Infinity;
+        REST_PRESETS.forEach((_, i) => {
+          const theta = (PRESET_ANGLES[i] * Math.PI) / 180;
+          const d = Math.hypot(fx - l.radius * Math.cos(theta), fy + l.radius * Math.sin(theta));
+          if (d < bestDist) {
+            bestDist = d;
+            best = i;
+          }
+        });
+        const next = bestDist <= l.bubble / 2 + 10 ? best : null;
+        if (next !== hover.current) {
+          hover.current = next;
+          l.onHoverChange(next);
+        }
+      },
+      onPanResponderRelease: () => {
+        const l = latest.current;
+        setPressed(false);
+        clearTimeout(holdTimer.current);
+        if (held.current) {
+          const idx = hover.current;
+          held.current = false;
+          hover.current = null;
+          l.onHoverChange(null);
+          if (idx !== null) {
+            l.onOpenChange(false);
+            l.onStart(REST_PRESETS[idx]);
+          }
+          // Released over nothing: the fan stays open, so a fumbled drag
+          // degrades into the tap-a-bubble flow rather than being punished.
+          return;
+        }
+        if (moved.current) return; // a scroll that never became one
+        if (l.seconds) l.onStart(l.seconds);
+        else l.onOpenChange(!l.open);
+      },
+      onPanResponderTerminate: () => {
+        setPressed(false);
+        clearTimeout(holdTimer.current);
+        held.current = false;
+        if (hover.current !== null) {
+          hover.current = null;
+          latest.current.onHoverChange(null);
+        }
+      },
+    })
+  ).current;
+
+  useEffect(() => () => clearTimeout(holdTimer.current), []);
+
+  const hoveredSeconds = hoverIndex === null || hoverIndex === undefined ? null : REST_PRESETS[hoverIndex];
+
   return (
     // Explicit width so the arc's horizontal anchor is the button's own
     // centre regardless of how wide the caption under it happens to render.
     <View style={{ width: size, alignItems: "center", gap: 4, flexShrink: 0 }}>
-      <PressFade
-        onPress={() => (seconds ? onStart(seconds) : setPickerOpen((o) => !o))}
-        accessibilityLabel={seconds ? "Start rest timer" : pickerOpen ? "Hide rest presets" : "Choose a rest length"}
+      <View
+        {...pan.panHandlers}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={seconds ? "Start rest timer. Hold to choose a different length" : open ? "Hide rest presets" : "Choose a rest length"}
         style={{
           width: size,
           height: size,
           borderRadius: 999,
           borderWidth: 1,
-          borderColor: pickerOpen ? colors.primary : CARD_BORDER,
+          borderColor: open ? colors.primary : CARD_BORDER,
           backgroundColor: SOFT,
           alignItems: "center",
           justifyContent: "center",
+          opacity: pressed ? 0.6 : 1,
+          ...(Platform.OS === "web" ? { touchAction: "none" } : null),
         }}
       >
         <Ionicons name="stopwatch-outline" size={compact ? 17 : 19} color="#8a5140" />
-      </PressFade>
+      </View>
+      {/* Second readout of what you're dragging to, since your own finger is
+          sitting on the bubble itself. */}
       <Text
         maxFontSizeMultiplier={1}
-        style={{ fontFamily: fonts.sansBold, fontSize: 9.5, height: REST_LABEL_H, lineHeight: REST_LABEL_H, textAlign: "center", color: MUTED }}
+        style={{
+          fontFamily: fonts.sansBold,
+          fontSize: 9.5,
+          height: REST_LABEL_H,
+          lineHeight: REST_LABEL_H,
+          textAlign: "center",
+          color: hoveredSeconds ? colors.primaryOnWhite : MUTED,
+        }}
       >
-        {seconds ? formatSeconds(seconds) : "Rest"}
+        {hoveredSeconds ? formatSeconds(hoveredSeconds) : seconds ? formatSeconds(seconds) : "Rest"}
       </Text>
     </View>
   );
@@ -364,6 +516,8 @@ export function ExerciseCard({
   // fan's way while it's open — the presets sit close enough to the timer now
   // that the top one would otherwise land on it.
   const [restPickerOpen, setRestPickerOpen] = useState(false);
+  // Which preset the finger is over during a hold-and-drag, or null.
+  const [restHoverIndex, setRestHoverIndex] = useState(null);
   const loaded = useRef(false);
   const debounceRef = useRef(null);
   // The load effect below sets rows/notes from whatever's already saved
@@ -818,11 +972,14 @@ export function ExerciseCard({
                 compact={compact}
                 open={restPickerOpen}
                 onOpenChange={setRestPickerOpen}
+                hoverIndex={restHoverIndex}
+                onHoverChange={setRestHoverIndex}
               />
             </View>
             <RestPresetFan
               open={restPickerOpen}
               compact={compact}
+              hoverIndex={restHoverIndex}
               onPick={(s) => {
                 setRestPickerOpen(false);
                 handleStartRest(s);
