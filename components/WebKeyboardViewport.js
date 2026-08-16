@@ -64,7 +64,6 @@ export function WebKeyboardViewport() {
       !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 
     let frame = 0;
-    let zoomRestore = 0;
 
     const release = () => {
       root.style.height = "";
@@ -79,17 +78,6 @@ export function WebKeyboardViewport() {
       // inside a window that cannot scroll (body overflow is hidden), i.e.
       // the header simply gone.
       if (window.scrollY !== 0) window.scrollTo(0, 0);
-    };
-
-    // Put the focused field on screen. Done here rather than left to the
-    // browser because the field only becomes reachable *after* the resize
-    // above makes its container scrollable — by which point Safari has
-    // already had (and missed) its chance. `block: "center"` also beats the
-    // browser's minimal-scroll default, which happily leaves a field flush
-    // against the top of the keyboard.
-    const revealFocused = () => {
-      const el = document.activeElement;
-      if (isEditable(el)) el.scrollIntoView({ block: "center", inline: "nearest" });
     };
 
     const apply = () => {
@@ -109,12 +97,6 @@ export function WebKeyboardViewport() {
       const occluded = window.innerHeight - vv.height;
       if (occluded > 80 && isEditable(document.activeElement)) {
         root.style.height = `${Math.round(vv.height)}px`;
-        // Deliberately does NOT scrollTo here. Safari's pan is stale once the
-        // page is resized to fit, but correcting it costs the focus (see
-        // release above) and a field you cannot type into beats a field
-        // that sits a few pixels off. revealFocused scrolls the element
-        // itself, which is survivable where a window-level scroll is not.
-        revealFocused();
       } else {
         release();
       }
@@ -125,50 +107,32 @@ export function WebKeyboardViewport() {
       frame = requestAnimationFrame(apply);
     };
 
-    // iOS auto-zooms any focused field whose font-size is under 16px, which
-    // would trip the pinch-zoom guard above and defeat the whole fix.
-    // Pinning maximum-scale while a field is focused suppresses that; the
-    // restore on blur is also the long-standing workaround for Safari never
-    // zooming back out on its own (the original reason this file existed).
-    // <select> is included here — it auto-zooms too — even though it is not
-    // "editable" for the resize check above.
-    const isField = (el) => isEditable(el) || el?.tagName === "SELECT";
-
-    const handleFocusIn = (e) => {
-      if (!isField(e.target)) return;
-      clearTimeout(zoomRestore);
-      // Already pinned for the whole session when installed — only a browser
-      // tab needs the scale held for the duration of the focus.
-      if (meta && baseViewport && !standalone) {
-        meta.setAttribute("content", `${baseViewport}, maximum-scale=1`);
-      }
-      // Refocusing between two already-visible fields fires no resize, so
-      // the second field would never be brought into view on its own.
-      schedule();
-    };
-
-    const handleFocusOut = (e) => {
-      if (!isField(e.target)) return;
-      clearTimeout(zoomRestore);
-      zoomRestore = setTimeout(() => {
-        if (meta && baseViewport) meta.setAttribute("content", baseViewport);
-      }, 100);
-    };
-
+    // THIS COMPONENT DOES NOTHING WHILE A FIELD IS TAKING FOCUS, ON PURPOSE.
+    //
+    // It used to also listen on focusin/focusout, and from there it rewrote
+    // the viewport <meta> (pinning maximum-scale to stop iOS auto-zooming a
+    // sub-16px field), scrolled the window to unwind Safari's pan, and
+    // scrollIntoView'd the focused field. On a real iPhone the result was
+    // that tapping the email field on /login opened the keyboard and closed
+    // it again immediately — you could not sign in at all, in the installed
+    // PWA or in a plain browser tab. Every one of those three is a DOM write
+    // landing in the middle of the focus gesture, and any of them can cost
+    // the focus on WebKit; removing only the scrolls was not enough, because
+    // the meta rewrite runs on the browser-tab path.
+    //
+    // What is left is a passive observer: the visual viewport shrinks, so the
+    // root shrinks to match, which is the whole reason the file exists. It
+    // never touches focus, the meta, or scroll position while a field is
+    // being focused. If auto-zoom or scroll-into-view need solving again,
+    // they need a real device in hand first — this has now been reasoned
+    // about wrongly twice.
     vv.addEventListener("resize", schedule);
     vv.addEventListener("scroll", schedule);
-    // focusin/focusout bubble where focus/blur do not, so one listener at
-    // the document covers every field in the tree.
-    document.addEventListener("focusin", handleFocusIn);
-    document.addEventListener("focusout", handleFocusOut);
 
     return () => {
       cancelAnimationFrame(frame);
-      clearTimeout(zoomRestore);
       vv.removeEventListener("resize", schedule);
       vv.removeEventListener("scroll", schedule);
-      document.removeEventListener("focusin", handleFocusIn);
-      document.removeEventListener("focusout", handleFocusOut);
       if (meta && original) meta.setAttribute("content", original);
       release();
     };
