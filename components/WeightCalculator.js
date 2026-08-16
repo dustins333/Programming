@@ -21,7 +21,7 @@ const BAR_MODES = [
   { key: "specialty", label: "Specialty" },
 ];
 
-const PLATE_WEIGHTS = [45, 35, 25, 10, 5, 2.5];
+const PLATE_WEIGHTS = [45, 35, 25, 15, 10, 5, 2.5];
 
 const KEYPAD_ROWS = [
   ["7", "8", "9", "÷"],
