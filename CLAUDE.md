@@ -3803,6 +3803,19 @@ reports, only one of which was a bug in this pass:
     (a table, one fixed width) and `payroll/admin/report.web.js` (several, but
     admin-only desk work). Deliberately desktop-only regardless: the three
     builders, `spc/print/[blockId].web.js`, `_layout.web.js`.
+  - **NEVER import the native sibling from inside the `.web.js` file.** Metro
+    applies platform-extension resolution to plain imports, not just to routes,
+    so `import Native from "./index"` written inside `index.web.js` resolves
+    straight back to `index.web.js`. The "native" component is then the file's
+    own default export, and at phone width the branch renders itself forever:
+    stack overflow, page dies, Safari reloads, and after a few rounds you get
+    "A problem repeatedly occurred." It cost a real production crash loop on
+    the SPC roster (2026-08-15), and its quiet failure mode is worse than its
+    loud one — at desktop width the branch never fires, so it looks fine, and
+    the phone symptom reads as a stale cache. **Put the shared screen in
+    `components/` where nothing has a `.web.js` sibling** (see
+    `components/coach/SpcRosterMobile.js`, `components/coach/CoachBlockOverview.js`)
+    and have both the route and the web file render that.
 
 ## Blocks can be trimmed back: "End here" (2026-08-15)
 
@@ -3884,6 +3897,36 @@ alone, and a trim there would remove 2 week-4 sessions with
 `completions_after_wk3 = 0`, so the guard passes and the block would end 08-21.
 Read-only check, no mutation run. `expo export -p web` clean, Babel scope pass
 clean. **Not click-tested** — both grids need a coach login.
+
+## WebKeyboardViewport does nothing on focus, on purpose (2026-08-15)
+
+`components/WebKeyboardViewport.js` (added by `171a6b4`, "Push the web layout
+up when the keyboard opens") made it impossible to sign in on a phone. Tapping
+the email field on `/login` opened the keyboard and closed it again instantly,
+in the installed PWA *and* in a plain browser tab — so nobody on mobile web
+could log in at all. That commit's own message flagged it as needing "a
+click-through on the PWA and TestFlight"; this is what that click-through
+found.
+
+**Cause**: it listened on `focusin`/`focusout` and from there did three DOM
+writes in the middle of the focus gesture — rewrote the viewport `<meta>` to
+pin `maximum-scale` (guarding against iOS auto-zooming sub-16px fields),
+`window.scrollTo(0, 0)` to unwind Safari's keyboard pan, and `scrollIntoView`
+on the focused field. On WebKit any of those can cost the focus, and losing
+focus closes the keyboard the tap just opened; the visual viewport then springs
+back and the resize handler runs again.
+
+**Took two attempts**, worth knowing why: removing only the two scrolls left
+the meta rewrite, which sits behind a `!standalone` guard — so the installed
+PWA and a browser tab take *different* paths through the same component, and a
+fix verified against one says nothing about the other. Test both.
+
+**Now**: no focus listeners at all. It is a passive observer — the visual
+viewport shrinks, the root element shrinks to match, which is the whole reason
+the file exists. **Auto-zoom on sub-16px fields and scroll-into-view are
+unsolved again**; if either needs fixing, get a real device first. This has now
+been reasoned about wrongly twice from a desktop, and a desktop browser cannot
+reproduce any of it — with no on-screen keyboard the entire code path no-ops.
 
 ## Working notes for future sessions
 
