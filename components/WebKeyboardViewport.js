@@ -1,48 +1,56 @@
 import { useEffect } from "react";
 import { Platform } from "react-native";
 
-// Makes the on-screen keyboard actually push the web app's layout up,
-// instead of covering it.
+// Keeps the web app usable while the on-screen keyboard is open.
 //
 // Supersedes ViewportZoomReset, which only cured half of one symptom.
 //
-// THE BUG THIS FIXES: expo-router's ScrollViewStyleReset pins the app to
-// `#root,body,html{height:100%}` + `body{overflow:hidden}`. On iOS (and on
-// Android Chrome, whose default is also `resizes-visual`) opening the
-// keyboard shrinks the VISUAL viewport but leaves the LAYOUT viewport
-// alone — so `height:100%` never changes, the page keeps rendering at full
-// height, and whatever sits in the bottom ~45% is simply behind the
-// keyboard. Any screen whose content fits the viewport then has nothing to
-// scroll: measured on /login at 375x812, the one scrollable ancestor of the
-// email field reported scrollHeight 720 === clientHeight 720, with the two
-// inputs at y=425 and y=491. There was no scroll position that could bring
-// them into view. That is why this reads as "a common theme" rather than
-// one screen's bug — it is the app shell, not any individual screen.
+// WHAT THIS DELIBERATELY NO LONGER DOES: set the root element's height to
+// `visualViewport.height`. That was the whole point of the file, on the theory
+// that iOS shrinks the VISUAL viewport but leaves the LAYOUT viewport alone, so
+// `height:100%` (expo-router's ScrollViewStyleReset pins html/body/#root to it)
+// never changes and the app keeps rendering underneath the keyboard.
 //
-// Note `automaticallyAdjustKeyboardInsets` (set on AuthScreen's ScrollView
-// and elsewhere) is an iOS-NATIVE prop — react-native-web's ScrollView has
-// no reference to it at all, so it is a silent no-op on the PWA.
+// Measured on device, both halves of that are wrong. iPhone 17 Pro, iOS 26.5,
+// installed PWA, keyboard open on a long scrolling page:
 //
-// THE FIX: track `visualViewport.height` and set the root element's height
-// to it, which cascades through body/#root's `height:100%` and re-lays the
-// whole app out inside the visible strip — the same thing Android's native
-// adjustResize does, which this codebase already designs for. A screen that
-// no longer fits then genuinely overflows its own ScrollView, so it can
-// scroll, and we put the focused field on screen ourselves rather than
-// trusting each browser's scroll-into-view.
+//     innerH 436   vvH 436   offTop 376   scrollY 376
+//     documentElement.clientHeight 812   body 812   #root 812   docScroll 812
 //
-// KNOWN LIMIT: `position: fixed` is resolved against the layout viewport,
-// not against the root element's height, so full-screen RN <Modal> overlays
-// (which react-native-web portals to body as `position:fixed; inset:0`) do
-// not shrink with this. In-page screens — every (auth) screen, every tab —
-// are covered.
+//   * innerHeight DOES shrink. iOS 26 honours interactive-widget=resizes-content
+//     (see app/+html.js), so `innerHeight - vv.height` reads 0 and the shrink
+//     never ran at all on current iOS — it has been inert since it was written.
+//     /login was really fixed by AuthHero collapsing (commit b7b0fe7).
+//   * What does not shrink is the INITIAL CONTAINING BLOCK, which is what
+//     `height:100%` resolves against — hence body/#root still 812. Safari then
+//     scrolls the document (376px here) to reveal the field, and that native
+//     reveal is perfectly good on its own.
+//
+// And where the shrink did fire — a real member's phone, same 26.5, where the
+// accessory-bar gap evidently clears the 80px threshold that the simulator
+// lands just under — it actively caused the bug it was meant to prevent.
+// Resizing the root does NOT take away the scroll offset Safari has already
+// applied, so the page ends up scrolled past its own new bottom: content
+// crushed against the top, a dead band below it, keyboard under that.
+// Reproduced deliberately by forcing the shrink on 26.5, and it matches the
+// reported screenshot exactly. Correcting it would mean scrolling, which the
+// focus note below explains we may not do — so the shrink is gone instead.
+//
+// Note `automaticallyAdjustKeyboardInsets` (set on AuthScreen's ScrollView and
+// elsewhere) is an iOS-NATIVE prop — react-native-web's ScrollView has no
+// reference to it at all, so it is a silent no-op on the PWA.
+//
+// What remains is the part that earns its keep: pin the scale in an installed
+// PWA, and unwind Safari's stale scroll once the keyboard is actually gone.
+// If a screen's fields still sit under the keyboard, collapse something on that
+// screen (the AuthHero pattern) — a pure render, no scrolling, no focus
+// contact. Do not reintroduce a root resize without re-reading the above.
 export function WebKeyboardViewport() {
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const vv = window.visualViewport;
     if (!vv) return;
 
-    const root = document.documentElement;
     const meta = document.querySelector('meta[name="viewport"]');
     const original = meta?.getAttribute("content") ?? null;
 
@@ -66,7 +74,6 @@ export function WebKeyboardViewport() {
     let frame = 0;
 
     const release = () => {
-      root.style.height = "";
       // Never scroll while a field is focused. On iOS a programmatic scroll
       // during the focus/keyboard-open gesture drops the focus, which closes
       // the keyboard the tap just opened — the "pops up and instantly
@@ -80,26 +87,11 @@ export function WebKeyboardViewport() {
       if (window.scrollY !== 0) window.scrollTo(0, 0);
     };
 
+    // The only thing left to do on a viewport change is tidy up after the
+    // keyboard has closed; release() is itself a no-op while a field is
+    // focused, so the open case correctly does nothing at all.
     const apply = () => {
-      // A deliberate pinch-zoom shrinks the visual viewport too, and fighting
-      // it by reflowing the page would be hostile. Only react to a viewport
-      // the user did not shrink themselves.
-      if (vv.scale > 1.01) {
-        release();
-        return;
-      }
-      // innerHeight is the LAYOUT viewport and does not move when the
-      // keyboard opens, so the difference is the occluded strip. The
-      // threshold keeps URL-bar collapse and rounding noise out of it, and
-      // requiring a focused editable keeps anything *else* that shrinks the
-      // visual viewport (browser toolbars, an OS overlay) from reflowing the
-      // whole app — the keyboard only matters when a field has focus.
-      const occluded = window.innerHeight - vv.height;
-      if (occluded > 80 && isEditable(document.activeElement)) {
-        root.style.height = `${Math.round(vv.height)}px`;
-      } else {
-        release();
-      }
+      release();
     };
 
     const schedule = () => {

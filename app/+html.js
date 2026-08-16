@@ -28,12 +28,15 @@ export default function Root({ children }) {
             its bare-minimum height, buttons reading as too small/cramped). */}
         {/* interactive-widget=resizes-content asks the browser to shrink the
             LAYOUT viewport when the on-screen keyboard opens, rather than
-            only the visual one — which is what makes `height:100%` (see
-            ScrollViewStyleReset below) stop covering the app with the
-            keyboard. Chrome/Android honours it natively; iOS Safari ignores
-            it, so components/WebKeyboardViewport.js does the same job there
-            in JS. Unknown viewport keys are ignored, so this is inert
-            everywhere else. */}
+            only the visual one. Chrome/Android honours it, and as of iOS 26 so
+            does Safari — measured on device in a standalone PWA, innerHeight
+            went 812 -> 436 on keyboard-open. What it does NOT do is shrink the
+            initial containing block, so `height:100%` (see ScrollViewStyleReset
+            below) still resolves to the full pre-keyboard height and the app
+            still lays out underneath the keyboard.
+            components/WebKeyboardViewport.js is what actually fixes that, on
+            every engine — do not assume this line alone covers it. Unknown
+            viewport keys are ignored, so it is inert on older iOS. */}
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover, interactive-widget=resizes-content" />
         <ScrollViewStyleReset />
 
