@@ -15,6 +15,15 @@ const ANGLES = [
   { key: "side", label: "Side" },
   { key: "back", label: "Back" },
 ];
+const SLOT_COUNTS = [2, 3, 4];
+// Keep each pane roughly the width it had at the original fixed 3 slots
+// (~355px) whatever the count, rather than letting 2 panes stretch to the
+// full 1100 container — an aspect-ratio 3/4 pane at 525px wide is 700 tall
+// and pushes the board's stat footer off screen. Capped at the container's
+// own max so 4 panes narrow instead of overflowing.
+const PANE_WIDTH = 355;
+const CONTAINER_MAX = 1100;
+const boardWidthFor = (count) => Math.min(CONTAINER_MAX, count * PANE_WIDTH);
 
 // Standalone compare board — pick any client, compare their progress
 // photos, without going through their full client-detail page. The board
@@ -30,7 +39,8 @@ export default function NutritionPhotoCompare() {
   const [photos, setPhotos] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [angle, setAngle] = useState("front");
-  const [slotDates, setSlotDates] = useState([null, null, null]);
+  const [slotCount, setSlotCount] = useState(3);
+  const [slotDates, setSlotDates] = useState(() => Array(3).fill(null));
   const [urls, setUrls] = useState({});
 
   const loadClients = useCallback(() => {
@@ -68,14 +78,18 @@ export default function NutritionPhotoCompare() {
   );
 
   useEffect(() => {
-    if (anglePhotos.length === 0) return;
-    const fallback = defaultDates(anglePhotos, 3);
+    // Resizes as well as seeds: `fallback` is always slotCount long, so
+    // adding a slot fills the new one from the even-spacing default while
+    // keeping every date the coach already picked, and removing one drops
+    // the trailing slot.
+    const fallback = defaultDates(anglePhotos, slotCount);
     setSlotDates((prev) => fallback.map((d, i) => (prev[i] && anglePhotos.some((p) => p.date === prev[i]) ? prev[i] : d)));
+    if (anglePhotos.length === 0) return;
     getPhotoSignedUrls(anglePhotos.map((p) => p.storage_path))
       .then((next) => setUrls((prev) => ({ ...prev, ...next })))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anglePhotos]);
+  }, [anglePhotos, slotCount]);
 
   const setSlotDate = (index, date) => {
     setSlotDates((prev) => prev.map((d, i) => (i === index ? date : d)));
@@ -135,7 +149,7 @@ export default function NutritionPhotoCompare() {
           Photo Compare
         </Text>
         <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-          Pick 3 dates, then screenshot the board below to share.
+          Pick {slotCount} dates, then screenshot the board below to share.
         </Text>
 
         {clients.length === 0 ? (
@@ -177,7 +191,7 @@ export default function NutritionPhotoCompare() {
               </View>
             )}
 
-            <View className="mb-5 flex-row gap-2">
+            <View className="mb-3 flex-row gap-2">
               {ANGLES.map((a) => (
                 <Text
                   key={a.key}
@@ -196,6 +210,28 @@ export default function NutritionPhotoCompare() {
               ))}
             </View>
 
+            <View className="mb-5 flex-row items-center gap-2">
+              <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
+                Photos
+              </Text>
+              {SLOT_COUNTS.map((n) => (
+                <Text
+                  key={n}
+                  onPress={() => setSlotCount(n)}
+                  className="rounded-full border px-3.5 py-1.5"
+                  style={{
+                    fontFamily: fonts.sansMedium,
+                    fontSize: 13,
+                    borderColor: slotCount === n ? colors.primary : "#d6d3d1",
+                    backgroundColor: slotCount === n ? colors.primary : "transparent",
+                    color: slotCount === n ? "white" : "#57534e",
+                  }}
+                >
+                  {n}
+                </Text>
+              ))}
+            </View>
+
             {!photos ? (
               <ActivityIndicator color={colors.primary} />
             ) : anglePhotos.length === 0 ? (
@@ -206,14 +242,16 @@ export default function NutritionPhotoCompare() {
               <>
                 {/* Date pickers are picker "chrome" — kept outside the board
                     so a screenshot of the board alone doesn't include them. */}
-                <View className="mb-4 flex-row gap-3">
+                <View className="mb-4 flex-row gap-3" style={{ width: "100%", maxWidth: boardWidthFor(slotCount) }}>
                   {slotDates.map((date, i) => (
                     <View key={i} style={{ flex: 1 }}>
                       <DateStepper anglePhotos={anglePhotos} selectedDate={date} onChange={(d) => setSlotDate(i, d)} />
                     </View>
                   ))}
                 </View>
-                <PhotoCompareBoard clientName={clients.find((c) => c.id === selectedId)?.name ?? ""} slots={boardSlots} urls={boardUrls} />
+                <View style={{ width: "100%", maxWidth: boardWidthFor(slotCount) }}>
+                  <PhotoCompareBoard clientName={clients.find((c) => c.id === selectedId)?.name ?? ""} slots={boardSlots} urls={boardUrls} />
+                </View>
               </>
             )}
           </>

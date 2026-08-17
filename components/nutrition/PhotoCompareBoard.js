@@ -81,9 +81,11 @@ function Stat({ value, label, color }) {
   );
 }
 
-// `slots`: up to 3 entries of {date, weight} | null, oldest-first — the
-// caller (photo-compare.js) owns date selection; this component just
-// renders whatever 3 dates it's handed, with their signed photo URLs.
+// `slots`: any number of {date, weight} | null entries, oldest-first (the
+// Photo Compare tool offers 2-4) — the caller (photo-compare.js) owns date
+// selection *and* how wide the board is allowed to get, so panes stay a
+// sane size at any count; this component just renders whatever dates it's
+// handed, with their signed photo URLs.
 // Adherence is deliberately never shown here (per the README: a coach might
 // not want a bad adherence number ending up on a client's social post) —
 // only the two positive/neutral stats below.
