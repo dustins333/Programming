@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, Pressable } from "react-native";
 import { toastError } from "../../../../../../lib/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Link, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { getClient } from "../../../../../../lib/nutrition/clients";
 import {
   listQuestionnaireQuestions,
@@ -16,6 +16,7 @@ import { HighlightableAnswer } from "../../../../../../components/nutrition/High
 import { QuestionListEditor } from "../../../../../../components/nutrition/QuestionListEditor";
 import { CoachShell } from "../../../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../../../lib/formatDate";
+import { dateInBoise } from "../../../../../../lib/boiseDate";
 import { confirmRemoveQuestion } from "../../../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../../../lib/theme";
 
@@ -119,15 +120,28 @@ export default function OnboardingQuestionnaire() {
   return (
     <CoachShell>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="px-6 py-8" contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 700 }}>
-        <Link href={`/(coach)/nutrition/clients/${userId}`} style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
-          ‹ {client.name}
-        </Link>
+        {/* Two entry points now — the Onboarding tab and the Settings tab —
+            so a hardcoded href would drop the coach on the Dashboard tab
+            rather than the one she came from. Same canGoBack guard used on
+            every other multi-entry coach screen. */}
+        <Pressable
+          onPress={() =>
+            router.canGoBack() ? router.back() : router.push(`/(coach)/nutrition/clients/${userId}`)
+          }
+          style={{ marginBottom: 12, alignSelf: "flex-start" }}
+          hitSlop={8}
+        >
+          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ {client.name}</Text>
+        </Pressable>
         <Text className="mb-1 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
           Questionnaire
         </Text>
         {response?.submitted_at ? (
+          // dateInBoise, never .slice(0, 10) — submitted_at is a timestamptz,
+          // so slicing the ISO string reads the UTC date, a day ahead for
+          // anything submitted in the Boise evening.
           <Text className="mb-6 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-            Submitted {formatDateMDY(response.submitted_at.slice(0, 10))}
+            Submitted {formatDateMDY(dateInBoise(new Date(response.submitted_at)))}
           </Text>
         ) : (
           <View className="mb-6" />

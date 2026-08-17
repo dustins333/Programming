@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
+import { router } from "expo-router";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { updateClient } from "../../lib/nutrition/clients";
 import { getClientQuestions, addClientQuestion, updateClientQuestion, deleteClientQuestion, listTemplateQuestions } from "../../lib/nutrition/checkin";
-import { addDays } from "../../lib/boiseDate";
+import { addDays, dateInBoise } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
 import { CADENCE_WEEKS } from "../../lib/nutrition/photos";
 import { checkinMondayForWeek, weekStartForCheckinMonday, mondayOnOrAfter } from "../../lib/nutrition/weekCycle";
@@ -97,7 +98,7 @@ const inputStyle = {
   backgroundColor: "white",
 };
 
-export function ClientSettingsPanel({ userId, coachId, coaches = [], client, checkins = [], reopens = [], photos = [], today, isWide, onSaved }) {
+export function ClientSettingsPanel({ userId, coachId, coaches = [], client, checkins = [], reopens = [], photos = [], today, isWide, questionnaireSubmittedAt = null, onSaved }) {
   const [startDate, setStartDate] = useState(client.start_date ?? "");
   const [status, setStatus] = useState(client.status ?? "active");
   const [assignedCoachId, setAssignedCoachId] = useState(client.coach_id ?? null);
@@ -234,6 +235,41 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
           </Field>
           <Field label="Status">
             <SegmentedControl segments={STATUS_OPTIONS} activeKey={status} onSelect={setStatus} />
+          </Field>
+
+          {/* The onboarding questionnaire is answered once and then kept
+              forever, but the only screen that renders it hangs off the
+              Onboarding tab — which disappears the moment a client is
+              approved. That left every active client's answers stored and
+              unreachable (13 of 14 real clients, 2026-08-17). This is the
+              permanent way back to them, deliberately here rather than on
+              Onboarding, since Settings is the one tab that never goes
+              away. No extra fetch: the parent already loads the response. */}
+          <Field label="Original questionnaire">
+            {questionnaireSubmittedAt ? (
+              <Pressable
+                onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/questionnaire`)}
+                className="flex-row items-center justify-between rounded-lg px-3.5 py-3"
+                style={{ borderWidth: 1, borderColor: "#ddd6cd", backgroundColor: "white" }}
+              >
+                <View>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>View answers</Text>
+                  {/* dateInBoise, never .slice(0, 10) — submitted_at is a
+                      timestamptz, and slicing the ISO string reads the UTC
+                      date, which is already tomorrow for anything submitted
+                      in the Boise evening. Abbi Stauffer's real row is
+                      exactly that case (01:29Z = 19:29 the previous day). */}
+                  <Text className="mt-0.5" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+                    Submitted {formatDateMDY(dateInBoise(new Date(questionnaireSubmittedAt)))}
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: colors.primaryOnWhite }}>›</Text>
+              </Pressable>
+            ) : (
+              <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
+                She never submitted one.
+              </Text>
+            )}
           </Field>
         </Card>
 

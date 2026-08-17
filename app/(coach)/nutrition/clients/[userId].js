@@ -705,6 +705,7 @@ export default function NutritionClientDetail() {
             photos={photos}
             today={today}
             isWide={isWide}
+            questionnaireSubmittedAt={onboarding?.response?.submitted_at ?? null}
             onSaved={load}
           />
         ) : null}
