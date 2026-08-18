@@ -14,7 +14,13 @@ import { fonts, colors } from "../../lib/theme";
 // The Check-In tab (coach web v2, screen 22): what came in, what it's
 // against, and what she said — in that order.
 //
-// The right rail is EDITABLE until the check-in is finalized, then frozen.
+// The right rail is ALWAYS live and editable. It used to freeze after a
+// check-in was finalized, showing the focus/game-plan copy captured onto
+// the response row — dropped per direct feedback: those snapshots were
+// never referenced, and seeing a stale copy next to the live one read as
+// "wait, I thought I just changed this". The snapshot columns are still
+// written (harmless, and the data is there if it's ever wanted back), just
+// never displayed.
 // Revising the focus items and the game plan is what reviewing a check-in
 // actually consists of, so both stay live while the coach works; finalizing
 // captures them onto the response (see finalizeCheckin) and the rail switches
@@ -143,7 +149,6 @@ export function NutritionCheckinTab({
   onOpenPhotos,
   onOpenTargets,
 }) {
-  const finalized = Boolean(checkin?.finalized_at);
   const paired = pairAnswers(checkin?.answers, priorCheckin?.answers, templateQuestions);
   const metrics = metricDeltas(summary, priorSummary);
   const weekPhotos = photosForRequirementWeek(photos, selectedWeek);
@@ -238,56 +243,13 @@ export function NutritionCheckinTab({
         </View>
 
         <View style={{ width: isWide ? 300 : undefined }}>
-          {finalized ? (
-            <>
-              <Card title="Game plan that week" style={{ marginBottom: 16 }}>
-                <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: checkin.game_plan_snapshot ? "#44403c" : "#a8a29e", lineHeight: 19 }}>
-                  {checkin.game_plan_snapshot || "Nothing written for this week."}
-                </Text>
-              </Card>
+          <Card title="Notes" style={{ marginBottom: 16 }}>
+            <GamePlan userId={userId} initialGamePlan={client.game_plan} />
+          </Card>
 
-              <Card title="Focus that week">
-                {(checkin.focus_snapshot ?? []).length === 0 ? (
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>No focus items were set that week.</Text>
-                ) : (
-                  checkin.focus_snapshot.map((item, i) => (
-                    <View key={i} className="mb-2 flex-row items-start" style={{ gap: 8 }}>
-                      <View
-                        className="items-center justify-center rounded"
-                        style={{
-                          width: 16,
-                          height: 16,
-                          marginTop: 1,
-                          borderWidth: 1.5,
-                          borderColor: item.done ? "#4d6142" : "#ddd6cd",
-                          backgroundColor: item.done ? "#4d6142" : "transparent",
-                        }}
-                      >
-                        {item.done ? <Text style={{ color: "white", fontSize: 10, lineHeight: 12 }}>✓</Text> : null}
-                      </View>
-                      <Text className="flex-1" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: item.done ? "#78716c" : "#44403c" }}>
-                        {item.text}
-                      </Text>
-                    </View>
-                  ))
-                )}
-              </Card>
-            </>
-          ) : (
-            <>
-              <Card title="Game plan" style={{ marginBottom: 16 }}>
-                <GamePlan userId={userId} initialGamePlan={client.game_plan} />
-              </Card>
-
-              <Card title="Focus" style={{ marginBottom: 16 }}>
-                <FocusChecklist userId={userId} items={focusItems} onChanged={onChanged} />
-              </Card>
-
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", lineHeight: 17 }}>
-                Both are live. Completing this check-in saves them against this week, and this panel switches to showing that.
-              </Text>
-            </>
-          )}
+          <Card title="Focus" style={{ marginBottom: 16 }}>
+            <FocusChecklist userId={userId} items={focusItems} onChanged={onChanged} />
+          </Card>
         </View>
       </View>
     </View>

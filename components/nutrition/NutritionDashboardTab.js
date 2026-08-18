@@ -174,7 +174,7 @@ export function NutritionDashboardTab({ userId, coachId, client, logs, currentTa
           <FocusChecklist userId={userId} items={focusItems} onChanged={onChanged} />
         </RailCard>
 
-        <RailCard title="Game plan">
+        <RailCard title="Notes">
           <GamePlan userId={userId} initialGamePlan={client.game_plan} />
         </RailCard>
 

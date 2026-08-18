@@ -13,6 +13,7 @@ import { listLogs } from "../../../../lib/nutrition/dailyLog";
 import {
   getCheckinForWeek,
   finalizeCheckin,
+  unfinalizeCheckin,
   listCheckinsSince,
   listCheckinReopensSince,
   listTemplateQuestions,
@@ -38,10 +39,11 @@ import { NutritionDashboardTab } from "../../../../components/nutrition/Nutritio
 import { NutritionCheckinTab } from "../../../../components/nutrition/NutritionCheckinTab";
 import { NutritionOnboardingTab } from "../../../../components/nutrition/NutritionOnboardingTab";
 import { CoachMessageBubble } from "../../../../components/CoachMessageBubble";
+import { ClientNotesBubble } from "../../../../components/nutrition/ClientNotesBubble";
 import { CoachShell } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { confirmBypassOnboarding, confirmSendToClient } from "../../../../lib/confirmDialog";
-import { toastError } from "../../../../lib/toast";
+import { toastError, toastSuccess } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
@@ -322,6 +324,28 @@ export default function NutritionClientDetail() {
     }
   };
 
+  // The completed pill doubles as the undo. No confirmation on purpose:
+  // finalizing itself has none, this IS the recovery from that, and putting
+  // friction on the escape hatch is the wrong way round. Re-finalizing is
+  // one click, so both directions are cheap.
+  // Targets currentCheckin's week, NOT selectedWeek: the pill's label is
+  // derived from the current week, but the Check-In tab can be paged back to
+  // an older one. Using selectedWeek here would let a pill reading "Awaiting
+  // her check-in" silently reopen a different week than the one it names.
+  const handleUnfinalizeCheckin = async () => {
+    if (!currentCheckin?.week_start) return;
+    setFinalizing(true);
+    try {
+      await unfinalizeCheckin(userId, currentCheckin.week_start);
+      await load();
+      toastSuccess("Check-in reopened");
+    } catch (err) {
+      toastError("Failed to reopen check-in", err);
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
   // Goes straight into Approve & Set Targets right after bypassing, rather
   // than leaving the coach to remember to come back and set one later.
   const handleCloseOut = async () => {
@@ -503,9 +527,23 @@ export default function NutritionClientDetail() {
             <View style={{ flex: 1, minWidth: 0 }}>
               <View className="flex-row flex-wrap items-center" style={{ gap: 10 }}>
                 <Text style={{ fontFamily: fonts.display, fontSize: 27, color: colors.primary }}>{client.name}</Text>
-                <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: pill.bg }}>
-                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: pill.text }}>{pill.label}</Text>
-                </View>
+                {pillKey === "completed" ? (
+                  <Pressable
+                    onPress={handleUnfinalizeCheckin}
+                    disabled={finalizing}
+                    accessibilityLabel="Reopen this check-in"
+                    className="flex-row items-center rounded-full px-2.5 py-1"
+                    style={{ backgroundColor: pill.bg, gap: 5, opacity: finalizing ? 0.5 : 1 }}
+                  >
+                    <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: pill.text }}>{pill.label}</Text>
+                    {/* Says the pill is a control, not just a status. */}
+                    <Ionicons name="arrow-undo-outline" size={12} color={pill.text} />
+                  </Pressable>
+                ) : (
+                  <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: pill.bg }}>
+                    <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: pill.text }}>{pill.label}</Text>
+                  </View>
+                )}
                 {/* A cross-link, not a duplicate: her lifting lives on the SPC
                     page and a coach reading a check-in about sore knees is
                     one click from what she actually squatted. */}
@@ -717,6 +755,7 @@ export default function NutritionClientDetail() {
         onClose={() => setManagingPhotos(false)}
         onChanged={load}
       />
+      <ClientNotesBubble userId={userId} client={client} focusItems={focusItems} onChanged={load} />
       <CoachMessageBubble userId={userId} clientName={client.name} />
     </CoachShell>
   );

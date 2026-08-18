@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { toastError } from "../../lib/toast";
 import { updateGamePlan } from "../../lib/nutrition/coachClient";
@@ -7,16 +7,31 @@ import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
 const MIN_HEIGHT = 100;
 
-export function GamePlan({ userId, initialGamePlan }) {
+// Exposes saveIfDirty() so a container that closes on a tap-away — the
+// floating notes bubble — can flush an unsaved edit instead of dropping it.
+// The visible Save button still works exactly as before for every other
+// caller, which passes no ref and is unaffected.
+export const GamePlan = forwardRef(function GamePlan({ userId, initialGamePlan, onSaved }, ref) {
   const [text, setText] = useState(initialGamePlan ?? "");
+  // What's actually persisted, so "dirty" survives a save without waiting
+  // for the parent to reload and hand down a fresh initialGamePlan.
+  const savedRef = useRef(initialGamePlan ?? "");
+  const textRef = useRef(initialGamePlan ?? "");
+  textRef.current = text;
   const [height, setHeight] = useState(MIN_HEIGHT);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const persist = async (value) => {
+    await updateGamePlan(userId, value);
+    savedRef.current = value;
+    onSaved?.(value);
+  };
+
   const handleSave = async () => {
     setBusy(true);
     try {
-      await updateGamePlan(userId, text);
+      await persist(text);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     } catch (err) {
@@ -25,6 +40,25 @@ export function GamePlan({ userId, initialGamePlan }) {
       setBusy(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    // Read through refs, not the closed-over `text`: the caller fires this
+    // from a tap-away handler that may have been created on an earlier
+    // render, and a stale closure would save the wrong thing.
+    // Three outcomes, not a boolean: a caller closing on tap-away has to
+    // tell "nothing to do" apart from "the write failed", or it closes over
+    // an unsaved note and the coach loses what she just typed.
+    async saveIfDirty() {
+      if (textRef.current === savedRef.current) return "unchanged";
+      try {
+        await persist(textRef.current);
+        return "saved";
+      } catch (err) {
+        toastError("Failed to save notes", err);
+        return "failed";
+      }
+    },
+  }));
 
   return (
     <View>
@@ -52,4 +86,4 @@ export function GamePlan({ userId, initialGamePlan }) {
       </View>
     </View>
   );
-}
+});
