@@ -8,7 +8,7 @@ import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { getCurrentBlock } from "../../../lib/programming/memberPlan";
 import { currentWeekNumber, blockLengthWeeks } from "../../../lib/programming/schedule";
 import { getMissedSessionFlagsByUser } from "../../../lib/programming/flags";
-import { getSpcClient, assignSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
+import { getSpcClient, assignSpcClient, setSpcStatus, updateSpcClient } from "../../../lib/programming/spcClients";
 import { getCurrentSpcBlock } from "../../../lib/programming/spcBlocks";
 import { getClient as getNutritionClient, createOrReactivateClient, setClientStatus as setNutritionStatus } from "../../../lib/nutrition/clients";
 import { listTemplates } from "../../../lib/programming/templates";
@@ -505,6 +505,18 @@ export default function ClientProfile() {
     }
   };
 
+  // SPC runs 1-4x a week (its own page offers the same four), unlike a
+  // group program's 1-3x — SPC has no shared day-of-week calendar capping
+  // how many sessions a week can hold.
+  const handleSpcFrequencySelect = async (sessionsPerWeek) => {
+    try {
+      await updateSpcClient(userId, { sessions_per_week: sessionsPerWeek });
+      await load();
+    } catch (err) {
+      toastError("Failed to update SPC session frequency", err);
+    }
+  };
+
   const nutritionActive = nutritionClient?.status === "active";
   const handleNutritionToggle = async (enrolled) => {
     try {
@@ -933,6 +945,20 @@ export default function ClientProfile() {
                       {spcClient ? "Enrolled" : "Not enrolled"}
                     </Text>
                   </View>
+                  {spcActive ? (
+                    <View className="mt-3 rounded-lg px-3.5 py-3" style={{ backgroundColor: "#faf8f6" }}>
+                      <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+                        Frequency
+                      </Text>
+                      <View style={{ maxWidth: 260 }}>
+                        <SegmentedControl
+                          segments={[1, 2, 3, 4].map((n) => ({ key: String(n), label: `${n}x` }))}
+                          activeKey={String(spcClient?.sessions_per_week ?? 2)}
+                          onSelect={(key) => handleSpcFrequencySelect(Number(key))}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
                   {spcClient ? <ViewLink label="View SPC program ›" onPress={() => router.push(`/(coach)/spc/${userId}`)} /> : null}
                 </>
               )}
