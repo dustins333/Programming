@@ -92,6 +92,18 @@ export default function More() {
         </Text>
       </Pressable>
 
+      <Pressable
+        onPress={() => router.push("/(coach)/my-training")}
+        className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+      >
+        <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+          My Training
+        </Text>
+        <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Set your own group program &amp; SPC memberships
+        </Text>
+      </Pressable>
+
       {profile?.role === "admin" ? (
         <Pressable
           onPress={() => router.push("/(coach)/announcements")}

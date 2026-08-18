@@ -89,6 +89,9 @@ function NavList({ profile, pathname, messagingEnabled, onNavigate, onSignOut })
             any client uses, reading this account's own program data. The
             member layout's staff-only "Coaching" tab is the way back. */}
         <NavRow active={false} icon="body" label="Member View" onPress={() => onNavigate("/(member)")} />
+        {/* Where a coach sets their OWN group/SPC memberships (nutrition
+            is admin-only, deliberately absent there). */}
+        <NavRow active={isActive(pathname, "/(coach)/my-training")} icon="fitness" label="My Training" onPress={() => onNavigate("/(coach)/my-training")} />
 
         {isAdmin ? (
           <NavRow active={isActive(pathname, "/(coach)/announcements")} icon="megaphone" label="Announcements" onPress={() => onNavigate("/(coach)/announcements")} />
