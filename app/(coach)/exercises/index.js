@@ -262,6 +262,14 @@ export default function Exercises() {
                             : ""}
                         </Text>
                       )}
+                      {/* Nothing distinguishes a bodyweight lift from a
+                          loaded one at a glance otherwise — a coach would
+                          have to open each to find out. */}
+                      {item.type !== "warmup" && item.tracks_weight === false ? (
+                        <View className="rounded-full px-2.5 py-[3px]" style={{ backgroundColor: "#eef1e7" }}>
+                          <Text style={{ fontFamily: fonts.sansBold, color: "#4d6142", fontSize: 10.5 }}>reps only</Text>
+                        </View>
+                      ) : null}
                     </View>
                     {item.type !== "warmup" && item.parent_exercise_id ? (
                       <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>

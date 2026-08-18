@@ -11,7 +11,7 @@ import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../lib/
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
 
 function emptyForm(type) {
-  return { name: "", type, muscleGroups: [], movementPatterns: [], parentExerciseId: "", defaultSets: "", defaultReps: "", cues: "", videoUrl: "" };
+  return { name: "", type, muscleGroups: [], movementPatterns: [], parentExerciseId: "", defaultSets: "", defaultReps: "", tracksWeight: true, cues: "", videoUrl: "" };
 }
 
 // Single-select against parent-less lift exercises — a variation can't
@@ -204,6 +204,7 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               parentExerciseId: initialExercise.parent_exercise_id ?? "",
               defaultSets: initialExercise.default_sets != null ? String(initialExercise.default_sets) : "",
               defaultReps: initialExercise.default_reps || "",
+              tracksWeight: initialExercise.tracks_weight !== false,
               cues: initialExercise.cues || "",
               videoUrl: initialExercise.video_url || "",
             }
@@ -365,46 +366,7 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               <View className="mb-4" />
             )}
 
-            {isWarmup ? (
-              <View className="mb-4 rounded-lg p-3.5" style={{ backgroundColor: "#faf8f6", borderWidth: 1, borderColor: "#ece7e1" }}>
-                <Text className="mb-2.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-                  Default sets/reps
-                </Text>
-                <View className="flex-row gap-2.5">
-                  <View className="flex-1">
-                    <Text className="mb-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                      Sets
-                    </Text>
-                    <TextInput
-                      ref={defaultSetsRef}
-                      value={form.defaultSets}
-                      onChangeText={(defaultSets) => setForm((f) => ({ ...f, defaultSets }))}
-                      onFocus={() => scrollFieldIntoView(defaultSetsRef.current)}
-                      keyboardType="numeric"
-                      inputAccessoryViewID={NUMERIC_DONE_ID}
-                      className="rounded-lg border border-stone-300 bg-white px-3 py-2.5"
-                      style={{ fontFamily: fonts.sans }}
-                    />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="mb-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                      Reps
-                    </Text>
-                    <TextInput
-                      ref={defaultRepsRef}
-                      value={form.defaultReps}
-                      onChangeText={(defaultReps) => setForm((f) => ({ ...f, defaultReps }))}
-                      onFocus={() => scrollFieldIntoView(defaultRepsRef.current)}
-                      className="rounded-lg border border-stone-300 bg-white px-3 py-2.5"
-                      style={{ fontFamily: fonts.sans }}
-                    />
-                  </View>
-                </View>
-                <Text className="mt-2 text-xs" style={{ fontFamily: fonts.sans, color: "#a8907f" }}>
-                  Pre-fills when inserted into a warm-up — coach can still edit per session.
-                </Text>
-              </View>
-            ) : (
+            {isWarmup ? null : (
               <>
                 <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
                   Muscle group (select all that apply)
@@ -466,8 +428,76 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
                     onChange={(parentExerciseId) => setForm((f) => ({ ...f, parentExerciseId }))}
                   />
                 </View>
+
+                <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+                  Weight
+                </Text>
+                <View className="mb-1 flex-row gap-2">
+                  {[
+                    { key: true, label: "Track weight" },
+                    { key: false, label: "Reps only" },
+                  ].map((opt) => {
+                    const active = form.tracksWeight === opt.key;
+                    return (
+                      <Pressable
+                        key={String(opt.key)}
+                        onPress={() => setForm((f) => ({ ...f, tracksWeight: opt.key }))}
+                        className="flex-1 items-center rounded-lg py-2.5"
+                        style={{ backgroundColor: active ? colors.primary : "white", borderWidth: active ? 0 : 1, borderColor: "#d9d4cd" }}
+                      >
+                        <Text style={{ fontFamily: active ? fonts.sansBold : fonts.sansSemiBold, color: active ? "white" : "#57534e", fontSize: 13 }}>
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text className="mb-4 text-xs" style={{ fontFamily: fonts.sans, color: "#a8907f" }}>
+                  {form.tracksWeight
+                    ? "The member logs reps and weight for every set."
+                    : "For lifts with nothing to load — an inverted row, a push-up, a plank. The member logs reps only, with no weight box, and this lift is left out of personal records."}
+                </Text>
               </>
             )}
+
+            <View className="mb-4 rounded-lg p-3.5" style={{ backgroundColor: "#faf8f6", borderWidth: 1, borderColor: "#ece7e1" }}>
+              <Text className="mb-2.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+                Default sets/reps
+              </Text>
+              <View className="flex-row gap-2.5">
+                <View className="flex-1">
+                  <Text className="mb-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                    Sets
+                  </Text>
+                  <TextInput
+                    ref={defaultSetsRef}
+                    value={form.defaultSets}
+                    onChangeText={(defaultSets) => setForm((f) => ({ ...f, defaultSets }))}
+                    onFocus={() => scrollFieldIntoView(defaultSetsRef.current)}
+                    keyboardType="numeric"
+                    inputAccessoryViewID={NUMERIC_DONE_ID}
+                    className="rounded-lg border border-stone-300 bg-white px-3 py-2.5"
+                    style={{ fontFamily: fonts.sans }}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="mb-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                    Reps
+                  </Text>
+                  <TextInput
+                    ref={defaultRepsRef}
+                    value={form.defaultReps}
+                    onChangeText={(defaultReps) => setForm((f) => ({ ...f, defaultReps }))}
+                    onFocus={() => scrollFieldIntoView(defaultRepsRef.current)}
+                    className="rounded-lg border border-stone-300 bg-white px-3 py-2.5"
+                    style={{ fontFamily: fonts.sans }}
+                  />
+                </View>
+              </View>
+              <Text className="mt-2 text-xs" style={{ fontFamily: fonts.sans, color: "#a8907f" }}>
+                Pre-fills when inserted into a {isWarmup ? "warm-up" : "session"} — coach can still edit per session.
+              </Text>
+            </View>
 
             <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
               Cues

@@ -68,7 +68,7 @@ function agoLabel(date, today) {
 // read. Rows stay exactly as they were logged — a session with three sets does
 // NOT get padded out to today's four, because inventing an empty fourth pill
 // would read as a set she skipped rather than one that was never asked for.
-function SetPill({ set, tinted }) {
+function SetPill({ set, tinted, tracksWeight = true }) {
   return (
     <View
       style={{
@@ -85,9 +85,13 @@ function SetPill({ set, tinted }) {
       <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 19, color: "#44403c" }}>
         {set.reps ?? "–"}
       </Text>
-      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 1 }}>
-        {set.weight != null ? `@ ${set.weight}` : "–"}
-      </Text>
+      {/* A reps-only lift has no weight line at all — a dash under every
+          single pill reads as missing data rather than "there is none". */}
+      {tracksWeight ? (
+        <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 1 }}>
+          {set.weight != null ? `@ ${set.weight}` : "–"}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -101,7 +105,7 @@ function SetPill({ set, tinted }) {
 // exact session rather than whatever today's weekday would pick. Absent when
 // the card is being viewed read-only in My History, in which case the full
 // history screen keeps its normal back behaviour.
-export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exerciseName, datePerformed, returnTo }) {
+export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exerciseName, datePerformed, returnTo, tracksWeight = true }) {
   const router = useRouter();
   const [logs, setLogs] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -245,7 +249,7 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
                       </View>
                       <View style={{ flexDirection: "row", gap: 7 }}>
                         {group.sets.map((s) => (
-                          <SetPill key={s.id} set={s} tinted={isLast} />
+                          <SetPill key={s.id} set={s} tinted={isLast} tracksWeight={tracksWeight} />
                         ))}
                       </View>
                       {group.notes ? (

@@ -105,7 +105,13 @@ export default function TemplateBuilderWeb() {
   const handleInsertExercise = async (exercise) => {
     try {
       setSaveState("saving");
-      const created = await addTemplateExercise({ templateId, exerciseId: exercise.id, position: exercises.length + 1 });
+      const created = await addTemplateExercise({
+        templateId,
+        exerciseId: exercise.id,
+        position: exercises.length + 1,
+        sets: exercise.default_sets != null ? Number(exercise.default_sets) : undefined,
+        reps: exercise.default_reps || undefined,
+      });
       setExercises((prev) => [...prev, created]);
       setExpandedId(created.id);
       setSaveState("saved");

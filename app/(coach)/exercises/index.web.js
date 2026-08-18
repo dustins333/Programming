@@ -111,6 +111,13 @@ function Row({ exercise, uses, duplicate, parentName, onEdit, onArchive, onUnarc
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 0.5, color: "#b23a22" }}>DUPLICATE?</Text>
             </View>
           ) : null}
+          {/* Nothing distinguishes a bodyweight lift from a loaded one at a
+              glance otherwise — a coach would have to open each to find out. */}
+          {!isWarmup && exercise.tracks_weight === false ? (
+            <View style={{ backgroundColor: "#eef1e7", borderRadius: 5, paddingVertical: 2, paddingHorizontal: 6 }}>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 0.5, color: "#4d6142" }}>REPS ONLY</Text>
+            </View>
+          ) : null}
         </View>
         {parentName ? (
           <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 2 }}>Variation of {parentName}</Text>

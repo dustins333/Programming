@@ -148,6 +148,8 @@ export default function SpcWorkoutBuilderWeb() {
         exerciseId: exercise.id,
         position: exercises.length + 1,
         userId: workout.spc_blocks.spc_client_id,
+        defaultSets: exercise.default_sets,
+        defaultReps: exercise.default_reps,
       });
       setExercises((prev) => [...prev, created]);
       setExpandedId(created.id);

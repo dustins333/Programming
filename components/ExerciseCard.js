@@ -501,6 +501,11 @@ export function ExerciseCard({
   compact,
 }) {
   const targetSets = getTargetSets(item);
+  // A lift with nothing to load — inverted row, push-up, plank — logs reps
+  // alone. The weight column disappears entirely rather than being disabled:
+  // a greyed-out box still reads as something she failed to fill in, and it
+  // would keep the card from ever counting as done.
+  const tracksWeight = item.exercise?.tracks_weight !== false;
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
   const [saveState, setSaveState] = useState("idle"); // idle | pending | saving | saved | error
@@ -591,7 +596,7 @@ export function ExerciseCard({
               datePerformed,
               setNumber: i + 1,
               reps: row.reps === "" ? null : Number(row.reps) || null,
-              weight: row.weight === "" ? null : Number(row.weight),
+              weight: !tracksWeight || row.weight === "" ? null : Number(row.weight),
               notes: notes === "" ? null : notes,
               source,
               session,
@@ -625,7 +630,7 @@ export function ExerciseCard({
   // mid-number.
   useEffect(() => {
     if (!onToggleComplete) return;
-    const fullyFilled = rows.length > 0 && rows.every((r) => r.reps !== "" && r.weight !== "");
+    const fullyFilled = rows.length > 0 && rows.every((r) => r.reps !== "" && (!tracksWeight || r.weight !== ""));
     if (skipCompletionEffectRef.current) {
       skipCompletionEffectRef.current = false;
       wasFullyFilledRef.current = fullyFilled;
@@ -636,7 +641,36 @@ export function ExerciseCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
 
-  const isLogged = (r) => r.reps !== "" && r.weight !== "";
+  const isLogged = (r) => r.reps !== "" && (!tracksWeight || r.weight !== "");
+
+  // Carry set 1 down the rest of the lift. A straight 3x10 @ 65 is three
+  // identical rows, and typing it out three times is the single most
+  // repetitive thing in the whole logging flow.
+  //
+  // This is deliberately an EXPLICIT gesture, not the automatic carry-over
+  // prefill that used to live here: pre-filling boxes she hadn't done yet
+  // made an untouched set read as already logged, which is exactly why it
+  // was taken out. Nothing is written until she asks for it.
+  //
+  // Only offered when it would actually do something — set 1 complete, and
+  // at least one later set still empty — so it isn't a permanent ornament.
+  const canFillDown =
+    rows.length > 1 && isLogged(rows[0]) && rows.slice(1).some((r) => r.reps === "" || (tracksWeight && r.weight === ""));
+
+  const handleFillDown = () => {
+    // Only fills the gaps: a set she already logged differently is left
+    // exactly as she logged it.
+    setRows((prev) =>
+      prev.map((r, i) =>
+        i === 0
+          ? r
+          : {
+              reps: r.reps === "" ? prev[0].reps : r.reps,
+              weight: !tracksWeight ? "" : r.weight === "" ? prev[0].weight : r.weight,
+            }
+      )
+    );
+  };
   const currentIndex = rows.findIndex((r) => !isLogged(r));
   const loggedSummary = summarizeSets(rows);
 
@@ -810,15 +844,18 @@ export function ExerciseCard({
             </Text>
           ) : null}
 
-          {/* REPS / LB said once for the whole lift. */}
+          {/* REPS / LB said once for the whole lift. A reps-only lift drops
+              the LB column altogether, so REPS takes the full width. */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: rowGap, marginBottom: 5 }}>
             <View style={{ width: setLabelWidth }} />
             <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 1, color: "#c0b9b0" }}>
               REPS
             </Text>
-            <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 1, color: "#c0b9b0" }}>
-              LB
-            </Text>
+            {tracksWeight ? (
+              <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 1, color: "#c0b9b0" }}>
+                LB
+              </Text>
+            ) : null}
             <View style={{ width: trailingWidth }} />
           </View>
 
@@ -882,6 +919,7 @@ export function ExerciseCard({
                   />
                   {row.reps === "" && targetLabel ? <TargetHint label={targetLabel} compact={compact} /> : null}
                 </View>
+                {tracksWeight ? (
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <TextInput
                     ref={autofillSuppressedRef}
@@ -910,6 +948,7 @@ export function ExerciseCard({
                     <CalculatorMark />
                   </PressFade>
                 </View>
+                ) : null}
                 <View style={{ width: trailingWidth, alignItems: "flex-end" }}>
                   {/* Kept in the layout (opacity, not unmounted) while the
                       rest fan is open so nothing shifts under the member's
@@ -938,6 +977,32 @@ export function ExerciseCard({
               </View>
             );
           })}
+
+          {canFillDown ? (
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 1, marginBottom: 8 }}>
+              <PressFade
+                onPress={handleFillDown}
+                accessibilityLabel={`Fill the remaining sets from set 1 of ${item.exercise.name}`}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 5,
+                  paddingLeft: 7,
+                  paddingRight: 11,
+                  paddingVertical: 5,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: CARD_BORDER,
+                  backgroundColor: SOFT,
+                }}
+              >
+                <Ionicons name="arrow-down" size={14} color="#8a5140" />
+                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: "#8a5140" }}>
+                  Same for the rest
+                </Text>
+              </PressFade>
+            </View>
+          ) : null}
 
           {/* Note beside the rest timer on the card's bottom row. Blank —
               the old prefilled prompt read as content that was already
@@ -1006,6 +1071,7 @@ export function ExerciseCard({
       ) : null}
 
       <ExerciseHistoryModal
+        tracksWeight={tracksWeight}
         visible={historyOpen}
         onClose={() => setHistoryOpen(false)}
         userId={userId}

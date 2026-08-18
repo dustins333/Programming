@@ -89,7 +89,13 @@ export default function TemplateBuilder() {
         const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: warmups.length + 1 });
         setWarmups((prev) => [...prev, created]);
       } else if (pickerTarget === "exercise") {
-        const created = await addTemplateExercise({ templateId, exerciseId: exercise.id, position: exercises.length + 1 });
+        const created = await addTemplateExercise({
+          templateId,
+          exerciseId: exercise.id,
+          position: exercises.length + 1,
+          sets: exercise.default_sets != null ? Number(exercise.default_sets) : undefined,
+          reps: exercise.default_reps || undefined,
+        });
         setExercises((prev) => [...prev, created]);
       }
     } catch (err) {
