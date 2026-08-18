@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
-import { View, Text, Pressable, Image, ActivityIndicator } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { PhaseCard } from "./PhaseCard";
-import { getPhotoSignedUrls } from "../../lib/nutrition/photos";
+import { StartingPhotos } from "./StartingPhotos";
 import { loggedCalories } from "../../lib/nutrition/targets";
 import { formatDateMDY } from "../../lib/formatDate";
 import { daysBetween, dateInBoise, todayInBoise } from "../../lib/boiseDate";
@@ -48,65 +47,6 @@ function Card({ title, children, style }) {
       ) : null}
       {children}
     </View>
-  );
-}
-
-function StartingPhotos({ photos }) {
-  const [urls, setUrls] = useState({});
-  const starting = ["front", "side", "back"]
-    .map((angle) => photos.filter((p) => p.angle === angle).sort((a, b) => (a.date < b.date ? -1 : 1))[0])
-    .filter(Boolean);
-
-  useEffect(() => {
-    const paths = starting.map((p) => p.storage_path);
-    if (paths.length === 0) return;
-    let cancelled = false;
-    getPhotoSignedUrls(paths)
-      .then((next) => {
-        if (!cancelled) setUrls(next);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [starting.map((p) => p.storage_path).join(",")]);
-
-  return (
-    <Card title="Starting photos">
-      {starting.length === 0 ? (
-        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
-          Nothing in yet. Not a blocker — you can set her targets without them.
-        </Text>
-      ) : (
-        <>
-          <View className="flex-row" style={{ gap: 8 }}>
-            {starting.map((photo) => (
-              <View key={photo.id ?? photo.angle} style={{ flex: 1 }}>
-                {urls[photo.storage_path] ? (
-                  <Image
-                    source={{ uri: urls[photo.storage_path] }}
-                    style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: 8, backgroundColor: "#f1efed" }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View className="items-center justify-center rounded-lg" style={{ aspectRatio: 3 / 4, backgroundColor: "#f1efed" }}>
-                    <ActivityIndicator color={colors.primary} size="small" />
-                  </View>
-                )}
-                <Text className="mt-1 text-center" style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e" }}>
-                  {photo.angle}
-                </Text>
-              </View>
-            ))}
-          </View>
-          <Text className="mt-3" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-            Taken {formatDateMDY(starting[0].date)}
-            {starting[0].weight ? ` at ${starting[0].weight} lb` : ""}. These become the left frame in every comparison from here.
-          </Text>
-        </>
-      )}
-    </Card>
   );
 }
 
@@ -320,7 +260,9 @@ export function NutritionOnboardingTab({
         </View>
 
         <View style={{ width: isWide ? 300 : undefined }}>
-          <StartingPhotos photos={photos} />
+          <Card title="Starting photos">
+            <StartingPhotos photos={photos} client={client} />
+          </Card>
         </View>
       </View>
     </View>

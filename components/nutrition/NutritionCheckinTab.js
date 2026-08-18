@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, Image, ActivityIndicator } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { MacroRingRow } from "./MacroRingRow";
 import { CheckinAnswerList, CheckinMetricStrip } from "./CheckinAnswerList";
 import { GamePlan } from "./GamePlan";
+import { OnboardingCheckinView } from "./OnboardingCheckinView";
 import { FocusChecklist } from "./FocusChecklist";
 import { pairAnswers, metricDeltas } from "../../lib/nutrition/checkinAnswers";
 import { getPhotoSignedUrls, photosForRequirementWeek } from "../../lib/nutrition/photos";
@@ -138,6 +140,10 @@ export function NutritionCheckinTab({
   weekPaging,
   onOlderWeek,
   onNewerWeek,
+  onOpenWeekPicker,
+  viewingOnboarding,
+  onboarding,
+  onChangeQuestionnaireHighlights,
   summary,
   priorSummary,
   currentTarget,
@@ -163,14 +169,21 @@ export function NutritionCheckinTab({
     <View>
       <View className="mb-4 flex-row flex-wrap items-center justify-between" style={{ gap: 10 }}>
         <View className="flex-row flex-wrap items-center" style={{ gap: 10 }}>
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
-            {/* Labelled by the check-in Monday, matching the timeline on the
-                Settings tab — the two are reachable from the same page, so
-                labelling one by its covered week and the other by its
-                check-in date would show two dates for the same check-in. */}
-            {formatDateMDY(checkinMondayForWeek(selectedWeek.start))} check-in
-          </Text>
-          {checkin?.submitted_at ? (
+          {/* The title is the way into the week picker. Stepping one week at
+              a time is fine for last week and hopeless for "what did she say
+              when she started", which is the whole reason her onboarding is
+              in that list. */}
+          <Pressable onPress={onOpenWeekPicker} hitSlop={8} className="flex-row items-center" style={{ gap: 5 }}>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
+              {/* Labelled by the check-in Monday, matching the timeline on the
+                  Settings tab — the two are reachable from the same page, so
+                  labelling one by its covered week and the other by its
+                  check-in date would show two dates for the same check-in. */}
+              {viewingOnboarding ? "Onboarding · her first check-in" : `${formatDateMDY(checkinMondayForWeek(selectedWeek.start))} check-in`}
+            </Text>
+            <Ionicons name="chevron-down" size={13} color={colors.primaryOnWhite} />
+          </Pressable>
+          {!viewingOnboarding && checkin?.submitted_at ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
               submitted {formatDateTimeInBoise(checkin.submitted_at)}
             </Text>
@@ -178,11 +191,21 @@ export function NutritionCheckinTab({
           {weekPaging ? <ActivityIndicator size="small" color={colors.primary} /> : null}
         </View>
         <View className="flex-row items-center" style={{ gap: 14 }}>
-          <Pressable onPress={onOlderWeek} hitSlop={8}>
-            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: colors.primaryOnWhite }}>‹ Older</Text>
+          {/* Onboarding is the oldest thing there is, so Older has nowhere to
+              go from it; Newer steps back out into the weeks. */}
+          <Pressable onPress={onOlderWeek} disabled={viewingOnboarding} hitSlop={8}>
+            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: viewingOnboarding ? "#d6d3d1" : colors.primaryOnWhite }}>
+              ‹ Older
+            </Text>
           </Pressable>
-          <Pressable onPress={onNewerWeek} disabled={weekOffset === 0} hitSlop={8}>
-            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: weekOffset === 0 ? "#d6d3d1" : colors.primaryOnWhite }}>
+          <Pressable onPress={onNewerWeek} disabled={!viewingOnboarding && weekOffset === 0} hitSlop={8}>
+            <Text
+              style={{
+                fontFamily: fonts.sansMedium,
+                fontSize: 12.5,
+                color: !viewingOnboarding && weekOffset === 0 ? "#d6d3d1" : colors.primaryOnWhite,
+              }}
+            >
               Newer ›
             </Text>
           </Pressable>
@@ -191,6 +214,19 @@ export function NutritionCheckinTab({
 
       <View style={{ flexDirection: isWide ? "row" : "column", gap: 18 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
+          {/* Her onboarding reviewed as the first check-in, in the same
+              column the weekly ones use — so the rail beside it (notes and
+              focus) is the same rail, and the whole review is one screen. */}
+          {viewingOnboarding ? (
+            <OnboardingCheckinView
+              client={client}
+              onboarding={onboarding}
+              photos={photos}
+              isWide={isWide}
+              onChangeHighlights={onChangeQuestionnaireHighlights}
+            />
+          ) : (
+            <>
           <View style={{ flexDirection: isWide ? "row" : "column", gap: 16 }}>
             {/* No photos, no box. An empty "none came in" card beside the
                 targets was a whole column spent saying nothing — photos
@@ -240,6 +276,8 @@ export function NutritionCheckinTab({
               )}
             </Card>
           </View>
+            </>
+          )}
         </View>
 
         <View style={{ width: isWide ? 300 : undefined }}>

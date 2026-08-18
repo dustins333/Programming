@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
-import { todayInBoise, addDays } from "../../../../lib/boiseDate";
+import { todayInBoise, addDays, daysBetween } from "../../../../lib/boiseDate";
 import { getClient, sendOnboardingToClient } from "../../../../lib/nutrition/clients";
 import { listCoaches } from "../../../../lib/programming/clients";
 import { getSpcClient, isSpcActive } from "../../../../lib/programming/spcClients";
@@ -18,7 +18,7 @@ import {
   listCheckinReopensSince,
   listTemplateQuestions,
 } from "../../../../lib/nutrition/checkin";
-import { listFocusItems, setCheckinHighlights } from "../../../../lib/nutrition/coachClient";
+import { listFocusItems, setCheckinHighlights, setQuestionnaireHighlights } from "../../../../lib/nutrition/coachClient";
 import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
 import { listPhases } from "../../../../lib/nutrition/planPhases";
@@ -33,6 +33,7 @@ import { TargetsEditor } from "../../../../components/nutrition/TargetsEditor";
 import { TargetHistoryTable } from "../../../../components/nutrition/TargetHistoryTable";
 import { ObjectiveTrackingHistory } from "../../../../components/nutrition/ObjectiveTrackingHistory";
 import { PhotoCompareRail } from "../../../../components/nutrition/PhotoCompareRail";
+import { CheckinWeekPicker, PICKER_PAST_WEEKS } from "../../../../components/nutrition/CheckinWeekPicker";
 import { ManagePhotosModal } from "../../../../components/nutrition/ManagePhotosModal";
 import { ClientSettingsPanel } from "../../../../components/nutrition/ClientSettingsPanel";
 import { NutritionDashboardTab } from "../../../../components/nutrition/NutritionDashboardTab";
@@ -59,7 +60,9 @@ const PHASE_LABELS = {
 };
 
 const WEEKS_SHOWN = 8;
-const TIMELINE_PAST_WEEKS = 6;
+// The week picker is the deepest thing reading this data, so it sets how far
+// back we fetch — not the Settings-tab timeline, which shows a shorter list.
+const TIMELINE_PAST_WEEKS = PICKER_PAST_WEEKS;
 
 // Joins a list into readable prose ("a, b and c") rather than a bare comma
 // list, since this lands in a confirm dialog the coach actually reads.
@@ -203,6 +206,8 @@ export default function NutritionClientDetail() {
   const [sending, setSending] = useState(false);
   const [showAllWeeks, setShowAllWeeks] = useState(false);
   const [managingPhotos, setManagingPhotos] = useState(false);
+  const [weekPickerOpen, setWeekPickerOpen] = useState(false);
+  const [viewingOnboarding, setViewingOnboarding] = useState(false);
 
   const isWide = isWeb && width >= WIDE_BREAKPOINT;
 
@@ -212,6 +217,28 @@ export default function NutritionClientDetail() {
     const start = addDays(end, -6);
     return { start, end };
   }, [today, weekOffset]);
+
+  // How far back "‹ Older" is allowed to walk. Without this it just kept
+  // incrementing, so a coach could page into weeks from before the client
+  // existed and read "Nothing submitted for this week" forever — past her
+  // onboarding, which is supposed to be the oldest thing there is.
+  //
+  // The floor is the week whose END falls on or after her start date, the
+  // same rule CheckinWeekTimeline filters its list by, so the stepper and
+  // the picker agree on where her history begins. A check-in she actually
+  // filed always wins over that, so a row dated oddly can never be stranded
+  // out of reach.
+  const oldestWeekOffset = useMemo(() => {
+    const { currentWeek } = computeWeekWindows(today);
+    const fromStart = client?.start_date
+      ? Math.floor(daysBetween(currentWeek.end, client.start_date) / 7)
+      : PICKER_PAST_WEEKS;
+    const fromCheckins = checkins.reduce(
+      (max, c) => Math.max(max, Math.round(daysBetween(currentWeek.start, c.week_start) / 7)),
+      0
+    );
+    return Math.max(0, fromStart, fromCheckins);
+  }, [today, client?.start_date, checkins]);
 
   const load = useCallback(async () => {
     // Clear any previous failure first — without this a successful
@@ -372,6 +399,42 @@ export default function NutritionClientDetail() {
       toastError("Failed to send to client", err);
     } finally {
       setSending(false);
+    }
+  };
+
+  // The picker hands back a week; the tab navigates by offset from the
+  // current one. daysBetween is A-minus-B, so current-minus-selected is
+  // positive going back in time — which is the direction weekOffset counts.
+  const handleSelectWeek = (week) => {
+    const { currentWeek } = computeWeekWindows(today);
+    const offset = Math.max(0, Math.round(daysBetween(currentWeek.start, week.start) / 7));
+    setViewingOnboarding(false);
+    if (offset !== weekOffset) {
+      setWeekPaging(true);
+      setWeekOffset(offset);
+    }
+    setWeekPickerOpen(false);
+  };
+
+  const handleSelectOnboarding = () => {
+    setViewingOnboarding(true);
+    setWeekPickerOpen(false);
+  };
+
+  // Same optimistic-then-persist shape as handleChangeHighlights below, but
+  // against questionnaire_responses, which is keyed by client_id and has no
+  // row id of its own.
+  const handleChangeQuestionnaireHighlights = async (answerIndex, ranges) => {
+    const response = onboarding?.response;
+    if (!response) return;
+    const previousHighlights = response.highlights;
+    const nextHighlights = { ...(previousHighlights ?? {}), [answerIndex]: ranges };
+    setOnboarding((o) => (o ? { ...o, response: { ...o.response, highlights: nextHighlights } } : o));
+    try {
+      await setQuestionnaireHighlights(userId, nextHighlights);
+    } catch (err) {
+      setOnboarding((o) => (o ? { ...o, response: { ...o.response, highlights: previousHighlights } } : o));
+      toastError("Failed to save highlight", err);
     }
   };
 
@@ -676,15 +739,33 @@ export default function NutritionClientDetail() {
             weekOffset={weekOffset}
             weekPaging={weekPaging}
             onOlderWeek={() => {
+              if (viewingOnboarding) return;
+              // One step past her first real week is her onboarding — which
+              // is her first check-in, so Older walks into it and stops
+              // there rather than off the end of her history.
+              if (weekOffset >= oldestWeekOffset) {
+                setViewingOnboarding(true);
+                return;
+              }
               setWeekPaging(true);
               setWeekOffset((o) => o + 1);
             }}
             onNewerWeek={() => {
+              // Onboarding is the oldest entry there is, so stepping newer
+              // from it means leaving it rather than changing the week.
+              if (viewingOnboarding) {
+                setViewingOnboarding(false);
+                return;
+              }
               if (weekOffset > 0) {
                 setWeekPaging(true);
                 setWeekOffset((o) => Math.max(0, o - 1));
               }
             }}
+            onOpenWeekPicker={() => setWeekPickerOpen(true)}
+            viewingOnboarding={viewingOnboarding}
+            onboarding={onboarding}
+            onChangeQuestionnaireHighlights={handleChangeQuestionnaireHighlights}
             summary={selectedWeekSummary}
             priorSummary={priorToSelectedSummary}
             currentTarget={currentTarget}
@@ -754,6 +835,23 @@ export default function NutritionClientDetail() {
         photosByDate={photosByDate}
         onClose={() => setManagingPhotos(false)}
         onChanged={load}
+      />
+      <CheckinWeekPicker
+        visible={weekPickerOpen}
+        onClose={() => setWeekPickerOpen(false)}
+        userId={userId}
+        coachId={profile.id}
+        client={client}
+        checkins={checkins}
+        reopens={checkinReopens}
+        photos={photos}
+        today={today}
+        onChanged={load}
+        selectedWeekStart={selectedWeek.start}
+        onSelectWeek={handleSelectWeek}
+        viewingOnboarding={viewingOnboarding}
+        onSelectOnboarding={handleSelectOnboarding}
+        onboardingSubmittedAt={onboarding?.response?.submitted_at ?? null}
       />
       <ClientNotesBubble userId={userId} client={client} focusItems={focusItems} onChanged={load} />
       <CoachMessageBubble userId={userId} clientName={client.name} />

@@ -5,23 +5,48 @@ import { formatDateMD, formatDateMDY } from "../lib/formatDate";
 import { fonts } from "../lib/theme";
 
 const isWeb = Platform.OS === "web";
-const CHART_HEIGHT = 200;
+const DEFAULT_HEIGHT = 200;
 const PADDING = { top: 16, bottom: 40, left: 8, right: 8 };
 const MAX_LABELS = 5;
+// Past this many readings the per-point dots stop being markers and become a
+// solid bead of ink along the line. The line alone carries the shape at that
+// density; the hovered point still gets its own dot.
+const MAX_DOTS = 60;
+
+const LINE = "#a46a57";
+const LINE_BEFORE = "#d9d0c7";
 
 // Auto-scales the Y axis to the data's actual range (±20% pad, not anchored
 // at 0) — same convention the standalone app's MetricChart.js uses, since a
 // weight/sleep/steps trend line is more readable zoomed to its own range
 // than dwarfed against a 0-anchored axis.
-export function TrendChart({ points, width = 320 }) {
+//
+// `sinceDate` splits the line in two: everything from that date on is clay,
+// everything before it is a warm neutral. That's the current target's
+// effective date on the nutrition dashboard — it says "this stretch is under
+// the numbers she's on now" without needing a second legend. The two
+// polylines share the boundary point, so the split is a colour change rather
+// than a break.
+//
+// Note the dots sit on actual readings only, which is what keeps a line
+// chart honest about gaps: a long straight run between two distant dots
+// reads as two measurements, not as a fortnight of daily data.
+export function TrendChart({
+  points,
+  width = 320,
+  height = DEFAULT_HEIGHT,
+  unit = "",
+  sinceDate = null,
+  emptyMessage = "Not enough data yet.",
+}) {
   const [activeIndex, setActiveIndex] = useState(null);
   const valid = points.filter((p) => p.value !== null && p.value !== undefined);
 
   if (valid.length === 0) {
     return (
-      <View className="items-center justify-center py-10">
+      <View className="items-center justify-center" style={{ height: Math.min(height, 140) }}>
         <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
-          Not enough data yet.
+          {emptyMessage}
         </Text>
       </View>
     );
@@ -36,7 +61,7 @@ export function TrendChart({ points, width = 320 }) {
   const yMax = max + padAmount;
 
   const plotWidth = width - PADDING.left - PADDING.right;
-  const plotHeight = CHART_HEIGHT - PADDING.top - PADDING.bottom;
+  const plotHeight = height - PADDING.top - PADDING.bottom;
   const axisY = PADDING.top + plotHeight;
 
   const coords = valid.map((p, i) => ({
@@ -53,7 +78,16 @@ export function TrendChart({ points, width = 320 }) {
     Array.from({ length: labelCount }, (_, i) => Math.round((i / Math.max(1, labelCount - 1)) * (coords.length - 1)))
   ));
 
-  const active = activeIndex !== null ? coords[activeIndex] : null;
+  // First reading on or after sinceDate. Everything from there on is the
+  // current stretch; the segment before it includes that boundary point so
+  // the two polylines meet rather than leaving a one-gap hole.
+  const splitAt = sinceDate ? coords.findIndex((c) => c.date >= sinceDate) : -1;
+  const hasSplit = splitAt > 0;
+  const beforeCoords = hasSplit ? coords.slice(0, splitAt + 1) : [];
+  const currentCoords = hasSplit ? coords.slice(splitAt) : coords;
+
+  const showDots = coords.length <= MAX_DOTS;
+  const active = activeIndex !== null && activeIndex < coords.length ? coords[activeIndex] : null;
 
   const nearestIndex = (offsetX) => {
     let closest = 0;
@@ -82,9 +116,11 @@ export function TrendChart({ points, width = 320 }) {
       }
     : {};
 
+  const asPoints = (list) => list.map((c) => `${c.x},${c.y}`).join(" ");
+
   return (
     <View>
-      <Svg width={width} height={CHART_HEIGHT} {...webHandlers}>
+      <Svg width={width} height={height} {...webHandlers}>
         <Line x1={PADDING.left} y1={PADDING.top} x2={PADDING.left} y2={axisY} stroke="#e7e5e4" strokeWidth={1} />
         <Line x1={PADDING.left} y1={axisY} x2={width - PADDING.right} y2={axisY} stroke="#e7e5e4" strokeWidth={1} />
         <SvgText x={PADDING.left} y={PADDING.top - 4} fontSize={10} fill="#a8a29e">
@@ -104,22 +140,29 @@ export function TrendChart({ points, width = 320 }) {
             </SvgText>
           );
         })}
-        <Polyline points={coords.map((c) => `${c.x},${c.y}`).join(" ")} fill="none" stroke="#a46a57" strokeWidth={2} />
-        {coords.map((c, i) => (
-          <Circle
-            key={i}
-            cx={c.x}
-            cy={c.y}
-            r={activeIndex === i ? 4 : 2.5}
-            fill="#a46a57"
-            {...(isWeb ? {} : { onPress: () => setActiveIndex(i) })}
-          />
-        ))}
+        {hasSplit ? <Polyline points={asPoints(beforeCoords)} fill="none" stroke={LINE_BEFORE} strokeWidth={2} /> : null}
+        <Polyline points={asPoints(currentCoords)} fill="none" stroke={LINE} strokeWidth={2} />
+        {showDots
+          ? coords.map((c, i) => (
+              <Circle
+                key={i}
+                cx={c.x}
+                cy={c.y}
+                r={activeIndex === i ? 4 : 2.5}
+                fill={hasSplit && i < splitAt ? LINE_BEFORE : LINE}
+                {...(isWeb ? {} : { onPress: () => setActiveIndex(i) })}
+              />
+            ))
+          : null}
+        {/* At high density the dots are gone, so the hovered reading still
+            needs one or there's nothing marking what the read-out refers to. */}
+        {active && !showDots ? <Circle cx={active.x} cy={active.y} r={4} fill={LINE} /> : null}
         {active ? <Line x1={active.x} y1={PADDING.top} x2={active.x} y2={axisY} stroke="#d6d3d1" strokeWidth={1} /> : null}
       </Svg>
       {active ? (
         <Text className="text-center text-xs text-stone-600" style={{ fontFamily: fonts.sansMedium }}>
           {formatDateMDY(active.date)}: {active.value.toFixed(1)}
+          {unit ? ` ${unit}` : ""}
         </Text>
       ) : (
         <Text className="text-center text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>

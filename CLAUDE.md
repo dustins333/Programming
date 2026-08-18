@@ -4258,13 +4258,128 @@ eyeballed) and the undo pill were all rendered and driven through a
 throwaway `app/zz-harness.js` route. **Not verified behind a real login** —
 standing limitation.
 
-**Left from this batch**: bar→line graphs on the nutrition dashboard with a
-1m default; the onboarding questionnaire surfaced as a client's first
-check-in (with the highlighter, starting photos, OT days and coach notes on
-one page — highlight storage for questionnaire answers is the open problem,
-since they live outside `checkin_responses.highlights`); and a check-in week
-selector opened from the Check-In tab's date title, reusing
-`CheckinWeekTimeline`.
+**Left from this batch — all three done 2026-08-18**, see the next section:
+bar→line graphs with a 1m default, the questionnaire surfaced as her first
+check-in, and the week selector. The "open problem" flagged here (highlight
+storage for questionnaire answers) turned out not to exist — the column was
+already there.
+
+## Nutrition dashboard goes to lines; onboarding becomes her first check-in (2026-08-18)
+
+The rest of the 2026-08-17 batch. No migration — see below for why the one
+that looked necessary wasn't.
+
+**Charts are lines, default range 1m.** `TrendChart` (already the line chart
+for member lift progress) gained `height` / `unit` / `sinceDate` /
+`emptyMessage` and now draws the weight chart too; `WeightBarChart.js` is
+deleted rather than left to rot. **This reverses that file's own deliberate
+"bars, because a line interpolates straight through a missed day" decision —
+Terra's explicit call, so don't fix it back.** The honesty it was protecting
+is preserved another way: dots sit only on real readings, so a long straight
+run between two distant dots still reads as two measurements rather than a
+fortnight of daily data. `sinceDate` (the current target's effective date)
+survives as a two-tone split — one neutral polyline, one clay, sharing the
+boundary point so it's a colour change and not a break — which is the direct
+translation of what the bar colouring meant. Dots are suppressed above 60
+points, or 6m/1y render as a solid bead of ink; the hovered point still gets
+its own. The four `MetricSparkTiles` are lines too.
+
+**Real geometry bug caught by measuring, not looking**: the sparkline's
+latest-reading dot sat at `x = width` with `r = 2.5` inside an SVG exactly
+`width` wide, so half of it was clipped on every tile (measured `cx 140` in a
+140px box). `sparkPoints` now insets by the dot radius on both axes. That
+function is exported and pure specifically so it can be checked without
+rendering.
+
+**Sparklines measure their own width via `onLayout` but accept a `sparkWidth`
+override.** ResizeObserver — which react-native-web implements `onLayout`
+with — does not fire in the sandboxed preview browser, so without the
+override there is no way to look at these before shipping them.
+
+### The questionnaire as her first check-in
+
+**No migration was needed, and the "open problem" was already solved.**
+`public.questionnaire_responses` has had a `highlights jsonb NOT NULL DEFAULT
+'{}'` column all along — identical in shape to `checkin_responses.highlights`
+— and its RLS policy is a plain `coach can manage responses` (`ALL`,
+`is_coach()`). It was already being *read* (`onboarding/questionnaire.js`
+renders `response.highlights?.[i]`); it simply never had a writer. Added
+`setQuestionnaireHighlights(userId, highlights)` to `coachClient.js` — keyed
+by `client_id`, since that table has **no `id` column at all** (one response
+per client), unlike `checkin_responses`.
+
+New `components/nutrition/OnboardingCheckinView.js` renders on the Check-In
+tab: questionnaire answers, starting photos, objective-tracking days, with
+the tab's own Notes/Focus rail unchanged beside it so the whole review is one
+screen to talk over. **The answers go through `CheckinAnswerList` rather than
+a second copy of the markup** — highlighting has enough hard-won edge-case
+handling in it (see `HighlightableAnswer.web.js`) that a parallel
+implementation would drift; questionnaire answers just have `hasPrior` and
+`hersOnly` false.
+
+**Onboarding is deliberately NOT mapped onto the calendar week containing her
+start date.** It has no `week_start` of its own, and inventing one would
+collide with a real check-in filed that same week by anyone who started
+mid-cycle. It sits at the bottom of the picker under "Where she started".
+
+### The week selector
+
+`CheckinWeekTimeline` gained optional `onSelectWeek` / `selectedWeekStart` /
+`pastWeeks` / `onboardingEntry`. Without them it renders exactly as it always
+did on the Settings tab, so that surface gains no tap target that goes
+nowhere. New `CheckinWeekPicker.js` wraps it in a centred modal (coach
+desktop-web convention) opened by pressing the Check-In tab's own date title.
+Reusing the timeline means the statuses in the picker are the same ones the
+Settings tab shows, from the same code — a second list would be a second
+definition of "completed". Verified that the nested Reopen `Pressable` still
+swallows its own press rather than also selecting the row.
+
+### Three real bugs found while doing it
+
+1. **Phantom missed check-ins — found by Terra on a real client.**
+   `CheckinWeekTimeline` enumerated a flat N weeks back with no awareness of
+   `client.start_date`, so every week before a client existed rendered as
+   **Missed with a Reopen button**. Melissa Benson (started 2026-08-09) had
+   four. The Weeks tab has always guarded against this via `maxWeeks`; this
+   timeline never did. Now filtered to weeks whose **end** falls on or after
+   `start_date` — the same "the week containing the start date is week 1"
+   rule the Weeks tab numbers by, so the two screens agree on where her
+   history begins. A week she actually filed a check-in for always shows
+   regardless, so a data oddity can't strand real work out of reach.
+2. **The picker listed 16 weeks while only 6 weeks of check-ins were
+   loaded** (`TIMELINE_PAST_WEEKS`), which would have rendered a
+   long-standing client's genuinely completed check-ins as Missed — with a
+   Reopen next to them. `PICKER_PAST_WEEKS` is now exported from the picker
+   and *is* the load window, so the two cannot drift. Stepping back beyond
+   that window is still correct: the selected week's check-in is fetched
+   individually by `getCheckinForWeek`, not read out of that array.
+3. **"‹ Older" had no floor** — it just incremented `weekOffset` forever, so
+   a coach could page back past onboarding into weeks the client never had.
+   New `oldestWeekOffset` clamps it, and one step past her first real week
+   now walks into **Onboarding** and stops there (Newer already steps back
+   out of it), which makes the stepper a complete traversal of her history.
+   Arithmetic verified against the real week helpers: Melissa clamps to
+   offset 1 (exactly her two filed weeks), a 2024 client still reaches 86
+   weeks, no `start_date` falls back to the picker depth rather than
+   infinity, and a check-in dated before the recorded start date stays
+   reachable.
+
+**Also fixed in passing**: `NutritionOnboardingTab`'s starting-photos card
+picked the earliest photo per angle from **all** photos with no
+`photosSinceEngagement` filter — so the nine clients migrated off the Google
+Sheets trackers were shown 2023/2024 photos as their starting set, the exact
+bug already fixed in `onboarding/photos.js` but never in the tab's own copy.
+Extracted to `components/nutrition/StartingPhotos.js`, scoped, and shared by
+both screens so there is one definition of "her starting set".
+
+**Verification**: clean `npx expo export -p web`, a Babel parse + scope pass
+over all 11 touched files (a clean export alone does not resolve identifiers
+— it has hidden a missing helper before), and real interaction through a
+throwaway `app/zz-harness.js` route: a drag-select on a questionnaire answer
+firing `onChangeHighlights(0, [[7,26]])` and rendering, week and onboarding
+selection, Reopen not stealing the row's press, sparkline geometry read out
+of the DOM, and the Melissa case re-rendered from her real row. **Not
+click-tested behind a real login** — standing limitation.
 
 ## Working notes for future sessions
 

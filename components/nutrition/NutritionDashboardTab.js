@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { MacroRingRow } from "./MacroRingRow";
-import { WeightBarChart } from "./WeightBarChart";
+import { TrendChart } from "../TrendChart";
 import { MetricSparkTiles } from "./MetricSparkTiles";
 import { FocusChecklist } from "./FocusChecklist";
 import { GamePlan } from "./GamePlan";
@@ -67,7 +67,7 @@ function RailCard({ title, headerRight, children }) {
 }
 
 export function NutritionDashboardTab({ userId, coachId, client, logs, currentTarget, focusItems, milestones, today, isWide, onChanged }) {
-  const [range, setRange] = useState(90);
+  const [range, setRange] = useState(30);
   // Measured, not derived from window width. An SVG needs a real pixel width,
   // and computing one from useWindowDimensions means subtracting the sidebar,
   // the page padding and the rail by hand — which was both wrong (the sidebar
@@ -153,11 +153,18 @@ export function NutritionDashboardTab({ userId, coachId, client, logs, currentTa
               </Text>
             ) : null}
           </View>
-          {/* Bars from the current target's start date are clay — the stretch
-              measured against the numbers she is on right now. */}
+          {/* The line goes clay from the current target's start date — the
+              stretch measured against the numbers she is on right now. */}
           <View onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
             {chartWidth > 0 ? (
-              <WeightBarChart points={weightPoints} width={chartWidth} sinceDate={currentTarget?.effective_date ?? null} />
+              <TrendChart
+                points={weightPoints}
+                width={chartWidth}
+                height={260}
+                unit="lb"
+                sinceDate={currentTarget?.effective_date ?? null}
+                emptyMessage="No weigh-ins in this range yet."
+              />
             ) : (
               // One frame with nothing in it, rather than a wrong-width chart
               // that visibly resizes after mount.

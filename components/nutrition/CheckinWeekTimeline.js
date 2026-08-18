@@ -29,7 +29,7 @@ function weekLabel(start) {
   return `${formatDateMDY(checkinMondayForWeek(start))} check-in`;
 }
 
-function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coachId, today, reopen, onChanged }) {
+function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coachId, today, reopen, onChanged, onSelect, selected }) {
   const [busy, setBusy] = useState(false);
   const required = isPhotoRequirementWeek(client, week.start);
   const weekPhotos = photosForRequirementWeek(photos, week);
@@ -56,10 +56,25 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coa
     }
   };
 
+  // Pressable only when the caller wants selection (the week picker on the
+  // Check-In tab). As a plain status list — its original job on the Settings
+  // tab — rows stay inert, so nothing there gains a tap target that goes
+  // nowhere. The Reopen control below is a nested Pressable and still wins
+  // its own taps.
+  const Wrapper = onSelect ? Pressable : View;
+  const wrapperProps = onSelect ? { onPress: () => onSelect(week) } : {};
+
   return (
-    <View
+    <Wrapper
+      {...wrapperProps}
       className="flex-row items-center justify-between border-b border-stone-100 py-2.5"
-      style={isCurrent ? { backgroundColor: "#faf8f6", marginHorizontal: -12, paddingHorizontal: 12, borderRadius: 8 } : undefined}
+      style={
+        selected
+          ? { backgroundColor: "#fdf6f2", marginHorizontal: -12, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: "#f0ddd2" }
+          : isCurrent
+            ? { backgroundColor: "#faf8f6", marginHorizontal: -12, paddingHorizontal: 12, borderRadius: 8 }
+            : undefined
+      }
     >
       <View style={{ flex: 1 }}>
         <Text style={{ fontFamily: isCurrent ? fonts.sansSemiBold : fonts.sans, fontSize: 13 }}>
@@ -91,7 +106,36 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coa
           <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: colors.primaryOnWhite }}>{busy ? "…" : "Reopen"}</Text>
         </Pressable>
       ) : null}
-    </View>
+    </Wrapper>
+  );
+}
+
+// Her onboarding sits at the bottom of the list as the oldest entry, because
+// that is what it is: her first check-in. It is deliberately NOT mapped onto
+// the calendar week containing her start date — it has no week_start of its
+// own, and inventing one would collide with a real check-in filed that same
+// week for anyone who started mid-cycle.
+function OnboardingRow({ onSelect, selected, submittedAt }) {
+  return (
+    <Pressable
+      onPress={onSelect}
+      className="flex-row items-center justify-between py-2.5"
+      style={
+        selected
+          ? { backgroundColor: "#fdf6f2", marginHorizontal: -12, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: "#f0ddd2" }
+          : undefined
+      }
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>Onboarding</Text>
+        <Text className="mt-0.5" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+          Questionnaire, starting photos and tracking days
+        </Text>
+      </View>
+      <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: submittedAt ? "#4d6142" : "#a8a29e" }}>
+        {submittedAt ? "Submitted" : "Nothing in"}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -100,9 +144,40 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coa
 // place instead of coach guesswork. Upcoming (next 3) / This week / Past
 // (last 5) — enumerateRecentWeeks includes the current week as its own
 // index 0, so it's split off from the rest here.
-export function CheckinWeekTimeline({ userId, coachId, client, checkins, reopens = [], photos, today, onChanged }) {
+//
+// Doubles as the week picker on the Check-In tab: pass onSelectWeek to make
+// the rows navigable, selectedWeekStart to mark where the coach currently
+// is, and onboardingEntry to hang her onboarding off the end of the list.
+// Without those it renders exactly as it always did on the Settings tab.
+export function CheckinWeekTimeline({
+  userId,
+  coachId,
+  client,
+  checkins,
+  reopens = [],
+  photos,
+  today,
+  onChanged,
+  onSelectWeek,
+  selectedWeekStart,
+  pastWeeks = PAST_WEEKS,
+  onboardingEntry,
+}) {
   const { currentWeek } = computeWeekWindows(today);
-  const recent = enumerateRecentWeeks(currentWeek, addDays, PAST_WEEKS);
+  // Stop at the client's own start date. Enumerating a flat N weeks back
+  // renders every week before she existed as a MISSED check-in, complete
+  // with a Reopen button — a client who started nine days ago showed four
+  // of them. A week counts as hers if it ENDS on or after her start date,
+  // matching the Weeks tab's "the week containing the start date is week 1"
+  // rule, so the two screens agree on where her history begins.
+  const allRecent = enumerateRecentWeeks(currentWeek, addDays, pastWeeks);
+  const submittedWeeks = new Set(checkins.map((c) => c.week_start));
+  const recent = client?.start_date
+    // A check-in she actually filed always shows, whatever the dates say —
+    // hiding one because it predates her recorded start date would lose real
+    // work over a data oddity.
+    ? allRecent.filter((w) => w.end >= client.start_date || submittedWeeks.has(w.start))
+    : allRecent;
   const upcoming = enumerateUpcomingWeeks(currentWeek, addDays, UPCOMING_WEEKS);
   const checkinsByWeek = Object.fromEntries(checkins.map((c) => [c.week_start, c]));
   // Several reopen rows can exist historically for the same week (an
@@ -123,6 +198,8 @@ export function CheckinWeekTimeline({ userId, coachId, client, checkins, reopens
     coachId,
     today,
     onChanged,
+    onSelect: onSelectWeek,
+    selected: !!selectedWeekStart && week.start === selectedWeekStart,
   });
 
   return (
@@ -134,17 +211,41 @@ export function CheckinWeekTimeline({ userId, coachId, client, checkins, reopens
         <Row key={w.start} {...rowProps(w, false, true)} />
       ))}
 
-      <Text className="mb-1.5 mt-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-        Current
-      </Text>
-      <Row {...rowProps(recent[0], true, false)} />
+      {/* enumerateRecentWeeks puts the current week at index 0, so the
+          start-date filter above can legitimately empty this list out for
+          someone who joined mid-week. */}
+      {recent.length > 0 ? (
+        <>
+          <Text className="mb-1.5 mt-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+            Current
+          </Text>
+          <Row {...rowProps(recent[0], true, false)} />
+        </>
+      ) : null}
 
-      <Text className="mb-1.5 mt-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-        Past
-      </Text>
-      {recent.slice(1).map((w) => (
-        <Row key={w.start} {...rowProps(w, false, false)} />
-      ))}
+      {recent.length > 1 ? (
+        <>
+          <Text className="mb-1.5 mt-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+            Past
+          </Text>
+          {recent.slice(1).map((w) => (
+            <Row key={w.start} {...rowProps(w, false, false)} />
+          ))}
+        </>
+      ) : null}
+
+      {onboardingEntry ? (
+        <>
+          <Text className="mb-1.5 mt-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
+            Where she started
+          </Text>
+          <OnboardingRow
+            onSelect={onboardingEntry.onSelect}
+            selected={onboardingEntry.selected}
+            submittedAt={onboardingEntry.submittedAt}
+          />
+        </>
+      ) : null}
     </View>
   );
 }
