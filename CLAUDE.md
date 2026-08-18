@@ -3156,6 +3156,8 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0061_events.sql` — **run**, confirmed live 2026-08-13 (5 tables with the expected policy counts, plus a real REST select returning `[]` rather than PGRST205). Adds `programming.events` / `event_items` / `event_questions` / `event_responses` / `event_response_items`, and `announcements.event_id`. **Do not reorder this file** — the child tables' policies reference `programming.events` in an EXISTS subquery, and Postgres resolves those at CREATE POLICY time (the bug that broke 0036 in production). Uses `unique nulls not distinct` (Postgres 15+) on the response-items constraint so an options-less item can't accumulate duplicate rows.
 - `0063_blocks_start_on_monday.sql` — **run**, confirmed live 2026-08-15 (0 non-Monday blocks remaining, both CHECK constraints present, and a Wednesday insert verified rejected). Snaps every existing `group_blocks`/`spc_blocks` row back to its week's Monday and adds `group_blocks_start_monday` / `spc_blocks_start_monday`. Carries its own rollback UPDATEs in a comment. See "Blocks start on Monday" below.
 - `0062_event_signup_options.sql` — **run**, confirmed live 2026-08-13. Adds `programming.events.ask_guest_count` (boolean, default **false**) and `cta_label` (nullable). Both additive; every existing event keeps behaving as it did.
+- `0064_exercise_tracks_weight.sql` — **run**, confirmed live 2026-08-17 (column present, `not null default true`). Adds `programming.exercises.tracks_weight` — false for bodyweight/rep-only lifts, which log reps with no weight box and are excluded from PR tracking. See the tweak-batch section below.
+- **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous. Next number is 0065.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.
@@ -4125,6 +4127,144 @@ gives the whole story from a single screenshot even after the keyboard has
 closed — far better than tapping and guessing, and it's what pinned the 308ms
 focusout to the debounced scroll. Still unverified: set-password and
 reset-password's code step (structurally identical, not individually driven).
+
+## Tweak batch: reps-only lifts, Flagship→Group, nutrition notes + finalize undo (2026-08-17)
+
+A batch of ~9 direct tweaks in one session. Three commits (`2d40329`,
+`09fbbf5`, `1cb02d4`). Worth reading for the four real bugs found along the
+way, two of which would have shipped silently.
+
+**Reps-only lifts** (migration `0064`, run). `exercises.tracks_weight`,
+default true. A lift with nothing to load — inverted row, push-up, plank —
+was still asking for a weight, and the card could never read as done
+because its weight box stayed empty forever. On a reps-only lift the weight
+column **disappears** rather than being disabled: a greyed box still reads
+as something she failed to fill in. `isLogged`, the auto-complete check and
+the autosave all stop waiting on it; the "last time" pills drop their weight
+line (a dash under every pill reads as missing data, not "there is none");
+both libraries show a `reps only` pill. **No PRs for those, per Terra's
+explicit call** — the existing `weight != null` guard covers a lift that
+never logged one, but an exercise *switched* to reps-only can still have
+older weighted rows behind it, so the exclusion is explicit in all three PR
+paths (`getExerciseStats`, `countPersonalRecordsOn`, `getSessionBests`).
+**Known gap, flagged not built**: `LiftProgressSection` returns null without
+a weight, so a reps-only lift shows no progress chart at all. Those lifts do
+progress — on reps — and charting that is a real change nobody asked for
+yet.
+
+**Default sets/reps now apply to lifts.** The columns have existed since
+0012 and `ExerciseFormModal` already had the fields; `lib/programming/
+exercises.js` was simply nulling them out for anything that wasn't a
+warm-up. Wired through every insert path. **SPC deliberately differs**: it
+already seeds from that client's most recent log, which is better
+information than a library default, so the order is last-logged → library
+default → 3×10.
+
+**"Same for the rest"** on the logging card — carries set 1 down the lift,
+appearing only when set 1 is complete and something below it is empty, and
+only filling the gaps. This is the explicit version of the carry-over
+prefill removed in the lift_v1 pass; that one pre-filled boxes she hadn't
+done yet, which made an untouched set read as already logged. **Reversal of
+a deliberate decision, at Terra's request** — the note in that section
+predicted she'd want the speed back, and she did.
+
+**Flagship renamed to Group.** One row (`group_programs.name` has been free
+text since 0010) plus a sort pin, a stale subtitle, and the log-source tag.
+New rows tag `source: 'group'`; nothing reads that column back (history
+matches on the completion row), so older `'flagship'` rows are harmless.
+
+**Real bug the rename would have caused**: `getCoachDashboardStats` looked
+the program up by the literal string `"Flagship"`, so the tile would have
+silently zeroed. The same hardcoding meant **LLYL (6 members) and Trial
+Group (5) had never appeared on the dashboard at all** — it only ever knew
+about two programs. The roster row now builds one chip per program from
+whatever exists, since programs have been coach-creatable since 0010.
+Worth remembering as a class: **grep for hardcoded program/exercise names
+before any rename**, and treat a by-name lookup as a bug in its own right.
+
+**"Logged today" on Coach Home mobile** put the 7-day average in the
+subtitle under the name and today's weigh-in on the far right edge. They're
+one group on the right now (`avg | today | delta`, down olive / up clay,
+matching the nutrition dashboard's own weight line). Column labels moved
+into a **single table header** rather than sitting on every row: repeating
+them cost enough width to truncate real client names. Columns are sized off
+**measured** text — the name box is 162px against the 156px "Lauren
+Bottelberghe" actually needs — with the delta column giving up its slack to
+pay for it. Note the average includes today's weigh-in, so the delta is
+slightly conservative; left as-is because redefining it here would make this
+list disagree with every other screen.
+
+**"Game plan" is called Notes**, and the Check-In tab's right rail **no
+longer freezes when finalized** — it used to switch to the focus/game-plan
+copy captured onto the response row, which was never referenced and read as
+"wait, I thought I just changed this" next to the live one. **This
+supersedes the phase-5 decision to render those snapshots.** The columns are
+still written (harmless, reversible), just never displayed.
+
+**New `components/nutrition/ClientNotesBubble.js`** — Notes + Focus
+reachable from any tab of a client's nutrition record. Reuses `GamePlan`
+and `FocusChecklist` rather than reimplementing either. **Bottom-LEFT
+because `CoachMessageBubble` already owns bottom-right there**; stacking
+them is worse, since that bubble is gated on the messaging kill switch and
+this one would hover above nothing for a client with messaging off. Same
+Modal rule as the other two bubbles: the idle control is NOT wrapped in one.
+- **`GamePlan` gained `saveIfDirty()` via `forwardRef`/`useImperativeHandle`**,
+  because "click off and it minimises" would otherwise bin an unsaved note
+  (it saves on an explicit button). It returns `unchanged`/`saved`/`failed`,
+  **not a boolean** — on a failed write the sheet has to stay open with the
+  text on screen; closing would drop it and a toast wouldn't bring it back.
+
+**The green "Check-in completed" pill is now the undo.** Finalizing is one
+click with no confirmation, so a misclick was permanent from inside the app.
+No confirmation on the undo on purpose — this *is* the recovery, and
+friction on the escape hatch is backwards. **Real bug caught while wiring
+it**: the first version targeted `selectedWeek` (whatever the Check-In tab
+is paged to) while the pill's label derives from `currentCheckin` (this
+week), so a pill reading "Awaiting her check-in" could quietly reopen a
+different week than the one it names. It targets the current week and only
+renders as pressable when the pill genuinely reads "Check-in completed".
+
+**`countPersonalRecordsOn` didn't select `exercises` at all**, so the
+reps-only guard added to it would have silently never fired — clean bundle,
+clean scope pass, and a no-op. Found by grepping the function's own query
+rather than trusting the guard read correctly. **Worth doing whenever a
+guard is added to a batched query: confirm the column it reads is actually
+in the select.**
+
+**"Liza was instantly due for a check-in after onboarding" was not a bug.**
+She has 24 check-ins and an unbroken weekly cadence back to March —
+`start_date`/`objective_tracking_approved_at` are both `2026-03-02
+15:00:00+00`, the on-the-hour stamp of the tracker backfill. She's a
+migrated client, correctly read as ongoing. **Check whether a "new" client
+is actually new before treating this shape of report as a bug.** Terra's
+stated wanted behaviour (a genuinely new client isn't due until the Sunday
+after approval) is unverified and unbuilt.
+
+**Gotcha that cost a live error**: converting `GamePlan` from `export
+function` to `export const … = forwardRef(…)` **breaks a running dev server
+until Metro is restarted** — React Fast Refresh handles a component's body
+changing but not its export identity, and throws "Component is not a
+function … `Component` is an instance of Object", attributed to a
+*neighbouring* element in the same rail rather than the culprit. Verified
+the code was fine by cold-rendering the exact failing rail. **Warn Terra
+whenever a change alters a component's export shape.**
+
+**Verification**: `npx expo export -p web` plus a Babel parse/scope pass
+after every batch (a clean export alone does not resolve identifiers). The
+reps-only card, the fill-down (driven for real — typed set 1, tapped, all
+six boxes filled), the notes bubble (including a failed save keeping the
+sheet open with the text intact), the weigh-in row (measured in the DOM, not
+eyeballed) and the undo pill were all rendered and driven through a
+throwaway `app/zz-harness.js` route. **Not verified behind a real login** —
+standing limitation.
+
+**Left from this batch**: bar→line graphs on the nutrition dashboard with a
+1m default; the onboarding questionnaire surfaced as a client's first
+check-in (with the highlighter, starting photos, OT days and coach notes on
+one page — highlight storage for questionnaire answers is the open problem,
+since they live outside `checkin_responses.highlights`); and a check-in week
+selector opened from the Check-In tab's date title, reusing
+`CheckinWeekTimeline`.
 
 ## Working notes for future sessions
 
