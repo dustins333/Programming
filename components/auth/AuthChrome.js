@@ -77,7 +77,20 @@ export function AuthScreen({ children, contentStyle, scroll = true }) {
           style={{ flex: 1 }}
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          // NEVER "on-drag" on web. react-native-web implements that prop
+          // as "blur the focused TextInput on ANY scroll event of this
+          // ScrollView" (ScrollView._handleScroll -> dismissKeyboard()), not
+          // on a finger drag. On Android Chrome the keyboard opening
+          // shrinks the layout (interactive-widget=resizes-content), Chrome
+          // scrolls the focused field into view INSIDE this ScrollView, that
+          // fires `scroll`, RNW blurs the field, and the keyboard closes the
+          // instant it opened — the "tap email, keyboard disappears" report
+          // on the installed PWA. iOS never hit it only because Safari
+          // scrolls the document rather than this element. Reproduced in
+          // the browser: one dispatched scroll event on this node moves
+          // activeElement from the input to <body>. Native keeps the real
+          // drag-to-dismiss behaviour.
+          keyboardDismissMode={Platform.OS === "web" ? "none" : "on-drag"}
           showsVerticalScrollIndicator={false}
           // iOS-native only. Android resizes the window itself
           // (adjustResize); on web this prop does not exist at all

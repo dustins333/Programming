@@ -4070,6 +4070,53 @@ unsolved again**; if either needs fixing, get a real device first. This has now
 been reasoned about wrongly twice from a desktop, and a desktop browser cannot
 reproduce any of it — with no on-screen keyboard the entire code path no-ops.
 
+## Android login: the keyboard closed itself — `keyboardDismissMode="on-drag"` on web (2026-08-18)
+
+A member on Android, installed PWA: tap the email field on /login, the
+keyboard appears and disappears immediately. Same *symptom* as the iOS
+focus-drop fixed on 2026-08-15, entirely different cause, and it survived
+every iOS fix because iOS never exercises the code path.
+
+**Root cause, reproduced in the browser rather than reasoned**: `AuthScreen`
+(`components/auth/AuthChrome.js`) was the one ScrollView in the app with
+`keyboardDismissMode="on-drag"`. On react-native-web that prop is implemented
+as **"blur the focused TextInput on ANY `scroll` event of this ScrollView"**
+(`ScrollView._handleScroll` → `dismissKeyboard()` →
+`TextInputState.blurTextInput`) — a real drag is not required. On Android,
+`interactive-widget=resizes-content` shrinks the layout on keyboard-open,
+Chrome scrolls the focused field into view *inside that ScrollView*, that fires
+`scroll`, RNW blurs the field, keyboard closes. iOS was immune only because
+Safari scrolls the *document* (the ICB doesn't shrink there), so the
+ScrollView itself never fires. Proof: with the field registered as focused, a
+single dispatched `scroll` event on that node moved `activeElement` from the
+input to `<body>`; after the fix, repeated scroll events leave it focused.
+
+**Fix**: `keyboardDismissMode={Platform.OS === "web" ? "none" : "on-drag"}`.
+Native keeps real drag-to-dismiss. **Rule: never set `on-drag` on a web-
+reachable ScrollView** — grep for it before adding one; there are now zero on
+web.
+
+**Two testing traps that made the first repro attempt pass falsely**: (1) in
+the hidden Browser pane, `input.focus()` sets `activeElement` but fires no
+focus *event*, so RNW's `TextInputState._currentlyFocusedNode` stays null and
+`dismissKeyboard()` is a silent no-op — dispatch a bubbling `focusin` after
+`focus()` to register the field the way a real tap does; (2) real `scroll`
+events don't dispatch while the pane is hidden (rendering-tied, like rAF and
+ResizeObserver) — dispatch `new Event("scroll")` on the node to exercise the
+handler.
+
+**New opt-in diagnostic**: `components/KeyboardDebugOverlay.js`, mounted in
+`app/_layout.js`. Off by default; open any page with `?kbdebug=1` for a
+fixed on-screen panel (browser/UA, standalone vs tab, innerHeight, visual
+viewport height/offset, ICB/#root heights, scrollY, focused field's rect, and
+a timestamped focus/resize/scroll log). Sticks per tab via sessionStorage;
+`?kbdebug=0` clears. Read-only, pointer-events none, its own DOM node outside
+React. This is the "on-screen event log" technique from the iOS session made
+permanent, so a member on a phone we can't simulate can hand over the numbers
+in one screenshot. Note: no Android SDK/emulator exists on this Mac; Android
+Studio + an AVD (Chrome inside, dev server at `10.0.2.2:8081`) would make
+Android verifiable here.
+
 ## Auth fields behind the keyboard: the shell fix, then the hero collapse (2026-08-15)
 
 Two commits, and the second only exists because the first was half a fix.

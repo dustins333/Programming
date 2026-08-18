@@ -19,6 +19,7 @@ import { PushRegistrar } from "../lib/notifications/PushRegistrar";
 import { PushDeepLink } from "../lib/notifications/PushDeepLink";
 import { KeyboardDoneButton } from "../components/KeyboardDoneButton";
 import { WebKeyboardViewport } from "../components/WebKeyboardViewport";
+import { KeyboardDebugOverlay } from "../components/KeyboardDebugOverlay";
 import { ToastHost } from "../components/ToastHost";
 import { AppUpdateChecker } from "../components/AppUpdateChecker";
 import { WebPushBanner } from "../components/WebPushBanner";
@@ -57,6 +58,7 @@ export default function RootLayout() {
           <PushDeepLink />
           <WebPushBanner />
           <WebKeyboardViewport />
+          <KeyboardDebugOverlay />
           <AppUpdateChecker />
           <Slot />
           <KeyboardDoneButton />
