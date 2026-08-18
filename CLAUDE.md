@@ -3098,6 +3098,50 @@ reach a block queued in November — flipping the range line red and disabling
 Create. **Not verified**: the Settings → Defaults tab itself, which needs an
 admin login.
 
+## Coaches set their own training; per-client question drift; hero-card permission leak (2026-08-18)
+
+Three small things from one message, two of them worth remembering as classes.
+
+**"Some clients still have the text field for the Zoom/Loom question."**
+Not a code bug — a data-model fact: each client holds their **own copy** of
+the check-in questions (`public.client_checkin_questions`), snapshotted from
+the template at approval time by `copyTemplateToClient`. The 2026-08-08
+conversion updated the template plus Terra's and Dustin's copies by hand, so
+only clients approved *after* that (Liza, Sam, Sarah) got the radio version;
+17 pre-existing clients still had text. Fixed with one direct UPDATE (type /
+options / booking_option copied from the template row), no code change.
+**General rule: any template edit — wording, add, remove, type — reaches new
+clients only.** If Terra changes the template and wants it everywhere, sync
+the per-client rows the same way; a "Push template to all clients" button on
+Settings → Nutrition was offered and not yet asked for.
+
+**Hero "pick up where you left off" showed a nutrition check-in to a coach
+with no nutrition access** (Banesa's screenshot). `getCoachDashboardStats`
+returns `nutritionReadyForCheckin` for everyone — the roster tile is
+permission-agnostic — and `getLaunchpadExtras` passed it straight into
+`getResumeTarget`, whose nutrition fallback fires whenever a coach has no
+group/SPC edit yet. Now gated on admin-or-`can_view_nutrition` at that one
+call site (`canSeeNutrition` in `lib/programming/launchpad.js`). Worth
+checking whenever a permission-agnostic aggregate is fed into a per-coach
+surface.
+
+**New `app/(coach)/my-training.js`** — a coach sets their OWN group
+memberships and SPC enrollment/frequency (sidebar "My Training" under Member
+View, and native More). Until this, only an admin could set anyone's
+memberships (via `clients/[userId].js`), and the admin's own "Manage own
+training" link lives on the admin-only Settings page. **Nutrition is
+deliberately absent from this screen — not disabled, absent** — per Terra:
+coaches may not turn nutrition on for themselves. That's also why it isn't
+just `clients/[userId].js` pointed at the caller's own id. Migration
+`0065_staff_own_spc_enrollment.sql` (**run**) adds a self-row policy on
+`spc_clients` (`user_id = auth.uid() and core.is_staff()`), because the
+existing staff policy is `can_access_spc()` and a coach without the SPC
+module would silently fail to enroll themself; group memberships were already
+plain `is_staff()`. Enrolling assigns the coach as their own SPC coach.
+
+Bundle + Babel scope pass clean; **not click-tested behind a coach login**
+(standing limitation). Commit `d089d63`.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -3157,7 +3201,8 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0063_blocks_start_on_monday.sql` — **run**, confirmed live 2026-08-15 (0 non-Monday blocks remaining, both CHECK constraints present, and a Wednesday insert verified rejected). Snaps every existing `group_blocks`/`spc_blocks` row back to its week's Monday and adds `group_blocks_start_monday` / `spc_blocks_start_monday`. Carries its own rollback UPDATEs in a comment. See "Blocks start on Monday" below.
 - `0062_event_signup_options.sql` — **run**, confirmed live 2026-08-13. Adds `programming.events.ask_guest_count` (boolean, default **false**) and `cta_label` (nullable). Both additive; every existing event keeps behaving as it did.
 - `0064_exercise_tracks_weight.sql` — **run**, confirmed live 2026-08-17 (column present, `not null default true`). Adds `programming.exercises.tracks_weight` — false for bodyweight/rep-only lifts, which log reps with no weight box and are excluded from PR tracking. See the tweak-batch section below.
-- **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous. Next number is 0065.
+- `0065_staff_own_spc_enrollment.sql` — **run**, verified live 2026-08-18. Adds a self-row `for all` policy on `programming.spc_clients` so any staff member can enroll/unenroll *themself* regardless of their `can_view_spc` flag. See the 2026-08-18 section above.
+- **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous. Next number is 0066.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.
