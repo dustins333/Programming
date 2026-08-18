@@ -113,10 +113,9 @@ export default function PlanBlock() {
         const workouts = await listPublishedWorkoutsForBlock(block.id);
         const completions = await listGroupCompletionDetailsForWorkouts(profile.id, workouts.map((w) => w.id));
         const week = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), todayInBoise());
-        // logs.source predates multi-membership and only special-cases
-        // Flagship/BWA by name — any other program tags with the generic
-        // 'group' value, same rule plan.js's own load() uses.
-        const source = program.name === "Flagship" ? "flagship" : program.name === "Better With Age" ? "bwa" : "group";
+        // logs.source only ever special-cased BWA by name — everything else
+        // tags with the generic 'group' value, same rule plan.js's load() uses.
+        const source = program.name === "Better With Age" ? "bwa" : "group";
 
         // "Block 12" — group blocks carry no name or number of their own, so
         // it's derived the same way SPC's labelBlocks() does it: chronological

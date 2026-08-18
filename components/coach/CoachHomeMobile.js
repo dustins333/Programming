@@ -256,11 +256,98 @@ function SheetRow({ title, detail, trailing, tone, onPress }) {
           </Text>
         ) : null}
       </View>
-      {trailing ? (
+      {typeof trailing === "string" ? (
         <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c" }}>{trailing}</Text>
-      ) : null}
+      ) : (
+        trailing ?? null
+      )}
       <Ionicons name="chevron-forward" size={15} color="#c9c4bd" />
     </PressFade>
+  );
+}
+
+// Today's weigh-in only means something against the trend it sits in, so
+// the average, today's number and the gap between them read as one group
+// on the right edge. They used to sit on opposite sides of the row — the
+// 7-day average buried in the subtitle under the client's name — which
+// made the comparison a scan across the full width of the phone.
+//
+// The column labels are a single header above the list rather than a pair
+// on every row: repeating them cost enough width to truncate real client
+// names ("Lauren Bottelbe…"), and a table only needs its headings once.
+// Units are dropped for the same reason — every number here is lb.
+//
+// The average is over the same 7-day window used everywhere else in the
+// app, which includes today, so the delta is slightly conservative:
+// today's number is one seventh of the figure it's measured against.
+// Sized off measured text, not guessed: the widest real client name
+// ("Lauren Bottelberghe") needs 156px, and these columns are what's
+// left over. The values are far narrower than the headings were, so
+// the labels are abbreviated to buy the name row back its space.
+const WEIGH_COL = 44;
+const DELTA_COL = 38;
+const WEIGH_GAP = 6;
+
+function WeighInHeader() {
+  const label = {
+    fontFamily: fonts.sansBold,
+    fontSize: 8.5,
+    color: "#a8a29e",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    textAlign: "right",
+  };
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: WEIGH_GAP, paddingBottom: 5 }}>
+      <View style={{ flex: 1, minWidth: 0 }} />
+      <Text maxFontSizeMultiplier={1} style={{ ...label, width: WEIGH_COL }}>
+        7d avg
+      </Text>
+      <Text maxFontSizeMultiplier={1} style={{ ...label, width: WEIGH_COL }}>
+        Today
+      </Text>
+      <Text maxFontSizeMultiplier={1} style={{ ...label, width: DELTA_COL }}>
+        +/−
+      </Text>
+      {/* matches SheetRow's chevron so the columns line up with the rows */}
+      <View style={{ width: 15 }} />
+    </View>
+  );
+}
+
+function WeighInTrailing({ avgWeight, weightToday }) {
+  const avg = roundWeight(avgWeight);
+  const today = roundWeight(weightToday);
+  const delta = avg !== null && today !== null ? Math.round((today - avg) * 10) / 10 : null;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: WEIGH_GAP }}>
+      <Text
+        maxFontSizeMultiplier={1.1}
+        style={{ width: WEIGH_COL, textAlign: "right", fontFamily: fonts.sans, fontSize: 13, color: "#78716c" }}
+      >
+        {avg !== null ? avg.toFixed(1) : "—"}
+      </Text>
+      <Text
+        maxFontSizeMultiplier={1.1}
+        style={{ width: WEIGH_COL, textAlign: "right", fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}
+      >
+        {today !== null ? today.toFixed(1) : "—"}
+      </Text>
+      <Text
+        maxFontSizeMultiplier={1.1}
+        style={{
+          width: DELTA_COL,
+          textAlign: "right",
+          fontFamily: fonts.sansSemiBold,
+          fontSize: 12.5,
+          // Down is olive, up is clay — the same pairing the nutrition
+          // dashboard's own weight-change line already uses.
+          color: delta === null ? "#c9c4bd" : delta < 0 ? "#4d6142" : delta > 0 ? "#8a5a2e" : "#78716c",
+        }}
+      >
+        {delta === null ? "—" : delta === 0 ? "0.0" : `${delta < 0 ? "↓" : "↑"}${Math.abs(delta).toFixed(1)}`}
+      </Text>
+    </View>
   );
 }
 
@@ -617,8 +704,9 @@ export function CoachHomeMobile() {
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <RosterChip label="Total" value={stats.totalMembers} onPress={() => goToClients(null)} />
-          <RosterChip label="Flagship" value={stats.flagshipCount} onPress={() => stats.flagshipProgramId && goToClients(stats.flagshipProgramId)} />
-          <RosterChip label="BWA" value={stats.bwaCount} onPress={() => stats.bwaProgramId && goToClients(stats.bwaProgramId)} />
+          {(stats.groupProgramCounts ?? []).map((p) => (
+            <RosterChip key={p.id} label={p.name} value={p.count} onPress={() => goToClients(p.id)} />
+          ))}
           <RosterChip label="SPC" value={stats.spcCount} onPress={() => goToClients("spc")} />
           <RosterChip label="Nutrition" value={stats.nutritionCount} onPress={() => goToClients("nutrition")} />
           {stats.unassignedCount > 0 ? (
@@ -646,22 +734,24 @@ export function CoachHomeMobile() {
         ) : nutritionToday.rows.length === 0 ? (
           <SheetEmpty>No one has logged anything yet today.</SheetEmpty>
         ) : (
-          nutritionToday.rows.map((r) => {
-            // 7-day average sits next to today's number so one weigh-in
-            // reads against the trend instead of on its own. "still logging"
-            // only shows on open days — it explains why a number might
-            // still move, where "finalized" on the rest would just be noise.
-            const avg = r.avgWeight !== null ? `7-day avg ${roundWeight(r.avgWeight)} lb` : "No weight logged this week";
+          <>
+            <WeighInHeader />
+            {nutritionToday.rows.map((r) => {
+            // "still logging" only shows on open days — it explains why a
+            // number might still move, where "finalized" on all the rest
+            // would just be noise. The weights themselves are grouped on
+            // the right; see WeighInTrailing.
             return (
               <SheetRow
                 key={r.userId}
                 title={r.name}
-                detail={r.finalized ? avg : `${avg} · still logging`}
-                trailing={r.weightToday !== null ? `${roundWeight(r.weightToday)} lb` : "—"}
+                detail={r.finalized ? null : "still logging"}
+                trailing={<WeighInTrailing avgWeight={r.avgWeight} weightToday={r.weightToday} />}
                 onPress={() => go(`/(coach)/nutrition/clients/${r.userId}`)}
               />
             );
-          })
+            })}
+          </>
         )}
       </Sheet>
 

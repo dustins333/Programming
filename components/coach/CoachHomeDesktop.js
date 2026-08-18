@@ -459,16 +459,9 @@ export function CoachHomeDesktop() {
           <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9, marginTop: 16 }}>
             <Eyebrow style={{ marginRight: 2 }}>ROSTER</Eyebrow>
             <RosterChip label="Total" value={stats.totalMembers} onPress={() => goToClients(null)} />
-            <RosterChip
-              label="Flagship"
-              value={stats.flagshipCount}
-              onPress={() => stats.flagshipProgramId && goToClients(stats.flagshipProgramId)}
-            />
-            <RosterChip
-              label="Better With Age"
-              value={stats.bwaCount}
-              onPress={() => stats.bwaProgramId && goToClients(stats.bwaProgramId)}
-            />
+            {(stats.groupProgramCounts ?? []).map((p) => (
+              <RosterChip key={p.id} label={p.name} value={p.count} onPress={() => goToClients(p.id)} />
+            ))}
             <RosterChip label="SPC" value={stats.spcCount} onPress={() => goToClients("spc")} />
             <RosterChip label="Nutrition" value={stats.nutritionCount} onPress={() => goToClients("nutrition")} />
             {stats.unassignedCount > 0 ? (

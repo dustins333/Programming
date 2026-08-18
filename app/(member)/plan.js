@@ -221,11 +221,13 @@ export default function MyFitness() {
         return Promise.all(
         assignments.map(async (assignment) => {
           const program = assignment.group_programs;
-          // logs.source predates multi-membership and only special-cases
-          // Flagship/BWA by name (migration 0004) — any other program
-          // (e.g. a specialty program like "Look Like You Lift") tags its
-          // logs with the generic 'group' value added in migration 0010.
-          const source = program.name === "Flagship" ? "flagship" : program.name === "Better With Age" ? "bwa" : "group";
+          // logs.source predates multi-membership and only ever special-
+          // cased BWA by name (migration 0004); everything else tags with
+          // the generic 'group' value added in 0010. Nothing reads this
+          // column back — history matches on the completion row, not on
+          // source — so rows written before Flagship was renamed to Group
+          // keep their old 'flagship' tag harmlessly.
+          const source = program.name === "Better With Age" ? "bwa" : "group";
           try {
             const block = await getCurrentBlock(program.id, today);
             if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };

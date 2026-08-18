@@ -370,7 +370,8 @@ function BlocksDesktop() {
     setLoadError(null);
     try {
       const programs = await listGroupPrograms();
-      const ordered = [...programs].sort((a, b) => (a.name === "Flagship" ? -1 : b.name === "Flagship" ? 1 : 0));
+      // The main program leads; the rest keep whatever order they came back in.
+      const ordered = [...programs].sort((a, b) => (a.name === "Group" ? -1 : b.name === "Group" ? 1 : 0));
       setProgramData(await Promise.all(ordered.map(loadProgramData)));
     } catch (err) {
       setLoadError(err.message ?? String(err));

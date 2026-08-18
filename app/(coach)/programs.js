@@ -5,7 +5,7 @@ import { CoachShell } from "../../components/CoachShell";
 import { fonts, colors } from "../../lib/theme";
 
 const ROWS = [
-  { href: "/(coach)/blocks", title: "Group Programs", subtitle: "Flagship & Better With Age" },
+  { href: "/(coach)/blocks", title: "Group Programs", subtitle: "Shared calendars & blocks" },
   { href: "/(coach)/spc", title: "SPC", subtitle: "Individualized, staggered blocks", permission: "can_view_spc" },
 ];
 
