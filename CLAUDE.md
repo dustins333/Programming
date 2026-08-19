@@ -3261,6 +3261,93 @@ files, and the pill rendered via a throwaway harness route. **Not verified on
 a phone** — the two places most worth a real look are My Week's stripe rows
 (fixed-height captions) and the set boxes' TARGET tag.
 
+## TrueCoach history import: staging tables + member-driven linking (2026-08-18)
+
+Follows the TrueCoach harvest (141 client `.txt` exports in Drive
+`TrueCoach/`, plans in `~/.claude/plans/truecoach-history-export-harvest.md`,
+`truecoach-export-report.md`, `truecoach-import-build.md`). Members are
+anxious about losing years of logged lifts when TrueCoach lapses; this makes
+that history hers again, one lift at a time, on her terms.
+
+**The design in one sentence**: every TrueCoach lift is parsed into staging
+tables; nothing reaches `programming.logs` until the MEMBER matches an import
+to a Kova exercise from her own history screen. Matching is never fuzzy-done
+for her (the exercise-merge detector's 35 false pairs is the precedent);
+multi-select is required (`DB bench` and `Dumbbell Bench Press` are both
+today's lift); one import feeds exactly one Kova lift (or its sets would exist
+twice and inflate PRs); picking one already linked elsewhere is a **move**,
+confirmed by naming both lifts.
+
+**Migration `0066_truecoach_imports.sql` (run, verified)**: `programming.
+truecoach_imports` (person × TrueCoach lift name; `user_id` NULLABLE;
+`unique (source_name, lift_name)`; `linked_exercise_id`), `truecoach_import_
+sets` (one row per set; `raw_text` = the WHOLE result block verbatim on every
+set row, exactly how Kova writes `logs.notes`), `logs.truecoach_import_id`
+(cascade), `logs.source` widened with `'truecoach'`. Two security-definer RPCs
+are the only member write path — `link_truecoach_import(import, exercise)`
+(idempotent; deletes that import's prior logs rows first, so a move is one
+atomic call) and `unlink_truecoach_import(import)` (deletes exactly the rows
+carrying the import id — Kova-logged rows have NULL there and cannot be
+reached, by construction, not convention). Members can only SELECT staging.
+
+**Why `user_id` is nullable, and the trigger**: `core.users` had 34 rows when
+this shipped — most of the 141 TrueCoach clients register later via the GHL
+webhook. `truecoach_attach_on_user_insert` (after insert on `core.users`)
+claims staged imports by lowercased email the moment the account appears, so
+nothing has to be re-run per registration. Emails come from the harvest
+checklist (`~/.claude/plans/truecoach-export-progress.json`), matched by email
+at harvest time; the one file with no roster email (Bob Getsinger, billed
+under his wife) is passed with `--email "Bob Getsinger=…"`.
+
+**Parser `scripts/truecoach_import.py`** (code only in repo; corpus, checklist
+and generated SQL never are): CRLF-normalise, md5-dedupe, `Workout Log:`
+header → person, session (`-----`) → exercise (`^[A-Z]{1,2}\d{0,2}\) Name:
+rx`) → result BLOCK (3-space-indented line + unindented continuation lines +
+optional comment paragraph). Emits idempotent SQL in chunks (`000_imports`,
+`NNN_sets`, `999_finalize`, `run.sh`); import ids are uuid5(source_name, lift)
+so re-parsing keeps links, replaces sets, and re-materialises linked imports.
+**Corpus survey findings that shaped the extractor** (all 141 files): 50,123
+result blocks, 41% multi-line; median 100 distinct lifts-with-results per
+client, max 185 (search in the picker is mandatory); 123 of 134 clients'
+dominant result shape matched NEITHER of the two "known" shapes (Bob's
+`50 lbs 3x15`, Abbi's `3x8 @50`) — the real corpus is `10 with 70 lbs`,
+`15x7,6,6`, `40# 15/15/15`, `10# × 8` per line, `Set 1: 10 reps, 80 pounds`,
+`8ea @15`… The extractor is a per-line tolerant grammar (rules tagged in
+`parse_shape`) with prescription-range disambiguation (`3x8-12` decides which
+of `45x8` is reps); it reaches **92% structured, 3.3% unparsed-with-digits,
+4.5% pure text** — and every block is stored verbatim regardless. Two traps
+worth remembering: `#44` → `44#` normalisation must not fire on `40# 15`
+(digit-lookbehind), and `AxB` where A exceeds the prescribed set count is
+reps×weight or reps×sets, never sets×reps. Loaded 2026-08-18: 12,550 imports /
+117,764 sets (111,440 structured), 3,079 imports attached to 26 accounts.
+
+**Member UI**: `components/TrueCoachMatchModal.js` (search, multi-select, rows
+carry `14 sessions · May–Aug 2026 · last 45lbs 3x12`, linked-here rows on top
+with Unlink, linked-elsewhere rows marked and pickable → move confirm; ordering
+by word overlap only, nothing pre-selected), reached from exactly two places:
+the history sheet's EMPTY state (`ExerciseHistoryModal` — deliberately no
+permanent button on the logging path) and a persistent dual-state row on the
+full-history page (`components/TrueCoachLinkRow.js`: `Match TrueCoach data →`
+/ `TrueCoach: DB bench, Dumbbell Bench Press · 23 sessions matched · Manage`;
+renders nothing for a member with no imports at all). `lib/programming/
+truecoachImports.js` wraps the RPCs. **Two guards added to `memberPlan.js`**:
+`logResult` and `getLoggedSetsForDate` filter `truecoach_import_id is null`
+— without the first, a back-logged Kova set on a date that already held
+imported sets would ADOPT the imported row and be deleted on unlink. `lib/
+history.js`'s day timeline also excludes imported rows (per-lift history only,
+by decision). `countPersonalRecordsOn` is keyed on `date_performed = today`, so
+past-dated imports can't spray the coach dashboard; `tracks_weight = false`
+lifts stay PR-excluded regardless of parsed weights.
+
+**Verified**: RPCs + RLS driven as a real member (Bob) inside a rolled-back
+transaction — 18 checks incl. link/move/unlink counts, Kova rows untouched,
+other-user import rejected, member direct update inert; attach trigger with a
+mixed-case email; parser against 38 unit cases + random block samples; UI at
+375px via a throwaway `app/zz-harness.js` (deleted). **Not verified behind a
+real login** — standing limitation. **Phase 2, not built**: a global "what
+have I linked" list on My History (`truecoach_imports` already carries every
+column it needs).
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -3321,7 +3408,8 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0062_event_signup_options.sql` — **run**, confirmed live 2026-08-13. Adds `programming.events.ask_guest_count` (boolean, default **false**) and `cta_label` (nullable). Both additive; every existing event keeps behaving as it did.
 - `0064_exercise_tracks_weight.sql` — **run**, confirmed live 2026-08-17 (column present, `not null default true`). Adds `programming.exercises.tracks_weight` — false for bodyweight/rep-only lifts, which log reps with no weight box and are excluded from PR tracking. See the tweak-batch section below.
 - `0065_staff_own_spc_enrollment.sql` — **run**, verified live 2026-08-18. Adds a self-row `for all` policy on `programming.spc_clients` so any staff member can enroll/unenroll *themself* regardless of their `can_view_spc` flag. See the 2026-08-18 section above.
-- **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous. Next number is 0066.
+- `0066_truecoach_imports.sql` — **run**, verified live 2026-08-18 (2 tables, trigger, 2 RPCs, `logs.truecoach_import_id`, `logs_source_check` widened). TrueCoach history staging + member linking. See the section above.
+- **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous. Next number is 0067.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.

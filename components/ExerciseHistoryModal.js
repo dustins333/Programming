@@ -115,7 +115,7 @@ function SetPill({ set, tinted, tracksWeight = true }) {
 // exact session rather than whatever today's weekday would pick. Absent when
 // the card is being viewed read-only in My History, in which case the full
 // history screen keeps its normal back behaviour.
-export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exerciseName, datePerformed, returnTo, tracksWeight = true }) {
+export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exerciseName, datePerformed, returnTo, tracksWeight = true, fetchImports = listMyTrueCoachImports }) {
   const router = useRouter();
   const [logs, setLogs] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -156,7 +156,7 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
       return;
     }
     let cancelled = false;
-    listMyTrueCoachImports(userId)
+    fetchImports(userId)
       .then((rows) => {
         if (!cancelled) setUnlinkedImports(rows.filter((i) => !i.linked_exercise_id || i.linked_exercise_id !== exerciseId));
       })
@@ -347,6 +347,7 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
         userId={userId}
         exerciseId={exerciseId}
         exerciseName={exerciseName}
+        fetchImports={fetchImports}
         onChanged={() => setRetryKey((k) => k + 1)}
       />
     </Modal>
