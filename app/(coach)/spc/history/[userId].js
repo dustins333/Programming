@@ -97,7 +97,10 @@ export default function SpcClientHistory() {
   const handlePickSession = (sessionNumber) => {
     const blockId = printBlockId;
     setPrintBlockId(null);
-    router.push(`/(coach)/spc/print/${blockId}?session=${sessionNumber}`);
+    // Web opens the print view in a new tab (it auto-launches the print
+    // dialog); native has no print surface and just shows the stub route.
+    if (Platform.OS === "web") window.open(`/spc/print/${blockId}?session=${sessionNumber}`, "_blank");
+    else router.push(`/(coach)/spc/print/${blockId}?session=${sessionNumber}`);
   };
 
   return (

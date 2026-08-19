@@ -20,7 +20,7 @@ import { getClient as getNutritionClient } from "../../../lib/nutrition/clients"
 import { getSetting } from "../../../lib/settings";
 import { SpcSessionReadout } from "../../../components/SpcSessionReadout";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
-import { PrintSessionPickerModal } from "../../../components/PrintSessionPickerModal";
+import { PrintBlockPickerModal } from "../../../components/PrintBlockPickerModal";
 import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { CoachSpcOverview } from "../../../components/coach/CoachSpcOverview";
@@ -348,8 +348,8 @@ function SpcClientDesktop() {
   const [rail, setRail] = useState("Lift progress");
   const [readoutSession, setReadoutSession] = useState(null);
   const [newBlockOpen, setNewBlockOpen] = useState(false);
-  // Print is per-session, not per-block: spc/print/[blockId] requires a
-  // ?session= param and rendered an empty "Session NaN" page without one.
+  // "Print block" asks which block (newest first), then which session —
+  // spc/print/[blockId] renders exactly one session per printed page.
   const [printPickerOpen, setPrintPickerOpen] = useState(false);
   // Click-to-copy: pick a source tile with the ⧉, then click any number of
   // target tiles, then confirm. Restored on web — it only ever existed on
@@ -1076,14 +1076,15 @@ function SpcClientDesktop() {
         onSubmit={handleCreateBlock}
       />
 
-      <PrintSessionPickerModal
+      <PrintBlockPickerModal
         visible={printPickerOpen}
-        loading={false}
-        sessionNumbers={[...new Set((detail?.sessions ?? []).map((w) => w.session_number))].sort((a, b) => a - b)}
+        blocks={blocks}
         onClose={() => setPrintPickerOpen(false)}
-        onPick={(n) => {
+        onPick={(b, n) => {
           setPrintPickerOpen(false);
-          router.push(`/(coach)/spc/print/${detail.block.id}?session=${n}`);
+          // New tab: the print view auto-opens the browser print dialog, and
+          // closing that tab lands the coach right back here.
+          window.open(`/spc/print/${b.id}?session=${n}`, "_blank");
         }}
       />
 

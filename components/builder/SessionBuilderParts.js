@@ -124,17 +124,23 @@ export function WarmupGrid({ warmups, onChange, onRemove, onAdd, editable = true
                   and shows the movement alone rather than dead inputs. */}
               {editable ? (
                 <>
+                  {/* Placeholders are the "not entered yet" hint. They used
+                      to render in nearly the same grey as a saved value, and
+                      a coach read "2 × 10/side" as real data that then
+                      "didn't print" — it was never saved. Ghost them hard. */}
                   <TextInput
                     value={w.sets ?? ""}
                     onChangeText={(v) => onChange(w.id, { sets: v })}
-                    placeholder="2"
+                    placeholder="—"
+                    placeholderTextColor="#d5cdc4"
                     style={{ width: 30, fontFamily: fonts.sans, fontSize: 12, color: "#57534e", textAlign: "right" }}
                   />
                   <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>×</Text>
                   <TextInput
                     value={w.reps ?? ""}
                     onChangeText={(v) => onChange(w.id, { reps: v })}
-                    placeholder="10/side"
+                    placeholder="reps"
+                    placeholderTextColor="#d5cdc4"
                     style={{ width: 68, fontFamily: fonts.sans, fontSize: 12, color: "#57534e" }}
                   />
                 </>

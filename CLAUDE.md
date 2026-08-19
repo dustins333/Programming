@@ -3142,6 +3142,87 @@ plain `is_staff()`. Enrolling assigns the coach as their own SPC coach.
 Bundle + Babel scope pass clean; **not click-tested behind a coach login**
 (standing limitation). Commit `d089d63`.
 
+## SPC program printing matches the paper SPC TEMPLATE sheet (2026-08-18)
+
+Terra's SPC coaches still hand-transcribe programs into a Google Sheet
+("SPC TEMPLATE", `tsmout1@gmail.com` Drive → Team Kova/SPC, 146 client tabs
+— export via the `.gsheet` stub's `doc_id`, same recipe as the tracker
+imports). `app/(coach)/spc/print/[blockId].web.js` now reproduces that
+template instead of a generic web table: header band (30pt, thick frame,
+`NAME | session title` — see below), **Warm up** 1–6 with Sets/Reps/Notes, **Main Session** A/B/C with
+E1/E2 superset letters, Sets/Reps/Rest, and blank **Week N / coach: / date:**
+columns for handwriting. One Letter-landscape page per printed sheet,
+`@page { size: letter landscape }`, rows flex to fill the page, main session
+padded to at least 6 bordered rows like the paper.
+
+**Weeks vs. columns — the one real design decision.** The paper assumes the
+same lifts every week; the app's SPC weeks are independent rows. Weeks are
+grouped into runs of identical exercise lists (`weekSignature`: lift ids +
+order + superset pairing + warm-ups — sets/reps/rest deliberately excluded);
+each run is one page whose week columns are exactly its weeks. A later week
+in a run whose prescription differs gets a small "4 × 8,8,6,6 · 2:00" line at
+the top of its column, leaving the space writable. Header started as the
+client name only ("eventually titles or focus items"); the session title was
+added the same night, below.
+
+**Follow-up same day (Terra's click-through)**: the SPC client page's "Print
+block" button now asks which **block** (newest first) then which **session**
+via new `components/PrintBlockPickerModal.js` (fetches that block's sessions
+itself — the page only holds the selected block's detail); Past blocks keeps
+the older `PrintSessionPickerModal`. And her first "Save as PDF" came out
+**blank** — inspected the file: made by **Safari** via the macOS dialog, Letter
+landscape, one page, empty content stream. Cause: Expo's
+`ScrollViewStyleReset` pins `html/body/#root` to `height:100%` with body
+`overflow:hidden`; Chrome prints through that, Safari clips the printout to
+the hidden box. `@media print` now forces `height:auto; overflow:visible` on
+those three. Re-verified Chrome via headless print; **Safari itself not
+re-tested here** — worth Terra one more Save-as-PDF.
+
+**Second follow-up, same night**: the Notes box beside the warm-ups is one
+tall cell with no horizontal rules (the paper's is free space); warm-up
+sets/reps fall back to the exercise's library `default_sets`/`default_reps`
+when the session row is blank (`listSpcWarmups` now selects them). Terra's
+"half the warm-ups have no sets/reps" was **data, not the print**: all 36
+blank rows in the live table were Glute Bridge / Half Kneeling Hip Flexor
+Strength / Quadruped T Spine Rotation, with nothing on the session AND no
+library default — set the library default and every past sheet fills in.
+**Why it looked like data**: the builder's `WarmupGrid` inputs had
+placeholders `2` / `10/side` rendering in almost the same grey as a saved
+value, so Bob's empty warm-ups read as "2 × 10/side" in the builder and
+"missing" on paper. Placeholders are now `—` / `reps` in the app's ghost
+`#d5cdc4`. **Header is now left-aligned `NAME | session title`** — the
+builder's per-week "Name this session" title, first week in the run that has
+one; name alone when none is set. **Name, bar and title share one font size**
+(30pt, name bold only) — a 34pt name against a small bar/title read as three
+things. `FitHeader` shrinks that one size (floor 16pt) until a long name +
+long title fits the band instead of clipping. **The tiny borderless warm-up
+sets/reps inputs in the builder are also why Terra thought those values were
+"stuck"** — they're editable, just not obviously so; worth a visible box if it
+comes up again.
+**`@page` gotcha, verified via headless print**: `size: 11in 8.5in landscape`
+made Chrome emit PORTRAIT (612×792); only `size: letter landscape` gives
+792×612 — don't "make it explicit". Also fixed a print-only bug where a gap in
+warm-up positions repeated one warm-up in two rows (rows now fill by sorted
+index, never by stored position).
+
+Flow otherwise unchanged (SPC client page / Past blocks → Print → pick
+session), but both entry points now `window.open` the print view in a **new tab**, which
+auto-launches the browser print dialog after a 400ms layout delay — the
+preview is the PDF, "Save as PDF" is one click. No PDF library. The
+`vercel.json` rewrite for `/spc/print/:blockId` already existed, so a fresh
+tab load resolves. `PRINT_CSS` and `PrintPage` are exported from the route
+file specifically so a harness can render the real stylesheet.
+
+**Verified as a real PDF, not a screenshot** (and re-verified after every
+follow-up above): headless Chrome
+(`"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+--headless=new --print-to-pdf=… http://localhost:8082/zz-harness`) against a
+throwaway harness route produced a 792×612pt (Letter landscape) PDF, 2 pages
+for a 4-week block whose week 3 changed, everything on-page. **That is the way
+to verify any print layout here** — the Browser pane cannot print. Clean
+`expo export`, Babel scope pass clean. **Not verified behind a real login**
+(standing limitation) — worth Terra printing one real client.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
