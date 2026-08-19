@@ -3175,8 +3175,8 @@ landscape, one page, empty content stream. Cause: Expo's
 `ScrollViewStyleReset` pins `html/body/#root` to `height:100%` with body
 `overflow:hidden`; Chrome prints through that, Safari clips the printout to
 the hidden box. `@media print` now forces `height:auto; overflow:visible` on
-those three. Re-verified Chrome via headless print; **Safari itself not
-re-tested here** — worth Terra one more Save-as-PDF.
+those three. Re-verified Chrome via headless print; **Safari confirmed by
+Terra on the deployed site** — a real Save-as-PDF came out with content.
 
 **Second follow-up, same night**: the Notes box beside the warm-ups is one
 tall cell with no horizontal rules (the paper's is free space); warm-up
@@ -3220,8 +3220,9 @@ follow-up above): headless Chrome
 throwaway harness route produced a 792×612pt (Letter landscape) PDF, 2 pages
 for a 4-week block whose week 3 changed, everything on-page. **That is the way
 to verify any print layout here** — the Browser pane cannot print. Clean
-`expo export`, Babel scope pass clean. **Not verified behind a real login**
-(standing limitation) — worth Terra printing one real client.
+`expo export`, Babel scope pass clean. **Confirmed live by Terra** (commit
+`a46f052`, pushed 2026-08-18): printed a real client from the deployed site
+in Safari, output correct.
 
 ## Database migrations
 
