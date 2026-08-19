@@ -906,6 +906,10 @@ export function ExerciseCard({
                     value={row.reps}
                     onChangeText={(v) => updateRow(i, "reps", v)}
                     onFocus={() => scrollFieldIntoView(cardRef.current)}
+                    // Coming back to a box that already has a number: the value is
+                    // selected on focus, so the first keystroke replaces it outright
+                    // instead of appending to what she typed the first time.
+                    selectTextOnFocus
                     keyboardType="decimal-pad"
                     inputAccessoryViewID={NUMERIC_DONE_ID}
                     // The target is drawn over the box, not put in the
@@ -927,6 +931,7 @@ export function ExerciseCard({
                     value={row.weight}
                     onChangeText={(v) => updateRow(i, "weight", v)}
                     onFocus={() => scrollFieldIntoView(cardRef.current)}
+                    selectTextOnFocus
                     keyboardType="decimal-pad"
                     inputAccessoryViewID={NUMERIC_DONE_ID}
                     // Weight is never prescribed in this gym, so there is no
