@@ -1060,10 +1060,12 @@ export function ExerciseCard({
 
           {/* The olive fill on a set box is the everyday "it saved" signal,
               so success stays silent — but a failure must not look
-              identical to a save. */}
-          {saveState === "saving" ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, color: MUTED, marginTop: 8 }}>Saving…</Text>
-          ) : saveState === "error" ? (
+              identical to a save. Deliberately no transient "Saving…" line:
+              autosave fires on every keystroke, so a line that appears and
+              disappears mid-set changes the card's height over and over and
+              shoves every card below it down the page. The error state is
+              persistent, so it can take the space it needs. */}
+          {saveState === "error" ? (
             <View className="flex-row items-center" style={{ marginTop: 8, gap: 10 }}>
               <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, color: "#b23a22", flexShrink: 1 }}>
                 Couldn't save — check your connection.
