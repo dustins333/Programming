@@ -35,7 +35,7 @@ import { FinalizePlate } from "../../components/session/FinalizePlate";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { buildLiftFinalizePlate } from "../../lib/finalizePlate";
 import { getGroupWeeklyProgress, getSpcWeeklyProgress } from "../../lib/programming/weeklyProgress";
-import { fonts, colors } from "../../lib/theme";
+import { fonts, colors, type } from "../../lib/theme";
 import { toastSuccess } from "../../lib/toast";
 
 // Design tokens from design_handoff_visual_pass_v4/README.md.
@@ -108,7 +108,7 @@ function WarmupCard({ warmups }) {
           <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#44403c" }}>
             Warm-up
           </Text>
-          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted }}>
             {warmups.length} move{warmups.length === 1 ? "" : "s"}
           </Text>
         </View>
@@ -128,13 +128,13 @@ function WarmupCard({ warmups }) {
                 <View className="flex-1 pr-2">
                   <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>{w.exercises?.name ?? w.label}</Text>
                   {w.notes ? (
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", fontStyle: "italic", marginTop: 1 }}>
+                    <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted, fontStyle: "italic", marginTop: 1 }}>
                       {w.notes}
                     </Text>
                   ) : null}
                 </View>
                 <View className="flex-row items-center" style={{ gap: 10 }}>
-                  {detail ? <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e" }}>{detail}</Text> : null}
+                  {detail ? <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.muted }}>{detail}</Text> : null}
                   <Pressable
                     onPress={() => toggle(key)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -919,13 +919,13 @@ export default function MyFitness() {
                 <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-600">
                   Rest day
                 </Text>
-                <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                <Text className="text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
                   No session scheduled today
                 </Text>
               </View>
             )}
             {groupEntry.status === "not_published" && (
-              <Text className="mb-6 text-stone-400" style={{ fontFamily: fonts.sans }}>
+              <Text className="mb-6" style={{ fontFamily: fonts.sans, color: colors.muted }}>
                 Week {groupEntry.weekNumber}, Session {groupEntry.sessionNumber} isn't published yet — check back soon.
               </Text>
             )}

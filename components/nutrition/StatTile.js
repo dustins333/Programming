@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { View, Text, TextInput } from "react-native";
-import { fonts } from "../../lib/theme";
+import { fonts, colors } from "../../lib/theme";
+import { Eyebrow } from "../Eyebrow";
 import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
 import { autofillSuppressedRef } from "../../lib/webAutofillSuppression";
 import { AddValueBadge } from "./AddValueBadge";
@@ -42,18 +43,13 @@ export function StatTile({ eyebrow, value, unit, onChangeText, footer, readOnly,
         borderColor: dashed ? DASHED_EMPTY : CARD_BORDER,
       }}
     >
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color: "#a8a29e" }}
-      >
-        {eyebrow}
-      </Text>
+      <Eyebrow>{eyebrow}</Eyebrow>
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 4, marginTop: 4 }}>
         {readOnly ? (
           <Text
             numberOfLines={1}
             maxFontSizeMultiplier={1.15}
-            style={{ flex: 1, minWidth: 0, fontFamily: fonts.display, fontSize: 24, color: empty ? "#c9c4bd" : "#44403c" }}
+            style={{ flex: 1, minWidth: 0, fontFamily: fonts.display, fontSize: 24, color: empty ? colors.hint : "#44403c" }}
           >
             {empty ? "–" : value}
           </Text>
@@ -69,7 +65,7 @@ export function StatTile({ eyebrow, value, unit, onChangeText, footer, readOnly,
               }}
               onBlur={() => setFocused(false)}
               keyboardType="decimal-pad"
-              placeholderTextColor="#c9c4bd"
+              placeholderTextColor={colors.hint}
               autoComplete="off"
               accessibilityLabel={eyebrow}
               maxFontSizeMultiplier={1.15}
@@ -91,7 +87,7 @@ export function StatTile({ eyebrow, value, unit, onChangeText, footer, readOnly,
           </View>
         )}
         {unit ? (
-          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", paddingBottom: 5 }}>
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted, paddingBottom: 5 }}>
             {unit}
           </Text>
         ) : null}

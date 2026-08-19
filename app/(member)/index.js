@@ -23,7 +23,8 @@ import { formatDateMDY } from "../../lib/formatDate";
 import { SessionSheet } from "../../components/SessionSheet";
 import { ProgressRing } from "../../components/ProgressRing";
 import { PressFade } from "../../components/PressFade";
-import { fonts, colors } from "../../lib/theme";
+import { fonts, colors, type } from "../../lib/theme";
+import { Eyebrow } from "../../components/Eyebrow";
 import { showToast } from "../../lib/toast";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -40,7 +41,7 @@ const CLAY = "#a46a57";
 const BRAND_TEXT = "#8a5140";
 const INK = "#44403c";
 const INK_SECONDARY = "#78716c";
-const INK_MUTED = "#a8a29e";
+const INK_MUTED = colors.muted;
 const DASHED_EMPTY = "#ddd6cd";
 const HERO_DARK = "#33251f";
 const HERO_CREAM = "#f7f3ee";
@@ -108,17 +109,6 @@ function setsByExercise(logs, exerciseRows) {
   return byExercise;
 }
 
-function Eyebrow({ children, color = INK_MUTED, style }) {
-  return (
-    <Text
-      maxFontSizeMultiplier={1.1}
-      style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", color, ...style }}
-    >
-      {children}
-    </Text>
-  );
-}
-
 // The dark hero — the one object on this screen with real weight, answering
 // "what am I doing today" before anything else. Precedence (README 1a):
 // today's group session if incomplete → else SPC's next incomplete → else a
@@ -154,7 +144,7 @@ function SessionHero({ eyebrow, chip, title, meta, ctaLabel, onStart, onPreview 
           <Text
             numberOfLines={1}
             maxFontSizeMultiplier={1.1}
-            style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.3, textTransform: "uppercase", color: HERO_SAND }}
+            style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1.2, textTransform: "uppercase", color: HERO_SAND }}
           >
             {eyebrow}
           </Text>
@@ -163,7 +153,7 @@ function SessionHero({ eyebrow, chip, title, meta, ctaLabel, onStart, onPreview 
           <View style={{ backgroundColor: "rgba(198,138,62,0.2)", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
             <Text
               maxFontSizeMultiplier={1.1}
-              style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.8, color: HERO_OCHRE }}
+              style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.8, color: HERO_OCHRE }}
             >
               {chip}
             </Text>
@@ -320,11 +310,11 @@ function SessionStripe({ completed, published, caption, isToday, sessionLabel, o
         maxFontSizeMultiplier={1}
         style={{
           fontFamily: fonts.sansBold,
-          fontSize: 8.5,
-          lineHeight: 11,
-          height: 11,
-          letterSpacing: 0.8,
-          color: isToday ? BRAND_TEXT : "#c9c4bd",
+          fontSize: type.eyebrow,
+          lineHeight: 14,
+          height: 14,
+          letterSpacing: 0.7,
+          color: isToday ? BRAND_TEXT : INK_MUTED,
           textAlign: "center",
           marginBottom: 5,
         }}
@@ -346,10 +336,10 @@ function SessionStripe({ completed, published, caption, isToday, sessionLabel, o
         maxFontSizeMultiplier={1.1}
         style={{
           fontFamily: fonts.sansBold,
-          fontSize: 9,
-          letterSpacing: 0.55,
+          fontSize: type.eyebrow,
+          letterSpacing: 0.5,
           textTransform: "uppercase",
-          color: published ? (isToday ? BRAND_TEXT : INK_MUTED) : "#c9c4bd",
+          color: published ? (isToday ? BRAND_TEXT : INK_MUTED) : INK_MUTED,
           textAlign: "center",
           marginTop: 7,
         }}
@@ -391,7 +381,7 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
         </Pressable>
         {onViewBlock ? (
           <Pressable onPress={onViewBlock} hitSlop={HITSLOP}>
-            <Text numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color: BRAND_TEXT }}>
+            <Text numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.caption, color: BRAND_TEXT }}>
               View full block ›
             </Text>
           </Pressable>
@@ -443,7 +433,7 @@ function EventsTeaser({ events, onOpen }) {
         <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
           {single ? single.title : `${events.length} things need a response`}
         </Text>
-        <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#8a8580" }}>
+        <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: INK_MUTED }}>
           {single
             ? single.response_type === "order"
               ? "Put in your order"
@@ -545,7 +535,7 @@ function NutritionCard({ days, elapsed, loggedCount, onNavigate, onDayPress }) {
           <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 14.5, color: INK }}>
             Nutrition
           </Text>
-          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11, color: INK_SECONDARY, marginTop: 2 }}>
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: INK_SECONDARY, marginTop: 2 }}>
             Tap a day to log it
           </Text>
         </Pressable>
@@ -582,7 +572,7 @@ function NutritionCard({ days, elapsed, loggedCount, onNavigate, onDayPress }) {
                 maxFontSizeMultiplier={1.1}
                 style={{
                   fontFamily: day.isToday ? fonts.sansBold : fonts.sans,
-                  fontSize: 10,
+                  fontSize: type.caption,
                   color: day.isToday ? BRAND_TEXT : INK_MUTED,
                 }}
               >
@@ -615,7 +605,7 @@ function ProgramErrorCard({ programName, message, onRetry }) {
         Something went wrong loading {programName ?? "your plan"}
       </Text>
       {message ? (
-        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: INK_SECONDARY, marginTop: 4 }}>
+        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: INK_SECONDARY, marginTop: 4 }}>
           {message}
         </Text>
       ) : null}

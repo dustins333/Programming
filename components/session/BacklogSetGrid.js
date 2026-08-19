@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput } from "react-native";
 import { logResult } from "../../lib/programming/memberPlan";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
-import { fonts } from "../../lib/theme";
-import { CARD_BORDER, CARD_SHADOW, CLAY, DASHED_EMPTY, FAINT, INK_DEEP, MUTED } from "./SessionSheetParts";
+import { fonts, colors, type } from "../../lib/theme";
+import { CARD_BORDER, CARD_SHADOW, CLAY, DASHED_EMPTY, INK_DEEP, MUTED } from "./SessionSheetParts";
 
 const AUTOSAVE_DELAY_MS = 700;
 
@@ -51,7 +51,7 @@ function SetBox({ value, onChangeText, onSaveNow, accessibilityLabel }) {
         inputAccessoryViewID={NUMERIC_DONE_ID}
         accessibilityLabel={accessibilityLabel}
         placeholder="–"
-        placeholderTextColor={FAINT}
+        placeholderTextColor={colors.hint}
         maxFontSizeMultiplier={1.1}
         style={{
           fontFamily: empty ? fonts.sans : fonts.sansBold,
@@ -139,7 +139,7 @@ export function BacklogSetGrid({ userId, exercise, datePerformed, source, sessio
           {exercise.name}
         </Text>
         {exercise.detail ? (
-          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11, color: MUTED, flexShrink: 0 }}>
+          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: MUTED, flexShrink: 0 }}>
             {exercise.detail}
           </Text>
         ) : null}
@@ -147,15 +147,16 @@ export function BacklogSetGrid({ userId, exercise, datePerformed, source, sessio
 
       <View style={{ flexDirection: "row", gap: 7, alignItems: "flex-end" }}>
         {/* Units labelled once, down the left edge. */}
-        <View style={{ width: 26, flexShrink: 0 }}>
-          <View style={{ height: 15 }} />
+        <View style={{ width: 28, flexShrink: 0 }}>
+          {/* Matches the SET label's height + marginBottom below. */}
+          <View style={{ height: 18 }} />
           <View style={{ height: 32, justifyContent: "center" }}>
-            <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, color: FAINT }}>
+            <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: type.caption, color: colors.muted }}>
               REP
             </Text>
           </View>
           <View style={{ height: 32, justifyContent: "center", marginTop: 5 }}>
-            <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, color: FAINT }}>
+            <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: type.caption, color: colors.muted }}>
               LB
             </Text>
           </View>
@@ -165,7 +166,7 @@ export function BacklogSetGrid({ userId, exercise, datePerformed, source, sessio
           <View key={i} style={{ flex: 1 }}>
             <Text
               maxFontSizeMultiplier={1}
-              style={{ fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 0.8, color: MUTED, textAlign: "center", height: 11, marginBottom: 4 }}
+              style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, lineHeight: 14, letterSpacing: 0.8, color: MUTED, textAlign: "center", height: 14, marginBottom: 4 }}
             >
               SET {i + 1}
             </Text>

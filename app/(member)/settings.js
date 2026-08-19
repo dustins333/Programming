@@ -9,6 +9,7 @@ import { updateOwnNotificationPrefs } from "../../lib/notifications/memberPrefs"
 import { useShowMessageBubble, setShowMessageBubble } from "../../lib/messageBubblePref";
 import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
 import { fonts, colors } from "../../lib/theme";
+import { Eyebrow } from "../../components/Eyebrow";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../lib/scrollToKeyboard";
 
@@ -31,14 +32,7 @@ function Card({ children }) {
 }
 
 function CardTitle({ children }) {
-  return (
-    <Text
-      maxFontSizeMultiplier={1.1}
-      style={{ fontFamily: fonts.sansSemiBold, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#a8a29e", marginBottom: 12 }}
-    >
-      {children}
-    </Text>
-  );
+  return <Eyebrow style={{ marginBottom: 12 }}>{children}</Eyebrow>;
 }
 
 function Row({ label, value, actionLabel, onPress, last }) {

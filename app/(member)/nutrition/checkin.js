@@ -16,7 +16,7 @@ import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHe
 import { formatDateMDY } from "../../../lib/formatDate";
 import { toastSuccess } from "../../../lib/toast";
 import { notifyCoachOfClient } from "../../../lib/notifications/sendPush";
-import { fonts, colors } from "../../../lib/theme";
+import { fonts, colors, type } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { KeyboardDoneButton } from "../../../components/KeyboardDoneButton";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
@@ -476,12 +476,12 @@ export default function WeeklyCheckin() {
           <Text
             numberOfLines={1}
             maxFontSizeMultiplier={1.1}
-            style={{ flexShrink: 1, fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.2, textTransform: "uppercase", color: "#beac95" }}
+            style={{ flexShrink: 1, fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1, textTransform: "uppercase", color: "#beac95" }}
           >
             Week of {formatDateMDY(currentWeek.start)}
           </Text>
           <View style={{ backgroundColor: "rgba(198,138,62,0.2)", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
-            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.7, color: "#e0b070" }}>
+            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.7, color: "#e0b070" }}>
               {taskDoneCount} OF {taskTotal} DONE
             </Text>
           </View>
@@ -489,7 +489,7 @@ export default function WeeklyCheckin() {
         <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: 26, color: "#f7f3ee", marginTop: 6 }}>
           Your check-in
         </Text>
-        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "rgba(247,243,238,0.62)", marginTop: 2 }}>
+        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "rgba(247,243,238,0.72)", marginTop: 2 }}>
           {response
             ? "Submitted — your coach will review it."
             : canFinalize
@@ -534,7 +534,7 @@ export default function WeeklyCheckin() {
             disabled={reopenSubmitting}
             style={[
               { opacity: reopenSubmitting ? 0.5 : 1, borderRadius: 15, backgroundColor: colors.primary },
-              !reopenCanFinalize ? { opacity: 0.45 } : undefined,
+              !reopenCanFinalize ? { opacity: 0.6 } : undefined,
             ]}
             className="mt-1 items-center py-3.5"
           >
@@ -656,7 +656,7 @@ export default function WeeklyCheckin() {
                   shadowRadius: 16,
                   elevation: 3,
                 },
-                !canFinalize ? { opacity: 0.45 } : undefined,
+                !canFinalize ? { opacity: 0.6 } : undefined,
               ]}
               className="mt-2 items-center py-4"
             >

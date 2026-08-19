@@ -1,6 +1,6 @@
 import { View, Text } from "react-native";
 import { PressFade } from "./PressFade";
-import { fonts } from "../lib/theme";
+import { fonts, colors, type } from "../lib/theme";
 
 // design_handoff_member_block_v1 (13a) — one container per week of the
 // block, tinted by how that week went, holding one tile per session.
@@ -35,18 +35,18 @@ const WEEK_TONES = {
   complete: { bg: "#f2f5ed", border: "#dde5d3", borderWidth: 1, label: "#4d6142", status: "#6f8161", tile: "#dde5d3" },
   short: { bg: "#fcf1ee", border: "#f2d9d2", borderWidth: 1, label: "#a5432c", status: "#b9705c", tile: "#f2d9d2" },
   current: { bg: "#ffffff", border: "#a46a57", borderWidth: 3, label: "#8a5140", status: "#8a5140", tile: "#ebdcd3" },
-  upcoming: { bg: "#f6f4f1", border: "#e9e5e0", borderWidth: 1, label: "#a8a29e", status: "#b5afa6", tile: "#e9e5e0" },
+  upcoming: { bg: "#f6f4f1", border: "#e9e5e0", borderWidth: 1, label: colors.muted, status: colors.muted, tile: "#e9e5e0" },
   // Coach preview: no adherence to report (a group block is shared, so
   // there's no one person's completion to colour it by), so every week reads
   // plain and only "this week" is marked.
-  neutral: { bg: "#fdfbf8", border: "#ece7e1", borderWidth: 1, label: "#a8a29e", status: "#b5afa6", tile: "#ece7e1" },
+  neutral: { bg: "#fdfbf8", border: "#ece7e1", borderWidth: 1, label: colors.muted, status: colors.muted, tile: "#ece7e1" },
 };
 
 const MISSED_BORDER = "#e3b8ac";
 const MISSED_TEXT = "#b9705c";
 const CLAY = "#a46a57";
 const INK = "#44403c";
-const MUTED = "#a8a29e";
+const MUTED = colors.muted;
 
 // "Complete" / "1 missed" / "This week" / "Coming up". The shortfall is
 // spelled out rather than shown as "2 of 3" — a ratio invites a 2× member to
@@ -121,7 +121,7 @@ export function BlockWeekCard({ weekNumber, status, missed, sessions, slots }) {
             small, but it's what stops the card reading as one more tint. */}
         <Text
           maxFontSizeMultiplier={1.1}
-          style={{ fontFamily: fonts.sansBold, fontSize: status === "current" ? 12 : 10.5, letterSpacing: 1.25, color: tone.label }}
+          style={{ fontFamily: fonts.sansBold, fontSize: status === "current" ? 12 : type.eyebrow, letterSpacing: 1.2, color: tone.label }}
         >
           WEEK {weekNumber}
         </Text>
@@ -130,12 +130,12 @@ export function BlockWeekCard({ weekNumber, status, missed, sessions, slots }) {
             what has to carry "you are here". */}
         {status === "current" ? (
           <View style={{ backgroundColor: CLAY, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 }}>
-            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.5, color: "#fff" }}>
+            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.5, color: "#fff" }}>
               THIS WEEK
             </Text>
           </View>
         ) : (
-          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: tone.status }}>
+          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: tone.status }}>
             {weekStatusLabel(status, missed)}
           </Text>
         )}

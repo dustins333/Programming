@@ -139,7 +139,7 @@ function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, isStaff }
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primaryOnWhite,
-        tabBarInactiveTintColor: "#b5afa6",
+        tabBarInactiveTintColor: colors.muted,
         tabBarStyle: { borderTopColor: "#e7e5e4" },
         tabBarIconStyle: TAB_ICON_STYLE,
       }}

@@ -13,6 +13,7 @@ import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { PhotoCompare } from "../../../components/nutrition/PhotoCompare";
 import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHeader";
 import { fonts, colors } from "../../../lib/theme";
+import { Eyebrow } from "../../../components/Eyebrow";
 import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
 const CANVAS = "#faf8f6";
@@ -118,20 +119,10 @@ export default function NutritionPhotos() {
         );
       })()}
 
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color: "#a8a29e", marginBottom: 10 }}
-      >
-        Add today's photos
-      </Text>
+      <Eyebrow style={{ marginBottom: 10 }}>Add today's photos</Eyebrow>
       <PhotoUpload userId={profile.id} onUploaded={load} />
 
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color: "#a8a29e", marginTop: 24, marginBottom: 10 }}
-      >
-        Compare
-      </Text>
+      <Eyebrow style={{ marginTop: 24, marginBottom: 10 }}>Compare</Eyebrow>
       <PhotoCompare photos={photos} />
     </ScrollView>
   );

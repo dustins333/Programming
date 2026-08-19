@@ -2,7 +2,7 @@ import { Modal, View, Text, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
 import { PressFade } from "../PressFade";
-import { fonts } from "../../lib/theme";
+import { fonts, colors, type } from "../../lib/theme";
 
 // The full-screen finalize moment (design_handoff_member_finalize_v1) —
 // replaces the plain "Workout finalized — nice work!" toast that used to be
@@ -28,7 +28,7 @@ const FACES = {
     plateBg: "#eee9e0",
     plateBorder: "#e2ddd6",
     sheen: "rgba(255,255,255,.7)",
-    eyebrow: "#a8a29e",
+    eyebrow: colors.muted,
     count: "#4d6142",
     sub: "#57534e",
     rule: "rgba(42,33,28,.16)",
@@ -107,8 +107,8 @@ export function FinalizePlate({ plate, onDone }) {
                 numberOfLines={1}
                 style={{
                   fontFamily: fonts.sansBold,
-                  fontSize: 8.5,
-                  letterSpacing: 2,
+                  fontSize: type.eyebrow,
+                  letterSpacing: 1.2,
                   color: tone.eyebrow,
                   textTransform: "uppercase",
                   textAlign: "center",
@@ -130,7 +130,7 @@ export function FinalizePlate({ plate, onDone }) {
               <View style={{ width: 34, height: 1, backgroundColor: tone.rule, marginTop: 16, marginBottom: 16 }} />
               <Text
                 numberOfLines={1}
-                style={{ fontFamily: fonts.sans, fontSize: 11, color: tone.sub, textAlign: "center" }}
+                style={{ fontFamily: fonts.sans, fontSize: type.caption, color: tone.sub, textAlign: "center" }}
               >
                 {plate.subline}
               </Text>

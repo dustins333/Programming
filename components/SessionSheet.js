@@ -18,7 +18,7 @@ import {
   StatePill,
 } from "./session/SessionSheetParts";
 import { todayInBoise } from "../lib/boiseDate";
-import { fonts, colors } from "../lib/theme";
+import { fonts, colors, type } from "../lib/theme";
 
 // design_handoff_member_block_v1 (14a-14d) — the sheet that opens when a
 // member taps a session, from a My Week stripe or from the block page.
@@ -226,7 +226,7 @@ export function SessionSheet({
                 <>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: 2, marginBottom: 8 }}>
                     <SheetEyebrow>What you did</SheetEyebrow>
-                    <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.6, color: FAINT }}>
+                    <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.6, color: MUTED }}>
                       REPS | LB
                     </Text>
                   </View>

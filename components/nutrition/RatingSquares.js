@@ -1,6 +1,6 @@
 import { View, Text } from "react-native";
 import { PressFade } from "../PressFade";
-import { fonts } from "../../lib/theme";
+import { fonts, colors, type } from "../../lib/theme";
 
 // design_handoff_member_mobile_v5 (1g) — the 1–5 scales (sleep quality,
 // hunger, energy) as five tappable squares instead of a dropdown. House
@@ -22,7 +22,7 @@ export function RatingSquares({ label, value, onChangeText, size = 26, compact, 
         <Text
           numberOfLines={1}
           maxFontSizeMultiplier={1.2}
-          style={{ fontFamily: compact ? fonts.sans : fonts.sansMedium, fontSize: compact ? 10.5 : 13.5, color: compact ? "#a8a29e" : "#44403c", marginBottom: compact ? 4 : 0 }}
+          style={{ fontFamily: compact ? fonts.sans : fonts.sansMedium, fontSize: compact ? type.caption : 13.5, color: compact ? colors.muted : "#44403c", marginBottom: compact ? 4 : 0 }}
         >
           {label}
         </Text>
@@ -58,7 +58,7 @@ export function RatingSquares({ label, value, onChangeText, size = 26, compact, 
             >
               <Text
                 maxFontSizeMultiplier={1}
-                style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: selected ? "#fff" : empty ? "#c9c4bd" : "#8a7f76" }}
+                style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: selected ? "#fff" : empty ? colors.hint : colors.muted }}
               >
                 {n}
               </Text>

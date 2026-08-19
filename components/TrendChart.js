@@ -123,19 +123,19 @@ export function TrendChart({
       <Svg width={width} height={height} {...webHandlers}>
         <Line x1={PADDING.left} y1={PADDING.top} x2={PADDING.left} y2={axisY} stroke="#e7e5e4" strokeWidth={1} />
         <Line x1={PADDING.left} y1={axisY} x2={width - PADDING.right} y2={axisY} stroke="#e7e5e4" strokeWidth={1} />
-        <SvgText x={PADDING.left} y={PADDING.top - 4} fontSize={10} fill="#a8a29e">
+        <SvgText x={PADDING.left} y={PADDING.top - 4} fontSize={11} fill="#6f6862">
           {max.toFixed(1)}
         </SvgText>
         {/* Just above the axis, not below it — below collided with the
             first date label at the same y. */}
-        <SvgText x={PADDING.left} y={axisY - 5} fontSize={10} fill="#a8a29e">
+        <SvgText x={PADDING.left} y={axisY - 5} fontSize={11} fill="#6f6862">
           {min.toFixed(1)}
         </SvgText>
         {labelIndices.map((i) => {
           const c = coords[i];
           const anchor = i === 0 ? "start" : i === coords.length - 1 ? "end" : "middle";
           return (
-            <SvgText key={i} x={c.x} y={axisY + 16} fontSize={9.5} fill="#a8a29e" textAnchor={anchor}>
+            <SvgText key={i} x={c.x} y={axisY + 16} fontSize={11} fill="#6f6862" textAnchor={anchor}>
               {formatDateMD(c.date)}
             </SvgText>
           );

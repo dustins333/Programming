@@ -5,6 +5,8 @@ import { listLogsForExercise } from "../lib/programming/memberPlan";
 import { formatDateMD } from "../lib/formatDate";
 import { todayInBoise, daysBetween } from "../lib/boiseDate";
 import { PressFade } from "./PressFade";
+import { TrueCoachMatchModal } from "./TrueCoachMatchModal";
+import { listMyTrueCoachImports } from "../lib/programming/truecoachImports";
 import { fonts, colors } from "../lib/theme";
 
 // design_handoff_member_lasttime_v1. This is now the ONLY place a member sees
@@ -62,7 +64,11 @@ function agoLabel(date, today) {
   return `${days} days ago`;
 }
 
-// One set = one pill, reps big and weight small beneath it. Pills are laid out
+// One set = one pill, reps on top and weight beneath it — stacked, so set 2
+// sits under set 2 across the three sessions. The weight is NOT the small
+// grey line it used to be (11px #a8a29e, 2.5:1, no unit): a member reported
+// she couldn't read it, and it's the number this sheet exists to show, so it's
+// now the same visual weight as the reps and carries "lb". Pills are laid out
 // in equal columns across the row so set 2 sits under set 2 of the session
 // above, which is what makes comparing three sessions a glance rather than a
 // read. Rows stay exactly as they were logged — a session with three sets does
@@ -88,8 +94,12 @@ function SetPill({ set, tinted, tracksWeight = true }) {
       {/* A reps-only lift has no weight line at all — a dash under every
           single pill reads as missing data rather than "there is none". */}
       {tracksWeight ? (
-        <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 1 }}>
-          {set.weight != null ? `@ ${set.weight}` : "–"}
+        <Text
+          maxFontSizeMultiplier={1.1}
+          numberOfLines={1}
+          style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: set.weight != null ? "#44403c" : colors.muted, marginTop: 2 }}
+        >
+          {set.weight != null ? `${set.weight} lb` : "–"}
         </Text>
       ) : null}
     </View>
@@ -110,6 +120,14 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
   const [logs, setLogs] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
+  // TrueCoach imports she hasn't matched to any Kova lift yet. Only fetched
+  // once the sheet knows her Kova history for this lift is empty — that's the
+  // one moment the "Match TrueCoach data" prompt earns a place in here. This
+  // sheet opens mid-workout, so it deliberately gets no permanent button; a
+  // lift that already has history reaches the same picker via the full-history
+  // screen's persistent row instead.
+  const [unlinkedImports, setUnlinkedImports] = useState(null);
+  const [matchOpen, setMatchOpen] = useState(false);
 
   // The lift title itself opens this, so it's one of the most-tapped things
   // in the whole logging flow — an uncaught rejection here left a spinner
@@ -130,6 +148,27 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
       cancelled = true;
     };
   }, [visible, exerciseId, userId, datePerformed, retryKey]);
+
+  const historyEmpty = Boolean(logs) && groupByDate(logs).length === 0;
+  useEffect(() => {
+    if (!visible || !historyEmpty || !userId) {
+      setUnlinkedImports(null);
+      return;
+    }
+    let cancelled = false;
+    listMyTrueCoachImports(userId)
+      .then((rows) => {
+        if (!cancelled) setUnlinkedImports(rows.filter((i) => !i.linked_exercise_id || i.linked_exercise_id !== exerciseId));
+      })
+      .catch(() => {
+        // The prompt is an extra, not the sheet's job — a failure here just
+        // leaves the plain first-time copy.
+        if (!cancelled) setUnlinkedImports([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, historyEmpty, userId, exerciseId, retryKey]);
 
   const today = todayInBoise();
   const allGroups = logs ? groupByDate(logs) : [];
@@ -182,7 +221,7 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
                 {exerciseName}
               </Text>
               {groups.length > 0 ? (
-                <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e", marginTop: 2 }}>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, marginTop: 2 }}>
                   {groups.length > 1 ? `Last ${groups.length} sessions` : "Last session"}
                 </Text>
               ) : null}
@@ -211,14 +250,35 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
               <ActivityIndicator color={colors.primary} />
             </View>
           ) : groups.length === 0 ? (
-            <View className="items-center py-8">
-              <Text className="text-center" style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#78716c" }}>
-                First time logging this lift.
-              </Text>
-              <Text className="mt-1 text-center" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
-                Whatever you do today becomes the reference next time.
-              </Text>
-            </View>
+            unlinkedImports && unlinkedImports.length > 0 ? (
+              // The empty sheet IS the import prompt (design_handoff_member_
+              // lasttime_v1 open question #2). Nothing else is on screen, so
+              // this costs nothing on the logging path.
+              <View className="items-center py-6">
+                <Text className="text-center" style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#78716c" }}>
+                  No history in Kova yet.
+                </Text>
+                <Text className="mt-1 text-center" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, paddingHorizontal: 12 }}>
+                  Your TrueCoach lifts are on file — pick the one{unlinkedImports.length === 1 ? "" : "s"} that match this and they'll show here.
+                </Text>
+                <PressFade
+                  onPress={() => setMatchOpen(true)}
+                  accessibilityLabel="Match TrueCoach data"
+                  style={{ marginTop: 16, minHeight: 46, paddingHorizontal: 22, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#fff" }}>Match TrueCoach data</Text>
+                </PressFade>
+              </View>
+            ) : (
+              <View className="items-center py-8">
+                <Text className="text-center" style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#78716c" }}>
+                  First time logging this lift.
+                </Text>
+                <Text className="mt-1 text-center" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted }}>
+                  Whatever you do today becomes the reference next time.
+                </Text>
+              </View>
+            )
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
               <View style={{ borderRadius: 16, borderWidth: 1, borderColor: CARD_BORDER, backgroundColor: "#fff", overflow: "hidden", ...CARD_SHADOW }}>
@@ -238,11 +298,11 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
                     >
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 9 }}>
                         <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#44403c" }}>{formatDateMD(group.date)}</Text>
-                        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e", flex: 1 }} numberOfLines={1}>
+                        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, flex: 1 }} numberOfLines={1}>
                           {agoLabel(group.date, today)}
                         </Text>
                         {isLast ? (
-                          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1, color: colors.primaryOnWhite }}>
+                          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1, color: colors.primaryOnWhite }}>
                             LAST TIME
                           </Text>
                         ) : null}
@@ -253,7 +313,7 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
                         ))}
                       </View>
                       {group.notes ? (
-                        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e", marginTop: 8, fontStyle: "italic" }}>{group.notes}</Text>
+                        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, marginTop: 8, fontStyle: "italic" }}>{group.notes}</Text>
                       ) : null}
                     </View>
                   );
@@ -281,6 +341,14 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
           )}
         </Pressable>
       </Pressable>
+      <TrueCoachMatchModal
+        visible={matchOpen}
+        onClose={() => setMatchOpen(false)}
+        userId={userId}
+        exerciseId={exerciseId}
+        exerciseName={exerciseName}
+        onChanged={() => setRetryKey((k) => k + 1)}
+      />
     </Modal>
   );
 }

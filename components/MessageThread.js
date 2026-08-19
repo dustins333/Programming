@@ -108,7 +108,7 @@ export function MessageThread({
           ) : !messages ? (
             <ActivityIndicator color={colors.primary} />
           ) : messages.length === 0 ? (
-            <Text className="text-sm text-stone-400" style={{ fontFamily: fonts.sans }}>
+            <Text className="text-sm" style={{ fontFamily: fonts.sans, color: colors.muted }}>
               No messages yet — say hello.
             </Text>
           ) : (
@@ -116,7 +116,7 @@ export function MessageThread({
               const own = isOwnMessage(m);
               return (
                 <View key={m.id} className="mb-2.5" style={{ alignItems: own ? "flex-end" : "flex-start" }}>
-                  <Text className="mb-0.5 text-xs text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
+                  <Text className="mb-0.5 text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.muted }}>
                     {labelFor(m)} · {formatDateTimeInBoise(m.created_at)}
                   </Text>
                   <View

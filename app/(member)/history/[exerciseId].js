@@ -4,8 +4,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLogsForExercise } from "../../../lib/programming/memberPlan";
+import { getExercise } from "../../../lib/programming/exercises";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { LiftProgressSection } from "../../../components/LiftProgress";
+import { TrueCoachLinkRow } from "../../../components/TrueCoachLinkRow";
 import { fonts, colors } from "../../../lib/theme";
 
 const CANVAS = "#faf8f6";
@@ -56,13 +58,21 @@ export default function ExerciseHistory() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [logs, setLogs] = useState(null);
+  const [exercise, setExercise] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
     try {
       setLoadError(null);
-      const data = await listLogsForExercise(profile.id, exerciseId, before ?? null);
+      // The exercise is fetched on its own so the title (and the TrueCoach
+      // row) don't depend on there being any logs to read the name off —
+      // a lift with no Kova history yet is exactly the case that row exists for.
+      const [data, ex] = await Promise.all([
+        listLogsForExercise(profile.id, exerciseId, before ?? null),
+        getExercise(exerciseId).catch(() => null),
+      ]);
       setLogs(data);
+      setExercise(ex);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -110,8 +120,14 @@ export default function ExerciseHistory() {
       ) : (
         <>
           <Text className="mb-4 text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
-            {logs[0]?.exercises?.name ?? "History"}
+            {exercise?.name ?? logs[0]?.exercises?.name ?? "History"}
           </Text>
+          <TrueCoachLinkRow
+            userId={profile.id}
+            exerciseId={exerciseId}
+            exerciseName={exercise?.name ?? logs[0]?.exercises?.name ?? "this lift"}
+            onChanged={load}
+          />
           <LiftProgressSection logs={logs} />
           <FlatList
         data={groups}
@@ -127,12 +143,12 @@ export default function ExerciseHistory() {
               {formatDateMDY(group.date)}
             </Text>
             {group.sets.map((s) => (
-              <Text key={s.id} style={{ fontFamily: fonts.sans, fontSize: 13, color: "#78716c", marginTop: 2 }}>
-                Set {s.set_number}: {s.reps ?? "–"} reps{s.weight ? ` @ ${s.weight}` : ""}
+              <Text key={s.id} style={{ fontFamily: fonts.sans, fontSize: 14, color: "#57534e", marginTop: 2 }}>
+                Set {s.set_number}: {s.reps ?? "–"} reps{s.weight != null ? ` @ ${s.weight} lb` : ""}
               </Text>
             ))}
             {group.notes ? (
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e", marginTop: 6, fontStyle: "italic" }}>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, marginTop: 6, fontStyle: "italic" }}>
                 {group.notes}
               </Text>
             ) : null}

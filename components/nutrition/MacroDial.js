@@ -3,7 +3,7 @@ import { View, Text, TextInput } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { AddValueBadge } from "./AddValueBadge";
 import { colorForTarget } from "../../lib/nutrition/weekCycle";
-import { fonts } from "../../lib/theme";
+import { fonts, colors, type } from "../../lib/theme";
 import { useScrollToKeyboard } from "../../lib/scrollToKeyboard";
 import { autofillSuppressedRef } from "../../lib/webAutofillSuppression";
 
@@ -89,7 +89,7 @@ export function MacroDial({ label, value, goal, unit = "g", onChangeText, readOn
             <Text
               maxFontSizeMultiplier={1.1}
               numberOfLines={1}
-              style={{ width: INNER - 4, textAlign: "center", fontFamily: fonts.display, fontSize: 16, color: empty ? "#c9c4bd" : color }}
+              style={{ width: INNER - 4, textAlign: "center", fontFamily: fonts.display, fontSize: 16, color: empty ? colors.hint : color }}
             >
               {empty ? "–" : value}
             </Text>
@@ -105,7 +105,7 @@ export function MacroDial({ label, value, goal, unit = "g", onChangeText, readOn
                 }}
                 onBlur={() => setFocused(false)}
                 keyboardType="decimal-pad"
-                placeholderTextColor="#c9c4bd"
+                placeholderTextColor={colors.hint}
                 autoComplete="off"
                 accessibilityLabel={`${label}${goal ? `, goal ${goal}${unit}` : ""}`}
                 maxFontSizeMultiplier={1.1}
@@ -114,7 +114,7 @@ export function MacroDial({ label, value, goal, unit = "g", onChangeText, readOn
                   textAlign: "center",
                   fontFamily: fonts.display,
                   fontSize: 16,
-                  color: empty ? "#c9c4bd" : color,
+                  color: empty ? colors.hint : color,
                   paddingVertical: 4,
                 }}
               />
@@ -135,7 +135,7 @@ export function MacroDial({ label, value, goal, unit = "g", onChangeText, readOn
       <Text
         numberOfLines={1}
         maxFontSizeMultiplier={1.15}
-        style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e", marginTop: 1 }}
+        style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, marginTop: 1 }}
       >
         {goal ? `of ${goal} ${unit}` : "no goal"}
       </Text>

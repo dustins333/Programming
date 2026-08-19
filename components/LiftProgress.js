@@ -43,7 +43,7 @@ export function LiftProgressSection({ logs }) {
     <View className="mb-3">
       {best ? (
         <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#4d6142" }}>
-          Best: {best.reps ?? "–"} reps @ {best.weight} ({formatDateMDY(best.date)})
+          Best: {best.reps ?? "–"} reps @ {best.weight} lb ({formatDateMDY(best.date)})
         </Text>
       ) : null}
       {points.length >= 2 ? <TrendChart points={points} width={chartWidth} /> : null}

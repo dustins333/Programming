@@ -1,6 +1,6 @@
 import { View, Text } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import { fonts } from "../lib/theme";
+import { fonts, colors } from "../lib/theme";
 
 // Progress ring for My Week's program cards (design_handoff_member_mobile_v5,
 // house rule 2): ring fill = completed ÷ target, count in Protest Strike
@@ -42,7 +42,9 @@ export function ProgressRing({ size = 38, stroke = 4, completed = 0, target = 0,
       </Svg>
       <Text
         maxFontSizeMultiplier={1}
-        style={{ fontFamily: fonts.display, fontSize: size <= 34 ? 11 : 12, color, includeFontPadding: false }}
+        // The count itself reads in the darker brand text while in progress —
+        // clay at 11–12px is under 3:1 on white. The ring keeps clay.
+        style={{ fontFamily: fonts.display, fontSize: size <= 34 ? 11 : 12, color: met ? OLIVE : colors.primaryOnWhite, includeFontPadding: false }}
       >
         {label ?? `${completed}/${target}`}
       </Text>

@@ -57,7 +57,7 @@ export function EventCard({ event, response, onPress }) {
       <View style={{ padding: 16 }}>
         <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, color: "#44403c" }}>{event.title}</Text>
 
-        <Text className="mt-1 text-xs" style={{ fontFamily: fonts.sans, color: "#8a8580" }}>
+        <Text className="mt-1 text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
           {event.event_date ? `${formatDateMDY(event.event_date)} · ` : ""}
           {closesLabel(event.closes_at)}
           {event.location ? ` · ${event.location}` : ""}

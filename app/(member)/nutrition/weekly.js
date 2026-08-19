@@ -16,7 +16,8 @@ import { RatingSquares } from "../../../components/nutrition/RatingSquares";
 import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHeader";
 import { formatDateMD } from "../../../lib/formatDate";
 import { PressFade } from "../../../components/PressFade";
-import { fonts, colors } from "../../../lib/theme";
+import { fonts, colors, type } from "../../../lib/theme";
+import { Eyebrow } from "../../../components/Eyebrow";
 import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
 const CANVAS = "#faf8f6";
@@ -58,17 +59,6 @@ function fmt(value, digits = 0) {
   return Number(value).toFixed(digits);
 }
 
-function Eyebrow({ children, color = "#a8a29e", style }) {
-  return (
-    <Text
-      maxFontSizeMultiplier={1.1}
-      style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color, ...style }}
-    >
-      {children}
-    </Text>
-  );
-}
-
 // The dark averages band. The logged-count chip is the caveat that
 // qualifies every number beside it — three logged days make a "week
 // average" that isn't really one.
@@ -90,7 +80,7 @@ function AveragesBand({ title, loggedCount, averages, weightTrend }) {
           {title} | Averages
         </Eyebrow>
         <View style={{ backgroundColor: "rgba(198,138,62,0.2)", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
-          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.7, color: HERO_OCHRE }}>
+          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.7, color: HERO_OCHRE }}>
             {loggedCount} OF 7 LOGGED
           </Text>
         </View>
@@ -104,7 +94,7 @@ function AveragesBand({ title, loggedCount, averages, weightTrend }) {
             <Text
               numberOfLines={1}
               maxFontSizeMultiplier={1.1}
-              style={{ fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.7, textTransform: "uppercase", color: "rgba(247,243,238,0.5)", marginTop: 2 }}
+              style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.7, textTransform: "uppercase", color: "rgba(247,243,238,0.72)", marginTop: 2 }}
             >
               {s.label}
             </Text>
@@ -137,7 +127,7 @@ function MacroAverageCard({ averages, target }) {
     >
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10 }}>
         <Eyebrow>Macro average vs goal</Eyebrow>
-        <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>
+        <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted }}>
           week average
         </Text>
       </View>
@@ -153,7 +143,7 @@ function MacroAverageCard({ averages, target }) {
               </Text>
               <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#44403c", marginTop: 1 }}>
                 {value != null ? Math.round(value) : "–"}
-                <Text style={{ fontFamily: fonts.sans, color: "#a8a29e" }}> / {m.goal ?? "–"}</Text>
+                <Text style={{ fontFamily: fonts.sans, color: colors.muted }}> / {m.goal ?? "–"}</Text>
               </Text>
               <View style={{ height: 8, borderRadius: 999, backgroundColor: TRACK, marginTop: 6, overflow: "hidden" }}>
                 <View style={{ width: `${pct * 100}%`, height: "100%", borderRadius: 999, backgroundColor: color }} />
@@ -228,7 +218,7 @@ function ExpandedDay({ log, target }) {
           <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansMedium, fontSize: 13.5, color: "#44403c" }}>
             Steps
           </Text>
-          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: 17, color: log?.steps != null ? "#44403c" : "#c9c4bd" }}>
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: 17, color: log?.steps != null ? "#44403c" : colors.hint }}>
             {log?.steps != null ? Number(log.steps).toLocaleString() : "–"}
           </Text>
         </View>
@@ -275,10 +265,10 @@ function DayRow({ date, label, log, target, expanded, onToggle, onLogPress, onLa
         style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
       >
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: logged ? "#44403c" : "#a8a29e" }}>
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: logged ? "#44403c" : colors.muted }}>
             {label}
           </Text>
-          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 2 }}>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, marginTop: 2 }}>
             {logged ? meta : "Not logged | tap to fill it in"}
           </Text>
         </View>
@@ -465,7 +455,7 @@ export default function NutritionWeekly() {
               >
                 <Text
                   maxFontSizeMultiplier={1}
-                  style={{ fontFamily: fonts.sansBold, fontSize: 9.5, color: selected ? "#fff" : "#a8a29e" }}
+                  style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: selected ? "#fff" : colors.muted }}
                 >
                   {day.name.slice(0, 1)}
                 </Text>

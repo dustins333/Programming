@@ -90,7 +90,7 @@ export function SessionHistoryModal({ visible, onClose, title, date, userId }) {
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} style={{ gap: 10 }}>
               {groups.length === 0 ? (
-                <Text className="py-3 text-center text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                <Text className="py-3 text-center text-sm" style={{ fontFamily: fonts.sans, color: colors.muted }}>
                   Nothing logged for this session.
                 </Text>
               ) : (
@@ -104,12 +104,12 @@ export function SessionHistoryModal({ visible, onClose, title, date, userId }) {
                       {group.name}
                     </Text>
                     {group.sets.map((s) => (
-                      <Text key={s.id} style={{ fontFamily: fonts.sans, fontSize: 13, color: "#78716c", marginTop: 2 }}>
-                        Set {s.set_number}: {s.reps ?? "–"} reps{s.weight ? ` @ ${s.weight}` : ""}
+                      <Text key={s.id} style={{ fontFamily: fonts.sans, fontSize: 14, color: "#57534e", marginTop: 2 }}>
+                        Set {s.set_number}: {s.reps ?? "–"} reps{s.weight != null ? ` @ ${s.weight} lb` : ""}
                       </Text>
                     ))}
                     {group.notes ? (
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e", marginTop: 6, fontStyle: "italic" }}>
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, marginTop: 6, fontStyle: "italic" }}>
                         {group.notes}
                       </Text>
                     ) : null}

@@ -5,8 +5,8 @@ import { PressFade } from "../PressFade";
 import { todayInBoise, addDays, dayOfWeekInBoise } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
 import { buildMonthGrid, stepMonth, MONTH_LABELS, WEEKDAY_LABELS } from "../../lib/monthGrid";
-import { fonts } from "../../lib/theme";
-import { CARD_BORDER, CARD_SHADOW, CLAY, BRAND_TEXT, INK, MUTED, FAINT } from "./SessionSheetParts";
+import { fonts, colors, type } from "../../lib/theme";
+import { CARD_BORDER, CARD_SHADOW, CLAY, BRAND_TEXT, INK, MUTED } from "./SessionSheetParts";
 
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -59,7 +59,7 @@ function CalendarGrid({ value, today, onPick }) {
           <Text
             key={i}
             maxFontSizeMultiplier={1}
-            style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: 9, color: FAINT, marginBottom: 4 }}
+            style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: colors.muted, marginBottom: 4 }}
           >
             {d}
           </Text>
@@ -137,7 +137,7 @@ export function BacklogDatePicker({ value, onChange, locked }) {
         <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: INK }}>
           Logging as {formatDateMDY(value)}
         </Text>
-        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11, color: MUTED, marginTop: 3 }}>
+        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: MUTED, marginTop: 3 }}>
           Close and reopen this session to change the date.
         </Text>
       </View>
@@ -177,7 +177,7 @@ export function BacklogDatePicker({ value, onChange, locked }) {
               <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 15, lineHeight: 17, color: selected ? BRAND_TEXT : "#57534e" }}>
                 {isToday ? "Today" : WEEKDAY_SHORT[dayOfWeekInBoise(date)]}
               </Text>
-              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 9.5, color: selected ? "#a8907f" : MUTED, marginTop: 3 }}>
+              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: selected ? BRAND_TEXT : MUTED, marginTop: 3 }}>
                 {shortLabel(date)}
               </Text>
             </PressFade>
@@ -199,7 +199,7 @@ export function BacklogDatePicker({ value, onChange, locked }) {
           }}
         >
           <Ionicons name="calendar-outline" size={15} color={BRAND_TEXT} />
-          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 10, color: BRAND_TEXT, textAlign: "center" }}>
+          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: BRAND_TEXT, textAlign: "center" }}>
             Pick a date
           </Text>
         </PressFade>

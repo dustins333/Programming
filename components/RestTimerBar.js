@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "./PressFade";
 import { useRestTimer, formatSeconds } from "../lib/restTimer";
-import { fonts } from "../lib/theme";
+import { fonts, type } from "../lib/theme";
 
 // The pinned rest bar (design_handoff_member_lift_v1). Rendered by
 // (member)/_layout.js above <Tabs>, so it sits over the tab content on every
@@ -104,13 +104,13 @@ export function RestTimerBar() {
               Rest done
             </Text>
             {setLine ? (
-              <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11, color: "rgba(255,255,255,0.75)" }}>
+              <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: "rgba(255,255,255,0.8)" }}>
                 {setLine}
               </Text>
             ) : null}
           </View>
           {canNavigate ? (
-            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: "#fff", flexShrink: 0 }}>
+            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.caption, color: "#fff", flexShrink: 0 }}>
               Back to lift ›
             </Text>
           ) : (
@@ -130,7 +130,7 @@ export function RestTimerBar() {
             <Text
               numberOfLines={1}
               maxFontSizeMultiplier={1.1}
-              style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.3, color: SAND, marginBottom: 5 }}
+              style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1.2, color: SAND, marginBottom: 5 }}
             >
               {timer.liftName ? `REST · ${String(timer.liftName).toUpperCase()}` : "REST"}
             </Text>
@@ -196,7 +196,7 @@ function ChipButton({ onPress, label, color, borderColor }) {
         borderColor,
       }}
     >
-      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color }}>
+      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.caption, color }}>
         {label}
       </Text>
     </PressFade>

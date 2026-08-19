@@ -27,7 +27,8 @@ import { StatTile } from "../../../components/nutrition/StatTile";
 import { AddValueBadge } from "../../../components/nutrition/AddValueBadge";
 import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHeader";
 import { PressFade } from "../../../components/PressFade";
-import { fonts, colors } from "../../../lib/theme";
+import { fonts, colors, type } from "../../../lib/theme";
+import { Eyebrow } from "../../../components/Eyebrow";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { useScrollToKeyboard, useKeyboardHeight, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
@@ -80,17 +81,6 @@ const CARD_SHADOW = {
   shadowRadius: 14,
   elevation: 2,
 };
-
-function Eyebrow({ children, color = "#a8a29e", style }) {
-  return (
-    <Text
-      maxFontSizeMultiplier={1.1}
-      style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", color, ...style }}
-    >
-      {children}
-    </Text>
-  );
-}
 
 // design_handoff_member_mobile_v5 (1g) — the three tinted "Log these in the
 // morning / macros / evening" cards are replaced by plain white cards with
@@ -165,7 +155,7 @@ function StepsRow({ value, onChangeText, goal, scrollViewRef, scrollOffsetRef })
           Steps
         </Text>
         {goal ? (
-          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e", marginTop: 1 }}>
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, marginTop: 1 }}>
             goal {goal}
           </Text>
         ) : null}
@@ -190,7 +180,7 @@ function StepsRow({ value, onChangeText, goal, scrollViewRef, scrollOffsetRef })
           }}
           onBlur={() => setFocused(false)}
           keyboardType="decimal-pad"
-          placeholderTextColor="#c9c4bd"
+          placeholderTextColor={colors.hint}
           autoComplete="off"
           accessibilityLabel="Steps"
           maxFontSizeMultiplier={1.15}
@@ -225,7 +215,7 @@ function FocusRow({ item, onChanged }) {
       >
         {item.done ? <Ionicons name="checkmark" size={13} color="white" /> : null}
       </View>
-      <Text style={{ fontFamily: fonts.sans, color: item.done ? "#a8a29e" : "#44403c", textDecorationLine: item.done ? "line-through" : "none" }}>
+      <Text style={{ fontFamily: fonts.sans, color: item.done ? colors.muted : "#44403c", textDecorationLine: item.done ? "line-through" : "none" }}>
         {item.text}
       </Text>
     </Pressable>
@@ -536,7 +526,7 @@ export default function NutritionToday() {
           <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: finalizedAt ? "#e9f0e1" : "#fdece5" }}>
             <Text
               maxFontSizeMultiplier={1.1}
-              style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.7, color: finalizedAt ? "#3f5136" : "#b23a22" }}
+              style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.7, color: finalizedAt ? "#3f5136" : "#b23a22" }}
             >
               {finalizedAt ? "LOGGED" : "NOT LOGGED YET"}
             </Text>
@@ -683,7 +673,7 @@ export default function NutritionToday() {
             radius={22}
             eyebrow="Today's macros"
             aside={
-              <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>
+              <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted }}>
                 {allMacrosEntered ? `${displayedCalories} cal derived` : "tap to enter"}
               </Text>
             }
@@ -703,7 +693,7 @@ export default function NutritionToday() {
               style={{ borderTopWidth: 1, borderTopColor: DIVIDER }}
             >
               <Pressable onPress={() => setCalorieModalOpen(true)} hitSlop={8} className="flex-row items-center gap-1.5" accessibilityLabel="About calculated calories">
-                <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c" }}>
+                <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: "#78716c" }}>
                   {isCalorieOverridden ? "Cronometer calories" : "Calculated"} {displayedCalories}
                   {calorieTarget ? ` | target ${calorieTarget}` : ""}
                 </Text>
@@ -722,7 +712,7 @@ export default function NutritionToday() {
               scrollOffsetRef={scrollOffsetRef}
               footer={
                 weightDelta !== null ? (
-                  <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansMedium, fontSize: 10.5, color: weightDelta <= 0 ? OLIVE : "#78716c" }}>
+                  <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansMedium, fontSize: type.caption, color: weightDelta <= 0 ? OLIVE : "#78716c" }}>
                     {weightDelta <= 0 ? "▼" : "▲"} {Math.abs(weightDelta).toFixed(1)} vs last week
                   </Text>
                 ) : null

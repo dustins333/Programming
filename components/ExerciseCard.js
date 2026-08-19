@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
-import { fonts, colors } from "../lib/theme";
+import { fonts, colors, type } from "../lib/theme";
 import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
 import { WeightCalculator } from "./WeightCalculator";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
@@ -56,12 +56,12 @@ const GHOST = "#c9c4bd";
 const OLIVE = "#4d6142";
 const LOGGED_BG = "#f3f6ef";
 const LOGGED_BORDER = "#dbe8cf";
-const MUTED = "#a8a29e";
+const MUTED = colors.muted;
 const SOFT = "#fdfbf8";
 // The unkeyed box: dashed border, barely-there ground, near-white clay value.
 const TARGET_BORDER = "#ddd6cd";
 const TARGET_BG = "#fdfbf8";
-const TARGET_TEXT = "#d5cdc4";
+const TARGET_TEXT = colors.hint;
 
 // "3 × 10 @ 135" when the sets are uniform, otherwise spelled out. Takes
 // either strings (this card's own live rows) or numbers (a logged history
@@ -74,9 +74,9 @@ export function summarizeSets(entries) {
   const reps = real.map((s) => val(s.reps));
   const weights = real.map((s) => val(s.weight));
   if (new Set(reps).size <= 1 && new Set(weights).size <= 1) {
-    return `${real.length} × ${reps[0] ?? "–"}${weights[0] != null ? ` @ ${weights[0]}` : ""}`;
+    return `${real.length} × ${reps[0] ?? "–"}${weights[0] != null ? ` @ ${weights[0]} lb` : ""}`;
   }
-  return real.map((s, i) => `${reps[i] ?? "–"}${weights[i] != null ? `@${weights[i]}` : ""}`).join(", ");
+  return real.map((s, i) => `${reps[i] ?? "–"}${weights[i] != null ? `@${weights[i]} lb` : ""}`).join(", ");
 }
 
 // Only worth showing as a per-set breakdown when the sets actually differ —
@@ -127,8 +127,9 @@ const REST_PRESETS = [60, 90, 120];
 // 11px) rather than left to the font, because the arc is positioned from the
 // row's bottom edge and this height is part of that offset. Pinning it keeps
 // the geometry identical on both platforms instead of depending on font
-// metrics; at 11 it also reproduces today's layout to the pixel.
-const REST_LABEL_H = 11;
+// metrics. 15 = the 12px caption + 3 (raised from 11/9.5 in the 2026-08-18
+// legibility pass; the arc geometry below tracks this constant).
+const REST_LABEL_H = 15;
 // How far the gutter reaches above the row, so the topmost bubble is inside
 // it. Worst case is the SHORTEST row (a taller notes field only pushes the
 // arc down): 58.3px at full size, 54.5px compact — 64 leaves ~6px spare.
@@ -402,7 +403,7 @@ function RestTimerButton({ seconds, onStart, compact, open, onOpenChange, hoverI
         maxFontSizeMultiplier={1}
         style={{
           fontFamily: fonts.sansBold,
-          fontSize: 9.5,
+          fontSize: type.caption,
           height: REST_LABEL_H,
           lineHeight: REST_LABEL_H,
           textAlign: "center",
@@ -468,7 +469,7 @@ function TargetHint({ label, compact }) {
         pointerEvents: "none",
       }}
     >
-      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.9, color: TARGET_TEXT }}>
+      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.8, color: TARGET_TEXT }}>
         TARGET
       </Text>
       <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.display, fontSize: compact ? 15.5 : 17, color: TARGET_TEXT }}>
@@ -694,7 +695,7 @@ export function ExerciseCard({
   // record, not a reference — there's nothing to disambiguate.
   const subtitle =
     !expanded && loggedSummary ? (
-      <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+      <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 12.5, color: MUTED, marginTop: 2 }}>
         Logged {loggedSummary}
       </Text>
     ) : null;
@@ -848,11 +849,11 @@ export function ExerciseCard({
               the LB column altogether, so REPS takes the full width. */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: rowGap, marginBottom: 5 }}>
             <View style={{ width: setLabelWidth }} />
-            <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 1, color: "#c0b9b0" }}>
+            <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1, color: MUTED }}>
               REPS
             </Text>
             {tracksWeight ? (
-              <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 1, color: "#c0b9b0" }}>
+              <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1, color: MUTED }}>
                 LB
               </Text>
             ) : null}
@@ -895,7 +896,7 @@ export function ExerciseCard({
               <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: rowGap, marginBottom: 7 }}>
                 <Text
                   maxFontSizeMultiplier={1}
-                  style={{ width: setLabelWidth, fontFamily: fonts.sansBold, fontSize: compact ? 9.5 : 10, color: isCurrent ? "#8a5140" : MUTED }}
+                  style={{ width: setLabelWidth, fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: isCurrent ? "#8a5140" : MUTED }}
                 >
                   SET {i + 1}
                 </Text>
@@ -997,7 +998,7 @@ export function ExerciseCard({
                 }}
               >
                 <Ionicons name="arrow-down" size={14} color="#8a5140" />
-                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: "#8a5140" }}>
+                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: "#8a5140" }}>
                   Same for the rest
                 </Text>
               </PressFade>
@@ -1056,14 +1057,14 @@ export function ExerciseCard({
               so success stays silent — but a failure must not look
               identical to a save. */}
           {saveState === "saving" ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 8 }}>Saving…</Text>
+            <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, color: MUTED, marginTop: 8 }}>Saving…</Text>
           ) : saveState === "error" ? (
             <View className="flex-row items-center" style={{ marginTop: 8, gap: 10 }}>
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#b23a22", flexShrink: 1 }}>
+              <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, color: "#b23a22", flexShrink: 1 }}>
                 Couldn't save — check your connection.
               </Text>
               <Pressable onPress={() => setSaveRetry((n) => n + 1)} hitSlop={8}>
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: colors.primaryOnWhite }}>Try again</Text>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: colors.primaryOnWhite }}>Try again</Text>
               </Pressable>
             </View>
           ) : null}

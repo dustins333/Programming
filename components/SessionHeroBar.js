@@ -1,7 +1,7 @@
 import { View, Text, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "./PressFade";
-import { fonts, colors } from "../lib/theme";
+import { fonts, colors, type } from "../lib/theme";
 
 // My Fitness's session header (design_handoff_member_lift_v1).
 //
@@ -23,7 +23,7 @@ import { fonts, colors } from "../lib/theme";
 // today's weekday. A caller that passes no tabs simply drops the row.
 const CANVAS = "#faf8f6";
 const CARD_BORDER = "#ece7e1";
-const MUTED = "#a8a29e";
+const MUTED = colors.muted;
 const HITSLOP = { top: 10, bottom: 10, left: 10, right: 10 };
 
 export function SessionHeroBar({
@@ -55,7 +55,7 @@ export function SessionHeroBar({
               <Text
                 numberOfLines={1}
                 maxFontSizeMultiplier={1.1}
-                style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.3, color: MUTED, flexShrink: 1 }}
+                style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1.2, color: MUTED, flexShrink: 1 }}
               >
                 {eyebrow}
               </Text>
@@ -65,7 +65,7 @@ export function SessionHeroBar({
             <Text
               numberOfLines={1}
               maxFontSizeMultiplier={1.1}
-              style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.3, color: MUTED }}
+              style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1.2, color: MUTED }}
             >
               {eyebrow}
             </Text>
@@ -92,14 +92,14 @@ export function SessionHeroBar({
                 }}
               >
                 <Ionicons name="checkmark" size={9} color="#4d6142" style={{ marginRight: 3 }} />
-                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, color: "#4d6142" }}>
+                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: "#4d6142" }}>
                   Finalized
                 </Text>
               </View>
             ) : null}
           </View>
           {meta ? (
-            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: MUTED, marginTop: 3 }}>
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: MUTED, marginTop: 3 }}>
               {meta}
             </Text>
           ) : null}
@@ -108,7 +108,7 @@ export function SessionHeroBar({
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 0, paddingTop: 2 }}>
           {onViewBlock ? (
             <PressFade onPress={onViewBlock} hitSlop={HITSLOP} style={{}}>
-              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color: colors.primaryOnWhite }}>
+              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.caption, color: colors.primaryOnWhite }}>
                 Full block ›
               </Text>
             </PressFade>
@@ -147,7 +147,7 @@ export function SessionHeroBar({
                   <Text
                     numberOfLines={1}
                     maxFontSizeMultiplier={1.05}
-                    style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: active ? colors.primaryOnWhite : "#78716c" }}
+                    style={{ fontFamily: fonts.sansBold, fontSize: type.caption, color: active ? colors.primaryOnWhite : "#78716c" }}
                   >
                     {tab.label}
                   </Text>
@@ -156,7 +156,7 @@ export function SessionHeroBar({
                   <Text
                     numberOfLines={1}
                     maxFontSizeMultiplier={1.05}
-                    style={{ fontFamily: fonts.sans, fontStyle: "italic", fontSize: 10, color: MUTED, marginTop: 1 }}
+                    style={{ fontFamily: fonts.sans, fontStyle: "italic", fontSize: type.caption, color: MUTED, marginTop: 1 }}
                   >
                     {tab.subtitle}
                   </Text>

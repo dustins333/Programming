@@ -3224,6 +3224,43 @@ to verify any print layout here** — the Browser pane cannot print. Clean
 `a46f052`, pushed 2026-08-18): printed a real client from the deployed site
 in Safari, output correct.
 
+## Member legibility pass: it was the grey, not the size (2026-08-18)
+
+Terra (who keeps her phone text at the smallest setting) reported member text
+"too small", one case specifically: the History set pill showed weight under
+reps in a way you couldn't read, and with no unit. A three-agent audit of
+every member screen found the real pattern: **base sizes were fine (13–14px);
+what read as small was `#a8a29e` (stone-400, 2.5:1 on white) used as the
+everyday secondary-text grey** in ~50 places carrying real information (units,
+targets, dates, prescriptions, day summaries), plus ~15 uppercase letter-spaced
+eyebrows at 8.5–10px, plus 26 distinct ad-hoc font sizes with no scale.
+
+**New tokens in `lib/theme.js`**: `colors.muted` (#6f6862, ~5.5:1) for
+secondary text that carries information; `colors.hint` (#9a9187, ~3:1) for
+ghost/placeholder text (the TARGET overlay in the set box, "–" empties); and a
+`type` scale (`eyebrow 11 / caption 12 / body 14 / …`) whose values are FLOORS
+for anything a member has to read. `#a8a29e` is now for decorative text only.
+**New shared `components/Eyebrow.js`** replaces five copy-pasted local
+eyebrows. Rules for new member UI: information text ≥12 and `colors.muted` or
+darker; uppercase eyebrows ≥11; nothing informational in `#a8a29e`.
+
+Specific fixes: `ExerciseHistoryModal`'s `SetPill` weight is 14px semibold
+dark with "lb" (was 11px grey, no unit, pinned to no scaling); every logged-set
+renderer now shows `lb` and uses `weight != null` (three of four used
+truthiness, dropping a 0 weight); the logged-row weight on the session sheet
+and the collapsed "Logged 3 × 8 @ 185 lb" summary likewise; tab-bar inactive
+colour is `colors.muted`; My Week stripe label/caption rows grew to 11 (their
+fixed heights raised to match — those heights are load-bearing for alignment);
+`ExerciseCard`'s `REST_LABEL_H` grew 11→15 (fan geometry reads it, so the arc
+moved with the row). Deliberately left at 10.5: the TARGET tag inside the set
+box (11 risked clipping the number in compact mode) and Nutrition Today's
+LOGGED pill. `maxFontSizeMultiplier` pins were not touched.
+
+Verified: clean `expo export -p web`, a Babel scope pass over all 38 touched
+files, and the pill rendered via a throwaway harness route. **Not verified on
+a phone** — the two places most worth a real look are My Week's stripe rows
+(fixed-height captions) and the set boxes' TARGET tag.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

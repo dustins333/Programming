@@ -18,7 +18,7 @@ import { BlockProgressHero } from "../../components/BlockProgressHero";
 import { BlockWeekCard } from "../../components/BlockWeekCard";
 import { PressFade } from "../../components/PressFade";
 import { toastError, toastSuccess } from "../../lib/toast";
-import { fonts, colors } from "../../lib/theme";
+import { fonts, colors, type } from "../../lib/theme";
 
 const CANVAS = "#faf8f6";
 
@@ -312,7 +312,7 @@ export default function PlanSpcBlock() {
         <PressFade onPress={goBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{}}>
           <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: colors.primaryOnWhite }}>‹ My Fitness</Text>
         </PressFade>
-        <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e" }}>
+        <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: colors.muted }}>
           SPC
         </Text>
       </View>
@@ -352,7 +352,7 @@ export default function PlanSpcBlock() {
           ))}
 
           {blockView.weeks.length === 0 ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted }}>
               Your coach hasn&apos;t published this block yet.
             </Text>
           ) : null}

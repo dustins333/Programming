@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { pickPhoto } from "../../lib/imagePicker";
 import { uploadPhoto } from "../../lib/nutrition/photos";
 import { todayInBoise } from "../../lib/boiseDate";
-import { fonts, colors } from "../../lib/theme";
+import { fonts, colors, type } from "../../lib/theme";
 
 const isWeb = Platform.OS === "web";
 
@@ -52,7 +52,7 @@ function SourceModal({ visible, onPick, onClose }) {
           </Pressable>
           <View className="h-px bg-stone-100" />
           <Pressable onPress={onClose} className="rounded-xl px-4 py-3.5">
-            <Text className="text-center text-stone-400" style={{ fontFamily: fonts.sansMedium }}>
+            <Text className="text-center" style={{ fontFamily: fonts.sansMedium, color: colors.muted }}>
               Cancel
             </Text>
           </Pressable>
@@ -96,7 +96,7 @@ function AngleBox({ angle, label, selected, uploading, onPicked, onCleared }) {
               className="flex-row items-center rounded-full"
               style={{ position: "absolute", top: 6, left: 6, backgroundColor: OLIVE, paddingHorizontal: 7, paddingVertical: 3, gap: 3 }}
             >
-              <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.7, color: "#fff" }}>
+              <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.7, color: "#fff" }}>
                 {label.toUpperCase()}
               </Text>
               <Ionicons name="checkmark" size={9} color="#fff" />
@@ -149,7 +149,7 @@ function AngleBox({ angle, label, selected, uploading, onPicked, onCleared }) {
         <Text
           maxFontSizeMultiplier={1.1}
           className="mt-1.5 text-center"
-          style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.9, textTransform: "uppercase", color: "#a8a29e" }}
+          style={{ fontFamily: fonts.sansBold, fontSize: type.caption, letterSpacing: 0.9, textTransform: "uppercase", color: colors.muted }}
         >
           {label}
         </Text>

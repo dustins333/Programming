@@ -1,5 +1,5 @@
 import { View, Text } from "react-native";
-import { fonts } from "../../lib/theme";
+import { fonts, colors, type } from "../../lib/theme";
 
 // Shared anatomy for the session sheet (design_handoff_member_block_v1,
 // screens 13b-13e and 14a-14d). Kept in one file so the sheet and the
@@ -15,7 +15,7 @@ export const CARD_BORDER = "#ece7e1";
 export const ROW_DIVIDER = "#f4efe9";
 export const INK = "#44403c";
 export const INK_DEEP = "#2a211c";
-export const MUTED = "#a8a29e";
+export const MUTED = colors.muted;
 export const FAINT = "#c9c4bd";
 export const CLAY = "#a46a57";
 export const BRAND_TEXT = "#8a5140";
@@ -35,14 +35,14 @@ export const SESSION_STATES = {
   today: { bg: "#fdf6f2", border: "#f0dbd0", text: BRAND_TEXT },
   backlog: { bg: "#fcf1ee", border: "#f2d9d2", text: "#b9705c" },
   logged: { bg: "#f2f5ed", border: "#dde5d3", text: OLIVE },
-  future: { bg: "#f6f4f1", border: "#e9e5e0", text: "#8a7a70" },
+  future: { bg: "#f6f4f1", border: "#e9e5e0", text: colors.muted },
 };
 
 export function StatePill({ state, label }) {
   const tone = SESSION_STATES[state] ?? SESSION_STATES.future;
   return (
     <View style={{ alignSelf: "flex-start", backgroundColor: tone.bg, borderWidth: 1, borderColor: tone.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.6, color: tone.text }}>
+      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.6, color: tone.text }}>
         {label}
       </Text>
     </View>
@@ -54,7 +54,7 @@ export function SheetEyebrow({ children, color = MUTED, style }) {
     <Text
       numberOfLines={1}
       maxFontSizeMultiplier={1.1}
-      style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", color, ...style }}
+      style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1, textTransform: "uppercase", color, ...style }}
     >
       {children}
     </Text>
@@ -66,7 +66,7 @@ export function SheetEyebrow({ children, color = MUTED, style }) {
 export function PositionChip({ label }) {
   return (
     <View style={{ width: 23, height: 23, borderRadius: 8, backgroundColor: "#f5f1ec", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 11, color: "#8a7a70" }}>
+      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: type.caption, color: colors.muted }}>
         {label}
       </Text>
     </View>
@@ -91,11 +91,11 @@ export function ExerciseGroupCard({ superset, rounds, children }) {
     >
       {superset ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "#fdf6f2", paddingHorizontal: 15, paddingTop: 9, paddingBottom: 7 }}>
-          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.95, color: BRAND_TEXT }}>
+          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.9, color: BRAND_TEXT }}>
             SUPERSET
           </Text>
           {rounds ? (
-            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 10, color: "#b08b7a" }}>
+            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted }}>
               {rounds} rounds
             </Text>
           ) : null}
@@ -127,7 +127,7 @@ export function ExerciseRow({ position, name, detail, last }) {
           {name}
         </Text>
         {detail ? (
-          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11, color: MUTED, marginTop: 2 }}>
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: MUTED, marginTop: 2 }}>
             {detail}
           </Text>
         ) : null}
@@ -151,7 +151,7 @@ export function LoggedExerciseRow({ position, name, detail, sets, last }) {
           {name}
         </Text>
         {detail ? (
-          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11, color: FAINT, flexShrink: 0 }}>
+          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: MUTED, flexShrink: 0 }}>
             {detail}
           </Text>
         ) : null}
@@ -179,8 +179,8 @@ export function LoggedExerciseRow({ position, name, detail, sets, last }) {
                 <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: missed ? "#b9705c" : INK_DEEP }}>
                   {missed ? "–" : (set.reps ?? "–")}
                 </Text>
-                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: missed ? fonts.sansSemiBold : fonts.sans, fontSize: missed ? 9 : 9.5, color: missed ? "#b9705c" : MUTED }}>
-                  {missed ? "missed" : (set.weight ?? "–")}
+                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: missed ? type.caption : 12.5, color: missed ? "#b9705c" : INK_DEEP }}>
+                  {missed ? "missed" : set.weight != null ? `${set.weight} lb` : "–"}
                 </Text>
               </View>
             );
@@ -190,7 +190,7 @@ export function LoggedExerciseRow({ position, name, detail, sets, last }) {
         // Nothing logged for this lift at all — one pill rather than a row of
         // identical empty boxes.
         <View style={{ alignSelf: "flex-end", marginTop: -22, backgroundColor: "#fcf1ee", borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4 }}>
-          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#b9705c" }}>
+          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: "#b9705c" }}>
             Missed
           </Text>
         </View>

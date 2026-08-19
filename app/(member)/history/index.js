@@ -91,7 +91,7 @@ function StatTile({ value, label, color }) {
       <Text
         numberOfLines={2}
         maxFontSizeMultiplier={1.1}
-        style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.8, textTransform: "uppercase", color: "#a8a29e", marginTop: 2 }}
+        style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", color: colors.muted, marginTop: 2 }}
       >
         {label}
       </Text>
@@ -180,7 +180,7 @@ function TimelineRow({ entry, onPress, isLast }) {
         <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: isPr ? fonts.sansBold : fonts.sansSemiBold, fontSize: 13.5, color: isPr ? OCHRE_TEXT : "#44403c" }}>
           {entry.label}
         </Text>
-        <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11, color: isPr ? "#a58255" : "#a8a29e", marginTop: 1 }}>
+        <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 12, color: isPr ? "#8a5a2e" : colors.muted, marginTop: 1 }}>
           {entry.subtitle}
         </Text>
       </View>
@@ -252,10 +252,10 @@ function ByDayView({ profile, prEntries, sessionCount, streak, statsError }) {
                   maxFontSizeMultiplier={1.1}
                   style={{
                     fontFamily: fonts.sansBold,
-                    fontSize: 10,
+                    fontSize: 11,
                     letterSpacing: 1,
                     textTransform: "uppercase",
-                    color: section.label === "Today" ? CLAY : "#a8a29e",
+                    color: section.label === "Today" ? colors.primaryOnWhite : colors.muted,
                   }}
                 >
                   {section.label}
@@ -331,7 +331,7 @@ function ByWorkoutView({ exercises, loadError, onRetry }) {
         <View style={{ backgroundColor: HERO_DARK, borderRadius: 20, padding: 16, marginBottom: 16 }}>
           <Text
             maxFontSizeMultiplier={1.1}
-            style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.2, textTransform: "uppercase", color: "#beac95" }}
+            style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase", color: "#beac95" }}
           >
             Biggest jump this block
           </Text>
@@ -346,7 +346,7 @@ function ByWorkoutView({ exercises, loadError, onRetry }) {
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Sparkline values={jump.trend} color={HERO_OCHRE} highlightLast />
-              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 9.5, color: "rgba(247,243,238,0.5)", marginTop: 4 }}>
+              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 12, color: "rgba(247,243,238,0.72)", marginTop: 4 }}>
                 {formatDateMD(jump.jumpFrom)} – {formatDateMD(jump.jumpTo)}
               </Text>
             </View>
@@ -381,10 +381,10 @@ function ByWorkoutView({ exercises, loadError, onRetry }) {
               <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#44403c" }}>
                 {item.exercise.name}
               </Text>
-              <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 2 }}>
+              <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted, marginTop: 2 }}>
                 Last done {formatDateMDY(item.lastDate)}
-                {item.lastReps ? ` | ${item.lastReps} reps` : ""}
-                {item.lastWeight ? ` @ ${item.lastWeight}` : ""}
+                {item.lastReps != null ? ` | ${item.lastReps} reps` : ""}
+                {item.lastWeight != null ? ` @ ${item.lastWeight} lb` : ""}
               </Text>
             </View>
             <Sparkline values={item.trend} />
@@ -393,7 +393,7 @@ function ByWorkoutView({ exercises, loadError, onRetry }) {
                 <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 19, color: OLIVE }}>
                   {item.best}
                 </Text>
-                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.8, color: "#a8a29e" }}>
+                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.8, color: colors.muted }}>
                   BEST LB
                 </Text>
               </View>

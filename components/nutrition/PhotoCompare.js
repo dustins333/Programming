@@ -25,7 +25,7 @@ function Slot({ photo, url, onPress }) {
   if (!photo) {
     return (
       <View className="flex-1 items-center justify-center rounded-lg border border-dashed border-stone-300" style={{ aspectRatio: 3 / 4 }}>
-        <Text className="text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 12 }}>
+        <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted }}>
           No photo
         </Text>
       </View>

@@ -21,7 +21,7 @@ import { BlockProgressHero } from "../../components/BlockProgressHero";
 import { BlockWeekCard } from "../../components/BlockWeekCard";
 import { PressFade } from "../../components/PressFade";
 import { toastError, toastSuccess } from "../../lib/toast";
-import { fonts, colors } from "../../lib/theme";
+import { fonts, colors, type } from "../../lib/theme";
 
 const CANVAS = "#faf8f6";
 
@@ -368,7 +368,7 @@ export default function PlanBlock() {
           <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: colors.primaryOnWhite }}>‹ My Fitness</Text>
         </PressFade>
         {state.status === "ready" ? (
-          <Text numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e", flexShrink: 1 }}>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: colors.muted, flexShrink: 1 }}>
             {state.program.name}
           </Text>
         ) : null}
@@ -407,7 +407,7 @@ export default function PlanBlock() {
           ))}
 
           {blockView.weeks.length === 0 ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted }}>
               Your coach hasn&apos;t published this block yet.
             </Text>
           ) : null}

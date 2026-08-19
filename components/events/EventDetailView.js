@@ -166,7 +166,7 @@ export function EventDetailView({
       ) : null}
 
       <Text style={{ fontFamily: fonts.display, fontSize: 28, color: colors.primary }}>{event.title}</Text>
-      <Text className="mb-4 mt-1 text-xs" style={{ fontFamily: fonts.sans, color: "#8a8580" }}>
+      <Text className="mb-4 mt-1 text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
         {event.event_date ? `${formatDateMDY(event.event_date)} · ` : ""}
         {`Closes ${formatDateTimeInBoise(event.closes_at)}`}
         {event.location ? ` · ${event.location}` : ""}
@@ -205,7 +205,7 @@ export function EventDetailView({
           <Text className="mb-1" style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>
             {response ? "You're signed up" : "Bringing anyone?"}
           </Text>
-          <Text className="mb-3 text-xs" style={{ fontFamily: fonts.sans, color: "#8a8580" }}>
+          <Text className="mb-3 text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
             Set how many guests so we can plan for them.
           </Text>
           <QtyStepper value={guestCount} onChange={setGuestCount} label="Guests" disabled={preview} />
@@ -227,12 +227,12 @@ export function EventDetailView({
           <Text className="mb-1" style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#44403c" }}>
             {response ? "Your order" : "What do you want?"}
           </Text>
-          <Text className="mb-2 text-xs" style={{ fontFamily: fonts.sans, color: "#8a8580" }}>
+          <Text className="mb-2 text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
             No payment now — we'll sort that when it arrives.
           </Text>
 
           {items.length === 0 ? (
-            <Text className="mt-3 text-sm" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
+            <Text className="mt-3 text-sm" style={{ fontFamily: fonts.sans, color: colors.muted }}>
               Nothing to order yet.
             </Text>
           ) : null}
@@ -243,7 +243,7 @@ export function EventDetailView({
               <View key={item.id} className="mt-3 border-t pt-2" style={{ borderTopColor: CARD_BORDER }}>
                 <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{item.name}</Text>
                 {item.description ? (
-                  <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#8a8580" }}>
+                  <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
                     {item.description}
                   </Text>
                 ) : null}
@@ -341,7 +341,7 @@ export function EventDetailView({
 
           {response ? (
             <PressFade onPress={onCancel} disabled={preview} style={{ alignItems: "center", paddingVertical: 14 }}>
-              <Text style={{ fontFamily: fonts.sansMedium, color: "#8a8580", fontSize: 13 }}>
+              <Text style={{ fontFamily: fonts.sansMedium, color: colors.muted, fontSize: 13 }}>
                 {event.response_type === "order" ? "Cancel my order" : "Cancel my sign-up"}
               </Text>
             </PressFade>

@@ -1,5 +1,5 @@
 import { View, Text } from "react-native";
-import { fonts } from "../lib/theme";
+import { fonts, type } from "../lib/theme";
 
 // design_handoff_member_block_v1 (13a) — the dark band that carries the block
 // as a whole: which block, which week of how many, and how much of the
@@ -49,7 +49,7 @@ export function BlockProgressHero({ title, done, total, footer }) {
       <View style={{ height: 6, borderRadius: 99, backgroundColor: "rgba(247,243,238,0.15)", overflow: "hidden" }}>
         <View style={{ width: `${pct * 100}%`, height: "100%", backgroundColor: HERO_OLIVE }} />
       </View>
-      <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "rgba(247,243,238,0.6)", marginTop: 9 }}>
+      <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: "rgba(247,243,238,0.7)", marginTop: 9 }}>
         {footer ?? `${done} of ${total} sessions done`}
       </Text>
     </View>

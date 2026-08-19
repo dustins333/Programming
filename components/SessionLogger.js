@@ -12,7 +12,7 @@ import {
   unmarkOneOffExerciseComplete,
 } from "../lib/programming/exerciseCompletions";
 import { PressFade } from "./PressFade";
-import { fonts, colors } from "../lib/theme";
+import { fonts, colors, type } from "../lib/theme";
 import { toastError } from "../lib/toast";
 import { ExerciseCard } from "./ExerciseCard";
 
@@ -255,7 +255,7 @@ export function SessionLogger({
               style={{
                 alignSelf: "flex-start",
                 fontFamily: fonts.sansBold,
-                fontSize: 9.5,
+                fontSize: type.eyebrow,
                 color: "#b23a22",
                 backgroundColor: "#fdece5",
                 borderRadius: 999,
