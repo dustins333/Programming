@@ -238,7 +238,7 @@ The ratio column holds hardcoded values, not formulas, and contains typos (see b
 ### Expected result
 
 - **121 of 139** live members have history. Median 10 months.
-- **Five perfect 22/22 records** (Top Dogs): Amanda Smout, Bernadette Sessions,
+- **Five perfect 22/22 records** (shown as *Committed Crew OGs*): Amanda Smout, Bernadette Sessions,
   Kristan Alford, Michelle Dodge, Sarah Cunningham.
 - Current-streak distribution: 33 at 0 (of those with history), 18 at 1, 26 at 2,
   5 at 22. Counting all 139 live members, the 0 bucket is 51 — it also holds the
@@ -289,9 +289,10 @@ Any change to the rules should be re-checked against this replay.
    qualified yes/no, and the tier cleared. Never recompute a closed month.
 4. **Backfill** the 22 historical months per the rules above.
 5. **Output**: copy-paste block, 3x group then 2x group, alphabetical within each.
-   Plus the Top Dogs (perfect-record) list broken out separately — Terra wants it
+   Plus the Committed Crew OGs (perfect-record) list broken out separately — Terra wants it
    even though she hasn't decided what it's for yet.
-6. **Access**: every coach can view. Upload/commit is presumably admin — confirm.
+6. **Access**: every coach can view. Upload/commit is gated on the Ops Hours
+   permission (`can_log_ops_hours`), admin always passing — see Still open #2.
 7. Re-uploading a month should overwrite with confirmation.
 
 ## Phase 2 — reconcile against Kova
@@ -354,9 +355,13 @@ Where Kova's numbers *are* useful is coach-side, shown next to Kilo's:
    breakdown; plus a trophy keyed off the current streak with a floor of 3+ so it
    stays meaningful. Terra's words: *"a little graphic somewhere? Almost like an
    achievement? A trophy if you will."*
-2. **Who may upload/commit** — all coaches can view; admin-only for the upload itself
-   is assumed but unconfirmed. Phase 1 shipped that assumption: `core.is_staff()`
-   reads, `core.is_admin()` writes, enforced in RLS (0067) as well as in the UI.
-   Widening upload to all coaches is a two-policy change, nothing else.
+2. ~~**Who may upload/commit**~~ — **decided 2026-08-19.** All coaches can view
+   (`core.is_staff()`). Uploading and committing rides on the **Ops Hours**
+   permission (`core.users.can_log_ops_hours`, from 0036), which already means
+   "runs gym operations, not just coaching" and is settable per coach in
+   Settings › Team — rather than a second flag nobody would remember to set.
+   Enforced in RLS via `core.can_manage_ccrew()` (0070) and mirrored in the UI
+   by `lib/ccrew/access.js`; admin always passes. Today that is Terra and
+   Lauren.
 3. **Canva automation** — deferred. A Canva connector exists and brand-template
    autofill from the committed list is feasible, but copy-paste is the ask for now.

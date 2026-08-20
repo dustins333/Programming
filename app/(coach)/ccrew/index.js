@@ -8,6 +8,7 @@ import StatTile from "../../../components/ccrew/StatTile";
 import RosterRow from "../../../components/ccrew/RosterRow";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listMembers, listPeriods, listQualifyingRecords, getPeriodRecords } from "../../../lib/ccrew/periods";
+import { canManageCcrew } from "../../../lib/ccrew/access";
 import { computeStreaks, buildOutputBlock, topDogs } from "../../../lib/ccrew/streaks";
 import { periodLabel, previousPeriod } from "../../../lib/ccrew/months";
 import { monthStats } from "../../../lib/ccrew/stats";
@@ -17,15 +18,12 @@ import { toastError } from "../../../lib/toast";
 
 const isWeb = Platform.OS === "web";
 
-function Section({ title, subtitle, children, right }) {
+function Section({ title, children, right }) {
   return (
     <View className="mb-6">
       <View className="mb-3 flex-row items-end justify-between gap-3">
         <View className="flex-1">
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 16, color: "#44403c" }}>{title}</Text>
-          {subtitle ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted, marginTop: 2 }}>{subtitle}</Text>
-          ) : null}
         </View>
         {right}
       </View>
@@ -76,7 +74,7 @@ export default function CcrewScreen() {
   const { profile } = useAuth();
   const { width } = useWindowDimensions();
   const compact = width < MOBILE_BREAKPOINT;
-  const isAdmin = profile?.role === "admin";
+  const canUpload = canManageCcrew(profile);
 
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -237,11 +235,8 @@ export default function CcrewScreen() {
         <View className="mb-5 flex-row flex-wrap items-center justify-between gap-3">
           <View>
             <Text style={{ fontFamily: fonts.display, fontSize: 28, color: "#44403c" }}>CCrew</Text>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.muted }}>
-              Committed Crew — 80% of the sessions your package commits you to
-            </Text>
           </View>
-          {isAdmin ? (
+          {canUpload ? (
             <Pressable
               onPress={() => router.push("/(coach)/ccrew/upload")}
               className="flex-row items-center gap-2 rounded-lg px-4 py-2.5"
@@ -257,11 +252,11 @@ export default function CcrewScreen() {
           <View className="rounded-2xl border bg-white p-8" style={{ borderColor: "#ece7e1" }}>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: "#44403c" }}>No months yet</Text>
             <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.muted, marginTop: 6 }}>
-              {isAdmin
+              {canUpload
                 ? "Export a full calendar month from Kilo, then upload it here to score it."
                 : "Terra hasn't uploaded a month yet. Once she does, the wall list shows up here."}
             </Text>
-            {isAdmin ? (
+            {canUpload ? (
               <Pressable
                 onPress={() => router.push("/(coach)/ccrew/upload")}
                 className="mt-4 flex-row items-center gap-2 self-start rounded-lg px-4 py-2.5"
@@ -274,7 +269,7 @@ export default function CcrewScreen() {
           </View>
         ) : (
           <>
-            {isAdmin && nextToUpload ? (
+            {canUpload && nextToUpload ? (
               <Pressable
                 onPress={() => router.push({ pathname: "/(coach)/ccrew/upload", params: { period: nextToUpload } })}
                 className="mb-5 flex-row items-center gap-3 rounded-2xl border p-4"
@@ -309,14 +304,11 @@ export default function CcrewScreen() {
               />
             </View>
 
-            <Section title="The list" subtitle="3x group first, then 2x, alphabetical within each.">
+            <Section title="The list">
               <OutputBlock text={block} subtitle={periodLabel(selected)} />
             </Section>
 
-            <Section
-              title="Top Dogs"
-              subtitle={`Perfect record — every one of the ${allPeriods.length} months processed.`}
-            >
+            <Section title="Committed Crew OGs">
               <View className="rounded-2xl border bg-white p-4" style={{ borderColor: "#ece7e1" }}>
                 {dogs.length ? (
                   dogs.map((d) => (
@@ -333,7 +325,7 @@ export default function CcrewScreen() {
               </View>
             </Section>
 
-            <Section title="Everyone" subtitle="Lifetime months first, streak second.">
+            <Section title="Everyone">
               <View className="rounded-2xl border bg-white px-4 py-1" style={{ borderColor: "#ece7e1" }}>
                 {roster.map((row) => (
                   <RosterRow key={row.id} row={row} compact={compact} />

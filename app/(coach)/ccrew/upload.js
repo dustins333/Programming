@@ -13,6 +13,7 @@ import { buildPreview, droppedMembers, FLAG_KINDS } from "../../../lib/ccrew/pre
 import { buildOutputBlock } from "../../../lib/ccrew/streaks";
 import { listMembers, listPeriods, listKovaUsers, commitPeriod } from "../../../lib/ccrew/periods";
 import { periodLabel, previousPeriod, recentPeriods } from "../../../lib/ccrew/months";
+import { canManageCcrew } from "../../../lib/ccrew/access";
 import { monthStats } from "../../../lib/ccrew/stats";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { confirmCommitCcrewPeriod } from "../../../lib/confirmDialog";
@@ -142,13 +143,17 @@ export default function CcrewUploadScreen() {
     }
   }
 
-  if (profile && profile.role !== "admin") {
+  // Gated on the same rule as core.can_manage_ccrew() (0070). Waits for the
+  // profile to load rather than bouncing on a null, so a slow fetch can't
+  // throw someone out of a screen they're allowed to be on.
+  if (profile && !canManageCcrew(profile)) {
     return (
       <CoachShell>
         <View className="flex-1 items-center justify-center p-8" style={{ backgroundColor: colors.canvas }}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: "#44403c" }}>Admin only</Text>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: "#44403c" }}>You don't have access</Text>
           <Text className="mt-2 text-center" style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.muted }}>
-            Uploading a month is admin-only. You can see every processed month on CCrew.
+            Uploading a month needs the Ops Hours permission, which an admin sets in Settings › Team. You can still see
+            every processed month on CCrew.
           </Text>
           <Pressable onPress={() => router.replace("/(coach)/ccrew")} className="mt-4 rounded-lg px-4 py-2" style={{ backgroundColor: colors.primary }}>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#fff" }}>Back to CCrew</Text>
