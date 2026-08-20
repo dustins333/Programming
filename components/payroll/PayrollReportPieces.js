@@ -144,13 +144,22 @@ const ROWS = [
 // row's total ("tap Group, see every date and quantity that period").
 // Reused as-is by the admin per-coach drill-down popup (D6), which just
 // passes that one coach's own entries instead of the viewer's own.
-export function CategoryBreakdown({ totals, entries, rateMaps }) {
+// `pending` is the 1:1 Nutrition preview (see useOwnReport) — money this
+// period will pick up once the coach confirms the roster at finalize.
+// Drawn as its own peach row rather than folded silently into a category,
+// because it is genuinely a different kind of number: real but not yet
+// committed. It counts toward the Total, so the figure here matches the one
+// on the Finalize button. Optional — the admin per-coach drill-down reuses
+// this component and passes none.
+export function CategoryBreakdown({ totals, entries, rateMaps, pending }) {
   const [openCategoryKey, setOpenCategoryKey] = useState(null);
   const drillable = Boolean(entries && rateMaps);
   const openRow = ROWS.find((r) => r.key === openCategoryKey);
   const drillItems = openRow && drillable ? entriesForCategory(entries, openRow.key, rateMaps) : [];
 
   const visible = ROWS.filter((row) => (totals[row.amountKey] || 0) || (row.countKey && totals[row.countKey]));
+  const pendingRows = pending ? pending.count + pending.needsCheck : 0;
+  const grandTotal = (totals.total || 0) + (pending?.amount || 0);
 
   return (
     <View style={{ maxWidth: 460, backgroundColor: "white", borderWidth: 1, borderColor: "#ece7e1", borderRadius: 16, paddingHorizontal: 14 }}>
@@ -184,14 +193,44 @@ export function CategoryBreakdown({ totals, entries, rateMaps }) {
           </RowWrapper>
         );
       })}
-      {visible.length === 0 ? (
+      {visible.length === 0 && pendingRows === 0 ? (
         <Text style={{ paddingVertical: 14, fontSize: 12.5, fontFamily: fonts.sans, color: "#a8a29e" }}>
           Nothing logged for this period yet.
         </Text>
       ) : null}
+      {pendingRows > 0 ? (
+        <View
+          className="flex-row items-center justify-between"
+          style={{
+            marginBottom: 2,
+            paddingVertical: 11,
+            paddingHorizontal: 11,
+            marginHorizontal: -3,
+            borderRadius: 11,
+            backgroundColor: "#fdf6f2",
+            borderWidth: 1,
+            borderColor: "#f0ddd2",
+          }}
+        >
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <Text style={{ fontSize: 12.5, fontFamily: fonts.sansSemiBold, color: "#8a5140" }}>1:1 Nutrition</Text>
+            {pending.count > 0 ? (
+              <Text style={{ fontSize: 10.5, fontFamily: fonts.sans, color: "#8a5140", marginTop: 2 }}>
+                {pending.count} client{pending.count === 1 ? "" : "s"} billing this period &middot; you&rsquo;ll confirm at finalize
+              </Text>
+            ) : null}
+            {pending.needsCheck > 0 ? (
+              <Text style={{ fontSize: 10.5, fontFamily: fonts.sans, color: "#b23a22", marginTop: 2 }}>
+                {pending.needsCheck} not active on Nutrition &mdash; not counted until you check {pending.needsCheck === 1 ? "it" : "them"} at finalize
+              </Text>
+            ) : null}
+          </View>
+          <Text style={{ fontSize: 13, fontFamily: fonts.sansBold, color: "#8a5140" }}>{formatMoney(pending.amount)}</Text>
+        </View>
+      ) : null}
       <View className="flex-row items-center justify-between" style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#ece7e1" }}>
         <Text style={{ fontSize: 12.5, fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>Total</Text>
-        <Text style={{ fontSize: 15, fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>{formatMoney(totals.total)}</Text>
+        <Text style={{ fontSize: 15, fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>{formatMoney(grandTotal)}</Text>
       </View>
 
       {drillable ? (

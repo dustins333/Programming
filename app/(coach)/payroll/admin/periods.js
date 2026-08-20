@@ -31,6 +31,7 @@ import { computeTotals, formatMoney, formatQuantity } from "../../../../lib/payr
 import { buildPeriodCsv, downloadCsv } from "../../../../lib/payroll/csvExport";
 import { formatDateMDY, formatDateRange } from "../../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../../lib/toast";
+import { sendPush } from "../../../../lib/notifications/sendPush";
 import { confirmClosePayPeriod } from "../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
@@ -332,6 +333,27 @@ export default function AdminPayrollPeriods() {
     }
   };
 
+  // Nothing else tells a coach their period came back — there's no badge,
+  // no email, and the note only appears once they happen to open Payroll.
+  // Best-effort on purpose: the send-back has already been written by the
+  // time this runs, so a failed push must never read as a failed send-back.
+  // The URL is deliberately unprefixed (see PushDeepLink) — /payroll/entries
+  // exists only in the coach group, so it's unambiguous for the native
+  // router and is also a real web path for the PWA's service worker.
+  const notifySentBack = async (coachUserId, note) => {
+    try {
+      const label = periodLabel(currentPeriod);
+      await sendPush({
+        userId: coachUserId,
+        title: "Payroll sent back",
+        body: note?.trim() ? `${label}: ${note.trim()}` : `${label} needs a change before it can be approved.`,
+        data: { url: "/payroll/entries" },
+      });
+    } catch {
+      // Swallowed: they'll still see the note on the Log screen.
+    }
+  };
+
   const handleExport = () => {
     const ok = downloadCsv(`payroll-${selectedPeriod}.csv`, buildPeriodCsv(entries, rateMaps));
     if (!ok) toastError("CSV export is web-only — open this page in a browser");
@@ -506,7 +528,14 @@ export default function AdminPayrollPeriods() {
                         onApprove={() => withBusy(row.staff.id, () => approveFinalization(row.finalization.id, profile.id), `Approved ${row.staff.name}.`)}
                         onUnapprove={() => withBusy(row.staff.id, () => unapproveFinalization(row.finalization.id))}
                         onSendBack={(note) =>
-                          withBusy(row.staff.id, () => sendBackFinalization(row.finalization.id, profile.id, note), `Sent back to ${row.staff.name}.`)
+                          withBusy(
+                            row.staff.id,
+                            async () => {
+                              await sendBackFinalization(row.finalization.id, profile.id, note);
+                              await notifySentBack(row.staff.id, note);
+                            },
+                            `Sent back to ${row.staff.name}.`
+                          )
                         }
                         onReopen={() =>
                           withBusy(row.staff.id, () => reopenFinalization(row.finalization.id, profile.id), `Reopened ${row.staff.name}'s period.`)

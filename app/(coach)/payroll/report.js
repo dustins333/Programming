@@ -44,6 +44,16 @@ export default function PayrollReport() {
   const currentPeriodRow = report.periodOptions.find((p) => p.start_date === report.selectedPeriod);
   const closed = isPeriodClosed(currentPeriodRow);
   const locked = isFinalizationLocked(finalization) || closed;
+  // Suppressed once the period is locked: after finalizing these are real
+  // rows already (so the preview is empty anyway), and on a period that
+  // closed without being finalized there is no finalize step left to
+  // promise. Only ever shown while the coach can still act on it.
+  const pendingNutrition = !locked ? report.pendingNutrition : null;
+  // A coach whose only pay this period is 1:1 Nutrition billing has no
+  // pay_entries rows of their own yet — those are written by the finalize
+  // step itself. Gating purely on entries.length locked them out of the one
+  // action that would create them.
+  const hasSomethingToFinalize = report.entries.length > 0 || (pendingNutrition?.count || 0) > 0;
 
   return (
     <CoachShell>
@@ -65,7 +75,7 @@ export default function PayrollReport() {
                 options={report.periodOptions}
                 selected={report.selectedPeriod}
                 onChange={report.changePeriod}
-                total={report.totals.total}
+                total={report.totals.total + (pendingNutrition?.amount || 0)}
                 today={todayInBoise()}
               />
             ) : null}
@@ -83,7 +93,7 @@ export default function PayrollReport() {
               </View>
             ) : (
               <View className="mt-3">
-                <CategoryBreakdown totals={report.totals} entries={report.entries} rateMaps={report.rateMaps} />
+                <CategoryBreakdown totals={report.totals} entries={report.entries} rateMaps={report.rateMaps} pending={pendingNutrition} />
                 {locked ? (
                   <Text className="mt-4 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
                     {closed ? "This pay period is closed." : "You've finalized this period — an admin can send it back if something needs changing."}
@@ -102,12 +112,12 @@ export default function PayrollReport() {
             <View className="mx-auto w-full" style={{ maxWidth: 460 }}>
               <Pressable
                 onPress={() => setFinalizeOpen(true)}
-                disabled={report.entries.length === 0}
+                disabled={!hasSomethingToFinalize}
                 className="items-center"
-                style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 14, opacity: report.entries.length === 0 ? 0.45 : 1 }}
+                style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 14, opacity: !hasSomethingToFinalize ? 0.45 : 1 }}
               >
                 <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }}>
-                  {report.entries.length === 0 ? "Nothing to finalize yet" : "Finalize this period"}
+                  {!hasSomethingToFinalize ? "Nothing to finalize yet" : "Finalize this period"}
                 </Text>
               </Pressable>
             </View>

@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { listOwnNutritionAssignments, assignmentsDueInPeriod, billingDateInPeriod } from "../../lib/payroll/nutritionAssignments";
-import { getClient } from "../../lib/nutrition/clients";
+import {
+  billingDateInPeriod,
+  listNutritionBillingForPeriod,
+  billingNoteFor,
+  NUTRITION_OTHER_TYPE,
+} from "../../lib/payroll/nutritionAssignments";
 import { createEntry } from "../../lib/payroll/entries";
 import { finalizeOwnPeriod } from "../../lib/payroll/finalizations";
 import { computeTotals, formatMoney } from "../../lib/payroll/calc";
@@ -19,18 +23,6 @@ function formatHours(decimal) {
   return `${m}m`;
 }
 
-// The other_rates row these billing entries are priced from. Kept as one
-// constant so the rate lookup, the row that gets created, and the
-// already-billed check below can never name it differently.
-const NUTRITION_OTHER_TYPE = "1:1 Nutrition";
-
-// pay_entries has no client_id column, so a billing row identifies its
-// client only through this note. Building it in one place means the row we
-// write and the row we look for are always the same string.
-function billingNoteFor(assignment) {
-  return `${NUTRITION_OTHER_TYPE} — ${assignment.client_name} (billing day ${assignment.billing_day_of_month})`;
-}
-
 // Off the "My Entries" screen, not its own route — review + (for a
 // nutrition-flagged coach) a mandatory roster confirmation for every
 // client whose billing day falls inside this period, before finalizing.
@@ -39,7 +31,20 @@ function billingNoteFor(assignment) {
 // still has to actively confirm each one — and gets a real warning if a
 // listed client isn't actually active on nutrition anymore, since a
 // paused/cancelled client shouldn't quietly still generate pay.
-export function FinalizeModal({ visible, onClose, onFinalized, profile, periodStart, periodEnd, entries, rateMaps }) {
+// `fetchNutritionBilling` defaults to the real query and exists only so this
+// sheet can be rendered with fake data outside a login (same seam as the
+// TrueCoach components' `fetchImports`). Nothing in the app passes it.
+export function FinalizeModal({
+  visible,
+  onClose,
+  onFinalized,
+  profile,
+  periodStart,
+  periodEnd,
+  entries,
+  rateMaps,
+  fetchNutritionBilling = listNutritionBillingForPeriod,
+}) {
   const isAdmin = profile?.role === "admin";
   const isNutritionCoach = isAdmin || profile?.can_view_nutrition;
 
@@ -48,6 +53,13 @@ export function FinalizeModal({ visible, onClose, onFinalized, profile, periodSt
   const [inactiveClientIds, setInactiveClientIds] = useState(new Set());
   const [confirmed, setConfirmed] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  // The period's rows, read inside the load effect below without being one
+  // of its dependencies — the parent rebuilds this array on every render,
+  // so keying the effect on it would re-run on each one and wipe whatever
+  // the coach had already ticked. What matters is the value at open time.
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
 
   useEffect(() => {
     if (!visible) return;
@@ -59,20 +71,16 @@ export function FinalizeModal({ visible, onClose, onFinalized, profile, periodSt
           if (!cancelled) setDueAssignments([]);
           return;
         }
-        const assignments = await listOwnNutritionAssignments(profile.id);
-        const due = assignmentsDueInPeriod(assignments, periodStart, periodEnd);
-
-        const inactive = new Set();
-        await Promise.all(
-          due.map(async (a) => {
-            try {
-              const client = await getClient(a.client_id);
-              if (!client || client.status !== "active") inactive.add(a.client_id);
-            } catch {
-              inactive.add(a.client_id);
-            }
-          })
-        );
+        // Same call My Pay previews from, so the roster this sheet asks
+        // about is exactly the one the coach has already been watching.
+        const rows = await fetchNutritionBilling({
+          coachId: profile.id,
+          periodStart,
+          periodEnd,
+          entries: entriesRef.current,
+        });
+        const due = rows.map((r) => r.assignment);
+        const inactive = new Set(rows.filter((r) => r.inactive).map((r) => r.assignment.client_id));
 
         if (!cancelled) {
           setDueAssignments(due);
@@ -80,8 +88,8 @@ export function FinalizeModal({ visible, onClose, onFinalized, profile, periodSt
           // Default-checked unless flagged inactive — forces a deliberate
           // decision on exactly the ones that need one.
           const initial = {};
-          due.forEach((a) => {
-            initial[a.id] = !inactive.has(a.client_id);
+          rows.forEach((r) => {
+            initial[r.assignment.id] = !r.inactive;
           });
           setConfirmed(initial);
         }
@@ -94,6 +102,7 @@ export function FinalizeModal({ visible, onClose, onFinalized, profile, periodSt
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, isNutritionCoach, periodStart, periodEnd, profile?.id]);
 
   const totals = computeTotals(entries, rateMaps);
@@ -151,9 +160,9 @@ export function FinalizeModal({ visible, onClose, onFinalized, profile, periodSt
           periodStart,
           {
             entry_date: entryDate,
-            other_type: "1:1 Nutrition",
+            other_type: NUTRITION_OTHER_TYPE,
             other_qty: 1,
-            notes: `1:1 Nutrition — ${assignment.client_name} (billing day ${assignment.billing_day_of_month})`,
+            notes: billingNoteFor(assignment),
           },
           "nutrition_billing"
         );
