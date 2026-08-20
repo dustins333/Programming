@@ -11,6 +11,7 @@ import { listWarmups, listWorkoutExercises } from "../../lib/programming/workout
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
 import { listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
+import { listLatestCoachingNotes } from "../../lib/programming/coachingNotes";
 import {
   listActiveOneOffWorkoutsForUser,
   listWeekOneOffWorkoutsForUser,
@@ -508,6 +509,13 @@ export default function MyFitness() {
     (async () => {
       try {
         const exerciseRows = await listSpcWorkoutExercises(session.workout.id);
+        // Latest coaching note per lift ("killed this — go up in weight",
+        // written mid-session at the hub or from the coach's phone). Own
+        // catch: a notes failure must never blank the session itself.
+        const coachingNotes = await listLatestCoachingNotes(
+          profile.id,
+          exerciseRows.map((ex) => ex.exercises.id)
+        ).catch(() => new Map());
         if (cancelled) return;
         setSpcDetail({
           sessionNumber: session.sessionNumber,
@@ -523,6 +531,7 @@ export default function MyFitness() {
             tempo: ex.tempo,
             rest: ex.rest,
             notes: ex.notes,
+            coachingNote: coachingNotes.get(ex.exercises.id) ?? null,
           })),
         });
       } catch (err) {

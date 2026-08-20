@@ -20,6 +20,7 @@ export default function CoachLayoutWeb() {
 
   if (!session) return <Redirect href="/login" />;
   if (!profile) return <Redirect href="/pending-setup" />;
+  if (profile.is_gym_display) return <Redirect href="/(display)" />;
   if (profile.role !== "admin" && profile.role !== "coach") {
     return <Redirect href="/(member)" />;
   }

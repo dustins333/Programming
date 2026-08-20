@@ -328,6 +328,12 @@ function SpcRosterDesktop() {
           </View>
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             <PressFade
+              onPress={() => router.push("/(coach)/spc/live")}
+              style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 16, backgroundColor: "#fff" }}
+            >
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Live session</Text>
+            </PressFade>
+            <PressFade
               onPress={() => router.push("/(coach)/spc/templates")}
               style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 16, backgroundColor: "#fff" }}
             >

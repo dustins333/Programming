@@ -3348,6 +3348,138 @@ real login** — standing limitation. **Phase 2, not built**: a global "what
 have I linked" list on My History (`truecoach_imports` already carries every
 column it needs).
 
+## SPC Live Session Hub — gym-floor display + coach control (2026-08-20)
+
+The 4-client SPC display screen from the original plan, built: a wall-mounted
+1920×1080 touchscreen shows up to 4 SPC clients' sessions as side-by-side
+vertical columns (like 4 phone screens, no page scroll), live-updating as sets
+are logged from any device, and itself a touch input surface. Plan at
+`~/.claude/plans/sparkling-splashing-allen.md`. Decisions made with Terra:
+dedicated display account (NOT a coach login, NOT per-session pairing codes),
+tap-a-lift-for-a-big-entry-pad input (no inline grid editing), and a new
+per-client-per-LIFT coaching-note history ("killed this, go up in weight")
+keyed on the raw `exercise_id` so it survives into next week/block.
+
+**Migration `0071_spc_live_hub.sql` — RUN and verified live** (tables,
+functions, 12 display policies, 2 widening policies all confirmed by direct
+query; PostgREST returns `[]` not PGRST205). What it adds:
+- `core.users.is_gym_display` + `core.is_gym_display()` — a boolean flag, not
+  a new role enum value (ALTER TYPE ADD VALUE can't be used in the same
+  transaction it's added in).
+- `programming.hub_sessions` (open = `ended_at is null`; a partial unique
+  index guarantees at most ONE open session ever) + `hub_session_clients`
+  (up to 4 slots; `client_name` is a snapshot specifically so the display
+  account needs no `core.users` read policy at all).
+- `programming.exercise_coaching_notes` — per (user, exercise) note history;
+  `exercise_id` nullable = a general note. Staff manage via `can_access_spc`,
+  member reads own, display reads+inserts for hub-active clients.
+- `programming.hub_active_client(uuid)` (definer helper used in every display
+  policy), `hub_reorder_exercises(workout, items)` (position-only reorder —
+  an UPDATE policy can't be column-scoped, so the RPC is the display's only
+  write path onto `spc_workout_exercises`), `hub_end_session()` (lets the TV
+  end a session; it has no UPDATE policy on hub_sessions).
+- Display policies: for-all on `logs`/`session_completions`/
+  `exercise_completions` gated `is_gym_display() AND hub_active_client(user_id)`,
+  plus published-only reads of the SPC structure tables mirroring 0006's
+  member shapes.
+- **⚠ Deliberate widening, flagged in the approved plan**: `staff manage
+  session completions` + `staff manage exercise completions` via `is_staff()`
+  — staff were SELECT-only on both (0007/0040), which blocked a coach's phone
+  from ticking lifts/finalizing on a client's behalf. Mirrors 0004's
+  `staff manage logs`, which always allowed staff to write a client's sets.
+
+**RLS was verified against the live DB before the migration was run for
+real**: the entire migration plus 17 impersonation assertions ran in one
+rolled-back script (`set_config('request.jwt.claims', ...)` + `set local role
+authenticated`, final `raise exception` carrying the report — a useful trick:
+`supabase db query` only prints the LAST statement's rows, but an exception's
+message always surfaces, and it rolls everything back). All 17 passed: display
+reads/writes exactly the hub-active client, is blocked (42501) on non-hub
+clients and foreign-workout reorders, sees zero payroll rows and only its own
+`core.users` row (pre-existing self-read policy — expected), can't update
+hub_sessions directly but can end via the RPC; coach completions-widening
+confirmed.
+
+**Data layer**: `lib/programming/hub.js` (`startHubSession` ends any open one
+first, `getOpenHubSession`, `endHubSession` → RPC, `fetchHubBoard` — the
+3-second poll, 5-6 bounded queries regardless of client count, logs matched
+purely on `spc_workout_id` per 0063, items built in the exact member-plan
+shape so `schemeLabel`/`supersetLettersFor` work unmodified — and
+`fetchHubWarmups`, fetched once per session, not per poll) +
+`lib/programming/coachingNotes.js` (kept separate so the member bundle never
+drags hub code). **Live sync is polling, deliberately not Supabase Realtime**
+— the realtime publication has zero tables (verified live), no realtime infra
+exists anywhere in the app, and member autosave is already debounced 900ms.
+
+**Components** (`components/hub/`, shared by both surfaces — nothing imports
+platform siblings): `useHubBoard.js` (the brain; poll-vs-edit merge via an
+`editingRef` so a poll never stomps the lift being typed into — the pad holds
+draft state, commits on Save, then an immediate out-of-band poll;
+simultaneous phone+hub edits converge last-write-per-set, accepted),
+`HubClientColumn.js` (compact lift rows with per-set chips, A1/A2 superset
+letters precomputed per item id — a counter mutated during render hands out
+wrong suffixes under list re-render, edit-order mode with up/down arrows,
+finalized = olive column that never disappears; plain `.map` not FlatList —
+sessions cap ~9 lifts and a FlatList nested in the coach page's ScrollView
+would warn/break; internal ScrollView on TV scale only), `HubEntryPad.js`
+(big keypad `HubNumberPad`, per-set boxes with TARGET ghosts, reps-only lifts
+drop the LB column entirely, superset sibling chips switch lifts without
+closing, member-notes → `logs.notes` convention, coaching-note field +
+lazy history), `HubSessionSetup.js` (4 slots, roster picker, per-slot
+resolution to first-incomplete-published via `getSpcRosterDetail`'s own
+block/week, per-slot errors never block other slots), `HubLiveSession.js`
+(the running-session wiring both screens render; phone width shows one
+client at a time via SegmentedControl tabs), `HubBoard.js` (N flex columns).
+
+**Routes**: new `app/(display)/` group (`_layout.js` gates on
+`profile.is_gym_display`; `index.js` is the TV — idle "waiting" state polling
+5s, top bar with clock + inline-confirm End button). `app/(coach)/spc/live.js`
+(setup → running view, End session; universal file, no `.web.js` sibling).
+Entry links: "Live session" button on the desktop SPC index header and a
+"Live session →" link next to Templates on `SpcRosterMobile`. Gate edits:
+`is_gym_display` added to BOTH AuthProvider profile selects (lines 78/122 —
+miss one and the flag never reaches the router), `app/index.js` routes the
+flag to `/(display)` before the role branches, and member + both coach
+layouts redirect it away. No vercel.json change — all new routes are static.
+
+**Member surfacing**: `plan.js`'s SPC detail effect batches
+`listLatestCoachingNotes` in its own `.catch(() => new Map())` (a notes
+failure never blanks the session) and attaches `coachingNote` per item;
+`ExerciseCard` renders it as "From your coach: …" + date right under the
+existing programmed "Coach note:" line — rides the item through SessionLogger
+untouched.
+
+**Verification**: migration + RLS proven live (above); `npx expo export -p
+web` clean + Babel parse/scope pass over all 21 touched files; the 4-up board
+(6/8/9 lifts, superset pair, reps-only lifts, one finalized client, coaching-
+note dot), the entry pad (keypad typing, Next-advance, per-box olive fill,
+superset chip switch to a reps-only layout, Save payload shape), the phone
+column, and edit-order mode (arrows, first/last dimmed, move callback) were
+all driven for real through a throwaway `app/zz-harness.js` at 1920×1080 and
+390×844 (deleted after, `git status` clean). Page-scroll checked by DOM
+measurement (scrollHeight == clientHeight at 4-up). **Not verified**: anything
+behind a real login — standing limitation. The synthetic-click flakiness on
+RNW Pressables hit again this session; the documented `dispatchEvent`
+pointer-sequence fallback worked (note: an Ionicons pressable's `textContent`
+is the glyph char, NOT "" — don't filter on empty text when hunting for one).
+
+**Manual steps for Terra (one-time, in the migration header too)**:
+1. Supabase Dashboard → Authentication → Add user `display@kovastrength.com`
+   (strong password).
+2. `insert into core.users (id, name, email, role) values ('<auth uid>',
+   'Gym Display', 'display@kovastrength.com', 'member') on conflict (id) do
+   nothing; update core.users set is_gym_display = true where email =
+   'display@kovastrength.com';`
+3. Sign the TV's browser in once at the normal login page — it routes itself
+   to the board and stays signed in.
+
+**Deferred v1** (per the approved plan): plate calculator inside the entry
+pad, coaching-note history on the member side, group-program (non-SPC) hub
+support. Worth a real click-through: start a session from a phone, confirm
+the TV picks it up ≤5s, a phone-logged set appears on the TV ≤3s, a TV pad
+write shows on the member's phone, reorder/finalize/end round-trip, and a
+coaching note written at the TV showing on the member's card next session.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -3409,7 +3541,8 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0064_exercise_tracks_weight.sql` — **run**, confirmed live 2026-08-17 (column present, `not null default true`). Adds `programming.exercises.tracks_weight` — false for bodyweight/rep-only lifts, which log reps with no weight box and are excluded from PR tracking. See the tweak-batch section below.
 - `0065_staff_own_spc_enrollment.sql` — **run**, verified live 2026-08-18. Adds a self-row `for all` policy on `programming.spc_clients` so any staff member can enroll/unenroll *themself* regardless of their `can_view_spc` flag. See the 2026-08-18 section above.
 - `0066_truecoach_imports.sql` — **run**, verified live 2026-08-18 (2 tables, trigger, 2 RPCs, `logs.truecoach_import_id`, `logs_source_check` widened). TrueCoach history staging + member linking. See the section above.
-- **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous. Next number is 0067.
+- `0071_spc_live_hub.sql` — **run**, verified live 2026-08-20 (3 tables, flag column, 3 functions, 12 display policies, 2 widening policies; PostgREST `[]` not PGRST205). SPC Live Session Hub + per-client-per-lift coaching notes + the staff completions-write widening. See its own section above. Next number is 0072.
+- **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
 **After running any migration that adds new tables**, PostgREST's schema cache needs a nudge — it doesn't pick up new tables automatically. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after. If that doesn't seem to take effect, check the Data API settings page (Project Settings → API) for a manual reload button, or just wait a minute for PostgREST's own timer. This bit us once (see below) — mention it proactively next time rather than waiting for a "table not found" error to prompt it.

@@ -91,6 +91,9 @@ export default function MemberLayout() {
 
   if (!session) return <Redirect href="/login" />;
   if (!profile) return <Redirect href="/pending-setup" />;
+  // The gym display account is role 'member' but must never see the member
+  // tabs — its whole world is the live session board.
+  if (profile.is_gym_display) return <Redirect href="/(display)" />;
   // Members always land here (app/index.js sends them straight to this
   // group on sign-in). Coaches/admins land in (coach) by default instead,
   // but — since a coach/admin is also a real training client, per explicit

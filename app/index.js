@@ -24,6 +24,12 @@ export default function Index() {
     return <Redirect href="/pending-setup" />;
   }
 
+  if (profile.is_gym_display) {
+    // The gym-floor TV's dedicated account — its whole world is the live
+    // session board. Checked before the role branches (it's role 'member').
+    return <Redirect href="/(display)" />;
+  }
+
   if (profile.role === "admin" || profile.role === "coach") {
     return <Redirect href="/(coach)" />;
   }

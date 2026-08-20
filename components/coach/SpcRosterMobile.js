@@ -120,9 +120,14 @@ export function SpcRosterMobile() {
           <Text className="text-2xl" style={{ fontFamily: fonts.display, color: colors.primary }}>
             SPC
           </Text>
-          <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-            Templates →
-          </Link>
+          <View className="flex-row items-center" style={{ gap: 14 }}>
+            <Link href="/(coach)/spc/live" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+              Live session →
+            </Link>
+            <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
+              Templates →
+            </Link>
+          </View>
         </View>
 
         {roster.length === 0 && (

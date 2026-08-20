@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Plat
 import { Ionicons } from "@expo/vector-icons";
 import { getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { fonts, colors, type } from "../lib/theme";
+import { formatDateMD } from "../lib/formatDate";
 import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
 import { WeightCalculator } from "./WeightCalculator";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
@@ -825,6 +826,17 @@ export function ExerciseCard({
             <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#57534e", marginBottom: 8 }}>
               <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Coach note: </Text>
               {coachNoteFor(item)}
+            </Text>
+          ) : null}
+          {/* Coaching note history's latest entry — written per client + LIFT
+              (exercise_coaching_notes, 0071), so unlike the programmed note
+              above it follows her into next week's version of this lift.
+              Rides the item through SessionLogger untouched. */}
+          {item.coachingNote ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#57534e", marginBottom: 8 }}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: "#4d6142" }}>From your coach: </Text>
+              {item.coachingNote.body}
+              <Text style={{ color: colors.hint }}>{"  " + formatDateMD(item.coachingNote.created_at.slice(0, 10))}</Text>
             </Text>
           ) : null}
           {item.exercise.cues ? (
