@@ -197,9 +197,15 @@ def main():
 
     if args.replace:
         lines += [
-            "-- --replace: the export is the truth for this period, so anything",
-            "-- in it that the export does not contain is removed.",
+            "-- --replace: the export is the truth for this period, so a row it",
+            "-- no longer contains is removed. Scoped to source = 'legacy_import'",
+            "-- on purpose: entries created inside Kova (an approved custom",
+            "-- request, a coach's own logged day) are not in the Glide export by",
+            "-- definition, and deleting them here would silently destroy real pay",
+            "-- -- and orphan the request that created it -- every time a period",
+            "-- was re-imported.",
             f"delete from payroll.pay_entries where pay_period_start = '{args.period}'",
+            "  and source = 'legacy_import'",
             "  and id not in (" + ", ".join(sql_str(i) for i in sorted(seen_ids)) + ");",
         ]
 
