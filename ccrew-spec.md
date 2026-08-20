@@ -262,8 +262,18 @@ since multi-membership (migration 0010) a client can hold several, each with its
 
 ## Phase 3 — member-facing and notifications
 
-**Not urgent: exactly 1 person in the whole roster has a push token today.** This is
-a reason to finish the GHL import before building it.
+**Push reach is better than it first appears.** As of 2026-08-19, **19 of the 139
+people in the export are reachable** — 10 staff and 9 members — plus Terra herself
+(reachable, but not caught by an email join because her Kilo address differs from her
+Kova one). Overall **11 of 14 staff accounts** can receive push; the exceptions are
+Leslie Romero and Sydni Arnold.
+
+Crucially, reach must be counted across **both** `core.push_tokens` (native Expo/APNs,
+only 2 rows — the TestFlight installs) **and** `public.push_subscriptions` (Web Push
+via VAPID, added 2026-08-07, which is how every PWA user is reachable). Counting only
+the native table badly understates it and was a real error in an earlier draft of this
+spec. `sendPushToUser()` in `supabase/functions/_shared/expoPush.ts` already fires both
+in parallel, so callers get this for free.
 
 Agreed design:
 
