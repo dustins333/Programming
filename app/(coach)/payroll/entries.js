@@ -2,7 +2,14 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
-import { getCurrentPeriodStart, getPayPeriod, computePeriodEnd, isPeriodClosed } from "../../../lib/payroll/periods";
+import {
+  getCurrentPeriodStart,
+  getPayPeriod,
+  computePeriodEnd,
+  isPeriodClosed,
+  listPayPeriodOptions,
+  listWritablePeriods,
+} from "../../../lib/payroll/periods";
 import { listAllRates } from "../../../lib/payroll/rates";
 import { listEntriesForPeriod } from "../../../lib/payroll/entries";
 import {
@@ -178,7 +185,10 @@ export default function PayrollEntries() {
   // it's reopened. The screen defaults to the current period as before; this
   // only ever adds a way to reach a past one, and only when there genuinely
   // is one to reach.
-  const [editablePastPeriods, setEditablePastPeriods] = useState([]);
+  // Every period this coach can still write to, not just ones they finalized
+  // and had sent back — see listWritablePeriods.
+  const [writablePeriods, setWritablePeriods] = useState([]);
+  const [ownFinalizations, setOwnFinalizations] = useState([]);
   const [currentPeriodStart, setCurrentPeriodStart] = useState(null);
   // Which period the screen is showing. A ref alongside the state for the
   // same reason useOwnReport keeps one: load() runs on every focus and must
@@ -190,18 +200,23 @@ export default function PayrollEntries() {
     if (!profile?.id) return;
     setLoading(true);
     try {
-      const current = await getCurrentPeriodStart();
+      const [current, options, finalizations] = await Promise.all([
+        getCurrentPeriodStart(),
+        listPayPeriodOptions(),
+        listOwnFinalizations(profile.id),
+      ]);
       setCurrentPeriodStart(current);
-      const ownFinalizations = await listOwnFinalizations(profile.id);
-      const pastEditable = ownFinalizations
-        .filter((f) => f.pay_period_start < current && !isFinalizationLocked(f))
-        .map((f) => f.pay_period_start);
-      setEditablePastPeriods(pastEditable);
+      setOwnFinalizations(finalizations);
+      const writable = listWritablePeriods(options, finalizations).sort((a, b) =>
+        a.start_date < b.start_date ? 1 : -1
+      );
+      setWritablePeriods(writable);
 
-      // Fall back to the current period if a previously-picked past period
-      // has since been re-finalized or closed out from under the selection.
+      // Fall back to the current period if a previously-picked one has since
+      // been finalized or closed out from under the selection.
       const wanted = selectedPeriodRef.current;
-      const start = wanted && (wanted === current || pastEditable.includes(wanted)) ? wanted : current;
+      const start =
+        wanted && (wanted === current || writable.some((p) => p.start_date === wanted)) ? wanted : current;
       selectedPeriodRef.current = start;
 
       const [periodRow, allRates, entries, ownFinalization, daySubmissions] = await Promise.all([
@@ -537,17 +552,18 @@ export default function PayrollEntries() {
             <ActivityIndicator color={colors.primary} />
           ) : (
             <>
-              {/* Only appears when an admin has actually sent a past period
-                  back. Until this existed, a coach asked to fix an entry
-                  after the period rolled over had no screen that could
-                  reach it. */}
-              {editablePastPeriods.length > 0 ? (
+              {/* Every period still open to this coach, so a line item can be
+                  added to the period being reviewed even once today has
+                  rolled into the next one. Hidden when the current period is
+                  the only option, which is the usual case. */}
+              {writablePeriods.length > 1 ? (
                 <View className="mb-5 flex-row flex-wrap items-center" style={{ gap: 8 }}>
                   <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
                     Editing:
                   </Text>
-                  {[currentPeriodStart, ...editablePastPeriods].filter(Boolean).map((start) => {
+                  {writablePeriods.map(({ start_date: start }) => {
                     const active = start === periodStart;
+                    const sentBack = ownFinalizations.some((f) => f.pay_period_start === start && f.reopened_at);
                     return (
                       <Pressable
                         key={start}
@@ -563,7 +579,7 @@ export default function PayrollEntries() {
                           style={{ fontFamily: active ? fonts.sansSemiBold : fonts.sansMedium, color: active ? colors.primaryOnWhite : "#78716c" }}
                         >
                           {formatDateMD(start)} – {formatDateMD(computePeriodEnd(start))}
-                          {start === currentPeriodStart ? " · current" : " · sent back"}
+                          {start === currentPeriodStart ? " · current" : sentBack ? " · sent back" : ""}
                         </Text>
                       </Pressable>
                     );

@@ -20,7 +20,14 @@ import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
-import { getCurrentPeriodStart, getPayPeriod, isPeriodClosed } from "../../../lib/payroll/periods";
+import {
+  getCurrentPeriodStart,
+  getPayPeriod,
+  isPeriodClosed,
+  computePeriodEnd,
+  listPayPeriodOptions,
+  listWritablePeriods,
+} from "../../../lib/payroll/periods";
 import { listOwnRequests, submitRequest, cancelOwnPendingRequest } from "../../../lib/payroll/requests";
 import { listClientsForCoach } from "../../../lib/nutrition/clients";
 import {
@@ -29,7 +36,7 @@ import {
   updateNutritionAssignment,
   removeNutritionAssignment,
 } from "../../../lib/payroll/nutritionAssignments";
-import { formatDateMDY } from "../../../lib/formatDate";
+import { formatDateMDY, formatDateMD } from "../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { confirmDelete } from "../../../lib/confirmDialog";
 import { fonts, colors } from "../../../lib/theme";
@@ -134,6 +141,11 @@ export default function PayrollExtraPay() {
 
   const [periodStart, setPeriodStart] = useState(null);
   const [period, setPeriod] = useState(null);
+  // Any open period can take a request — unlike pay entries, custom_requests
+  // has no finalization gate in RLS, only the closed check, so this is the
+  // plain open-period list with no finalizations passed.
+  const [writablePeriods, setWritablePeriods] = useState([]);
+  const [currentPeriodStart, setCurrentPeriodStart] = useState(null);
   const [ownRequests, setOwnRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -159,6 +171,9 @@ export default function PayrollExtraPay() {
   const scrollOffsetRef = useRef(0);
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
   const requestCardRef = useRef(null);
+  // loadRequests runs on every focus and must read the actual choice, not
+  // the value captured when the callback was first created.
+  const selectedPeriodRef = useRef(null);
   const newDayRowRefs = useRef(new Map());
   const editDayRowRefs = useRef(new Map());
   const keyboardHeight = useKeyboardHeight();
@@ -169,8 +184,20 @@ export default function PayrollExtraPay() {
   const loadRequests = useCallback(async () => {
     if (!profile?.id) return;
     try {
-      const start = await getCurrentPeriodStart();
-      const [periodRow, mine] = await Promise.all([getPayPeriod(start), listOwnRequests(profile.id)]);
+      const [current, options, mine] = await Promise.all([
+        getCurrentPeriodStart(),
+        listPayPeriodOptions(),
+        listOwnRequests(profile.id),
+      ]);
+      setCurrentPeriodStart(current);
+      const writable = listWritablePeriods(options).sort((a, b) => (a.start_date < b.start_date ? 1 : -1));
+      setWritablePeriods(writable);
+      // Keep whatever was picked if it is still open, so a refocus doesn't
+      // silently drop the choice back to the current period.
+      const keep = writable.some((o) => o.start_date === selectedPeriodRef.current);
+      const start = keep ? selectedPeriodRef.current : current;
+      selectedPeriodRef.current = start;
+      const periodRow = writable.find((o) => o.start_date === start) ?? (await getPayPeriod(start));
       setPeriodStart(start);
       setPeriod(periodRow);
       setOwnRequests(mine);
@@ -180,6 +207,14 @@ export default function PayrollExtraPay() {
       setLoading(false);
     }
   }, [profile?.id]);
+
+  const selectPeriod = useCallback(
+    (start) => {
+      selectedPeriodRef.current = start;
+      loadRequests();
+    },
+    [loadRequests]
+  );
 
   const loadNutrition = useCallback(async () => {
     if (!profile?.id) return;
@@ -362,6 +397,45 @@ export default function PayrollExtraPay() {
                     <EmptyLine>This pay period is closed — new requests will apply to the next open period.</EmptyLine>
                   ) : (
                     <View ref={requestCardRef}>
+                      {/* Which period this is paid in. Without it a request
+                          filed after a period ended — the usual case for a
+                          reimbursement you only remember at review time —
+                          silently landed in the current period instead of the
+                          one being closed. */}
+                      {writablePeriods.length > 1 ? (
+                        <>
+                          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                            Pay period
+                          </Text>
+                          <View className="mb-4 flex-row flex-wrap items-center" style={{ gap: 8 }}>
+                            {writablePeriods.map(({ start_date: start }) => {
+                              const active = start === periodStart;
+                              return (
+                                <Pressable
+                                  key={start}
+                                  onPress={() => (active ? null : selectPeriod(start))}
+                                  className="rounded-full border px-3 py-1.5"
+                                  style={{
+                                    borderColor: active ? colors.primary : "#e7e5e4",
+                                    backgroundColor: active ? "#fdf6f2" : "white",
+                                  }}
+                                >
+                                  <Text
+                                    className="text-xs"
+                                    style={{
+                                      fontFamily: active ? fonts.sansSemiBold : fonts.sansMedium,
+                                      color: active ? colors.primaryOnWhite : "#78716c",
+                                    }}
+                                  >
+                                    {formatDateMD(start)} – {formatDateMD(computePeriodEnd(start))}
+                                    {start === currentPeriodStart ? " · current" : ""}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </>
+                      ) : null}
                       <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
                         Description
                       </Text>
