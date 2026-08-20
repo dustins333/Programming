@@ -63,6 +63,20 @@ export default function More() {
         </Pressable>
       ) : null}
 
+      {/* No permission gate — every coach can view CCrew. Uploading a
+          month is admin-only and lives on the upload screen itself. */}
+      <Pressable
+        onPress={() => router.push("/(coach)/ccrew")}
+        className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+      >
+        <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+          CCrew
+        </Text>
+        <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Committed Crew — who made the wall
+        </Text>
+      </Pressable>
+
       {/* No permission gate — every coach logs their own hours here. */}
       <Pressable
         onPress={() => router.push("/(coach)/payroll")}

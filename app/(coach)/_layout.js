@@ -65,6 +65,7 @@ export default function CoachLayout() {
       <Tabs.Screen name="announcements" options={{ href: null }} />
       <Tabs.Screen name="events" options={{ href: null }} />
       <Tabs.Screen name="my-training" options={{ href: null }} />
+      <Tabs.Screen name="ccrew" options={{ href: null }} />
     </Tabs>
   );
 }
