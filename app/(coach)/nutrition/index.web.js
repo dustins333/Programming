@@ -210,7 +210,13 @@ export default function NutritionQueue() {
               {roster.length} active · {waitingCount} check-in{waitingCount === 1 ? "" : "s"} waiting
             </Text>
           </View>
-          <View className="flex-row flex-wrap items-center" style={{ gap: 10 }}>
+          {/* flexShrink/minWidth are load-bearing, not tidying: react-native-web's
+              View defaults to flex-shrink 0, so without them this row cannot
+              shrink below the combined width of its three buttons (374px) and
+              its own flex-wrap never engages. At phone width that ran "+ Enroll
+              client" past the viewport edge, and since the page's scrollWidth
+              stays put there was no way to scroll to it. */}
+          <View className="flex-row flex-wrap items-center" style={{ gap: 10, flexShrink: 1, minWidth: 0 }}>
             <Link href="/(coach)/nutrition/photo-compare" asChild>
               <Pressable className="rounded-lg px-4 py-2.5" style={{ borderWidth: 1, borderColor: "#ddd6cd", backgroundColor: "white" }}>
                 <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Photo compare</Text>

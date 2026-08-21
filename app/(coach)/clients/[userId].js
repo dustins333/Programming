@@ -819,7 +819,7 @@ export default function ClientProfile() {
               enrolled={nutritionActive}
               snapshot={nutritionSnapshot}
               error={nutritionSnapshotError}
-              onReview={() => router.push(`/(coach)/nutrition/clients/${userId}`)}
+              onReview={(tab) => router.push(`/(coach)/nutrition/clients/${userId}${tab ? `?tab=${tab}` : ""}`)}
               onRetry={load}
             />,
             <View key="notes">

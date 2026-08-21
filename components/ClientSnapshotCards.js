@@ -155,8 +155,16 @@ export function NutritionCard({ enrolled, snapshot, error, onReview, onRetry }) 
         <StatRow label="Check-in" value={checkin.label} tone={checkin.tone} />
       </View>
 
+      {/* The link named the check-in but landed on Dashboard, leaving the
+          coach to find the tab themselves. The label and the destination are
+          decided together here for that reason — split across two components
+          is how they came apart in the first place. */}
       {onReview ? (
-        <Pressable onPress={onReview} className="mt-2.5 self-start" hitSlop={6}>
+        <Pressable
+          onPress={() => onReview(snapshot.checkinStatus === "ready" ? "checkin" : undefined)}
+          className="mt-2.5 self-start"
+          hitSlop={6}
+        >
           <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>
             {snapshot.checkinStatus === "ready" ? "Review their check-in →" : "Open nutrition →"}
           </Text>

@@ -56,7 +56,12 @@ export async function resolveAudienceUserIds(admin: SupabaseClient, announcement
   // admins alike (coaches/admins can be in-audience for the in-app popup
   // via matchesAudience's unconditional default-true, so push needs to
   // match that, not just members).
-  const { data, error } = await admin.schema("core").from("users").select("id");
+  //
+  // Excluding the gym-floor TV (is_gym_display, migration 0071): it is a
+  // screen on the wall, not somebody to notify. The other three branches
+  // resolve through membership tables it is not in, so only this one can
+  // pick it up.
+  const { data, error } = await admin.schema("core").from("users").select("id").eq("is_gym_display", false);
   if (error) throw error;
   return (data ?? []).map((r: { id: string }) => r.id);
 }
