@@ -97,9 +97,26 @@ A real design handoff (`design_handoff_visual_pass_v4/README.md` + a static HTML
 npm install         # install dependencies — see "npm install gotcha" below, use --legacy-peer-deps
 npx expo start --web   # web dev server (this repo's `run` skill / .claude/launch.json target: kova-strength-web)
 npx expo start       # native dev server (needs a device/simulator — not available in this sandboxed environment)
+npm run build        # what Vercel runs: expo export -p web, then the route guard below
+npm run check:routes # fails if a dynamic route has no vercel.json rewrite (needs a built dist/)
 ```
 
-No lint/test scripts configured yet.
+No lint/test scripts. `npm run build` is the closest thing to CI — it is the
+real production build command (Vercel prefers a `build` script over its own
+detected Expo command) and it gates on `scripts/check-vercel-rewrites.mjs`, so
+a dynamic route shipped without a rewrite fails the deploy instead of 404ing
+for whoever follows a link to it. See the first-run-audit section below.
+
+**Verification bar for any change here, in order of strength:** run
+`npm run build`; then a Babel parse + unresolved-identifier pass over every
+touched file (**a clean export is weaker evidence than it looks — Metro neither
+parses every file you touched nor resolves identifiers**, and this has hidden a
+missing import and a missing helper more than once); then, where the screen is
+reachable, actually drive it. Signed-out screens (`/login`, `/register`,
+`/reset-password`, `/set-password`, `/support`) can be driven directly; for
+anything behind a login, render the component through a throwaway top-level
+route such as `app/zz-harness.js` and delete it afterwards — preferred over
+mounting on `login.js`, since deleting it cannot leave sign-in broken.
 
 ## Tech stack
 
@@ -3480,6 +3497,128 @@ the TV picks it up ≤5s, a phone-logged set appears on the TV ≤3s, a TV pad
 write shows on the member's phone, reorder/finalize/end round-trip, and a
 coaching note written at the TV showing on the member's card next session.
 
+## First-run audit: 17 findings, 5 batches, all closed (2026-08-21)
+
+An unbiased first-run walkthrough (brand-new member, then a coach checking a
+client) produced 21 findings; 17 survived triage into a 5-batch plan. All are
+now closed. **The audit and plan artifacts are the working documents** —
+`~/.claude/projects/.../memory/first_run_audit_fix_plan.md` holds the live URLs
+and per-item detail. What follows is only what stays useful afterwards.
+
+**Batch 1 — auth email links.** Root cause was the Supabase email *templates*,
+not the redirect allow-list: all three hardcoded `{{ .SiteURL }}/auth/confirm`
+(a *Nutrition Tracker* route — 200 there, 404 on Kova) and never used
+`{{ .ConfirmationURL }}`, so the app's `redirectTo` had never mattered for
+email at all. Also why coach invites always landed on the old app. Fixed in
+the dashboard; the management API 403s on `mailer_templates_*`.
+**Sequencing trap:** templates before Site URL — flipping Site URL first moves
+every auth email from a working page to a 404. **To test a redirect without
+sending mail:** `GET /auth/v1/verify?token=bogus&type=recovery&redirect_to=<url>`
+and read the `Location` header. `admin/generate_link` ignores `redirect_to`
+entirely and `POST /auth/v1/recover` 200s for anything, so both are useless here.
+
+**Batch 2 — de-gendered the coach copy.** Terra chose **drop the pronoun, not a
+they/them swap** — that's the standing convention for any new coach-facing
+string. `HERS ONLY` → `CUSTOM`, `hersOnly`/`hersOnlyCount` → `custom`/`customCount`.
+Code comments were left alone (not user-facing).
+
+**Scope user-facing copy with an AST pass, never grep** — grep over-reported by
+more than half here (mostly code comments): `@babel/parser` + `@babel/traverse`,
+visit `StringLiteral` / `JSXText` / `TemplateElement`, report
+`p.node.loc.start.line`. Real count was **44 strings across 21 files**, not the
+29/14 a grep-based estimate claimed. Reusable for any "find all copy matching X".
+
+**Batch 3 — dynamic routes, and a build gate for them.** Three routes had no
+`vercel.json` rewrite and 404'd on a fresh load or a refresh
+(`/events/:eventId`, `/events/:eventId/responses`, `/spc/overview/:userId`);
+the events one mattered most because event push notifications carry that exact
+URL. **This bug class is silent by design** — client-side navigation never asks
+the server, so a missing rewrite only breaks for someone following a link
+straight in.
+
+`scripts/check-vercel-rewrites.mjs` (`npm run check:routes`) walks a real
+export for every dynamic route, builds the URL a member would actually request,
+and fails with the exact rewrite line to paste; it also flags a rewrite whose
+destination file no longer exists. It skips `(group)`-prefixed paths — those
+are a file-layout artifact, not URLs. **It is wired into `"build"`**
+(`expo export -p web && npm run check:routes`), which is what Vercel runs in
+place of its own detected Expo command whenever a `build` script exists — so a
+future dynamic route without a rewrite fails the deploy rather than shipping
+broken. Mutation-tested in both directions; it passed on its first real deploy.
+A failed build cannot take the site down: Vercel only points the domain at a
+deployment that built.
+
+**Don't call a Vercel deploy failed too early.** This one took several minutes
+during which production kept serving the *previous* commit's bundle, which
+reads exactly like a failure — I said so, and was wrong. Verify by re-checking.
+The reliable probe: `curl -o /dev/null -w '%{http_code}'` against a dynamic
+route, plus grepping the live entry bundle
+(`curl <site>/<page>` → the `/_expo/static/js/web/entry-*.js` path) for a marker
+string unique to the new commit.
+
+**The gym-floor TV is a real `core.users` row** (`is_gym_display`, migration
+0071, role `member`). It was showing on the Clients roster as a client called
+"Gym Display", counting toward the unassigned tally, and sitting inside the
+audience for every all-gym push. Filtered out of `listMembers()` and the
+`"all"` branch of `_shared/announcementAudience.ts` — the other three audience
+branches resolve through membership tables it isn't in. **Anything new that
+enumerates members or push recipients needs the same filter.** Known and left
+alone: CCrew's `listKovaUsers()` still offers it as a Kilo-attendance match.
+
+**Batch 4 — `/register` and `/reset-password` are now one flow.** They had
+drifted into 95% the same code and *the drift was the bug*: reset-password kept
+picking up improvements register never got, so the screen a brand-new member
+meets first was the worse of the two. `components/auth/CodeAuthFlow.js` is the
+shared flow; the two screens are ~25 lines each, differing only in a `copy`
+prop. 451 lines of duplication removed.
+- **`request-registration-code` returns the same `{sent:true}` whether it
+  texted a code, found no account, or refused inside its 45s cooldown** —
+  deliberate, anti-enumeration. So a Resend inside that window would report
+  success having done nothing; the button counts down instead, and is only
+  pressable when it will actually act.
+- The countdown tracks a **deadline** (`resendAt` + `Date.now()`), not a
+  decrementing number: browsers throttle timers in a backgrounded tab, so a
+  counter drifts behind real time. That's a *duration*, so plain `Date.now()`
+  is correct and the `boiseDate` rules don't apply — commented in the file so a
+  later pass doesn't "fix" it into `todayInBoise`.
+- Both screens are reachable signed-out, so they can be **driven in a browser
+  for real**. Use an address that matches no account (`…@example.invalid`,
+  checked against `core.users` first) — the uniform response means nothing is
+  sent and no real member is texted.
+
+**Batch 5.** Announcement expiry (migration 0072, above; compose picker
+defaults to **2 weeks**, counted from `send_at` not from now, `Never` still
+available; `scan-announcements` skips expired rows). Clients page made usable
+at phone width. Member Settings' two nutrition-only notification toggles are
+gated on nutrition enrollment and the card hides when empty — **starts hidden
+so it can't flash in and vanish, but a failed lookup shows it: a blip must
+never hide a setting somebody genuinely has.** Showing a member their assigned
+coach was declined, not built.
+
+### Two things worth generalising from this pass
+
+**A bare `flex-wrap` on a react-native-web row does nothing unless the row
+itself can shrink.** RNW's `View` defaults to `flex-shrink: 0`, so a row of
+buttons keeps its full intrinsic width, its own wrap never engages, and it runs
+past the viewport — while `document.scrollWidth` stays put, so it can't even be
+scrolled to. Bit twice in this pass (the nutrition header's "+ Enroll client",
+then the Clients header) and both times the row *already had* `flex-wrap`, so
+the obvious fix was not the fix. Add `flexShrink: 1` + `minWidth: 0`, and
+**measure `getBoundingClientRect()` rather than eyeballing a screenshot** — the
+overflow is invisible in one.
+
+**An audit finding can be stale, and Terra questioning a premise is worth more
+than the finding.** M-C3 claimed finishing a workout "empties the page". It
+doesn't: `components/session/FinalizePlate.js` + `lib/finalizePlate.js` show a
+full-screen plate with PRs, session volume and weekly progress, and a
+"✓ No remaining sessions this week" card sits underneath. The audit had been
+written against a reading of the screen that predated that handoff. Going and
+reading the code turned a redesign question into a two-line bug fix: once the
+last session is finalized nothing is `"ready"`, so `focus` resolves to null in
+`plan.js` and SPC's empty-state lines rendered by default — a member finishing a
+group workout got "Your SPC coach hasn't published this block yet" under her
+done card. Now gated on `focus?.type === "spc" || groups.length === 0`.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -3541,7 +3680,8 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0064_exercise_tracks_weight.sql` — **run**, confirmed live 2026-08-17 (column present, `not null default true`). Adds `programming.exercises.tracks_weight` — false for bodyweight/rep-only lifts, which log reps with no weight box and are excluded from PR tracking. See the tweak-batch section below.
 - `0065_staff_own_spc_enrollment.sql` — **run**, verified live 2026-08-18. Adds a self-row `for all` policy on `programming.spc_clients` so any staff member can enroll/unenroll *themself* regardless of their `can_view_spc` flag. See the 2026-08-18 section above.
 - `0066_truecoach_imports.sql` — **run**, verified live 2026-08-18 (2 tables, trigger, 2 RPCs, `logs.truecoach_import_id`, `logs_source_check` widened). TrueCoach history staging + member linking. See the section above.
-- `0071_spc_live_hub.sql` — **run**, verified live 2026-08-20 (3 tables, flag column, 3 functions, 12 display policies, 2 widening policies; PostgREST `[]` not PGRST205). SPC Live Session Hub + per-client-per-lift coaching notes + the staff completions-write widening. See its own section above. Next number is 0072.
+- `0071_spc_live_hub.sql` — **run**, verified live 2026-08-20 (3 tables, flag column, 3 functions, 12 display policies, 2 widening policies; PostgREST `[]` not PGRST205). SPC Live Session Hub + per-client-per-lift coaching notes + the staff completions-write widening. See its own section above.
+- `0072_announcement_expiry.sql` — **run**, verified live 2026-08-21. Adds `programming.announcements.expires_at` (nullable; null = never expires, so every pre-existing row is unaffected) and rewrites the `members read due announcements` policy to `send_at <= now() and (expires_at is null or expires_at > now())`. Enforced in RLS deliberately, not in the app — an expired announcement stops existing for members the same way an unsent one already does. Next number is 0073.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
