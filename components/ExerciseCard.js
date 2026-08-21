@@ -1032,6 +1032,8 @@ export function ExerciseCard({
                 onChangeText={setNotes}
                 onFocus={() => scrollFieldIntoView(cardRef.current)}
                 multiline
+                placeholder="Notes"
+                placeholderTextColor={colors.hint}
                 inputAccessoryViewID={NUMERIC_DONE_ID}
                 accessibilityLabel={`Notes for ${item.exercise.name}`}
                 style={{
