@@ -22,6 +22,7 @@ import { SpcSessionReadout } from "../../../components/SpcSessionReadout";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
 import { PrintBlockPickerModal } from "../../../components/PrintBlockPickerModal";
 import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
+import { CommentThread } from "../../../components/CommentThread";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { CoachSpcOverview } from "../../../components/coach/CoachSpcOverview";
 import { PressFade } from "../../../components/PressFade";
@@ -909,6 +910,15 @@ function SpcClientDesktop() {
 
               {rail === "Notes" ? (
                 <>
+                  {/* Coach-to-coach notes on this block. They already lived on
+                      the SPC builder, but the builder is one session — this is
+                      the page where the whole block is in front of you, which
+                      is where a note about it belongs. Keyed on the selected
+                      block, so stepping the block picker re-reads its notes. */}
+                  <View style={{ marginBottom: 16 }}>
+                    <CommentThread spcBlockId={detail.block.id} />
+                  </View>
+
                   <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 12, padding: 15, marginBottom: 16 }}>
                     <Eyebrow style={{ marginBottom: 10 }}>CLIENT NOTES</Eyebrow>
                     <BlockNotes notes={blockNotes} />

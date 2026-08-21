@@ -12,6 +12,7 @@ import { SessionSheet } from "../SessionSheet";
 import { BlockProgressHero } from "../BlockProgressHero";
 import { BlockWeekCard } from "../BlockWeekCard";
 import { BlockPicker, blockHeroTitle } from "../BlockPicker";
+import { CommentThread } from "../CommentThread";
 import { PressFade } from "../PressFade";
 import { fonts, colors } from "../../lib/theme";
 
@@ -211,6 +212,15 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
           {blockView.weeks.length === 0 ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>Nothing written in this block yet.</Text>
           ) : null}
+
+          {/* Coach-to-coach notes on the block being viewed. The pre-overview
+              version of this page carried them and the restructure dropped
+              them; on a phone this screen IS the block, so it's where a note
+              about the block belongs. Keyed on the selected block, so the
+              picker re-reads its notes. */}
+          <View style={{ marginTop: 6 }}>
+            <CommentThread spcBlockId={state.block.id} />
+          </View>
         </>
       )}
 
