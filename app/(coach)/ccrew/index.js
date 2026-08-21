@@ -254,7 +254,7 @@ export default function CcrewScreen() {
             <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.muted, marginTop: 6 }}>
               {canUpload
                 ? "Export a full calendar month from Kilo, then upload it here to score it."
-                : "Terra hasn't uploaded a month yet. Once she does, the wall list shows up here."}
+                : "Terra hasn't uploaded a month yet. Once a month is uploaded, the wall list shows up here."}
             </Text>
             {canUpload ? (
               <Pressable

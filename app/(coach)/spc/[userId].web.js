@@ -169,7 +169,7 @@ function SessionCell({ session, onPress, copyRole, onStartCopy }) {
       case "skipped":
         return "Skipped";
       case "due":
-        return "Waiting on her";
+        return "Not logged yet";
       case "upcoming":
         return `${session.programmedSets} sets programmed`;
       case "draft":
@@ -313,9 +313,9 @@ function KeyLifts({ exercises }) {
   ));
 }
 
-function WhatSheSaid({ notes }) {
+function BlockNotes({ notes }) {
   if (notes.length === 0) {
-    return <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>No notes from her in this block.</Text>;
+    return <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>No client notes in this block.</Text>;
   }
   return notes.map((n, i) => (
     <View key={i} style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 10, padding: 12, marginBottom: 9 }}>
@@ -741,7 +741,7 @@ function SpcClientDesktop() {
           <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, padding: 34, alignItems: "center" }}>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: "#2a211c", marginBottom: 6 }}>No blocks yet</Text>
             <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#78716c", textAlign: "center", marginBottom: 16 }}>
-              Start her first block to begin programming.
+              Start the first block to begin programming.
             </Text>
             <PressFade
               onPress={() => setNewBlockOpen(true)}
@@ -890,7 +890,7 @@ function SpcClientDesktop() {
                         On nutrition coaching
                       </Text>
                       <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c", marginBottom: 12 }}>
-                        Her check-ins, targets and photos live on the nutrition record.
+                        Check-ins, targets and photos live on the nutrition record.
                       </Text>
                       <PressFade
                         onPress={() => router.push(`/(coach)/nutrition/clients/${userId}`)}
@@ -901,7 +901,7 @@ function SpcClientDesktop() {
                     </>
                   ) : (
                     <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
-                      She isn't on nutrition coaching.
+                      Not enrolled in nutrition coaching.
                     </Text>
                   )}
                 </View>
@@ -910,8 +910,8 @@ function SpcClientDesktop() {
               {rail === "Notes" ? (
                 <>
                   <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 12, padding: 15, marginBottom: 16 }}>
-                    <Eyebrow style={{ marginBottom: 10 }}>WHAT SHE SAID</Eyebrow>
-                    <WhatSheSaid notes={blockNotes} />
+                    <Eyebrow style={{ marginBottom: 10 }}>CLIENT NOTES</Eyebrow>
+                    <BlockNotes notes={blockNotes} />
                   </View>
 
                   {/* Status, coach and frequency aren't in the v2 mock, which
@@ -973,7 +973,7 @@ function SpcClientDesktop() {
                         if (notesDraft !== (spcClient?.notes_goals_feedback ?? "")) patch({ notes_goals_feedback: notesDraft }, "Notes saved");
                       }}
                       multiline
-                      placeholder="What she's working toward…"
+                      placeholder="What the client is working toward…"
                       style={{
                         minHeight: 70,
                         borderWidth: 1,

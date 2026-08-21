@@ -179,7 +179,7 @@ export function NutritionCheckinTab({
                   Settings tab — the two are reachable from the same page, so
                   labelling one by its covered week and the other by its
                   check-in date would show two dates for the same check-in. */}
-              {viewingOnboarding ? "Onboarding · her first check-in" : `${formatDateMDY(checkinMondayForWeek(selectedWeek.start))} check-in`}
+              {viewingOnboarding ? "Onboarding · first check-in" : `${formatDateMDY(checkinMondayForWeek(selectedWeek.start))} check-in`}
             </Text>
             <Ionicons name="chevron-down" size={13} color={colors.primaryOnWhite} />
           </Pressable>

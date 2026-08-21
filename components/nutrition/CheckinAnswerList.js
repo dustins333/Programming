@@ -21,9 +21,9 @@ function AnswerRow({ item, highlights, onChangeHighlights, last }) {
         {/* A question written for this client alone, not inherited from the
             gym template — worth marking, because it's usually the one she
             was asked about a specific injury or experiment. */}
-        {item.hersOnly ? (
+        {item.custom ? (
           <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: "#fdece5" }}>
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 9, color: "#b23a22", letterSpacing: 0.4 }}>HERS ONLY</Text>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 9, color: "#b23a22", letterSpacing: 0.4 }}>CUSTOM</Text>
           </View>
         ) : null}
       </View>

@@ -44,7 +44,7 @@ export function EnrollClientModal({ visible, existingClientIds, onClose, onEnrol
     setBusyId(member.id);
     try {
       await createOrReactivateClient({ userId: member.id, name: member.name, email: member.email, phone: member.phone });
-      toastSuccess(`${member.name} enrolled — set her up on the Onboarding tab`);
+      toastSuccess(`${member.name} enrolled — finish setup on the Onboarding tab`);
       await onEnrolled(member.id);
       onClose();
     } catch (err) {

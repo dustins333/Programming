@@ -18,6 +18,16 @@ import { useRefreshOnFocus } from "../../../lib/useRefreshOnFocus";
 
 const CANVAS = "#faf8f6";
 
+// Three angles can be outstanding at once, so a plain join put "and" between
+// every item ("Front and Side and Back"). Capitalises each angle and joins the
+// list the way a person would say it.
+function listAngles(angles) {
+  const names = angles.map((a) => a[0].toUpperCase() + a.slice(1));
+  if (names.length <= 1) return names.join("");
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 export default function NutritionPhotos() {
   // Tabs keep this screen mounted, so a mount-only load never re-runs
   // on a return visit — see lib/useRefreshOnFocus.js.
@@ -109,7 +119,7 @@ export default function NutritionPhotos() {
                 style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: satisfied ? "#4d6142" : outstanding ? "#b23a22" : "#57534e" }}
               >
                 {outstanding
-                  ? `Photos due this week. ${missing.map((m) => m[0].toUpperCase() + m.slice(1)).join(" and ")} still needed`
+                  ? `Photos due this week. ${listAngles(missing)} still needed`
                   : satisfied
                     ? "This week's photos are in"
                     : "No photos due this week"}

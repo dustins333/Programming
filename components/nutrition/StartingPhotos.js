@@ -17,7 +17,7 @@ const ANGLES = ["front", "side", "back"];
 // starting set for a client who started this year — the same bug that was
 // already fixed in the standalone onboarding/photos.js screen but never in
 // the tab's own copy.
-export function StartingPhotos({ photos, client, emptyMessage = "Nothing in yet. Not a blocker — you can set her targets without them." }) {
+export function StartingPhotos({ photos, client, emptyMessage = "Nothing in yet. Not a blocker — you can set targets without them." }) {
   const [urls, setUrls] = useState({});
 
   const engagement = photosSinceEngagement(photos ?? [], client);

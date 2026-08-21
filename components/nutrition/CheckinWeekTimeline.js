@@ -237,7 +237,7 @@ export function CheckinWeekTimeline({
       {onboardingEntry ? (
         <>
           <Text className="mb-1.5 mt-3 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.5 }}>
-            Where she started
+            Starting point
           </Text>
           <OnboardingRow
             onSelect={onboardingEntry.onSelect}

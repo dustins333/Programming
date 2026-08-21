@@ -237,7 +237,7 @@ export default function NutritionQueue() {
                 <View className="items-center justify-center rounded-2xl p-16" style={{ borderWidth: 1, borderColor: "#ece7e1", backgroundColor: "white" }}>
                   <Ionicons name="nutrition-outline" size={26} color="#d6d3d1" />
                   <Text className="mt-3 text-center" style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#a8a29e" }}>
-                    Pick a client on the left to see her week.
+                    Pick a client on the left to see the week.
                   </Text>
                 </View>
               )}

@@ -157,7 +157,7 @@ function TabBar({ tabs, active, onSelect }) {
 
 const STATUS_PILL = {
   needsTarget: { label: "Needs target", bg: "#f4ede3", text: "#8a5a2e" },
-  pending: { label: "Awaiting her check-in", bg: "#fdece5", text: "#b23a22" },
+  pending: { label: "Awaiting client check-in", bg: "#fdece5", text: "#b23a22" },
   ready: { label: "Awaiting coach check-in", bg: "#f4ede3", text: "#8a5a2e" },
   completed: { label: "Check-in completed", bg: "#eef1e7", text: "#4d6142" },
   paused: { label: "Paused", bg: "#f1efed", text: "#78716c" },
@@ -294,7 +294,7 @@ export default function NutritionClientDetail() {
       if (currentResult.status === "fulfilled") setCurrentCheckin(currentResult.value);
       else console.error("Failed to load the current check-in:", currentResult.reason);
       // Left null on failure rather than defaulted to an empty array — an
-      // empty template would badge every one of her questions HERS ONLY.
+      // empty template would badge every one of this client's questions CUSTOM.
       if (templateResult.status === "fulfilled") setTemplateQuestions(templateResult.value);
       else console.error("Failed to load the check-in template:", templateResult.reason);
       if (spcResult.status === "fulfilled") setSpcClient(spcResult.value);
@@ -653,7 +653,7 @@ export default function NutritionClientDetail() {
             <View style={{ flex: 1, minWidth: 240 }}>
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#8a5a2e" }}>No target set yet</Text>
               <Text className="mt-0.5" style={{ fontFamily: fonts.sans, fontSize: 12, color: "#8a5a2e" }}>
-                Every tab here measures her against her targets. Set them and the rest of this page starts working.
+                Every tab here measures progress against targets. Set them and the rest of this page starts working.
               </Text>
             </View>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#8a5a2e" }}>Review &amp; set targets ›</Text>

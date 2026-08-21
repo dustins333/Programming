@@ -345,7 +345,7 @@ export default function TemplateBuilderWeb() {
         visible={previewOpen}
         onClose={() => setPreviewOpen(false)}
         title={template.name}
-        subtitle="Exactly what she sees once this is assigned"
+        subtitle="Exactly what the client sees once this is assigned"
         warmups={warmups.map((w) => w.exercises?.name ?? w.label ?? "Warm-up")}
         exercises={exercises.map((e) => ({
           id: e.id,

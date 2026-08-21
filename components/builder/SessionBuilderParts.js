@@ -440,7 +440,7 @@ export function SortableLift({
                   <TextInput
                     value={item.notes ?? ""}
                     onChangeText={(v) => onChange(item.id, { notes: v })}
-                    placeholder="A cue she'll see under this lift…"
+                    placeholder="A cue shown under this lift…"
                     style={{
                       height: 34,
                       borderWidth: 1,

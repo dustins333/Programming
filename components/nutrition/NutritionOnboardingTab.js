@@ -115,7 +115,7 @@ export function NutritionOnboardingTab({
           style={{ borderWidth: 1, borderColor: "#f0ddd2", backgroundColor: "#fdf6f2", gap: 12 }}
         >
           <Text className="flex-1" style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: "#b23a22", minWidth: 240 }}>
-            Not sent yet — she can&apos;t see her questionnaire or tracking dates until you send it.
+            Not sent yet — the client can&apos;t see the questionnaire or tracking dates until you send it.
           </Text>
           <Pressable onPress={onSendToClient} disabled={sending} className="rounded-lg px-4 py-2.5" style={{ backgroundColor: colors.primary, opacity: sending ? 0.5 : 1 }}>
             <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
@@ -144,14 +144,14 @@ export function NutritionOnboardingTab({
           </View>
           <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#b0a08d", marginTop: 8 }}>
             {client.onboarding_sent_at
-              ? `Invited ${formatDateMDY(invitedOn)}${daysSinceInvite !== null ? ` · she has had the app ${daysSinceInvite} day${daysSinceInvite === 1 ? "" : "s"}` : ""}`
-              : "Not sent to her yet"}
+              ? `Invited ${formatDateMDY(invitedOn)}${daysSinceInvite !== null ? ` · ${daysSinceInvite} day${daysSinceInvite === 1 ? "" : "s"} with the app` : ""}`
+              : "Not sent yet"}
           </Text>
         </View>
 
         <Pressable onPress={() => router.push(approveHref)} className="rounded-lg px-5 py-3" style={{ backgroundColor: phases.readyForReview ? colors.primary : "rgba(255,255,255,0.12)" }}>
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: phases.readyForReview ? "white" : "#d8cec1" }}>
-            Set her first targets
+            Set first targets
           </Text>
         </Pressable>
       </View>
@@ -162,7 +162,7 @@ export function NutritionOnboardingTab({
             title="Questionnaire"
             accent="accent"
             done={phases.questionnaire}
-            subtext={phases.questionnaire ? "Submitted — tap to read her answers" : "Not submitted yet"}
+            subtext={phases.questionnaire ? "Submitted — tap to read the answers" : "Not submitted yet"}
             onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/questionnaire`)}
           />
         </View>
@@ -197,7 +197,7 @@ export function NutritionOnboardingTab({
           <Card>
             <View className="mb-2 flex-row flex-wrap items-center" style={{ gap: 8 }}>
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                {phases.readyForReview ? "Ready for review" : "Still waiting on her"}
+                {phases.readyForReview ? "Ready for review" : "Still waiting"}
               </Text>
               {phases.readyForReview ? (
                 <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: "#f4ede3" }}>
@@ -207,8 +207,8 @@ export function NutritionOnboardingTab({
             </View>
             <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#44403c", lineHeight: 20 }}>
               {phases.readyForReview
-                ? "Everything you need is in. Setting her first targets is what turns this into a live client — the tabs above fill in from that point and she starts getting weekly check-ins."
-                : "You can set her targets at any point — nothing above is a hard blocker. Close out onboarding if she isn't going to finish the rest in the app."}
+                ? "Everything you need is in. Setting the first targets is what turns this into a live client — the tabs above fill in from that point and weekly check-ins begin."
+                : "You can set targets at any point — nothing above is a hard blocker. Close out onboarding if the rest isn't going to get finished in the app."}
             </Text>
 
             {baseline && baseline.days > 0 ? (
@@ -217,7 +217,7 @@ export function NutritionOnboardingTab({
                   className="mb-2"
                   style={{ fontFamily: fonts.sansBold, fontSize: 10, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}
                 >
-                  Her first week, for reference
+                  First week, for reference
                 </Text>
                 <View className="flex-row flex-wrap" style={{ gap: 24 }}>
                   {[
@@ -238,7 +238,7 @@ export function NutritionOnboardingTab({
             <View className="mt-4 flex-row flex-wrap" style={{ gap: 10 }}>
               <Pressable onPress={() => router.push(approveHref)} className="rounded-lg px-5 py-3" style={{ backgroundColor: colors.primary }}>
                 <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
-                  Set her first targets
+                  Set first targets
                 </Text>
               </Pressable>
               {/* Kova's real second action, in place of the mock's "Ask her

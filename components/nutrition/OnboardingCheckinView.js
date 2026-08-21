@@ -17,7 +17,7 @@ import { fonts } from "../../lib/theme";
 // the same markup: highlighting has enough hard-won edge-case handling in it
 // (see HighlightableAnswer.web.js) that a parallel implementation would
 // drift. Questionnaire answers have no prior week and no gym template to
-// differ from, so hasPrior and hersOnly are simply false.
+// differ from, so hasPrior and custom are simply false.
 
 function Card({ title, headerRight, children, style }) {
   return (
@@ -57,7 +57,7 @@ function TrackingDays({ onboarding }) {
   if (dates.length === 0) {
     return (
       <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
-        No days were assigned — objective tracking was skipped for her. That&apos;s a choice, not a gap.
+        No days were assigned — objective tracking was skipped for this client. That&apos;s a choice, not a gap.
       </Text>
     );
   }
@@ -99,7 +99,7 @@ export function OnboardingCheckinView({ client, onboarding, photos, isWide, onCh
     answer: a.answer,
     hasPrior: false,
     lastAnswer: null,
-    hersOnly: false,
+    custom: false,
   }));
 
   return (
@@ -145,7 +145,7 @@ export function OnboardingCheckinView({ client, onboarding, photos, isWide, onCh
             <CheckinAnswerList paired={paired} highlights={response.highlights} onChangeHighlights={onChangeHighlights} />
           ) : (
             <Text style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
-              She hasn&apos;t submitted her questionnaire.
+              No questionnaire submitted yet.
             </Text>
           )}
         </Card>

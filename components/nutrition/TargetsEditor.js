@@ -173,7 +173,7 @@ export function TargetsEditor({ userId, setBy, currentTarget, recentAverages, se
               : ""}
           </Text>
         ) : (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#8a5a2e" }}>No target set yet — these will be her first.</Text>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#8a5a2e" }}>No target set yet — these will be the first.</Text>
         )}
       </View>
 

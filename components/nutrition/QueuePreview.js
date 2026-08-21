@@ -258,7 +258,7 @@ export function QueuePreview({ client, today }) {
 
       <View className="mb-3 flex-row flex-wrap" style={{ gap: 12 }}>
         <Card
-          title="Her check-in"
+          title="Check-in"
           style={{ flex: 2, minWidth: 320 }}
           headerRight={
             <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>
@@ -291,7 +291,7 @@ export function QueuePreview({ client, today }) {
 
           <View className="mt-3 flex-row flex-wrap items-center justify-between" style={{ gap: 8 }}>
             <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-              Averaged over the {preview.daysLogged} day{preview.daysLogged === 1 ? "" : "s"} she logged
+              Averaged over the {preview.daysLogged} day{preview.daysLogged === 1 ? "" : "s"} logged
             </Text>
             <Pressable onPress={() => router.push(`${href}?tab=checkin`)} hitSlop={8}>
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>Read the full form →</Text>

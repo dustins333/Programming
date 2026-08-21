@@ -279,7 +279,7 @@ export default function SpcWorkoutBuilderWeb() {
       const next = workout.status === "published" ? "draft" : "published";
       await setSpcWorkoutStatus(workoutId, next);
       setWorkout((w) => ({ ...w, status: next }));
-      toastSuccess(next === "published" ? "Published — she can see it now" : "Unpublished");
+      toastSuccess(next === "published" ? "Published — visible to the client now" : "Unpublished");
     } catch (err) {
       toastError("Couldn't publish", err);
     } finally {
@@ -551,7 +551,7 @@ export default function SpcWorkoutBuilderWeb() {
         visible={previewOpen}
         onClose={() => setPreviewOpen(false)}
         title={workout.title || `Week ${workout.week_number}, Session ${workout.session_number}`}
-        subtitle="Exactly what she sees"
+        subtitle="Exactly what the client sees"
         warmups={warmups.map((w) => w.exercises?.name ?? w.label ?? "Warm-up")}
         exercises={exercises.map((e) => ({
           id: e.id,

@@ -204,14 +204,14 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
   };
 
   // Which of her questions came from the gym template vs. were written for
-  // her alone — the same split the Check-In tab badges as HERS ONLY, matched
+  // custom to this client — the same split the Check-In tab badges as CUSTOM, matched
   // on question text since a client's copy is physical, not a live join
   // (copyTemplateToClient).
   const templateTexts = useMemo(
     () => (templateQuestions ? new Set(templateQuestions.map((q) => q.question_text.trim().toLowerCase())) : null),
     [templateQuestions]
   );
-  const hersOnlyCount = templateTexts
+  const customCount = templateTexts
     ? questions.filter((q) => !templateTexts.has((q.question_text ?? "").trim().toLowerCase())).length
     : 0;
 
@@ -267,7 +267,7 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
               </Pressable>
             ) : (
               <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
-                She never submitted one.
+                Never submitted.
               </Text>
             )}
           </Field>
@@ -324,7 +324,7 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
                 </>
               ) : (
                 <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
-                  No progress photos are required from her on any cadence.
+                  No progress photos are required on any cadence.
                 </Text>
               )}
             </View>
@@ -368,11 +368,11 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
       </View>
 
       <View className="mt-4">
-        <Card title="Her check-in questions">
+        <Card title="Check-in questions">
           <Text className="mb-3" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
             {templateTexts === null
-              ? "Her own copy — editing here doesn't affect the shared template or any other client."
-              : `${questions.length - hersOnlyCount} come from the gym template in Settings. ${hersOnlyCount === 0 ? "None are" : hersOnlyCount === 1 ? "One is" : `${hersOnlyCount} are`} hers alone. Editing here doesn't affect the template or any other client.`}
+              ? "This client's own copy — editing here doesn't affect the shared template or any other client."
+              : `${questions.length - customCount} come from the gym template in Settings. ${customCount === 0 ? "None are" : customCount === 1 ? "One is" : `${customCount} are`} custom to this client. Editing here doesn't affect the template or any other client.`}
           </Text>
           <QuestionListEditor
             questions={questions}

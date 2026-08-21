@@ -1,10 +1,20 @@
 import { View, Text, Linking, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import { colors, fonts } from "../lib/theme";
 
 export default function Support() {
+  const router = useRouter();
+
   return (
     <View className="flex-1 bg-white px-6 py-16 items-center">
       <View style={{ maxWidth: 480, width: "100%" }}>
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.push("/"))}
+          className="mb-4 self-start"
+          hitSlop={8}
+        >
+          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+        </Pressable>
         <Text
           className="mb-2 text-3xl text-primary"
           style={{ fontFamily: fonts.display }}

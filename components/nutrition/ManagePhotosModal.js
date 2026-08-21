@@ -29,7 +29,7 @@ export function ManagePhotosModal({ visible, userId, photosByDate, onClose, onCh
               Add an old set
             </Text>
             <Text className="mb-3" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
-              Backfill photos she took before she was on the app. Pick the date they were actually taken, not today.
+              Backfill photos taken before this client was on the app. Pick the date they were actually taken, not today.
             </Text>
             <PhotoUpload userId={userId} onUploaded={onChanged} allowDatePick />
 
