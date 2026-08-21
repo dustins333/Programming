@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { toastError } from "../../../lib/toast";
 import { linkMemberByAuthId } from "../../../lib/programming/clients";
 import { loadClientsRoster } from "../../../lib/programming/clientsRoster";
 import { LinkMemberModal } from "../../../components/LinkMemberModal";
-import { CoachShell } from "../../../components/CoachShell";
+import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { ClientRosterTable, TABLE_WIDTH } from "../../../components/ClientRosterTable";
 import { fonts, colors } from "../../../lib/theme";
 
@@ -157,6 +157,8 @@ export default function ClientsWeb() {
     });
   }, [searched, filter, sort, matchesFilter]);
 
+  const { width } = useWindowDimensions();
+  const isNarrow = width < MOBILE_BREAKPOINT;
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount);
   const pageRows = filtered.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
@@ -164,8 +166,8 @@ export default function ClientsWeb() {
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ padding: 40 }}>
-        <View className="mb-5 flex-row items-start justify-between" style={{ gap: 16 }}>
+      <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ padding: isNarrow ? 16 : 40 }}>
+        <View className="mb-5 flex-row flex-wrap items-start justify-between" style={{ gap: 16 }}>
           <View>
             <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 26 }}>Clients</Text>
             {state ? (
@@ -175,13 +177,16 @@ export default function ClientsWeb() {
               </Text>
             ) : null}
           </View>
-          <View className="flex-row items-center gap-2.5">
+          <View className="flex-row flex-wrap items-center gap-2.5" style={{ flexShrink: 1, minWidth: 0 }}>
             <TextInput
               value={search}
               onChangeText={setSearch}
               placeholder="Search by name"
               className="rounded-lg border border-stone-300 bg-white px-3.5"
-              style={{ fontFamily: fonts.sans, fontSize: 13, height: 40, width: 260 }}
+              // A fixed 260 is wider than a phone has to spare once the
+              // button sits beside it; minWidth 0 is what actually lets an
+              // input shrink in react-native-web.
+              style={{ fontFamily: fonts.sans, fontSize: 13, height: 40, width: isNarrow ? undefined : 260, flexGrow: isNarrow ? 1 : 0, flexBasis: isNarrow ? 180 : "auto", minWidth: 0 }}
             />
             <Pressable
               onPress={() => setModalVisible(true)}

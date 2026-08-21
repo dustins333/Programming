@@ -722,6 +722,9 @@ export default function MyFitness() {
     focus = candidates[0].focus;
   }
   const needsPicker = !focus && candidates.length >= 2;
+  // SPC's empty-state chatter is only meaningful when SPC is the thing being
+  // looked at, or when it's the only program on the account.
+  const spcMessagesApply = focus?.type === "spc" || groups.length === 0;
 
   // Exactly one section is "the" clear focus of the page — alone (no
   // ambiguity) or explicitly resolved — and that's the one the hero header
@@ -998,12 +1001,20 @@ export default function MyFitness() {
 
       {!needsPicker && (!focus || focus.type === "spc") && (
         <>
-          {spc?.status === "no_block" && (
+          {/* "There's nothing here for you" messages, so they only belong on
+              screen when SPC is what the member is actually looking at, or
+              when SPC is all they have. Otherwise finishing a group workout
+              dropped an unrelated line about SPC right under the done card:
+              once the last session is finalized nothing is "ready" any more,
+              so focus resolves to null and this whole block rendered by
+              default. Reads as "you're done — but something's wrong", which
+              is the opposite of what just happened. */}
+          {spcMessagesApply && spc?.status === "no_block" && (
             <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
               No active SPC block right now.
             </Text>
           )}
-          {spc?.status === "not_published" && (
+          {spcMessagesApply && spc?.status === "not_published" && (
             <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
               Your SPC coach hasn't published this block yet — check back soon.
             </Text>

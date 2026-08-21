@@ -11,7 +11,8 @@ import {
   deleteAnnouncement,
   pushAnnouncementNow,
 } from "../../../lib/programming/announcements";
-import { formatDateTimeInBoise, boiseInstantFrom } from "../../../lib/boiseDate";
+import { formatDateTimeInBoise, boiseInstantFrom, dateInBoise } from "../../../lib/boiseDate";
+import { formatDateMDY } from "../../../lib/formatDate";
 import { buildDateOptions, TIME_OPTIONS, roundUpToQuarterHour, toDateValue, toTimeValue } from "../../../lib/dateTimeOptions";
 import { confirmDeleteAnnouncement } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
@@ -31,6 +32,20 @@ const AUDIENCE_OPTIONS = [
   { key: "spc", label: "SPC" },
   { key: "nutrition", label: "Nutrition" },
 ];
+
+// An announcement used to run until somebody remembered to delete it, which
+// is how two test messages kept popping at members for a fortnight. Measured
+// from send_at, not from now, so a scheduled one gets its full run rather
+// than part of it being eaten before it appears.
+const EXPIRY_OPTIONS = [
+  { value: "1", label: "1 day" },
+  { value: "3", label: "3 days" },
+  { value: "7", label: "1 week" },
+  { value: "14", label: "2 weeks" },
+  { value: "30", label: "1 month" },
+  { value: "never", label: "Never" },
+];
+const DEFAULT_EXPIRY_DAYS = "14";
 
 const TIMING_OPTIONS = [
   { key: "now", label: "Send now" },
@@ -72,6 +87,7 @@ export default function Announcements() {
   const [audience, setAudience] = useState("all");
   const [targetGroupProgramId, setTargetGroupProgramId] = useState(null);
   const [requiresReload, setRequiresReload] = useState(false);
+  const [expiryDays, setExpiryDays] = useState(DEFAULT_EXPIRY_DAYS);
   const [timing, setTiming] = useState("now");
   const [scheduleDate, setScheduleDate] = useState(() => toDateValue(roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000))));
   const [scheduleTime, setScheduleTime] = useState(() => toTimeValue(roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000))));
@@ -116,6 +132,7 @@ export default function Announcements() {
     setTargetGroupProgramId(null);
     setRequiresReload(false);
     setTiming("now");
+    setExpiryDays(DEFAULT_EXPIRY_DAYS);
     const nextDefault = roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000));
     setScheduleDate(toDateValue(nextDefault));
     setScheduleTime(toTimeValue(nextDefault));
@@ -129,6 +146,11 @@ export default function Announcements() {
     // device-local meant a travelling coach scheduled the wrong hour and
     // then saw a time they hadn't picked.
     return boiseInstantFrom(scheduleDate, scheduleTime);
+  };
+
+  const resolveExpiresAt = (sendAt) => {
+    if (expiryDays === "never") return null;
+    return new Date(new Date(sendAt).getTime() + Number(expiryDays) * 24 * 60 * 60 * 1000).toISOString();
   };
 
   const handleSend = async () => {
@@ -145,7 +167,16 @@ export default function Announcements() {
     try {
       const sendAt = resolveSendAt();
       const created = await createAnnouncement(
-        { title, message, sendAt, targetType: audience, targetGroupProgramId, requiresReload, imagePath },
+        {
+          title,
+          message,
+          sendAt,
+          targetType: audience,
+          targetGroupProgramId,
+          requiresReload,
+          imagePath,
+          expiresAt: resolveExpiresAt(sendAt),
+        },
         profile.id
       );
       if (timing === "now") {
@@ -337,6 +368,32 @@ export default function Announcements() {
             </View>
           ) : null}
 
+          <Text className="mb-1 mt-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+            Stop showing after
+          </Text>
+          <View className="mb-1 flex-row items-center" style={{ gap: 10 }}>
+            {isWeb ? (
+              <select
+                value={expiryDays}
+                onChange={(e) => setExpiryDays(e.target.value)}
+                style={{ fontFamily: fonts.sans, fontSize: 14, padding: "8px 10px", borderRadius: 8, border: "1px solid #d6d3d1", maxWidth: 180 }}
+              >
+                {EXPIRY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <NativePickerField options={EXPIRY_OPTIONS} value={expiryDays} onChange={setExpiryDays} placeholder="Pick" />
+            )}
+          </View>
+          <Text className="mb-4 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+            {expiryDays === "never"
+              ? "Runs until you delete it — including for members who join later."
+              : "Counted from when it goes out, and it stops appearing for everyone after that."}
+          </Text>
+
           <Pressable
             onPress={handleSend}
             disabled={submitting}
@@ -388,6 +445,11 @@ export default function Announcements() {
                     {formatDateTimeInBoise(a.send_at)}
                     {a.pushed_at ? " · Pushed" : isFuture ? " · Pending" : " · In-app only"}
                     {a.requires_reload ? " · Refresh prompt" : ""}
+                    {a.expires_at
+                      ? new Date(a.expires_at) <= new Date()
+                        ? ` · Expired ${formatDateMDY(dateInBoise(new Date(a.expires_at)))}`
+                        : ` · Until ${formatDateMDY(dateInBoise(new Date(a.expires_at)))}`
+                      : " · No end date"}
                   </Text>
                 </View>
                 <Pressable onPress={() => handleDelete(a.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>

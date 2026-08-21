@@ -34,6 +34,11 @@ Deno.serve(async (req) => {
     .from("announcements")
     .select("*")
     .lte("send_at", new Date().toISOString())
+    // Skip anything that has already expired (migration 0072). A scheduled
+    // announcement whose window closed before this scan reached it is
+    // invisible to members, so pushing it would notify people about
+    // something they then can't open.
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
     .is("pushed_at", null);
   if (fetchError) {
     return new Response(JSON.stringify({ error: fetchError.message }), { status: 500 });

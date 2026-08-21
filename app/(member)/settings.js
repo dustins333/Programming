@@ -8,6 +8,7 @@ import { supabase } from "../../lib/supabase/client";
 import { updateOwnNotificationPrefs } from "../../lib/notifications/memberPrefs";
 import { useShowMessageBubble, setShowMessageBubble } from "../../lib/messageBubblePref";
 import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
+import { getClient } from "../../lib/nutrition/clients";
 import { fonts, colors } from "../../lib/theme";
 import { Eyebrow } from "../../components/Eyebrow";
 import { toastError, toastSuccess } from "../../lib/toast";
@@ -210,6 +211,7 @@ export default function MemberSettings() {
   // Hidden until confirmed on — same default as every other messaging
   // entry point (FloatingMessageBubble, My Week's header icon).
   const [messagingOn, setMessagingOn] = useState(false);
+  const [nutritionOn, setNutritionOn] = useState(false);
 
   // The Danger zone's Delete-account field sits at the very bottom of this
   // page — exactly the "focused field near the end of scrollable content"
@@ -244,8 +246,37 @@ export default function MemberSettings() {
       isMessagingEnabledForUser(profile.id)
         .then(setMessagingOn)
         .catch(() => setMessagingOn(false));
+      // Both remaining notification toggles are nutrition-only, and they
+      // were shown — defaulted ON — to members with no nutrition at all,
+      // promising evening log reminders and a weekly check-in for a product
+      // they aren't on. Starts hidden so it can't flash in and vanish (the
+      // Messages nav item did exactly that), but a failed lookup shows them:
+      // a blip must never hide a setting someone genuinely has.
+      getClient(profile.id)
+        .then((client) => setNutritionOn(Boolean(client && client.status === "active")))
+        .catch(() => setNutritionOn(true));
     }, [profile])
   );
+
+  const notifRows = [
+    ...(nutritionOn
+      ? [
+          {
+            key: "dailyLogReminder",
+            label: "Daily log reminder",
+            description: "An evening nudge if today's nutrition log isn't finalized.",
+          },
+          {
+            key: "checkinAvailable",
+            label: "Weekly check-in available",
+            description: "Sunday announcement that the new week's check-in is open.",
+          },
+        ]
+      : []),
+    ...(messagingOn
+      ? [{ key: "coachMessages", label: "Coach messages", description: "New comments from your coach." }]
+      : []),
+  ];
 
   const handleChangeEmail = async (email) => {
     const { error } = await supabase.auth.updateUser({ email });
@@ -332,31 +363,24 @@ export default function MemberSettings() {
         />
       </Card>
 
-      <Card>
-        <CardTitle>Notifications</CardTitle>
-        <ToggleRow
-          label="Daily log reminder"
-          description="An evening nudge if today's nutrition log isn't finalized."
-          value={notifValues.dailyLogReminder}
-          onValueChange={(v) => handleToggleNotif("dailyLogReminder", v)}
-        />
-        <ToggleRow
-          label="Weekly check-in available"
-          description="Sunday announcement that the new week's check-in is open."
-          value={notifValues.checkinAvailable}
-          onValueChange={(v) => handleToggleNotif("checkinAvailable", v)}
-          last={!messagingOn}
-        />
-        {messagingOn ? (
-          <ToggleRow
-            label="Coach messages"
-            description="New comments from your coach."
-            value={notifValues.coachMessages}
-            onValueChange={(v) => handleToggleNotif("coachMessages", v)}
-            last
-          />
-        ) : null}
-      </Card>
+      {/* Built as a list so `last` follows whichever row actually ends it,
+          and so the card disappears entirely rather than sitting there empty
+          for a training-only member with messaging off. */}
+      {notifRows.length > 0 ? (
+        <Card>
+          <CardTitle>Notifications</CardTitle>
+          {notifRows.map((row, i) => (
+            <ToggleRow
+              key={row.key}
+              label={row.label}
+              description={row.description}
+              value={notifValues[row.key]}
+              onValueChange={(v) => handleToggleNotif(row.key, v)}
+              last={i === notifRows.length - 1}
+            />
+          ))}
+        </Card>
+      ) : null}
 
       {/* Both messaging settings hide whenever messaging is off for this
           member — either the admin kill switch, or an audience scope that
