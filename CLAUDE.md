@@ -5106,8 +5106,10 @@ rather than people who declined, and **pruning is fully reversible** — the
 source corpus (143 files, 9.1 MB) is intact in dustin@kovastrength.com's Drive
 under `TrueCoach/`, and `scripts/truecoach_import.py` re-imports idempotently
 (uuid5 ids). At 30 MB there is no cost pressure, so the useful decision is a
-*trigger* ("prune the never-registered once the GHL migration is finished"),
-not a date.
+*trigger*, not a date — and **Terra's call on 2026-08-21 was keep it all for
+now and revisit once the GHL migration is finished**, when it is actually
+clear who is not coming. Nothing to build; don't prune this without asking
+again.
 
 Also cleaned: one `public.clients.phone` held a valid 10-digit number wrapped
 in two invisible Unicode directional-isolate characters (pasted from a contact
