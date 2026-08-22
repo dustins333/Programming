@@ -1,0 +1,65 @@
+-- Retire the dead `nutrition` schema (audit finding F13).
+--
+-- !! DO NOT RUN THIS YET. It is blocked on a dashboard step -- see STOP
+-- !! below. Running it on its own takes the ENTIRE Data API down.
+--
+-- These six tables are the superseded placeholder nutrition build. Since
+-- 2026-08-02 the real nutrition module reads and writes the standalone
+-- Nutrition Tracker app's own live public.* tables instead (see CLAUDE.md,
+-- "Nutrition rebuilt against the standalone app's live tables"), and this
+-- schema has been inert ever since. Verified live before writing this:
+--   * 10 rows across all six tables, all leftover QA data;
+--   * every foreign key crosses OUT of it into core.users -- nothing
+--     anywhere depends on it, and FKs follow a rename automatically;
+--   * zero database functions or views reference `nutrition.`;
+--   * the only reference in any repo was the exported `nutrition` schema
+--     handle in lib/supabase/client.js, which nothing imported. Removed in
+--     the same commit as this migration.
+--
+-- ---------------------------------------------------------------------
+-- STOP -- ordering matters, and getting it wrong is a full outage.
+-- ---------------------------------------------------------------------
+-- `nutrition` is still listed in Project Settings > API > Exposed schemas.
+-- PostgREST will not build its schema cache at all if ANY schema in that
+-- list is missing -- it does not skip the missing one, it fails the whole
+-- build and answers every request, on every schema, with
+--   503 PGRST002 "Could not query the database for the schema cache".
+--
+-- This was established the hard way on 2026-08-21: running the rename
+-- below by itself took public/core/programming/payroll down together for
+-- ~45 seconds, until `alter schema nutrition_deprecated rename to
+-- nutrition;` brought them straight back. Confirmed recovered on the first
+-- poll, with all five schemas answering 200 again.
+--
+-- So the order is:
+--   1. Supabase dashboard -> Project Settings -> API -> Exposed schemas:
+--      remove `nutrition`. Save. (Nothing reads it, so this is safe on its
+--      own -- and it is the step that actually makes the schema
+--      unreachable from any client.)
+--   2. Confirm the API is still healthy, e.g.
+--        curl -s -o /dev/null -w '%{http_code}' \
+--          "$URL/rest/v1/clients?select=id&limit=1" \
+--          -H "apikey: $ANON" -H "Authorization: Bearer $ANON"
+--      should be 200.
+--   3. Only then run this file, and NOTIFY pgrst, 'reload schema';
+--   4. Confirm 200 again on public / core / programming / payroll.
+--
+-- RENAME, not DROP, deliberately. A rename breaks loudly the moment
+-- anything still reaches for it, and reverts in one statement. A drop is
+-- silent and final, and the 30-day wait is the only thing that can tell us
+-- the greps were complete.
+--
+-- Rollback, if anything breaks:
+--   alter schema nutrition_deprecated rename to nutrition;
+--   -- and put `nutrition` back in Exposed schemas if step 1 was done.
+--
+-- Drop it after 30 quiet days:
+--   drop schema nutrition_deprecated cascade;
+-- ---------------------------------------------------------------------
+alter schema nutrition rename to nutrition_deprecated;
+
+comment on schema nutrition_deprecated is
+  'Dead placeholder nutrition build, superseded 2026-08-02 by the live public.* tables. Renamed by migration 0075. Safe to drop after 30 quiet days. See 0075 for the full check and the ordering requirement.';
+
+-- PostgREST caches the schema list too — NOTIFY pgrst, 'reload schema';
+-- in the SQL Editor right after running this.
