@@ -5021,9 +5021,8 @@ the public `graphics` bucket; and 107 orphaned progress-photo files.
   `supabase projects api-keys`, so a batch `DELETE /storage/v1/object/<bucket>`
   with a `{"prefixes":[...]}` body works — that is how the 107 orphans went.
 - **Still open** (updated 2026-08-21 — see the follow-up section below):
-  F8 is closed; F13's `client.js` export is gone but its schema rename is
-  blocked on an Exposed-schemas change; F14 (TrueCoach retention) is a
-  decision for Terra; the "~12 hot unindexed FKs" turned out to be a
+  F8 and F13 are both closed; F14 (TrueCoach retention) was decided as
+  keep-for-now; the "~12 hot unindexed FKs" turned out to be a
   leading-column artifact and needs no action. Nine orphaned photo files
   remain by choice: five are real images with no duplicate, four are junk.
 
@@ -5071,21 +5070,38 @@ of the table rather than an audit nicety.
 **The big lesson — PostgREST fails its ENTIRE schema-cache build if any schema
 listed in Exposed schemas is missing.** It does not skip the missing one. Every
 request, on every schema, answers `503 PGRST002 "Could not query the database
-for the schema cache"`. Renaming the dead `nutrition` schema (F13) on its own
-took `public`, `core`, `programming` and `payroll` down together for ~45
-seconds; `alter schema nutrition_deprecated rename to nutrition;` brought them
-back on the first poll, with all five confirmed 200 again. **Before renaming or
-dropping any schema, remove it from Project Settings > API > Exposed schemas
-first, confirm the API is still healthy, and only then touch the schema.**
-Migration `0075` is committed but **deliberately not run**, and leads with that
-ordering.
+for the schema cache"`. Renaming the dead `nutrition` schema on its own took
+`public`, `core`, `programming` and `payroll` down together for ~45 seconds;
+`alter schema nutrition_deprecated rename to nutrition;` brought them back on
+the first poll, with all five confirmed 200 again. **Never rename or drop a
+schema that is in the exposed-schemas config without removing it from that
+config first.**
 
-F13's safe half is done: the exported `nutrition` schema handle in
-`lib/supabase/client.js` is gone. Verified against the live database rather
-than the note — 10 rows across all six tables, every FK crossing **out** into
-`core.users` so nothing depends on it, zero functions or views referencing
-`nutrition.`, and exactly one reference in any repo (that export, which nothing
-imported).
+**F13 closed, by renaming the TABLES instead of the schema (migration `0075`,
+run).** That sidesteps the whole problem: the schema keeps existing so
+PostgREST stays happy, while `nutrition.daily_logs` and its five siblings are
+now `zz_deprecated_*` — so anything still reaching for a dead name breaks
+loudly with a scoped `PGRST205` on that table alone, and it reverts in six
+statements. Confirmed live: the old name 404s with a helpful hint, all five
+schemas still answer 200, and all 12 policies / 7 FKs / 10 rows survived the
+rename untouched. **It also means the exposed-schemas entry never has to be
+touched at all** — when these are dropped after 30 quiet days, an empty
+`nutrition` schema is a perfectly good end state. Worth remembering as the
+general move: *renaming the tables gets you everything the schema rename was
+for, with none of the blast radius.*
+
+The exported `nutrition` schema handle in `lib/supabase/client.js` is gone too.
+Verified against the live database rather than the note — 10 rows across all
+six tables, every FK crossing **out** into `core.users` so nothing depends on
+it, zero functions or views referencing `nutrition.`, and exactly one reference
+in any repo (that export, which nothing imported).
+
+For the record, the exposed-schemas setting is genuinely hard to find in the
+current dashboard and the Supabase CLI has no command for it (`supabase
+projects` covers list/create/api-keys only); reading or changing it needs the
+Management API's `/v1/projects/{ref}/postgrest` endpoint and a personal access
+token, which the CLI keeps in the macOS keychain rather than on disk. Not
+needed for anything above.
 
 **"~12 hot unindexed FKs" was largely a leading-column artifact — no action
 taken.** `programming.logs` already has `logs_user_exercise_idx (user_id,

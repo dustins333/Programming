@@ -1,7 +1,4 @@
--- Retire the dead `nutrition` schema (audit finding F13).
---
--- !! DO NOT RUN THIS YET. It is blocked on a dashboard step -- see STOP
--- !! below. Running it on its own takes the ENTIRE Data API down.
+-- Retire the dead `nutrition` tables (audit finding F13).
 --
 -- These six tables are the superseded placeholder nutrition build. Since
 -- 2026-08-02 the real nutrition module reads and writes the standalone
@@ -17,49 +14,52 @@
 --     the same commit as this migration.
 --
 -- ---------------------------------------------------------------------
--- STOP -- ordering matters, and getting it wrong is a full outage.
+-- Why the TABLES are renamed and not the SCHEMA
 -- ---------------------------------------------------------------------
--- `nutrition` is still listed in Project Settings > API > Exposed schemas.
--- PostgREST will not build its schema cache at all if ANY schema in that
--- list is missing -- it does not skip the missing one, it fails the whole
--- build and answers every request, on every schema, with
+-- The obvious move is `alter schema nutrition rename to
+-- nutrition_deprecated`. Do not: `nutrition` is listed in the project's
+-- PostgREST exposed-schemas config, and PostgREST does not skip a
+-- configured schema that has gone missing -- it fails the ENTIRE
+-- schema-cache build and answers every request, on every schema, with
 --   503 PGRST002 "Could not query the database for the schema cache".
 --
--- This was established the hard way on 2026-08-21: running the rename
--- below by itself took public/core/programming/payroll down together for
--- ~45 seconds, until `alter schema nutrition_deprecated rename to
--- nutrition;` brought them straight back. Confirmed recovered on the first
--- poll, with all five schemas answering 200 again.
+-- Established the hard way on 2026-08-21: the schema rename took
+-- public/core/programming/payroll down together for ~45 seconds, until
+-- `alter schema nutrition_deprecated rename to nutrition;` brought them
+-- straight back (confirmed 200 on all five on the first poll afterwards).
 --
--- So the order is:
---   1. Supabase dashboard -> Project Settings -> API -> Exposed schemas:
---      remove `nutrition`. Save. (Nothing reads it, so this is safe on its
---      own -- and it is the step that actually makes the schema
---      unreachable from any client.)
---   2. Confirm the API is still healthy, e.g.
---        curl -s -o /dev/null -w '%{http_code}' \
---          "$URL/rest/v1/clients?select=id&limit=1" \
---          -H "apikey: $ANON" -H "Authorization: Bearer $ANON"
---      should be 200.
---   3. Only then run this file, and NOTIFY pgrst, 'reload schema';
---   4. Confirm 200 again on public / core / programming / payroll.
---
--- RENAME, not DROP, deliberately. A rename breaks loudly the moment
--- anything still reaches for it, and reverts in one statement. A drop is
--- silent and final, and the 30-day wait is the only thing that can tell us
--- the greps were complete.
+-- Renaming the tables instead gets the same result with none of that. The
+-- schema keeps existing so PostgREST stays happy, while anything still
+-- reaching for `nutrition.daily_logs` breaks loudly and immediately, and
+-- the whole thing reverts in six statements. It also means the exposed-
+-- schemas entry never has to be touched: when these are finally dropped,
+-- an empty `nutrition` schema is a perfectly good end state.
 --
 -- Rollback, if anything breaks:
---   alter schema nutrition_deprecated rename to nutrition;
---   -- and put `nutrition` back in Exposed schemas if step 1 was done.
+--   alter table nutrition.zz_deprecated_nutrition_clients rename to nutrition_clients;
+--   alter table nutrition.zz_deprecated_targets rename to targets;
+--   alter table nutrition.zz_deprecated_daily_logs rename to daily_logs;
+--   alter table nutrition.zz_deprecated_checkin_template_questions rename to checkin_template_questions;
+--   alter table nutrition.zz_deprecated_client_checkin_questions rename to client_checkin_questions;
+--   alter table nutrition.zz_deprecated_checkin_responses rename to checkin_responses;
 --
--- Drop it after 30 quiet days:
---   drop schema nutrition_deprecated cascade;
+-- Drop them after 30 quiet days (leave the empty schema in place):
+--   drop table nutrition.zz_deprecated_checkin_responses,
+--              nutrition.zz_deprecated_client_checkin_questions,
+--              nutrition.zz_deprecated_checkin_template_questions,
+--              nutrition.zz_deprecated_daily_logs,
+--              nutrition.zz_deprecated_targets,
+--              nutrition.zz_deprecated_nutrition_clients;
 -- ---------------------------------------------------------------------
-alter schema nutrition rename to nutrition_deprecated;
+alter table nutrition.nutrition_clients          rename to zz_deprecated_nutrition_clients;
+alter table nutrition.targets                    rename to zz_deprecated_targets;
+alter table nutrition.daily_logs                 rename to zz_deprecated_daily_logs;
+alter table nutrition.checkin_template_questions rename to zz_deprecated_checkin_template_questions;
+alter table nutrition.client_checkin_questions   rename to zz_deprecated_client_checkin_questions;
+alter table nutrition.checkin_responses          rename to zz_deprecated_checkin_responses;
 
-comment on schema nutrition_deprecated is
-  'Dead placeholder nutrition build, superseded 2026-08-02 by the live public.* tables. Renamed by migration 0075. Safe to drop after 30 quiet days. See 0075 for the full check and the ordering requirement.';
+comment on schema nutrition is
+  'Dead placeholder nutrition build, superseded 2026-08-02 by the live public.* tables. Its tables were renamed zz_deprecated_* by migration 0075 on 2026-08-21; safe to drop them after 30 quiet days. Keep the schema itself: it is in the PostgREST exposed-schemas config, and removing a configured schema fails the whole Data API. See 0075.';
 
--- PostgREST caches the schema list too — NOTIFY pgrst, 'reload schema';
--- in the SQL Editor right after running this.
+-- PostgREST caches table names — NOTIFY pgrst, 'reload schema'; in the SQL
+-- Editor right after running this.
