@@ -4,7 +4,8 @@ import { Redirect, Link, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { getSettings, getSetting, updateSetting } from "../../lib/settings";
 import { sendPush } from "../../lib/notifications/sendPush";
-import { listCoaches, updateCoachPermissions, inviteStaffMember } from "../../lib/programming/clients";
+import { listCoaches, updateCoachPermissions, updateCoachCalendar, inviteStaffMember } from "../../lib/programming/clients";
+import { listGhlCalendars } from "../../lib/nutrition/ghlCalendars";
 import { listGroupPrograms } from "../../lib/programming/blocks";
 import {
   getMessagingSettings,
@@ -27,6 +28,7 @@ import { toastError, toastSuccess } from "../../lib/toast";
 import { CoachShell } from "../../components/CoachShell";
 import { AddStaffModal } from "../../components/AddStaffModal";
 import { StaffPermissionMatrix, PERMISSION_COLUMNS } from "../../components/StaffPermissionMatrix";
+import { CoachCalendarPicker, CoachCalendarRow } from "../../components/CoachCalendarPicker";
 import { TemplateEditorButton } from "../../components/nutrition/TemplateEditorButton";
 import { NativePickerField } from "../../components/NativePickerField";
 import { confirmRemoveQuestion, confirmDelete } from "../../lib/confirmDialog";
@@ -203,6 +205,14 @@ export default function Settings() {
   const [savingNotifKey, setSavingNotifKey] = useState(null);
   const [coaches, setCoaches] = useState([]);
   const [savingPermKey, setSavingPermKey] = useState(null);
+  const [calendars, setCalendars] = useState([]);
+  const [calendarsLoading, setCalendarsLoading] = useState(true);
+  const [calendarsError, setCalendarsError] = useState(null);
+  const [defaultCalendarId, setDefaultCalendarId] = useState(null);
+  const [savingDefaultCalendar, setSavingDefaultCalendar] = useState(false);
+  // { coach, prompted } — prompted means this opened by itself right after
+  // Nutrition access was switched on, rather than from a row's own link.
+  const [calendarPicker, setCalendarPicker] = useState(null);
   const [addStaffVisible, setAddStaffVisible] = useState(false);
   const [addStaffRole, setAddStaffRole] = useState("coach");
   const [checkinQuestions, setCheckinQuestions] = useState([]);
@@ -225,6 +235,27 @@ export default function Settings() {
       setCoaches(await listCoaches());
     } catch (err) {
       console.error("Failed to load team list:", err);
+    }
+  }, []);
+
+  // Isolated the same way loadCoaches is. This one reaches GoHighLevel
+  // rather than our own database, so it is the load most likely to fail for
+  // reasons that have nothing to do with Kova — every consumer degrades to
+  // the calendar id or a plain "Set" link rather than breaking.
+  const loadCalendars = useCallback(async () => {
+    setCalendarsLoading(true);
+    setCalendarsError(null);
+    try {
+      setCalendars(await listGhlCalendars());
+    } catch (err) {
+      setCalendarsError(err.message ?? String(err));
+    } finally {
+      setCalendarsLoading(false);
+    }
+    try {
+      setDefaultCalendarId(await getSetting("nutrition_checkin_calendar_id", null));
+    } catch (err) {
+      console.error("Failed to load the default check-in calendar:", err);
     }
   }, []);
 
@@ -325,6 +356,7 @@ export default function Settings() {
       // the page, same reasoning as every other isolated-load pattern in
       // this app.
       await loadCoaches();
+      await loadCalendars();
       await loadTemplates();
       await loadMessaging();
       await loadEquipment();
@@ -332,7 +364,7 @@ export default function Settings() {
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
-  }, [loadCoaches, loadTemplates, loadMessaging, loadEquipment, loadCheckinNotif]);
+  }, [loadCoaches, loadCalendars, loadTemplates, loadMessaging, loadEquipment, loadCheckinNotif]);
 
   const nextPosition = (list) => (list.length > 0 ? Math.max(...list.map((q) => q.position)) + 1 : 1);
 
@@ -566,6 +598,14 @@ export default function Settings() {
         canViewExerciseLibrary: field === "can_view_exercise_library" ? value : undefined,
         canLogOpsHours: field === "can_log_ops_hours" ? value : undefined,
       });
+      // Switching Nutrition on for someone with no calendar of their own is
+      // the exact moment their future clients start booking onto the gym
+      // default rather than onto them — so ask right here rather than
+      // leaving it to be noticed later. Only when it's genuinely unset, so
+      // re-toggling an already-configured coach doesn't nag.
+      if (field === "can_view_nutrition" && value && !coach.ghl_calendar_id) {
+        setCalendarPicker({ coach: { ...coach, [field]: value }, prompted: true });
+      }
     } catch (err) {
       setCoaches((cs) => cs.map((c) => (c.id === coach.id ? { ...c, [field]: !value } : c)));
       toastError("Failed to save", err);
@@ -574,10 +614,45 @@ export default function Settings() {
     }
   };
 
+  const handleSaveCoachCalendar = async (coach, calendarId) => {
+    await updateCoachCalendar(coach.id, calendarId);
+    setCoaches((cs) => cs.map((c) => (c.id === coach.id ? { ...c, ghl_calendar_id: calendarId } : c)));
+    toastSuccess(
+      calendarId
+        ? `${coach.name}'s check-ins now book onto ${calendars.find((c) => c.id === calendarId)?.name ?? "that calendar"}.`
+        : `${coach.name}'s check-ins now use the gym default calendar.`
+    );
+  };
+
+  // The calendar an unassigned client — or a coach who hasn't had one picked
+  // — falls back to. Surfaced because after 0077 every coach row can say
+  // "use the gym default", and that phrase needs somewhere to point.
+  const handleSaveDefaultCalendar = async (calendarId) => {
+    const previous = defaultCalendarId;
+    setDefaultCalendarId(calendarId);
+    setSavingDefaultCalendar(true);
+    try {
+      await updateSetting("nutrition_checkin_calendar_id", calendarId);
+    } catch (err) {
+      setDefaultCalendarId(previous);
+      toastError("Couldn't save that — try again.", err);
+    } finally {
+      setSavingDefaultCalendar(false);
+    }
+  };
+
   const handleAddStaff = async ({ name, email, role, existingUserId, permissions }) => {
     try {
-      const { invited } = await inviteStaffMember({ name, email, role, existingUserId, permissions });
+      const { profile: newProfile, invited } = await inviteStaffMember({ name, email, role, existingUserId, permissions });
       await loadCoaches();
+      // Same reasoning as the Nutrition toggle above: a coach added WITH
+      // nutrition access is the other way someone ends up coaching nutrition
+      // with no calendar of their own. Admins are included — they always have
+      // nutrition access regardless of the module step.
+      const hasNutrition = role === "admin" || Boolean(permissions?.can_view_nutrition);
+      if (newProfile?.id && hasNutrition && !newProfile.ghl_calendar_id) {
+        setCalendarPicker({ coach: newProfile, prompted: true });
+      }
       // Only say "invited" when an email genuinely went out — promoting an
       // account that already exists sends nothing.
       toastSuccess(
@@ -690,6 +765,9 @@ export default function Settings() {
             currentUserId={profile?.id}
             savingPermKey={savingPermKey}
             onTogglePermission={handleTogglePermission}
+            calendars={calendars}
+            calendarsLoading={calendarsLoading}
+            onEditCalendar={(coach) => setCalendarPicker({ coach, prompted: false })}
           />
         ) : (
           coaches.map((coach) => (
@@ -734,6 +812,17 @@ export default function Settings() {
                   ))}
                 </View>
               )}
+
+              {/* Admins are included even with no Nutrition switch of their
+                  own — core.can_access_nutrition() always passes for them. */}
+              {coach.role === "admin" || (coach.can_view_nutrition ?? true) ? (
+                <CoachCalendarRow
+                  coach={coach}
+                  calendars={calendars}
+                  loading={calendarsLoading}
+                  onPress={() => setCalendarPicker({ coach, prompted: false })}
+                />
+              ) : null}
             </View>
           ))
         )}
@@ -911,6 +1000,58 @@ export default function Settings() {
             onDelete={handleDeleteQuestionnaireQuestion}
             onMove={handleMoveQuestionnaireQuestion}
           />
+        </View>
+
+        {/* The calendar a check-in Zoom call falls back to when the client
+            has no coach assigned (public.clients.coach_id is nullable, 0033)
+            or their coach hasn't had one picked in Settings -> Team. Every
+            coach row over there can read "use the gym default", so that
+            phrase needs somewhere to point. */}
+        <View className="mt-5 rounded-xl border border-stone-200 p-5">
+          <Text className="mb-1 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+            Default check-in calendar
+          </Text>
+          <Text className="mb-3 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+            Where a check-in Zoom call books when the client has no assigned nutrition coach, or their coach has no calendar of
+            their own. Per-coach calendars are set on the Team tab.
+          </Text>
+          {calendarsError ? (
+            <View>
+              <Text className="mb-3 text-sm text-stone-600" style={{ fontFamily: fonts.sans }}>
+                {calendarsError}
+              </Text>
+              <Pressable onPress={loadCalendars} className="self-start rounded-lg border border-stone-300 px-4 py-2.5">
+                <Text style={{ fontFamily: fonts.sansMedium }}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : calendarsLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <View style={{ maxWidth: 300, opacity: savingDefaultCalendar ? 0.5 : 1 }}>
+              {isWeb ? (
+                <select
+                  value={defaultCalendarId ?? ""}
+                  onChange={(e) => handleSaveDefaultCalendar(e.target.value || null)}
+                  disabled={savingDefaultCalendar}
+                  style={{ fontFamily: fonts.sans, fontSize: 14, padding: "10px 10px", borderRadius: 8, border: "1px solid #d6d3d1" }}
+                >
+                  <option value="">No default — booking is turned off</option>
+                  {calendars.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <NativePickerField
+                  options={calendars.map((c) => ({ value: c.id, label: c.name }))}
+                  value={defaultCalendarId ?? ""}
+                  onChange={(v) => handleSaveDefaultCalendar(v || null)}
+                  placeholder="Pick a calendar"
+                />
+              )}
+            </View>
+          )}
         </View>
 
         <View className="mt-5 rounded-xl border border-stone-200 p-5">
@@ -1144,6 +1285,19 @@ export default function Settings() {
       </View>
       )}
     </ScrollView>
+
+    <CoachCalendarPicker
+      visible={Boolean(calendarPicker)}
+      coach={calendarPicker?.coach ?? null}
+      prompted={calendarPicker?.prompted ?? false}
+      calendars={calendars}
+      loading={calendarsLoading}
+      loadError={calendarsError}
+      onRetry={loadCalendars}
+      defaultCalendarId={defaultCalendarId}
+      onClose={() => setCalendarPicker(null)}
+      onSave={handleSaveCoachCalendar}
+    />
 
     <AddStaffModal
       visible={addStaffVisible}

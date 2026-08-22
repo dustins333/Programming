@@ -1,7 +1,10 @@
 // Called by a member's own session right after they answer "Zoom" on their
 // weekly check-in (see the booking_option column, migration 0042) — returns
-// real open slots on Terra's GHL "Nutrition Check In" calendar so the app
-// can render a picker instead of the member having to text her directly.
+// real open slots on their OWN coach's GHL calendar so the app can render a
+// picker instead of the member having to text anyone directly. Which
+// calendar that is comes from resolveCheckinCalendarId (0077); it used to
+// be one hardcoded id, which meant every client booked onto Terra's
+// availability no matter who actually coached them.
 // JWT-verified (default supabase functions deploy, no --no-verify-jwt) since
 // this is a normal logged-in-member action, same auth pattern as
 // ensure-nutrition-coach.
@@ -9,8 +12,8 @@
 // Deploy with: supabase functions deploy get-checkin-booking-slots
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveCheckinCalendarId } from "../_shared/checkinCalendar.ts";
 
-const CALENDAR_ID = "t7fAF1sImGuso1im6UR6";
 const DAYS_AHEAD = 14;
 const GHL_VERSION = "2021-04-15";
 
@@ -29,6 +32,7 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const callerClient = createClient(supabaseUrl, serviceRoleKey, { global: { headers: { Authorization: authHeader } } });
+  const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
   const {
     data: { user: caller },
@@ -46,11 +50,19 @@ Deno.serve(async (req) => {
     });
   }
 
+  const calendarId = await resolveCheckinCalendarId(adminClient, caller.id);
+  if (!calendarId) {
+    return new Response(JSON.stringify({ error: "Scheduling isn't set up yet — ask your coach to book this for you." }), {
+      status: 500,
+      headers: jsonHeaders,
+    });
+  }
+
   const startMs = Date.now();
   const endMs = startMs + DAYS_AHEAD * 24 * 60 * 60 * 1000;
 
   const slotsResp = await fetch(
-    `https://services.leadconnectorhq.com/calendars/${CALENDAR_ID}/free-slots?startDate=${startMs}&endDate=${endMs}&timezone=America%2FBoise`,
+    `https://services.leadconnectorhq.com/calendars/${calendarId}/free-slots?startDate=${startMs}&endDate=${endMs}&timezone=America%2FBoise`,
     { headers: { Authorization: `Bearer ${apiKey}`, Version: GHL_VERSION } }
   );
 

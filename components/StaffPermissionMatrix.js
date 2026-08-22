@@ -2,6 +2,7 @@ import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { fonts, colors } from "../lib/theme";
+import { CoachCalendarRow } from "./CoachCalendarPicker";
 
 // The four per-coach module flags on core.users. Shared by the web matrix
 // below and settings.js's own native card list so the two can't drift on
@@ -89,7 +90,15 @@ function PermissionCheckbox({ checked, disabled, saving, onToggle, accessibility
 // can do what" reads down a column instead of needing five cards opened.
 // Native keeps the per-coach card list in settings.js — four toggle rows
 // per coach fit a phone; a five-column table doesn't.
-export function StaffPermissionMatrix({ coaches, currentUserId, savingPermKey, onTogglePermission }) {
+export function StaffPermissionMatrix({
+  coaches,
+  currentUserId,
+  savingPermKey,
+  onTogglePermission,
+  calendars = [],
+  calendarsLoading = false,
+  onEditCalendar,
+}) {
   const router = useRouter();
 
   return (
@@ -146,6 +155,18 @@ export function StaffPermissionMatrix({ coaches, currentUserId, savingPermKey, o
                 <Text className="mt-0.5 text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 12 }} numberOfLines={1}>
                   {coach.email}
                 </Text>
+                {/* Admins are included even though they have no Nutrition
+                    checkbox to tick — core.can_access_nutrition() always
+                    passes for them, and Terra (an admin) coaches the most
+                    nutrition clients of anyone. */}
+                {onEditCalendar && (isAdmin || (coach.can_view_nutrition ?? true)) ? (
+                  <CoachCalendarRow
+                    coach={coach}
+                    calendars={calendars}
+                    loading={calendarsLoading}
+                    onPress={() => onEditCalendar(coach)}
+                  />
+                ) : null}
               </View>
             </View>
 

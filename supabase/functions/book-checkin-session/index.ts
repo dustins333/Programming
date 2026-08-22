@@ -1,15 +1,17 @@
-// Books a real appointment on Terra's GHL "Nutrition Check In" calendar for
-// the calling member, using their stored ghl_contact_id (see import-client +
-// migration 0026 — Kova never stores a phone number, only the GHL contact
-// id). Called right after a member picks a slot from
+// Books a real appointment on the calling member's own coach's GHL calendar
+// (resolveCheckinCalendarId, 0077 — same resolution the slots function used
+// to build the picker, shared so the two can never disagree about which
+// calendar a slot came from), using their stored ghl_contact_id (see
+// import-client + migration 0026 — Kova never stores a phone number, only
+// the GHL contact id). Called right after a member picks a slot from
 // get-checkin-booking-slots. JWT-verified (default deploy), same auth
 // pattern as ensure-nutrition-coach.
 //
 // Deploy with: supabase functions deploy book-checkin-session
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveCheckinCalendarId } from "../_shared/checkinCalendar.ts";
 
-const CALENDAR_ID = "t7fAF1sImGuso1im6UR6";
 const GHL_VERSION = "2021-04-15";
 
 Deno.serve(async (req) => {
@@ -62,12 +64,20 @@ Deno.serve(async (req) => {
     });
   }
 
+  const calendarId = await resolveCheckinCalendarId(adminClient, caller.id);
+  if (!calendarId) {
+    return new Response(JSON.stringify({ error: "Scheduling isn't set up yet — ask your coach to book this for you." }), {
+      status: 500,
+      headers: jsonHeaders,
+    });
+  }
+
   // Slot duration comes from the calendar itself rather than being
   // hardcoded here, so a future change to the calendar's own slot length
   // (Settings -> GHL, outside this app) doesn't silently desync endTime.
   let slotDurationMinutes = 30;
   try {
-    const calResp = await fetch(`https://services.leadconnectorhq.com/calendars/${CALENDAR_ID}`, {
+    const calResp = await fetch(`https://services.leadconnectorhq.com/calendars/${calendarId}`, {
       headers: { Authorization: `Bearer ${apiKey}`, Version: GHL_VERSION },
     });
     if (calResp.ok) {
@@ -88,7 +98,7 @@ Deno.serve(async (req) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      calendarId: CALENDAR_ID,
+      calendarId,
       locationId,
       contactId: profile.ghl_contact_id,
       startTime,
