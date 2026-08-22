@@ -4960,7 +4960,9 @@ A full read-only audit of the Supabase project (schema, RLS, functions,
 orchestration) cross-referenced against all four local repos, followed by an
 approved fix pass. Full report:
 https://claude.ai/code/artifact/365e64ad-d60e-4084-a5f9-d788e3e506c0 —
-rollback SQL for every change is in that session's scratchpad.
+rollback SQL and evidence for every change are in `~/kova-audit-2026-08-21/`
+(see its README for what each file undoes; the 107 storage files and 3 auth
+accounts are the two changes that cannot be undone).
 
 **The estate is in better shape than "grown organically" implies**, and this
 is worth knowing before anyone plans a big cleanup: all 85 tables have RLS
