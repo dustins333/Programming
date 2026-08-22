@@ -5020,12 +5020,101 @@ the public `graphics` bucket; and 107 orphaned progress-photo files.
   `42501` from a protection trigger. A `service_role` key **is** reachable via
   `supabase projects api-keys`, so a batch `DELETE /storage/v1/object/<bucket>`
   with a `{"prefixes":[...]}` body works — that is how the 107 orphans went.
-- **Still open**: an import log with retry (F8), the dead `nutrition` schema
-  and its unused `client.js` export (F13), a TrueCoach retention decision
-  (F14 — `truecoach_import_sets` is 32 MB of a 63 MB database and 75% of it
-  belongs to people who never registered), plus phone-format normalisation
-  and ~12 hot unindexed FKs. Nine orphaned photo files remain by choice: five
-  are real images with no duplicate, four are junk.
+- **Still open** (updated 2026-08-21 — see the follow-up section below):
+  F8 is closed; F13's `client.js` export is gone but its schema rename is
+  blocked on an Exposed-schemas change; F14 (TrueCoach retention) is a
+  decision for Terra; the "~12 hot unindexed FKs" turned out to be a
+  leading-column artifact and needs no action. Nine orphaned photo files
+  remain by choice: five are real images with no duplicate, four are junk.
+
+## Backend audit follow-up: GHL import log, and a real Data API outage (2026-08-21)
+
+Second pass over the audit's remaining findings — see the section above for
+the first twelve. Rollback SQL and evidence stay in `~/kova-audit-2026-08-21/`.
+
+**F8 closed — `core.ghl_import_log` + a retry (migration `0074`, run).**
+`import-client` was fire-and-forget from GHL's side: GHL's webhook action
+surfaces nothing on a non-2xx, so a failed import was only discoverable by
+noticing, later, that someone was missing from the Clients list. With 140-200
+clients still to migrate through that path, that is not a detection mechanism.
+Shape lifted from the sibling Safety Fair repo's `public.entries`, adapted for
+the opposite direction — **Safety Fair pushes to GHL and retries by
+re-pushing; Kova receives from GHL and can only retry by replaying the payload
+it was sent**, which is why the row stores `payload` and why that is the point
+of the table rather than an audit nicety.
+
+- **One row per person, not per delivery.** `dedupe_key` is the email (the
+  identity `import-client` actually resolves on — `createUser` is by email and
+  `core.users.id` comes from the auth row), or `payload:<sha-256>` when the
+  webhook carried no email at all. GHL has been observed firing the same
+  contact twelve times; that now leaves `attempts = 12`, not twelve rows.
+- `core.record_ghl_import(...)` does the upsert-with-increment in one
+  statement. `attempts + 1` cannot be expressed through supabase-js's
+  `.upsert()`, and a read-then-write from the Edge Function would race those
+  concurrent webhooks.
+- **Admin-read only, deliberately narrower than `core.is_staff()`**: `payload`
+  is GHL's raw contact body (phone, address) and RLS cannot scope a policy to
+  a subset of columns. The client lib never selects it; only the retry
+  function does, under the service role.
+- The import moved to `_shared/ghlImport.ts` so `retry-ghl-import` runs the
+  **same** code path the webhook does — a retry with its own implementation
+  would prove nothing about the path GHL actually takes.
+- **A wrong shared secret is deliberately not logged** — it is not an import
+  attempt, and logging it would let anyone who can reach the URL grow the
+  table at will.
+- UI is `components/GhlImportIssuesCard.js` on the Clients page, admin-only,
+  rendering nothing when nothing is wrong. **It cannot be a per-row action on
+  the roster**, which is the obvious place to look for it: a failed import
+  means the person is not on the roster at all. That invisibility is the whole
+  problem.
+
+**The big lesson — PostgREST fails its ENTIRE schema-cache build if any schema
+listed in Exposed schemas is missing.** It does not skip the missing one. Every
+request, on every schema, answers `503 PGRST002 "Could not query the database
+for the schema cache"`. Renaming the dead `nutrition` schema (F13) on its own
+took `public`, `core`, `programming` and `payroll` down together for ~45
+seconds; `alter schema nutrition_deprecated rename to nutrition;` brought them
+back on the first poll, with all five confirmed 200 again. **Before renaming or
+dropping any schema, remove it from Project Settings > API > Exposed schemas
+first, confirm the API is still healthy, and only then touch the schema.**
+Migration `0075` is committed but **deliberately not run**, and leads with that
+ordering.
+
+F13's safe half is done: the exported `nutrition` schema handle in
+`lib/supabase/client.js` is gone. Verified against the live database rather
+than the note — 10 rows across all six tables, every FK crossing **out** into
+`core.users` so nothing depends on it, zero functions or views referencing
+`nutrition.`, and exactly one reference in any repo (that export, which nothing
+imported).
+
+**"~12 hot unindexed FKs" was largely a leading-column artifact — no action
+taken.** `programming.logs` already has `logs_user_exercise_idx (user_id,
+exercise_id, date_performed DESC)`, and every app query on `logs` filters by
+user as well as exercise, so the hot per-lift path is served (measured: index
+scan, 2.9ms). The genuinely unindexed FKs sit on tables of a few hundred rows
+where the scan measures ~7ms end to end, most of it round-trip. Indexing them
+would add write cost for no measurable read gain. **A FK flagged as
+"unindexed" by a leading-column check may well be covered by a composite —
+check the real query shape and EXPLAIN it before adding an index.**
+
+**F14 (TrueCoach retention) is still open and is Terra's call, not a
+migration.** Current numbers: 12,550 imports / 117,764 sets, ~30 MB of a 57 MB
+database; 134 people in the corpus, **108 with no Kova account yet**; 26 have
+accounts and only **3 have ever linked anything** (17 lifts). Two facts that
+reframe it: the 108 are largely people whose GHL migration has not happened yet
+rather than people who declined, and **pruning is fully reversible** — the
+source corpus (143 files, 9.1 MB) is intact in dustin@kovastrength.com's Drive
+under `TrueCoach/`, and `scripts/truecoach_import.py` re-imports idempotently
+(uuid5 ids). At 30 MB there is no cost pressure, so the useful decision is a
+*trigger* ("prune the never-registered once the GHL migration is finished"),
+not a date.
+
+Also cleaned: one `public.clients.phone` held a valid 10-digit number wrapped
+in two invisible Unicode directional-isolate characters (pasted from a contact
+card), which would defeat any exact match or search. Stripped; rollback in
+`f20_phone_bidi_rollback.sql`. The remaining phone-format variance (4 shapes
+across 25 rows) is left alone — it is display-only here, and normalising a
+shared `public.*` column could surprise the standalone Nutrition Tracker app.
 
 ## Working notes for future sessions
 
