@@ -52,12 +52,12 @@ export default function Support() {
           >
             Phone
           </Text>
-          <Pressable onPress={() => Linking.openURL("tel:12082014864")}>
+          <Pressable onPress={() => Linking.openURL("tel:12089073317")}>
             <Text
               className="text-lg"
               style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}
             >
-              (208) 201-4864
+              (208) 907-3317
             </Text>
           </Pressable>
         </View>
