@@ -3367,6 +3367,12 @@ column it needs).
 
 ## SPC Live Session Hub — gym-floor display + coach control (2026-08-20)
 
+> **The UI in this section is superseded** by the 2026-08-22 design pass
+> (`design_handoff_spc_hub_v1`, its own section below): `HubEntryPad.js` is
+> deleted, both surfaces expand a lift in place with a docked keypad, and
+> commit-on-Save became autosave. The data model, RLS, poll design and the
+> setup flow described here are all still current.
+
 The 4-client SPC display screen from the original plan, built: a wall-mounted
 1920×1080 touchscreen shows up to 4 SPC clients' sessions as side-by-side
 vertical columns (like 4 phone screens, no page scroll), live-updating as sets
@@ -3491,7 +3497,8 @@ is the glyph char, NOT "" — don't filter on empty text when hunting for one).
    to the board and stays signed in.
 
 **Deferred v1** (per the approved plan): plate calculator inside the entry
-pad, coaching-note history on the member side, group-program (non-SPC) hub
+pad *(done in the 2026-08-22 pass — it lives in the dock, not the pad)*,
+coaching-note history on the member side, group-program (non-SPC) hub
 support. Worth a real click-through: start a session from a phone, confirm
 the TV picks it up ≤5s, a phone-logged set appears on the TV ≤3s, a TV pad
 write shows on the member's phone, reorder/finalize/end round-trip, and a
@@ -3681,8 +3688,11 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0065_staff_own_spc_enrollment.sql` — **run**, verified live 2026-08-18. Adds a self-row `for all` policy on `programming.spc_clients` so any staff member can enroll/unenroll *themself* regardless of their `can_view_spc` flag. See the 2026-08-18 section above.
 - `0066_truecoach_imports.sql` — **run**, verified live 2026-08-18 (2 tables, trigger, 2 RPCs, `logs.truecoach_import_id`, `logs_source_check` widened). TrueCoach history staging + member linking. See the section above.
 - `0071_spc_live_hub.sql` — **run**, verified live 2026-08-20 (3 tables, flag column, 3 functions, 12 display policies, 2 widening policies; PostgREST `[]` not PGRST205). SPC Live Session Hub + per-client-per-lift coaching notes + the staff completions-write widening. See its own section above.
-- `0072_announcement_expiry.sql` — **run**, verified live 2026-08-21. Adds `programming.announcements.expires_at` (nullable; null = never expires, so every pre-existing row is unaffected) and rewrites the `members read due announcements` policy to `send_at <= now() and (expires_at is null or expires_at > now())`. Enforced in RLS deliberately, not in the app — an expired announcement stops existing for members the same way an unsent one already does. Next number is 0074.
+- `0072_announcement_expiry.sql` — **run**, verified live 2026-08-21. Adds `programming.announcements.expires_at` (nullable; null = never expires, so every pre-existing row is unaffected) and rewrites the `members read due announcements` policy to `send_at <= now() and (expires_at is null or expires_at > now())`. Enforced in RLS deliberately, not in the app — an expired announcement stops existing for members the same way an unsent one already does. (0074, 0075 and 0076 are all applied — see their own entries and the audit
+sections; next number is 0077.)
 - `0073_logs_unique_set.sql` — **run**, verified live 2026-08-21. De-duplicates `programming.logs` and adds `logs_unique_set_idx`, a `UNIQUE NULLS NOT DISTINCT` index over user, exercise, date, set number, all three session references, `week_number` and `truecoach_import_id`. `logResult()` was a hand-rolled select-then-update-or-insert with nothing backing it, so two racing autosaves both inserted the same set. **`NULLS NOT DISTINCT` is load-bearing** — every session column is null for a row with no session reference, and plain UNIQUE treats each of those as distinct, which would let the duplicates straight back through. **The key is wide on purpose**: two genuinely different sessions on one date must stay separate rows, and linking two TrueCoach imports to the same Kova lift (0066, in active use on five exercises) each materialises its own set rows. `ON CONFLICT` inference against a nulls-not-distinct index was verified on a throwaway table before the code was changed.
+- `0076_hub_notes_and_idle_stats.sql` — **run**, verified live 2026-08-22 (dry-run in a rolled-back transaction first, then applied + `NOTIFY pgrst`). Everything in it exists because of one constraint from 0071: the wall display signs in as an account with **no read policy on `core.users` at all** and no access to any client outside the open hub session, so anything the TV needs to *show* about a person has to be snapshotted onto a row it can already read, or served by a security-definer function. Adds (a) `programming.exercise_coaching_notes.author_name` and `programming.hub_sessions.coach_name` — name snapshots, the same answer 0071 already used for `hub_session_clients.client_name`, nullable with no backfill so older notes render unattributed rather than guessed; (b) `programming.hub_idle_stats()`, security-definer, returning the gym's weekly session count and recent personal bests for the idle board. **The bests gate lives inside the function**, keyed on `core.settings.hub_idle_show_recent_bests` (seeded `false`) — so while it is off the TV never receives a client's name at all, and it needs no read on `core.settings` either (which it also has no policy for). "Best" = a lift logged in the last 7 days beating that client's own previous best, with at least 2 earlier days of that lift on record so a first-ever log is never announced; reps-only lifts are judged on reps, matching `getExerciseStats`/`countPersonalRecordsOn`.
+
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
@@ -5148,6 +5158,119 @@ decided, or shown not to be findings. The one live task left anywhere in it is
 the payroll finalize → approve → send-back → close walkthrough, which Terra
 scheduled for the next real payroll run — see the note in the section above
 before poking at it.
+
+## SPC Live Hub design pass — expand in place, dock the keypad (2026-08-22)
+
+A handoff (`design_handoff_spc_hub_v1/` — README + `Kova SPC Live Hub -
+Directions.dc.html` + 9 screenshots, direction **1a** decided) redesigns both
+hub surfaces: the wall display (`app/(display)/index.js`) and the coach phone
+(`app/(coach)/spc/live.js`). Same "the HTML is a reference, never copied in"
+rule as every prior handoff. Migration `0076`, above, is part of it.
+
+**`HubEntryPad.js` is deleted.** Tapping a lift now expands it IN PLACE
+inside its own column with the keypad docked beneath it, on both surfaces —
+there is no modal on either any more. New: `HubLiftCard.js` (the open card),
+`HubDock.js`, `HubPlateCalc.js`, `HubLiftHistory.js`, `HubSetBubbles.js`,
+`HubIdleScreen.js`.
+
+**The dock is one slot with three interchangeable occupants at the same
+footprint** — keypad, plate calculator, block history — pinned bottom-right
+of the column, all dismissable with the `⌄`. Its top border is 2px clay
+matching the open card, which is what says "this keypad belongs to THAT
+lift" on a wall four people are reading at once. This replaced a three-zone
+card (sets | note | every week side by side) that only worked at a 900px
+column, and widening one column means resizing its neighbours — so columns
+would move whenever somebody tapped.
+
+**Layout rules, all arithmetic rather than taste** (a column is 460px at 4
+clients, 619 at 3, 463 at 1-2, with 992px of height inside it):
+
+- **A column is only ever one of two widths.** 4 clients = 463, 3 fills
+  (~620), 1-2 hold 463 and **centre**, with the clock taking the gap to
+  their left (equal flex spacers both sides — measured: 729px margins at 1
+  client, 491 at 2). Guarded on there actually being room, so a coach's
+  narrower browser falls back to filling instead of overflowing; verified at
+  900px, columns drop to 430 and the page stops overflowing.
+- **Every other lift collapses to one line while a lift is open** — name,
+  set summary, tick. Full rows are ~104px and five of them plus a usable
+  card does not fit in 992 at any client count.
+- **An overflowing column scrolls inside itself**, with a bottom fade and a
+  pinned "N more lifts ⌄" row outside the scroll area. **No scrollbar**: a
+  classic one consumes content width in the scrolling column only, which
+  would render that client's cards ~19px narrower than its neighbours' on a
+  four-up wall. The count comes from per-row `onLayout` offsets and degrades
+  to a plain "More lifts ⌄" rather than risking a wrong number.
+
+**Autosave replaced commit-on-Save**, because the design has no Save button
+anywhere: sets persist on a 700ms debounce and again on collapse, matching
+the member app. A `dirtyRef` means opening a lift to look at it and closing
+it again writes nothing, and the debounce clears it so collapsing after a
+write doesn't repeat it.
+
+**`useHubBoard`'s poll freeze became a `Map` keyed by userId.** Two columns
+can genuinely be expanded at once (a coach running four people moves between
+two racks), so freezing "the one open lift" was wrong the moment a second
+column opened. `clearEditing(userId)` clears one; no argument clears all.
+
+**Resolving the handoff's flagged note merge** (it explicitly delegated
+this): one store, `programming.exercise_coaching_notes`, scoped to (user,
+exercise, workout, week). **Append-only** — the display has INSERT but no
+UPDATE there (0071) — so "one note per lift per week" is read as *the newest
+row for that week* rather than edited in place, and saving only inserts when
+the text actually changed. The hub no longer writes `logs.notes` at all.
+Known consequence: a note a client types into her own session log on her
+phone does not appear on the board.
+
+**Answers to the rest of the handoff's open questions**, decided rather than
+sent back: "last completed week" is **the last week the lift was actually
+logged**, not the previous week of the block — a skipped week is absent
+rather than an empty row, since an empty "WEEK 2" is worse than the WEEK 1 a
+coach can actually compare against; a finalized column gets a 6px olive bar
++ COMPLETE pill + outlined button, **not** a full wash (visual-pass v4's
+border-and-fill rule); expanding the warm-up strip pushes the list down and
+lets it scroll rather than forcing the open lift shut; note attribution is
+uniformly a first name from the `author_name` snapshot.
+
+**Recent bests on the idle board were Terra's call, taken explicitly**
+(the handoff flagged them as needing it — member first names and numbers on
+a wall in a shared room): build it, default **off**, admin toggle at
+**Settings → Equipment → Gym display**. The gate is in the SQL, not the
+client — see 0076.
+
+**Deviations from the mock, deliberate:**
+- The note field and the `+ Add set` / `Same as last` buttons stay on the
+  **phone** card. The README says the phone should hold "sets + the history
+  strip + the note affordance and nothing more", but its own problem table
+  asks for those buttons, and dropping them means a coach cannot add a set
+  from their phone at all. It fits at 390px — verified.
+- The note field always sits **below** the sets, never beside them. The
+  README's prose says beside at 3 clients, but its own screenshot of the
+  3-client frame shows it below; the screenshot won.
+- The idle screen's "a coach starts the board from their phone" line is
+  **gone** (Terra's call) — the coaches know, and it was the one piece of
+  admin copy on a screen the whole gym looks at.
+- The idle screen is centred as a **group** (measured: 368px margins each
+  side), not pushed to both edges; its stat column is only in the layout
+  when it has a card in it, so a bare clock still centres properly.
+
+**Verification** — driven through a throwaway `app/zz-harness.js` route at
+1920×1080, 900 and 375 (deleted after, `git status` confirmed clean): the
+four-up resting board, three columns expanded simultaneously, keypad typing →
+Next → weight, the calculator (45+45+25+35 bar = 150, Insert lands it and
+returns to the keypad), the history dock with two real weeks, both centred
+widths measured to the pixel, the reps-only lift dropping its LB column *and*
+dimming the Calculator pill, and callback instrumentation proving
+open-and-close-with-no-edit writes nothing while typing writes exactly once.
+Clean `expo export -p web` plus a Babel parse/scope pass after every batch.
+**Not verified**: anything behind a real login, and none of it on native.
+The one thing that most needs Terra's own pass is a real block's history
+strip — fake weeks are all a logged-out harness can show.
+
+**Tooling note**: the Browser pane's `resize_window` still does not deliver a
+real resize event to the page, and a manually dispatched `new Event("resize")`
+did NOT reach react-native-web's `useWindowDimensions` either — a width-
+dependent branch tested that way reads as broken when it is fine. Reload at
+the target width instead; that is also the real case for a wall display.
 
 ## Working notes for future sessions
 
