@@ -750,7 +750,7 @@ Terra runs payroll for ~13 coaches out of a separate Glide app (a Google Sheet e
 1. The first version of the script only attached the `ON CONFLICT` clause to the *last* of 11 batched `pay_entries` INSERT statements (2,161 rows batched 200-at-a-time) — every earlier batch would have 23505'd on any re-run. Caught before Terra ever ran it, by static file inspection. Fixed so every batch is now a fully independent, self-contained idempotent statement.
 2. **`0037` actually failed on Terra's first live run**: `ERROR: 21000: ON CONFLICT DO UPDATE command cannot affect row a second time`. Root cause: 3 `EntryID`s appear **twice** in the raw Glide export itself — genuine duplicate rows (confirmed by pulling both copies directly: identical date/coach/content, only Glide's internal hidden Row ID differs), not a script bug. Since `pay_entries.id` reuses `EntryID` as the primary key, two rows sharing an id inside the *same* INSERT statement collide with each other, which `ON CONFLICT DO UPDATE` can't resolve (it only handles conflicts against rows that already existed before the statement ran). Fixed by deduping on `EntryID` during generation (keep first occurrence, log a warning for each dropped duplicate) — 2,161 raw rows → 2,158 imported. Re-verified after the fix (no live DB in this environment, so verification is static): rebuilt the batch-duplicate-id check and the SQL-comment-aware quote/paren-balance check from scratch against the regenerated file, both clean.
 
-Real import rules applied: the `Cleaning + BS`/`BWA` typo remap, Glide's `''`-vs-`null` inconsistency normalized across every numeric column, `SPC_Attendees`' `'N/A'` string → real `null`, one orphaned pay-period reference (`pp_2022_12_25` → `pp_2025_12_25`) corrected, and **everything imported as-is including test/junk rows** (`"sms test"`, `"Test"` $50, etc.) — Terra's explicit call, full historical accuracy over cleanliness. One request row (Melissa Benson Strategy Session, `krneidner@gmail.com`) has no resolvable `PayPeriodID` at all and was skipped — flagged for Terra to re-enter by hand if still relevant. The 4 real rows in the disconnected `"11 Nutrition"` tab (Sam/Liza/Sarah/Lori, coach Abby) were deliberately **not** auto-imported into `nutrition_assignments` — matching bare first names to real `public.clients` rows isn't safely resolvable offline with no live DB access; Terra needs to re-add these 4 by hand through the new Nutrition tab.
+Real import rules applied: the `Cleaning + BS`/`BWA` typo remap, Glide's `''`-vs-`null` inconsistency normalized across every numeric column, `SPC_Attendees`' `'N/A'` string → real `null`, one orphaned pay-period reference (`pp_2022_12_25` → `pp_2025_12_25`) corrected, and **everything imported as-is including test/junk rows** (`"sms test"`, `"Test"` $50, etc.) — Terra's explicit call, full historical accuracy over cleanliness. One request row — a Strategy Session **for client Melissa Benson**, submitted by **coach Kelsie Neidner** (`krneidner@gmail.com`) — has no resolvable `PayPeriodID` at all and was skipped; flagged for Terra to re-enter by hand if still relevant. **Read that pairing carefully: the name in a request's description is the CLIENT, the email is the COACH.** An earlier session read this line as one person and reported Kelsie's 41 unattributed pay entries as belonging to Melissa Benson, who is a separate, active member with her own account and zero payroll rows. `payroll.pay_entries.staff_name` carries the coach's real name on every row — read that column, never a description or a note, before naming anyone. The 4 real rows in the disconnected `"11 Nutrition"` tab (Sam/Liza/Sarah/Lori, coach Abby) were deliberately **not** auto-imported into `nutrition_assignments` — matching bare first names to real `public.clients` rows isn't safely resolvable offline with no live DB access; Terra needs to re-add these 4 by hand through the new Nutrition tab.
 
 `0037_payroll_seed_data.sql` **has been run against the live project** (2,158 pay entries, 43 custom requests, 23 historical pay periods).
 
@@ -3681,7 +3681,8 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0065_staff_own_spc_enrollment.sql` — **run**, verified live 2026-08-18. Adds a self-row `for all` policy on `programming.spc_clients` so any staff member can enroll/unenroll *themself* regardless of their `can_view_spc` flag. See the 2026-08-18 section above.
 - `0066_truecoach_imports.sql` — **run**, verified live 2026-08-18 (2 tables, trigger, 2 RPCs, `logs.truecoach_import_id`, `logs_source_check` widened). TrueCoach history staging + member linking. See the section above.
 - `0071_spc_live_hub.sql` — **run**, verified live 2026-08-20 (3 tables, flag column, 3 functions, 12 display policies, 2 widening policies; PostgREST `[]` not PGRST205). SPC Live Session Hub + per-client-per-lift coaching notes + the staff completions-write widening. See its own section above.
-- `0072_announcement_expiry.sql` — **run**, verified live 2026-08-21. Adds `programming.announcements.expires_at` (nullable; null = never expires, so every pre-existing row is unaffected) and rewrites the `members read due announcements` policy to `send_at <= now() and (expires_at is null or expires_at > now())`. Enforced in RLS deliberately, not in the app — an expired announcement stops existing for members the same way an unsent one already does. Next number is 0073.
+- `0072_announcement_expiry.sql` — **run**, verified live 2026-08-21. Adds `programming.announcements.expires_at` (nullable; null = never expires, so every pre-existing row is unaffected) and rewrites the `members read due announcements` policy to `send_at <= now() and (expires_at is null or expires_at > now())`. Enforced in RLS deliberately, not in the app — an expired announcement stops existing for members the same way an unsent one already does. Next number is 0074.
+- `0073_logs_unique_set.sql` — **run**, verified live 2026-08-21. De-duplicates `programming.logs` and adds `logs_unique_set_idx`, a `UNIQUE NULLS NOT DISTINCT` index over user, exercise, date, set number, all three session references, `week_number` and `truecoach_import_id`. `logResult()` was a hand-rolled select-then-update-or-insert with nothing backing it, so two racing autosaves both inserted the same set. **`NULLS NOT DISTINCT` is load-bearing** — every session column is null for a row with no session reference, and plain UNIQUE treats each of those as distinct, which would let the duplicates straight back through. **The key is wide on purpose**: two genuinely different sessions on one date must stay separate rows, and linking two TrueCoach imports to the same Kova lift (0066, in active use on five exercises) each materialises its own set rows. `ON CONFLICT` inference against a nulls-not-distinct index was verified on a throwaway table before the code was changed.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
@@ -4952,6 +4953,77 @@ firing `onChangeHighlights(0, [[7,26]])` and rendering, week and onboarding
 selection, Reopen not stealing the row's press, sparkline geometry read out
 of the DOM, and the Melissa case re-rendered from her real row. **Not
 click-tested behind a real login** — standing limitation.
+
+## Backend audit: 12 findings closed (2026-08-21)
+
+A full read-only audit of the Supabase project (schema, RLS, functions,
+orchestration) cross-referenced against all four local repos, followed by an
+approved fix pass. Full report:
+https://claude.ai/code/artifact/365e64ad-d60e-4084-a5f9-d788e3e506c0 —
+rollback SQL for every change is in that session's scratchpad.
+
+**The estate is in better shape than "grown organically" implies**, and this
+is worth knowing before anyone plans a big cleanup: all 85 tables have RLS
+enabled, there are **zero** blanket-`true` policies, none granted to `anon`,
+every `SECURITY DEFINER` function pins `search_path`, and there are **zero
+broken table references** in any repo. The identity layer — the risky part,
+with three apps sharing one `auth.users` — has no orphans in either
+direction. Naming is already consistent across all 688 columns.
+
+**Fixed this pass** — `logs` duplicates (see 0073); a $247,132 approved pay
+request that should have read $2,471.32 (only `approved_amount` was wrong;
+`amount_requested` and the pay entry both already read correctly, so no money
+moved); 1,140 `pay_entries` backfilled from `staff_email` to a real
+`user_id`; `import-client`'s silent-500 collision path; five RLS policies
+that anon could read; rate snapshots for all 22 closed periods; settings-key
+drift; three junk auth accounts; three redundant indexes; a size/MIME cap on
+the public `graphics` bucket; and 107 orphaned progress-photo files.
+
+**Things worth carrying forward:**
+
+- **`import-client` no longer 500s on a `ghl_contact_id` collision.** It lands
+  a usable profile without the contact id and returns **200 with a warning
+  payload**, because GHL's webhook action surfaces nothing on a non-2xx — a
+  500 there is invisible, and used to leave an `auth.users` row with no
+  `core.users` row, which is unregisterable and invisible on every screen.
+  There is still **no import log or retry** (audit F8); Safety Fair's
+  `public.entries` already does this properly (`ghl_sync_status`,
+  `ghl_sync_error`, unique `dedupe_key`, a retry endpoint) and is the thing
+  to copy rather than redesign.
+- **Anon could read every announcement.** Four event/announcement policies
+  plus `core.settings`' messaging keys gated on content state (`send_at <=
+  now()`) with no caller check, and `to public` includes `anon`. Confirmed
+  with a real unauthenticated request before fixing. **Standing rule: an RLS
+  policy gates on the caller first, content state second.**
+- **Closed pay periods now freeze their rates.** 21 of the 22 closed periods
+  had no `closed_period_rate_snapshots` row (they were closed by SQL during
+  the Glide import), so the report repriced them live at today's rates.
+  Snapshots are now in place. `owner_pay`/`staff_pay` were deliberately left
+  null — writing them would mean reimplementing the pay formula in SQL, and
+  the report already recomputes from entries, now against frozen rates.
+- **`payroll.finalizations` is still empty** — the submit → approve →
+  send-back → close flow has never run on real data. Worth walking one live
+  period before the next real payroll run.
+- **Half of payroll history was keyed on an email string**, not a user. Now
+  backfilled except 41 rows for **Kelsie Neidner**, a departed coach with no
+  account of any kind — `core.users` has no inactive/archived state, so
+  representing her would mean an *active* staff account. The `user_id ??
+  staff_email` fallback in the admin report must stay for her alone.
+- **`core.settings` is a shared bag** — one owner per key, whitelist your own
+  keys, never render or write it wholesale. Three superseded block-length
+  keys were renamed `zz_deprecated_*`; the key the UI actually reads
+  (`default_block_length_weeks`) had no row at all and now does.
+- **Storage deletes need the Storage API.** `supabase storage rm` reports
+  success and deletes nothing, and direct deletes from `storage.objects` raise
+  `42501` from a protection trigger. A `service_role` key **is** reachable via
+  `supabase projects api-keys`, so a batch `DELETE /storage/v1/object/<bucket>`
+  with a `{"prefixes":[...]}` body works — that is how the 107 orphans went.
+- **Still open**: an import log with retry (F8), the dead `nutrition` schema
+  and its unused `client.js` export (F13), a TrueCoach retention decision
+  (F14 — `truecoach_import_sets` is 32 MB of a 63 MB database and 75% of it
+  belongs to people who never registered), plus phone-format normalisation
+  and ~12 hot unindexed FKs. Nine orphaned photo files remain by choice: five
+  are real images with no duplicate, four are junk.
 
 ## Working notes for future sessions
 

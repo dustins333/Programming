@@ -102,18 +102,77 @@ Deno.serve(async (req) => {
     .eq("id", authUserId)
     .maybeSingle();
 
-  const { data: profile, error: upsertError } = await adminClient
+  const baseProfile = { id: authUserId, name, email, role: existingProfile?.role ?? "member" };
+
+  let { data: profile, error: upsertError } = await adminClient
     .schema("core")
     .from("users")
-    .upsert(
-      { id: authUserId, name, email, role: existingProfile?.role ?? "member", ghl_contact_id: String(contactId) },
-      { onConflict: "id" },
-    )
+    .upsert({ ...baseProfile, ghl_contact_id: String(contactId) }, { onConflict: "id" })
     .select()
     .single();
 
+  // core.users.ghl_contact_id is UNIQUE (0026). The upsert conflicts on `id`,
+  // so a contact id already held by a DIFFERENT row raises 23505 rather than
+  // resolving. That used to 500 — and GHL surfaces nothing on a non-2xx, so
+  // the import looked identical to a success while actually leaving the worst
+  // possible state behind: an auth.users row with no core.users row. Someone
+  // in that state cannot register (request-registration-code looks them up in
+  // core.users, finds nothing, and returns the same uniform {sent:true} it
+  // returns for everyone), does not appear on the Clients list, and is
+  // invisible to every screen. It reads as "the text never arrived."
+  //
+  // So: land a usable profile without the contact id rather than nothing at
+  // all, and say so in the response instead of failing silently.
+  // Match on the SQLSTATE plus the column name, checking BOTH message and
+  // details. Verified against the live database: Postgres returns 23505 with
+  // message `duplicate key value violates unique constraint
+  // "users_ghl_contact_id_key"` and detail `Key (ghl_contact_id)=(...)
+  // already exists.` — the column name appears in both. Checking both because
+  // this codebase has already been bitten once by matching a provider's error
+  // on the exact wording of a single field (see the "already been registered"
+  // regex above).
+  let contactIdConflict = false;
+  const conflictBlob = `${upsertError?.message ?? ""} ${(upsertError as { details?: string } | null)?.details ?? ""}`;
+  if (upsertError?.code === "23505" && conflictBlob.includes("ghl_contact_id")) {
+    contactIdConflict = true;
+    const retry = await adminClient
+      .schema("core")
+      .from("users")
+      .upsert(baseProfile, { onConflict: "id" })
+      .select()
+      .single();
+    profile = retry.data;
+    upsertError = retry.error;
+  }
+
   if (upsertError) {
     return new Response(JSON.stringify({ error: upsertError.message }), { status: 500 });
+  }
+
+  if (contactIdConflict) {
+    // Deliberately 200, not an error status. GHL's webhook action shows
+    // nothing on a non-2xx, so a 500 here is invisible; a 200 carrying a
+    // warning at least lands in its log, and the account is usable.
+    const { data: holder } = await adminClient
+      .schema("core")
+      .from("users")
+      .select("email")
+      .eq("ghl_contact_id", String(contactId))
+      .maybeSingle();
+    console.warn(
+      `import-client: ghl_contact_id ${contactId} already belongs to ${holder?.email ?? "another account"}; imported ${email} without it`,
+    );
+    return new Response(
+      JSON.stringify({
+        imported: true,
+        warning: "ghl_contact_id_conflict",
+        detail:
+          `Imported, but GHL contact ${contactId} is already linked to ${holder?.email ?? "another account"}. ` +
+          `${email} has no contact id, so SMS registration codes will not reach them until it is reassigned.`,
+        profile,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   return new Response(JSON.stringify({ imported: true, profile }), {
