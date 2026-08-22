@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { linkMemberByAuthId } from "../../../lib/programming/clients";
 import { loadClientsRoster } from "../../../lib/programming/clientsRoster";
 import { LinkMemberModal } from "../../../components/LinkMemberModal";
+import { GhlImportIssuesCard } from "../../../components/GhlImportIssuesCard";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 
@@ -126,6 +127,8 @@ export default function Clients() {
             </Text>
           </Pressable>
         </View>
+
+        <GhlImportIssuesCard onImported={load} />
 
         <TextInput
           value={search}

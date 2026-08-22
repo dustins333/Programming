@@ -8,6 +8,7 @@ import { loadClientsRoster } from "../../../lib/programming/clientsRoster";
 import { LinkMemberModal } from "../../../components/LinkMemberModal";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { ClientRosterTable, TABLE_WIDTH } from "../../../components/ClientRosterTable";
+import { GhlImportIssuesCard } from "../../../components/GhlImportIssuesCard";
 import { fonts, colors } from "../../../lib/theme";
 
 const PAGE_SIZE = 25;
@@ -199,6 +200,8 @@ export default function ClientsWeb() {
             </Pressable>
           </View>
         </View>
+
+        <GhlImportIssuesCard onImported={load} />
 
         {loadError ? (
           <>
