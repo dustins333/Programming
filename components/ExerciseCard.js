@@ -96,6 +96,36 @@ export function coachNoteFor(item) {
   return item.notes || null;
 }
 
+// Carrying a logged set down into the empty ones below it, as a pure
+// function so the button's enabled state and the tap itself can't disagree.
+//
+// The source is the nearest logged set ABOVE each gap, never set 1: on an
+// ascending-weight lift set 2 is what set 3 should follow, and copying set 1
+// into it was flatly wrong. A row completed by the carry becomes the source
+// for the row beneath it, so one tap fills a whole tail from the last real
+// set — and a set she already logged differently is left exactly as it is.
+function planFillDown(rows, tracksWeight) {
+  const logged = (r) => r.reps !== "" && (!tracksWeight || r.weight !== "");
+  let source = null;
+  let fills = 0;
+  const next = rows.map((r) => {
+    if (logged(r)) {
+      source = r;
+      return r;
+    }
+    if (!source) return r;
+    const filled = {
+      reps: r.reps === "" ? source.reps : r.reps,
+      weight: !tracksWeight ? "" : r.weight === "" ? source.weight : r.weight,
+    };
+    if (filled.reps === r.reps && filled.weight === r.weight) return r;
+    fills += 1;
+    if (logged(filled)) source = filled;
+    return filled;
+  });
+  return { next, fills };
+}
+
 // The stopwatch bottom-right of each lift, with the coach's programmed rest
 // under it. Never auto-starts — a rest only ever begins on a real tap. With
 // no programmed rest there's no number to start from, so it offers the same
@@ -645,34 +675,35 @@ export function ExerciseCard({
 
   const isLogged = (r) => r.reps !== "" && (!tracksWeight || r.weight !== "");
 
-  // Carry set 1 down the rest of the lift. A straight 3x10 @ 65 is three
-  // identical rows, and typing it out three times is the single most
-  // repetitive thing in the whole logging flow.
+  // Carry what she last logged down the rest of the lift. A straight
+  // 3x10 @ 65 is three identical rows, and typing it out three times is the
+  // single most repetitive thing in the whole logging flow.
   //
   // This is deliberately an EXPLICIT gesture, not the automatic carry-over
   // prefill that used to live here: pre-filling boxes she hadn't done yet
   // made an untouched set read as already logged, which is exactly why it
   // was taken out. Nothing is written until she asks for it.
   //
-  // Only offered when it would actually do something — set 1 complete, and
-  // at least one later set still empty — so it isn't a permanent ornament.
-  const canFillDown =
-    rows.length > 1 && isLogged(rows[0]) && rows.slice(1).some((r) => r.reps === "" || (tracksWeight && r.weight === ""));
+  // The source is the nearest logged set ABOVE each gap, not set 1 — an
+  // ascending-weight lift means set 2 is what set 3 should follow, and
+  // copying set 1 into it was flatly wrong (reported for real). Carrying
+  // sequentially also means a filled row becomes the source for the row
+  // under it, so one tap fills a whole tail from the last real set.
+  //
+  // Only offered when it would actually do something — a logged set with at
+  // least one empty set somewhere below it — so it isn't a permanent
+  // ornament.
+  const fillPlan = planFillDown(rows, tracksWeight);
+  const canFillDown = fillPlan.fills > 0;
 
   const handleFillDown = () => {
     // Only fills the gaps: a set she already logged differently is left
-    // exactly as she logged it.
-    setRows((prev) =>
-      prev.map((r, i) =>
-        i === 0
-          ? r
-          : {
-              reps: r.reps === "" ? prev[0].reps : r.reps,
-              weight: !tracksWeight ? "" : r.weight === "" ? prev[0].weight : r.weight,
-            }
-      )
-    );
+    // exactly as she logged it. Recomputed off the latest rows rather than
+    // the render-time plan, so a keystroke landing between render and tap
+    // can't be overwritten by a stale copy.
+    setRows((prev) => planFillDown(prev, tracksWeight).next);
   };
+
   const currentIndex = rows.findIndex((r) => !isLogged(r));
   const loggedSummary = summarizeSets(rows);
 
@@ -1000,7 +1031,7 @@ export function ExerciseCard({
             <View style={{ flexDirection: "row", alignItems: "center", marginTop: 1, marginBottom: 8 }}>
               <PressFade
                 onPress={handleFillDown}
-                accessibilityLabel={`Fill the remaining sets from set 1 of ${item.exercise.name}`}
+                accessibilityLabel={`Fill the remaining sets of ${item.exercise.name} from the last set you logged`}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
