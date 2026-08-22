@@ -5004,8 +5004,17 @@ the public `graphics` bucket; and 107 orphaned progress-photo files.
   null — writing them would mean reimplementing the pay formula in SQL, and
   the report already recomputes from entries, now against frozen rates.
 - **`payroll.finalizations` is still empty** — the submit → approve →
-  send-back → close flow has never run on real data. Worth walking one live
-  period before the next real payroll run.
+  send-back → close flow has never run on real data. **Terra's call on
+  2026-08-21: she is walking it on the next real payroll run and will follow
+  up if anything breaks.** So this is scheduled, not outstanding — don't
+  treat it as an open action item, and don't fabricate test finalizations to
+  exercise it. If she does report a problem, the things most worth checking
+  first are the ones with no live coverage at all: whether a sent-back coach
+  actually regains write access to their entries (`sendBackFinalization`
+  writes `reopened_at` as well as `sent_back_at` precisely because
+  `pay_entries`' four write policies gate on the finalized/reopened
+  comparison alone), and whether closing a period with an undecided custom
+  request is still correctly blocked.
 - **Half of payroll history was keyed on an email string**, not a user. Now
   backfilled except 41 rows for **Kelsie Neidner**, a departed coach with no
   account of any kind — `core.users` has no inactive/archived state, so
@@ -5113,8 +5122,8 @@ would add write cost for no measurable read gain. **A FK flagged as
 "unindexed" by a leading-column check may well be covered by a composite —
 check the real query shape and EXPLAIN it before adding an index.**
 
-**F14 (TrueCoach retention) is still open and is Terra's call, not a
-migration.** Current numbers: 12,550 imports / 117,764 sets, ~30 MB of a 57 MB
+**F14 (TrueCoach retention) — decided, nothing built.** It was a policy call
+rather than a migration. Current numbers: 12,550 imports / 117,764 sets, ~30 MB of a 57 MB
 database; 134 people in the corpus, **108 with no Kova account yet**; 26 have
 accounts and only **3 have ever linked anything** (17 lifts). Two facts that
 reframe it: the 108 are largely people whose GHL migration has not happened yet
@@ -5133,6 +5142,12 @@ card), which would defeat any exact match or search. Stripped; rollback in
 `f20_phone_bidi_rollback.sql`. The remaining phone-format variance (4 shapes
 across 25 rows) is left alone — it is display-only here, and normalising a
 shared `public.*` column could surprise the standalone Nutrition Tracker app.
+
+**Nothing from the audit remains open.** All fourteen findings are closed,
+decided, or shown not to be findings. The one live task left anywhere in it is
+the payroll finalize → approve → send-back → close walkthrough, which Terra
+scheduled for the next real payroll run — see the note in the section above
+before poking at it.
 
 ## Working notes for future sessions
 
