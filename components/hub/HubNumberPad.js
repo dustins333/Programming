@@ -1,11 +1,16 @@
 import { Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../PressFade";
-import { fonts, colors } from "../../lib/theme";
+import { fonts } from "../../lib/theme";
 
-// The hub's big-finger keypad — no OS keyboard on a wall-mounted TV, and even
-// on the coach's phone the entry pad is a deliberate "commit on Save" surface
-// rather than a live TextInput. Keys ≥72px at TV scale, 56px at phone scale.
+// A phone-shaped 3×4 pad — 1-2-3 / 4-5-6 / 7-8-9 / .-0-⌫ — not a wide flat
+// bank of digits. Stacked number keys are what a hand expects, and cornering
+// the pad in the dock's bottom-right leaves the strip to its left for the
+// label, the calculator and Next, so Next sits under the typing hand rather
+// than stretched across the column.
+//
+// Sized from the width it's given rather than a hardcoded key size: the same
+// pad has to sit in a 463px column at four clients and a 390px phone.
 const KEYS = [
   ["1", "2", "3"],
   ["4", "5", "6"],
@@ -13,23 +18,21 @@ const KEYS = [
   [".", "0", "back"],
 ];
 
-export function HubNumberPad({ onKey, onNext, scale = "tv" }) {
-  const keySize = scale === "tv" ? 76 : 56;
-  const fontSize = scale === "tv" ? 28 : 22;
-  const gap = scale === "tv" ? 10 : 8;
+export function HubNumberPad({ onKey, width = 214, keyHeight = 44, gap = 6 }) {
+  const keyWidth = (width - gap * 2) / 3;
   return (
-    <View style={{ alignSelf: "center" }}>
+    <View style={{ width }}>
       {KEYS.map((row, ri) => (
-        <View key={ri} style={{ flexDirection: "row", marginBottom: gap }}>
-          {row.map((key) => (
+        <View key={ri} style={{ flexDirection: "row", marginBottom: ri === KEYS.length - 1 ? 0 : gap }}>
+          {row.map((key, ki) => (
             <PressFade
               key={key}
               onPress={() => onKey(key)}
               style={{
-                width: keySize,
-                height: keySize,
-                marginHorizontal: gap / 2,
-                borderRadius: 14,
+                width: keyWidth,
+                height: keyHeight,
+                marginLeft: ki === 0 ? 0 : gap,
+                borderRadius: 10,
                 backgroundColor: "white",
                 borderWidth: 1,
                 borderColor: "#e0d9d1",
@@ -38,27 +41,14 @@ export function HubNumberPad({ onKey, onNext, scale = "tv" }) {
               }}
             >
               {key === "back" ? (
-                <Ionicons name="backspace-outline" size={fontSize} color="#57534e" />
+                <Ionicons name="backspace-outline" size={Math.min(22, keyHeight * 0.48)} color="#57534e" />
               ) : (
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize, color: "#292524" }}>{key}</Text>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: Math.min(24, keyHeight * 0.52), color: "#292524" }}>{key}</Text>
               )}
             </PressFade>
           ))}
         </View>
       ))}
-      <PressFade
-        onPress={onNext}
-        style={{
-          height: scale === "tv" ? 60 : 48,
-          marginHorizontal: gap / 2,
-          borderRadius: 14,
-          backgroundColor: colors.primary,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: scale === "tv" ? 20 : 16, color: "white" }}>Next</Text>
-      </PressFade>
     </View>
   );
 }

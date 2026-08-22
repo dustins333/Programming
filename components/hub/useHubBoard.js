@@ -37,11 +37,15 @@ export function useHubBoard({ idlePoll = true } = {}) {
   const [warmups, setWarmups] = useState(new Map()); // Map<spcWorkoutId, rows>
   const [pollError, setPollError] = useState(false);
 
-  // While the entry pad is open for one lift, poll results must not stomp
-  // that lift's logs (the pad holds draft state; a client's phone write
-  // arriving mid-edit would visually revert the coach's typing the moment
-  // they saved). Everything else on the board still updates live.
-  const editingRef = useRef(null); // { userId, exerciseId } | null
+  // While a lift is expanded, poll results must not stomp that lift's logs
+  // (the card holds the draft; a client's phone write arriving mid-edit would
+  // visually revert the coach's typing). Everything else on the board still
+  // updates live.
+  //
+  // A MAP, not a single ref: two columns can be expanded at once — a coach
+  // running four people moves between two racks — so freezing "the one open
+  // lift" would be wrong the moment a second column is opened.
+  const editingRef = useRef(new Map()); // Map<userId, exerciseId>
   const sessionRef = useRef(undefined);
   sessionRef.current = hubSession;
   const boardRef = useRef(null);
@@ -71,19 +75,17 @@ export function useHubBoard({ idlePoll = true } = {}) {
     try {
       const next = await fetchHubBoard(session.clients);
       setPollError(false);
-      const editing = editingRef.current;
-      if (editing) {
-        const prevEntry = boardRef.current?.get(editing.userId);
-        const nextEntry = next.get(editing.userId);
-        if (prevEntry && nextEntry) {
-          const kept = new Map(nextEntry.logsByExerciseId);
-          if (prevEntry.logsByExerciseId.has(editing.exerciseId)) {
-            kept.set(editing.exerciseId, prevEntry.logsByExerciseId.get(editing.exerciseId));
-          } else {
-            kept.delete(editing.exerciseId);
-          }
-          next.set(editing.userId, { ...nextEntry, logsByExerciseId: kept });
+      for (const [editUserId, editExerciseId] of editingRef.current) {
+        const prevEntry = boardRef.current?.get(editUserId);
+        const nextEntry = next.get(editUserId);
+        if (!prevEntry || !nextEntry) continue;
+        const kept = new Map(nextEntry.logsByExerciseId);
+        if (prevEntry.logsByExerciseId.has(editExerciseId)) {
+          kept.set(editExerciseId, prevEntry.logsByExerciseId.get(editExerciseId));
+        } else {
+          kept.delete(editExerciseId);
         }
+        next.set(editUserId, { ...nextEntry, logsByExerciseId: kept });
       }
       setBoard(next);
     } catch (e) {
@@ -146,51 +148,54 @@ export function useHubBoard({ idlePoll = true } = {}) {
   }, [refreshSession, refreshBoard, idlePoll]);
 
   const setEditing = useCallback((userId, exerciseId) => {
-    editingRef.current = { userId, exerciseId };
+    editingRef.current.set(userId, exerciseId);
   }, []);
-  const clearEditing = useCallback(() => {
-    editingRef.current = null;
+  const clearEditing = useCallback((userId) => {
+    if (userId == null) editingRef.current.clear();
+    else editingRef.current.delete(userId);
   }, []);
 
-  // Commit one lift's sets from the entry pad. Same write contract as the
-  // member phone's autosave: every set row rewritten, the shared notes value
-  // duplicated onto each (logs.notes convention), source "spc" so hub-entered
-  // sets are indistinguishable from phone-entered ones. Simultaneous edits
-  // from the client's own phone converge as last-write-per-set — accepted for
-  // a coached session where everyone is standing at the same rack.
-  const saveLift = useCallback(
-    async ({ userId, spcWorkoutId, weekNumber, exerciseId, rows, memberNotes, coachingNote, authorId }) => {
-      const datePerformed = todayInBoise();
-      const notes = memberNotes === "" || memberNotes == null ? null : memberNotes;
-      await Promise.all(
-        rows.map((row, i) =>
-          logResult({
-            userId,
-            exerciseId,
-            datePerformed,
-            setNumber: i + 1,
-            reps: row.reps === "" || row.reps == null ? null : Number(row.reps) || null,
-            weight: row.weight === "" || row.weight == null ? null : Number(row.weight),
-            notes,
-            source: "spc",
-            session: { spcWorkoutId, weekNumber },
-          })
-        )
-      );
-      if (coachingNote && coachingNote.trim()) {
-        await addCoachingNote({
+  // Write one lift's sets. Called on a debounce while the coach types and
+  // again on collapse — the design has no Save button anywhere, matching the
+  // member app's own autosave. Deliberately does NOT refreshBoard(): the
+  // draft in the card is the truth while the lift is open (the poll is
+  // frozen for exactly this lift), so a refresh per keystroke-debounce would
+  // be four columns of queries for nothing.
+  //
+  // Same write contract as the member phone: every set row rewritten, source
+  // "spc", the session stamped — so hub-entered sets are indistinguishable
+  // from phone-entered ones. Simultaneous edits from the client's own phone
+  // converge as last-write-per-set, accepted for a coached session where
+  // everyone is standing at the same rack.
+  const saveSets = useCallback(async ({ userId, spcWorkoutId, weekNumber, exerciseId, rows }) => {
+    const datePerformed = todayInBoise();
+    await Promise.all(
+      rows.map((row, i) =>
+        logResult({
           userId,
           exerciseId,
-          authorId: authorId ?? null,
-          body: coachingNote.trim(),
-          spcWorkoutId,
-          weekNumber,
-        });
-      }
-      clearEditing();
+          datePerformed,
+          setNumber: i + 1,
+          reps: row.reps === "" || row.reps == null ? null : Number(row.reps) || null,
+          weight: row.weight === "" || row.weight == null ? null : Number(row.weight),
+          source: "spc",
+          session: { spcWorkoutId, weekNumber },
+        })
+      )
+    );
+  }, []);
+
+  // The lift's one note for this week. Append-only — the display account has
+  // INSERT but no UPDATE on exercise_coaching_notes (0071), so "one note per
+  // lift per week" is read as "the newest row for that week" rather than
+  // edited in place. authorName is snapshotted because the TV cannot read
+  // core.users to resolve author_id to a person.
+  const saveNote = useCallback(
+    async ({ userId, spcWorkoutId, weekNumber, exerciseId, body, authorId, authorName }) => {
+      await addCoachingNote({ userId, exerciseId, authorId: authorId ?? null, authorName: authorName ?? null, body, spcWorkoutId, weekNumber });
       await refreshBoard();
     },
-    [refreshBoard, clearEditing]
+    [refreshBoard]
   );
 
   const toggleExerciseComplete = useCallback(
@@ -267,7 +272,8 @@ export function useHubBoard({ idlePoll = true } = {}) {
     refreshBoard,
     setEditing,
     clearEditing,
-    saveLift,
+    saveSets,
+    saveNote,
     toggleExerciseComplete,
     toggleFinalize,
     moveLift,

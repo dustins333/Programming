@@ -15,13 +15,13 @@ const CARD_BORDER = "#ece7e1";
 // bar" covers dumbbell-only or plate-loaded-machine sets with no bar at all
 // — it's the default, since most quick weight lookups on the plate side are
 // exactly that (a dumbbell or a machine stack), not a barbell lift.
-const BAR_MODES = [
+export const BAR_MODES = [
   { key: "none", label: "No bar" },
   { key: "barbell", label: "Barbell (35 lb)" },
   { key: "specialty", label: "Specialty" },
 ];
 
-const PLATE_WEIGHTS = [45, 35, 25, 15, 10, 5, 2.5];
+export const PLATE_WEIGHTS = [45, 35, 25, 15, 10, 5, 2.5];
 
 const KEYPAD_ROWS = [
   ["7", "8", "9", "÷"],
@@ -32,7 +32,7 @@ const KEYPAD_ROWS = [
 
 // Strips float noise (2.5 + 2.5 -> "5", not "5.00") without losing real
 // fractional plate weights.
-function formatNum(n) {
+export function formatNum(n) {
   if (!Number.isFinite(n)) return "0";
   return Number(n.toFixed(2)).toString();
 }

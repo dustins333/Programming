@@ -3,36 +3,36 @@ import { Image, Text, View } from "react-native";
 import { PressFade } from "../../components/PressFade";
 import { useHubBoard } from "../../components/hub/useHubBoard";
 import { HubLiveSession } from "../../components/hub/HubLiveSession";
+import { HubIdleScreen } from "../../components/hub/HubIdleScreen";
 import { toastError } from "../../lib/toast";
 import { fonts, colors, type } from "../../lib/theme";
 
 // The wall-mounted gym-floor display (1920x1080 landscape touchscreen).
 // Idle until a coach starts a hub session from their phone
 // (app/(coach)/spc/live.js); then up to 4 client columns, live via the
-// 3-second poll in useHubBoard, each column a touch input surface (tap a
-// lift -> big entry pad). Ending from here goes through the hub_end_session
-// RPC — the display account has no direct UPDATE on hub_sessions.
+// 3-second poll in useHubBoard, each column a touch input surface — tap a
+// lift and it expands in place with the keypad docked beneath it. Ending
+// from here goes through the hub_end_session RPC; the display account has no
+// direct UPDATE on hub_sessions.
 //
-// Page never scrolls (overflow hidden); an overflowing column's own lift
-// list scrolls internally instead (see HubClientColumn's FlatList).
+// The page itself never scrolls (overflow hidden); an overflowing column's
+// own lift list scrolls internally instead, so nothing in any other column
+// moves.
 
-function Clock() {
-  const [now, setNow] = useState(new Date());
+function useNow(intervalMs = 15000) {
+  const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000);
+    const t = setInterval(() => setNow(new Date()), intervalMs);
     return () => clearInterval(t);
-  }, []);
-  return (
-    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.muted }}>
-      {now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-    </Text>
-  );
+  }, [intervalMs]);
+  return now;
 }
 
 export default function DisplayBoard() {
   const hub = useHubBoard({ idlePoll: true });
   const { hubSession, board, pollError, end } = hub;
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const now = useNow();
 
   const handleEnd = async () => {
     setConfirmEnd(false);
@@ -48,7 +48,7 @@ export default function DisplayBoard() {
       {/* Top bar */}
       <View
         style={{
-          height: 52,
+          height: 60,
           flexDirection: "row",
           alignItems: "center",
           paddingHorizontal: 18,
@@ -57,16 +57,18 @@ export default function DisplayBoard() {
           backgroundColor: "white",
         }}
       >
-        <Image source={require("../../assets/kova-logo.jpg")} style={{ width: 30, height: 30, borderRadius: 15, marginRight: 10 }} />
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, color: colors.primaryOnWhite }}>Kova Strength</Text>
-        <Text style={{ fontFamily: fonts.sans, fontSize: type.body, color: colors.muted, marginLeft: 12 }}>
-          {hubSession ? "Live SPC session" : "SPC session board"}
+        <Image source={require("../../assets/kova-logo.jpg")} style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10 }} />
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, lineHeight: 21, color: colors.primaryOnWhite }}>Kova{"\n"}Strength</Text>
+        <Text style={{ fontFamily: fonts.sans, fontSize: type.body, lineHeight: 19, color: colors.muted, marginLeft: 16 }}>
+          {hubSession ? "Live SPC\nsession" : "SPC session\nboard"}
         </Text>
         {pollError ? (
-          <Text style={{ fontFamily: fonts.sansMedium, fontSize: type.caption, color: "#8a5a2e", marginLeft: 12 }}>reconnecting…</Text>
+          <Text style={{ fontFamily: fonts.sansMedium, fontSize: type.caption, color: "#8a5a2e", marginLeft: 14 }}>reconnecting…</Text>
         ) : null}
         <View style={{ flex: 1 }} />
-        <Clock />
+        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, lineHeight: 19, color: "#57534e", textAlign: "right" }}>
+          {now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s?([AP]M)$/i, "\n$1")}
+        </Text>
         {hubSession ? (
           confirmEnd ? (
             <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
@@ -81,9 +83,9 @@ export default function DisplayBoard() {
           ) : (
             <PressFade
               onPress={() => setConfirmEnd(true)}
-              style={{ marginLeft: 16, borderRadius: 999, borderWidth: 1, borderColor: "#ece7e1", paddingHorizontal: 14, paddingVertical: 7 }}
+              style={{ marginLeft: 16, borderRadius: 999, borderWidth: 1, borderColor: "#ece7e1", paddingHorizontal: 16, paddingVertical: 8 }}
             >
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.muted }}>End session</Text>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, lineHeight: 17, color: colors.muted, textAlign: "center" }}>End{"\n"}session</Text>
             </PressFade>
           )
         ) : null}
@@ -91,16 +93,10 @@ export default function DisplayBoard() {
 
       {/* Body */}
       {hubSession === undefined ? null : !hubSession ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Image source={require("../../assets/kova-logo.jpg")} style={{ width: 96, height: 96, borderRadius: 48, marginBottom: 20, opacity: 0.9 }} />
-          <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primary }}>Waiting for a session</Text>
-          <Text style={{ fontFamily: fonts.sans, fontSize: type.bodyLg, color: colors.muted, marginTop: 8 }}>
-            A coach can start one from their phone — SPC → Live session.
-          </Text>
-        </View>
+        <HubIdleScreen now={now} />
       ) : !board ? null : (
-        <View style={{ flex: 1, padding: 12 }}>
-          <HubLiveSession hub={hub} authorId={hubSession.coach_id} scale="tv" />
+        <View style={{ flex: 1, padding: 14 }}>
+          <HubLiveSession hub={hub} authorId={hubSession.coach_id} authorName={hubSession.coach_name?.split(" ")[0] ?? null} scale="tv" now={now} />
         </View>
       )}
     </View>

@@ -213,6 +213,7 @@ export default function Settings() {
   const [groupPrograms, setGroupPrograms] = useState([]);
   const [savingMessaging, setSavingMessaging] = useState(false);
   const [specialtyBars, setSpecialtyBars] = useState([]);
+  const [showRecentBests, setShowRecentBests] = useState(false);
   const [savingBars, setSavingBars] = useState(false);
   const [newBarName, setNewBarName] = useState("");
   const [newBarWeight, setNewBarWeight] = useState("");
@@ -247,7 +248,27 @@ export default function Settings() {
     } catch (err) {
       console.error("Failed to load specialty bars:", err);
     }
+    try {
+      setShowRecentBests(await getSetting("hub_idle_show_recent_bests", false));
+    } catch (err) {
+      console.error("Failed to load gym display settings:", err);
+    }
   }, []);
+
+  // Whether the idle wall display may show client first names + numbers.
+  // Off by default and deliberately so — it is member data on a screen in a
+  // shared room. Committed on flip (an off switch should take effect
+  // immediately), optimistic with a rollback, same shape as the payroll
+  // deadline toggle.
+  const handleToggleRecentBests = async (next) => {
+    setShowRecentBests(next);
+    try {
+      await updateSetting("hub_idle_show_recent_bests", next);
+    } catch (err) {
+      setShowRecentBests(!next);
+      toastError("Couldn't save that — try again.", err);
+    }
+  };
 
   // Isolated the same way loadCoaches is — a nutrition-table hiccup
   // shouldn't take down the rest of Settings.
@@ -771,6 +792,28 @@ export default function Settings() {
       )}
 
       {tab === "equipment" && (
+      <>
+      <View className="mb-5 rounded-xl border border-stone-200 p-5">
+        <Text className="mb-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
+          Gym Display
+        </Text>
+        <View className="flex-row items-center justify-between">
+          <View style={{ flex: 1, paddingRight: 16 }}>
+            <Text className="text-base text-stone-800" style={{ fontFamily: fonts.sansMedium }}>
+              Show recent bests on the idle board
+            </Text>
+            <Text className="mt-1 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
+              When the SPC board isn't running a session it shows the clock and the gym's weekly session count. Turn this on to also rotate through recent personal bests — client first names and their numbers, readable by anyone in the room.
+            </Text>
+          </View>
+          <Switch
+            value={showRecentBests}
+            onValueChange={handleToggleRecentBests}
+            trackColor={{ true: colors.primary }}
+          />
+        </View>
+      </View>
+
       <View className="rounded-xl border border-stone-200 p-5">
         <Text className="mb-4 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.6 }}>
           Specialty Bars
@@ -838,6 +881,7 @@ export default function Settings() {
           </Pressable>
         </View>
       </View>
+      </>
       )}
 
       {tab === "templates" && (

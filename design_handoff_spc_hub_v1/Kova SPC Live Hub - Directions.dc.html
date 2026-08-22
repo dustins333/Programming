@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #efe9e3; font-family: Montserrat, sans-serif; }
+  a { color: #8a5140; text-decoration: none; border-bottom: 1px solid #e3cfc4; }
+  a:hover { color: #a46a57; border-bottom-color: #a46a57; }
+  div::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:64px;padding:64px;width:max-content">
+
+  <div style="display:flex;flex-direction:column;gap:14px;width:1100px">
+    <div style="font-family:'Protest Strike',sans-serif;font-size:44px;color:#a46a57;line-height:1.05">SPC Live Session Hub</div>
+    <div style="font-size:17px;line-height:1.55;color:#57534e;text-wrap:pretty">The wall display and the coach phone, designed as one surface. Expand-in-place inside a column, a keypad per column, per-column Finalize — and the paper sheet's block history brought onto the card.</div>
+    <div style="font-size:17px;line-height:1.55;color:#57534e;text-wrap:pretty"><strong style="color:#292524">On using a 50" wall — decided:</strong> a column is only ever one of two widths. One and two clients hold the four-client column (463px) and centre, with the clock on the leftover wall (<a href="#2a">2a</a>). Three expands to fill, four is standard. The block history opens into the dock rather than onto the card — same corner as the keypad and the calculator (<a href="#2h">history open</a>).</div>
+    <div style="font-size:17px;line-height:1.55;color:#57534e;text-wrap:pretty"><strong style="color:#292524">Earlier:</strong> two directions for the card itself — <a href="#1a">1a</a> keeps everything on it, <a href="#1b">1b</a> puts history and the note behind a switch. The frames after them are the state set with <a href="#1a">1a</a> applied.</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:64px;width:3904px">
+
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="2">
+      <div id="{{ f.id }}" style="display:flex;flex-direction:column;gap:14px;width:1920px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <sc-if value="{{ f.option }}">
+            <div style="font-weight:700;font-size:13px;letter-spacing:1px;color:#fff;background:#a46a57;border-radius:999px;padding:7px 15px">{{ f.badge }}</div>
+          </sc-if>
+          <sc-if value="{{ f.state }}">
+            <div style="font-weight:700;font-size:11px;letter-spacing:1.4px;color:#8a5140;background:#fdf6f2;border:1px solid #f0ddd2;border-radius:999px;padding:7px 14px">{{ f.badge }}</div>
+          </sc-if>
+          <div style="font-size:20px;font-weight:700;color:#292524">{{ f.title }}</div>
+        </div>
+        <div style="font-size:15px;line-height:1.5;color:#57534e;width:1100px">{{ f.desc }}</div>
+
+        <div style="width:1920px;height:1080px;background:#faf8f6;overflow:hidden;box-shadow:0 18px 50px rgba(68,64,60,0.16);display:flex;flex-direction:column;border-radius:6px">
+          <div style="height:60px;flex:0 0 60px;background:#fff;border-bottom:1px solid #ece7e1;display:flex;align-items:center;gap:14px;padding:0 20px">
+            <img src="assets/kova-logo.jpg" alt="Kova Strength" style="width:32px;height:32px;border-radius:16px;object-fit:cover">
+
+            <div style="font-weight:700;font-size:17px;color:#8a5140">Kova Strength</div>
+            <div style="font-size:13.5px;color:#6f6862">Live SPC session</div>
+            <div style="flex:1"></div>
+            <div style="font-size:16px;font-weight:600;color:#6f6862">3:41 PM</div>
+            <div style="border:1px solid #ece7e1;border-radius:999px;padding:9px 16px;font-size:13px;font-weight:600;color:#6f6862">End session</div>
+          </div>
+
+          <div style="flex:1;min-height:0;display:flex;gap:14px;padding:14px;justify-content:center">
+
+            <sc-if value="{{ f.margin }}">
+              <div style="flex:0 0 300px;display:flex;flex-direction:column;justify-content:center;gap:8px;padding-right:10px">
+                <div style="font-size:12px;font-weight:700;letter-spacing:2.2px;color:#6f6862">THURSDAY · AUGUST 21</div>
+                <div style="font-family:'Protest Strike',sans-serif;font-size:132px;line-height:0.9;color:#44403c;letter-spacing:-3px">3:41</div>
+              </div>
+            </sc-if>
+
+            <sc-for list="{{ f.cols }}" as="col" hint-placeholder-count="3">
+              <div style="flex:1 1 0;min-width:0;max-width:{{ col.maxW }};display:flex;flex-direction:column;background:#fff;border:1px solid #ece7e1;border-radius:18px;overflow:hidden">
+
+                <sc-if value="{{ col.finalized }}">
+                  <div style="height:6px;flex:0 0 6px;background:#4d6142"></div>
+                </sc-if>
+
+                <div style="padding:10px 12px 8px;border-bottom:1px solid #ece7e1;display:flex;align-items:flex-start;gap:8px">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:700;font-size:19px;color:#292524;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ col.name }}</div>
+                    <div style="font-size:11.5px;color:#6f6862;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ col.meta }}</div>
+                  </div>
+                  <sc-if value="{{ col.finalized }}">
+                    <div style="border-radius:999px;background:#eef1e7;border:1px solid #dbe8cf;padding:5px 11px;font-size:11px;font-weight:700;letter-spacing:0.6px;color:#4d6142;white-space:nowrap">COMPLETE</div>
+                  </sc-if>
+                  <div style="width:34px;height:34px;flex:0 0 34px;border-radius:17px;border:1px solid #ece7e1;display:flex;align-items:center;justify-content:center;font-size:14px;color:#6f6862">⇅</div>
+                </div>
+
+                <sc-if value="{{ col.warmup }}">
+                  <div style="display:flex;align-items:center;gap:8px;padding:5px 8px 5px 12px;background:#faf8f6;border-bottom:1px solid #ece7e1">
+                    <div style="flex:1;min-width:0;font-size:11.5px;color:#6f6862;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600;color:#57534e">Warm-up · 6 · </span>{{ col.warmup }}</div>
+                    <div style="width:30px;height:30px;flex:0 0 30px;border-radius:15px;border:1px solid #e3d9d0;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;color:#8a5140">⌄</div>
+                  </div>
+                </sc-if>
+
+                <div style="flex:1;min-height:0;padding:8px;display:flex;flex-direction:column;gap:5px;overflow-y:auto;scrollbar-width:none;mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent)">
+                  <sc-for list="{{ col.rows }}" as="r" hint-placeholder-count="4">
+                    <sc-if value="{{ r.compact }}">
+                      <div style="display:flex;align-items:center;gap:8px;border:1px solid #ece7e1;border-radius:11px;padding:5px 10px;background:#fff;flex:0 0 auto">
+                        <div style="flex:1;min-width:0;font-weight:600;font-size:13.5px;color:#292524;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</div>
+                        <div style="font-size:12px;font-weight:600;color:#6f6862;white-space:nowrap">{{ r.summary }}</div>
+                        <div style="font-size:15px;color:#4d6142;width:16px;text-align:center">{{ r.mark }}</div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ r.full }}">
+                      <div style="border:1px solid #ece7e1;border-radius:14px;padding:9px 11px;background:#fff;flex:0 0 auto">
+                        <div style="display:flex;align-items:center;gap:8px">
+                          <div style="flex:1;min-width:0;font-weight:600;font-size:15.5px;color:#292524;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</div>
+                          <div style="font-size:13px;color:#8a5140">{{ r.noteMark }}</div>
+                          <sc-if value="{{ r.done }}">
+                            <div style="width:28px;height:28px;flex:0 0 28px;border-radius:14px;background:#4d6142;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff">✓</div>
+                          </sc-if>
+                          <sc-if value="{{ r.notDone }}">
+                            <div style="width:28px;height:28px;flex:0 0 28px;border-radius:14px;border:1.5px solid #cfd8c4;display:flex;align-items:center;justify-content:center;font-size:14px;color:#a9b79c">✓</div>
+                          </sc-if>
+                        </div>
+                        <div style="font-size:12px;color:#6f6862;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.scheme }}</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
+                          <sc-for list="{{ r.chips }}" as="c" hint-placeholder-count="3">
+                            <sc-if value="{{ c.logged }}">
+                              <div style="min-width:52px;text-align:center;border:1px solid #dbe8cf;background:#f3f6ef;border-radius:8px;padding:4px 7px;font-size:13px;font-weight:600;color:#3f4a36">{{ c.v }}</div>
+                            </sc-if>
+                            <sc-if value="{{ c.empty }}">
+                              <div style="min-width:52px;text-align:center;border:1px dashed #ddd6cd;border-radius:8px;padding:4px 7px;font-size:13px;font-weight:600;color:#9a9187">{{ c.v }}</div>
+                            </sc-if>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </sc-for>
+
+                  <sc-if value="{{ col.card }}">
+                    <div style="border:2px solid #a46a57;border-radius:16px;background:#fff;padding:10px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 20px rgba(68,64,60,0.07);flex:0 0 auto">
+                      <div style="display:flex;align-items:flex-start;gap:8px">
+                        <div style="flex:1;min-width:0">
+                          <div style="font-weight:700;font-size:20px;color:#8a5140;line-height:1.15">{{ col.card.name }}</div>
+                          <div style="font-size:12px;color:#6f6862;margin-top:2px">{{ col.card.scheme }}</div>
+                        </div>
+                        <div style="width:40px;height:40px;flex:0 0 40px;border-radius:20px;border:1.5px solid #f0ddd2;background:#fdf6f2;display:flex;align-items:center;justify-content:center;font-size:14px;color:#8a5140">⌃</div>
+                      </div>
+
+                      <sc-if value="{{ col.card.siblings }}">
+                        <div style="display:flex;gap:6px;flex-wrap:wrap">
+                          <sc-for list="{{ col.card.siblings }}" as="s" hint-placeholder-count="2">
+                            <sc-if value="{{ s.active }}">
+                              <div style="border-radius:999px;background:#a46a57;padding:8px 13px;font-size:12.5px;font-weight:600;color:#fff;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.label }}</div>
+                            </sc-if>
+                            <sc-if value="{{ s.idle }}">
+                              <div style="border-radius:999px;background:#fff;border:1px solid #ece7e1;padding:8px 13px;font-size:12.5px;font-weight:600;color:#57534e;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.label }}</div>
+                            </sc-if>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ col.card.tabbed }}">
+                        <div style="display:flex;gap:5px;background:#f4f0ec;border-radius:12px;padding:4px">
+                          <div style="flex:1;height:38px;border-radius:9px;background:#fff;box-shadow:0 1px 3px rgba(68,64,60,0.1);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#292524">Log</div>
+                          <div style="flex:1;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#6f6862">History · 2</div>
+                          <div style="flex:1;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#6f6862">Note</div>
+                        </div>
+                      </sc-if>
+
+                      <div style="display:flex;flex-wrap:wrap;gap:12px">
+                        <div style="flex:1 1 250px;min-width:0;display:flex;flex-direction:column;gap:6px">
+                          <div style="display:flex;gap:8px;padding:0 2px">
+                            <div style="width:24px;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#6f6862">SET</div>
+                            <div style="flex:1;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#6f6862;text-align:center">REPS</div>
+                            <sc-if value="{{ col.card.tracksWeight }}">
+                              <div style="flex:1;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#6f6862;text-align:center">LB</div>
+                            </sc-if>
+                          </div>
+                          <sc-for list="{{ col.card.sets }}" as="s" hint-placeholder-count="3">
+                            <div style="display:flex;gap:8px;align-items:stretch">
+                              <div style="width:24px;display:flex;align-items:center;font-size:13.5px;font-weight:600;color:#57534e">{{ s.n }}</div>
+                              <sc-if value="{{ s.repsKeyed }}">
+                                <div style="flex:1;height:44px;border:1px solid #dbe8cf;background:#f3f6ef;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:600;color:#3f4a36">{{ s.reps }}</div>
+                              </sc-if>
+                              <sc-if value="{{ s.repsActive }}">
+                                <div style="flex:1;height:44px;border:2px solid #a46a57;background:#fff;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                                  <div style="font-size:9px;font-weight:700;letter-spacing:0.8px;color:#9a9187">TARGET {{ s.repsTarget }}</div>
+                                  <div style="font-size:20px;font-weight:600;color:#292524">{{ s.reps }}</div>
+                                </div>
+                              </sc-if>
+                              <sc-if value="{{ s.repsEmpty }}">
+                                <div style="flex:1;height:44px;border:1.5px dashed #ddd6cd;background:#fdfbf8;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                                  <div style="font-size:9px;font-weight:700;letter-spacing:0.8px;color:#9a9187">TARGET</div>
+                                  <div style="font-size:17px;font-weight:600;color:#9a9187">{{ s.repsTarget }}</div>
+                                </div>
+                              </sc-if>
+                              <sc-if value="{{ s.wKeyed }}">
+                                <div style="flex:1;height:44px;border:1px solid #dbe8cf;background:#f3f6ef;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:600;color:#3f4a36">{{ s.weight }}</div>
+                              </sc-if>
+                              <sc-if value="{{ s.wActive }}">
+                                <div style="flex:1;height:44px;border:2px solid #a46a57;background:#fff;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:5px">
+                                  <div style="font-size:20px;font-weight:600;color:#292524">{{ s.weight }}</div>
+                                  <div style="width:2px;height:22px;background:#a46a57"></div>
+                                </div>
+                              </sc-if>
+                              <sc-if value="{{ s.wEmpty }}">
+                                <div style="flex:1;height:44px;border:1.5px dashed #ddd6cd;background:#fdfbf8;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#9a9187">–</div>
+                              </sc-if>
+                            </div>
+                          </sc-for>
+                          <div style="display:flex;gap:8px">
+                            <div style="flex:1;height:44px;border:1px solid #e3d9d0;background:#fdf6f2;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#8a5140">+ Add set</div>
+                            <div style="flex:1;height:44px;border:1px solid #e3d9d0;background:#fdf6f2;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#8a5140">Same as last</div>
+                          </div>
+                        </div>
+
+                        <sc-if value="{{ col.card.noteBox }}">
+                          <div style="flex:1 1 250px;min-width:0;display:flex;flex-direction:column;gap:6px">
+                            <div style="font-size:10px;font-weight:700;letter-spacing:0.9px;color:#6f6862;white-space:nowrap">NOTES · {{ col.card.weekLabel }}</div>
+                            <div style="flex:1;min-height:64px;border:1px solid #ece7e1;background:#fff;border-radius:12px;padding:10px;font-size:13.5px;line-height:1.45;color:#9a9187">{{ col.card.noteBox }}</div>
+                            <div style="font-size:11px;color:#9a9187">Coach or client — one note, both see it.</div>
+                          </div>
+                        </sc-if>
+
+                        <sc-if value="{{ col.card.weeks }}">
+                          <div style="flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:6px">
+                            <div style="font-size:10px;font-weight:700;letter-spacing:0.9px;color:#6f6862">THIS BLOCK</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:8px">
+                              <sc-for list="{{ col.card.weeks }}" as="w" hint-placeholder-count="2">
+                                <sc-if value="{{ w.latest }}">
+                                  <div style="flex:1 1 160px;min-width:0;border:1px solid #f0ddd2;background:#fdf6f2;border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;gap:6px">
+                                    <div style="display:flex;align-items:baseline;gap:6px">
+                                      <div style="font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8a5140;white-space:nowrap">{{ w.label }}</div>
+                                      <div style="font-size:10.5px;color:#9a9187;white-space:nowrap">{{ w.date }}</div>
+                                    </div>
+                                    <div style="display:flex;flex-wrap:wrap;gap:5px">
+                                      <sc-for list="{{ w.sets }}" as="p" hint-placeholder-count="3">
+                                        <div style="border-radius:8px;background:#fff;border:1px solid #f0ddd2;padding:3px 8px;display:flex;align-items:baseline;gap:3px">
+                                          <span style="font-size:15px;font-weight:700;color:#292524">{{ p.reps }}</span>
+                                          <span style="font-size:11px;color:#6f6862">{{ p.weight }}</span>
+                                        </div>
+                                      </sc-for>
+                                    </div>
+                                    <div style="font-size:11.5px;line-height:1.4;color:#57534e">{{ w.note }} <span style="color:#9a9187">— {{ w.author }}</span></div>
+                                  </div>
+                                </sc-if>
+                                <sc-if value="{{ w.older }}">
+                                  <div style="flex:1 1 160px;min-width:0;border:1px solid #ece7e1;background:#faf8f6;border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;gap:6px">
+                                    <div style="display:flex;align-items:baseline;gap:6px">
+                                      <div style="font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#6f6862;white-space:nowrap">{{ w.label }}</div>
+                                      <div style="font-size:10.5px;color:#9a9187;white-space:nowrap">{{ w.date }}</div>
+                                    </div>
+                                    <div style="display:flex;flex-wrap:wrap;gap:5px">
+                                      <sc-for list="{{ w.sets }}" as="p" hint-placeholder-count="3">
+                                        <div style="border-radius:8px;background:#fff;border:1px solid #ece7e1;padding:3px 8px;display:flex;align-items:baseline;gap:3px">
+                                          <span style="font-size:15px;font-weight:700;color:#44403c">{{ p.reps }}</span>
+                                          <span style="font-size:11px;color:#6f6862">{{ p.weight }}</span>
+                                        </div>
+                                      </sc-for>
+                                    </div>
+                                    <div style="font-size:11.5px;line-height:1.4;color:#57534e">{{ w.note }} <span style="color:#9a9187">— {{ w.author }}</span></div>
+                                  </div>
+                                </sc-if>
+                              </sc-for>
+                            </div>
+                          </div>
+                        </sc-if>
+                      </div>
+
+                      <sc-if value="{{ col.card.noteRow }}">
+                        <div style="height:44px;border:1px solid #ece7e1;background:#fff;border-radius:12px;display:flex;align-items:center;padding:0 11px;font-size:13px;color:#9a9187;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ col.card.noteRow }}</div>
+                      </sc-if>
+
+                      <sc-if value="{{ col.card.strip }}">
+                        <div style="border:1px solid #f0ddd2;background:#fdf6f2;border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:3px">
+                          <div style="display:flex;align-items:center;gap:8px">
+                            <div style="font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8a5140;white-space:nowrap">{{ col.card.strip.label }}</div>
+                            <div style="flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px">
+                              <sc-for list="{{ col.card.strip.pills }}" as="p" hint-placeholder-count="3">
+                                <div style="border-radius:8px;background:#fff;border:1px solid #f0ddd2;padding:3px 7px;display:flex;align-items:baseline;gap:3px">
+                                  <span style="font-size:14px;font-weight:700;color:#292524">{{ p.reps }}</span>
+                                  <span style="font-size:10.5px;color:#6f6862">{{ p.weight }}</span>
+                                </div>
+                              </sc-for>
+                            </div>
+                            <div style="font-size:11.5px;font-weight:600;color:#8a5140;white-space:nowrap">{{ col.card.strip.more }}</div>
+                          </div>
+                          <div style="font-size:11.5px;line-height:1.35;color:#57534e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ col.card.strip.note }} <span style="color:#9a9187">— {{ col.card.strip.author }}</span></div>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ col.emptyMsg }}">
+                    <div style="padding:12px 10px;font-size:13.5px;line-height:1.5;color:#6f6862">{{ col.emptyMsg }}</div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ col.overflowNote }}">
+                  <div style="flex:0 0 auto;margin:0 8px 8px;height:40px;border:1px solid #ece7e1;background:#faf8f6;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:6px">
+                    <div style="font-size:12.5px;font-weight:700;color:#8a5140;white-space:nowrap">{{ col.overflowNote }}</div>
+                    <div style="font-size:12px;color:#8a5140">⌄</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ col.keypad }}">
+                  <div style="border-top:2px solid #a46a57;background:#faf8f6;padding:8px;display:flex;gap:8px;align-items:stretch;justify-content:flex-end">
+                    <div style="flex:0 1 148px;min-width:0;display:flex;flex-direction:column;gap:6px">
+                      <div style="display:flex;align-items:flex-start;gap:6px">
+                        <div style="flex:1;min-width:0;font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8a5140;line-height:1.4">{{ col.keypad.label }}</div>
+                        <div style="width:32px;height:32px;flex:0 0 32px;border-radius:16px;border:1px solid #e3d9d0;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;color:#8a5140">⌄</div>
+                      </div>
+                      <div style="flex:1"></div>
+                      <sc-if value="{{ col.keypad.calcPill }}">
+                        <div style="height:40px;border-radius:999px;border:1px solid #e3d9d0;background:#fff;display:flex;align-items:center;justify-content:center;gap:5px;font-size:12.5px;font-weight:600;color:#8a5140;white-space:nowrap">▦ Calculator</div>
+                      </sc-if>
+                      <div style="height:44px;background:#a46a57;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff">Next</div>
+                    </div>
+                    <div style="flex:0 0 214px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-end">
+                      <sc-for list="{{ keys }}" as="k" hint-placeholder-count="12">
+                        <div style="flex:1 1 28%;min-width:58px;height:44px;background:#fff;border:1px solid #ece7e1;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600;color:#292524">{{ k }}</div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ col.hist }}">
+                  <div style="border-top:2px solid #a46a57;background:#faf8f6;padding:8px;display:flex;gap:8px;align-items:stretch;justify-content:flex-end">
+                    <div style="flex:0 1 148px;min-width:0;min-height:203px;display:flex;flex-direction:column;gap:6px">
+                      <div style="display:flex;align-items:flex-start;gap:6px">
+                        <div style="flex:1;min-width:0;font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8a5140;line-height:1.4">THIS BLOCK · DB BENCH PRESS</div>
+                        <div style="width:32px;height:32px;flex:0 0 32px;border-radius:16px;border:1px solid #e3d9d0;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;color:#8a5140">⌄</div>
+                      </div>
+                      <div style="flex:1"></div>
+                      <div style="font-size:11.5px;line-height:1.4;color:#6f6862">Every week of the block, most recent first.</div>
+                      <div style="height:44px;background:#a46a57;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:700;color:#fff;white-space:nowrap">‹ Back to keypad</div>
+                    </div>
+                    <div style="flex:0 0 214px;display:flex;flex-direction:column;gap:6px;justify-content:flex-end">
+                      <sc-for list="{{ histWeeks }}" as="w" hint-placeholder-count="2">
+                        <sc-if value="{{ w.latest }}">
+                          <div style="border:1px solid #f0ddd2;background:#fdf6f2;border-radius:11px;padding:7px 9px;display:flex;flex-direction:column;gap:4px">
+                            <div style="display:flex;align-items:baseline;gap:6px">
+                              <div style="font-size:10px;font-weight:700;letter-spacing:0.8px;color:#8a5140;white-space:nowrap">{{ w.label }}</div>
+                              <div style="font-size:10px;color:#9a9187;white-space:nowrap">{{ w.date }}</div>
+                            </div>
+                            <div style="display:flex;flex-wrap:wrap;gap:4px">
+                              <sc-for list="{{ w.sets }}" as="p" hint-placeholder-count="3">
+                                <div style="border-radius:7px;background:#fff;border:1px solid #f0ddd2;padding:2px 6px;display:flex;align-items:baseline;gap:2px">
+                                  <span style="font-size:13px;font-weight:700;color:#292524">{{ p.reps }}</span>
+                                  <span style="font-size:9.5px;color:#6f6862">{{ p.weight }}</span>
+                                </div>
+                              </sc-for>
+                            </div>
+                            <div style="font-size:11px;line-height:1.35;color:#57534e">{{ w.note }} <span style="color:#9a9187">— {{ w.author }}</span></div>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ w.older }}">
+                          <div style="border:1px solid #ece7e1;background:#fff;border-radius:11px;padding:7px 9px;display:flex;flex-direction:column;gap:4px">
+                            <div style="display:flex;align-items:baseline;gap:6px">
+                              <div style="font-size:10px;font-weight:700;letter-spacing:0.8px;color:#6f6862;white-space:nowrap">{{ w.label }}</div>
+                              <div style="font-size:10px;color:#9a9187;white-space:nowrap">{{ w.date }}</div>
+                            </div>
+                            <div style="display:flex;flex-wrap:wrap;gap:4px">
+                              <sc-for list="{{ w.sets }}" as="p" hint-placeholder-count="3">
+                                <div style="border-radius:7px;background:#faf8f6;border:1px solid #ece7e1;padding:2px 6px;display:flex;align-items:baseline;gap:2px">
+                                  <span style="font-size:13px;font-weight:700;color:#44403c">{{ p.reps }}</span>
+                                  <span style="font-size:9.5px;color:#6f6862">{{ p.weight }}</span>
+                                </div>
+                              </sc-for>
+                            </div>
+                            <div style="font-size:11px;line-height:1.35;color:#57534e">{{ w.note }} <span style="color:#9a9187">— {{ w.author }}</span></div>
+                          </div>
+                        </sc-if>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ col.calc }}">
+                  <div style="border-top:2px solid #a46a57;background:#faf8f6;padding:8px;display:flex;gap:8px;align-items:stretch;justify-content:flex-end">
+                    <div style="flex:0 1 148px;min-width:0;display:flex;flex-direction:column;gap:6px">
+                      <div style="display:flex;align-items:flex-start;gap:6px">
+                        <div style="flex:1;min-width:0;font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8a5140;line-height:1.4">CALCULATOR · SET 2</div>
+                        <div style="width:32px;height:32px;flex:0 0 32px;border-radius:16px;border:1px solid #e3d9d0;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;color:#8a5140">⌄</div>
+                      </div>
+                      <div style="flex:1"></div>
+                      <div style="display:flex;align-items:baseline;gap:6px">
+                        <div style="font-size:10px;font-weight:700;letter-spacing:0.8px;color:#9a9187">TOTAL</div>
+                        <div style="font-size:24px;font-weight:700;color:#44403c">155</div>
+                      </div>
+                      <div style="height:38px;border-radius:999px;border:1px solid #ece7e1;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#6f6862;white-space:nowrap">‹ Keypad</div>
+                      <div style="height:44px;background:#a46a57;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;white-space:nowrap">Insert 155</div>
+                    </div>
+                    <div style="flex:0 0 214px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-content:flex-end">
+                      <div style="height:44px;border-radius:11px;background:#a46a57;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;color:#fff">None</div>
+                      <div style="height:44px;border-radius:11px;background:#fff;border:1px solid #ece7e1;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;color:#44403c">35 lb</div>
+                      <div style="height:44px;border-radius:11px;background:#fff;border:1px solid #ece7e1;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;color:#44403c">Spec ›</div>
+                      <sc-for list="{{ plates }}" as="p" hint-placeholder-count="7">
+                        <div style="height:44px;background:#fff;border:1px solid #ece7e1;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:4px">
+                          <div style="font-size:16px;font-weight:700;color:#44403c">{{ p.w }}</div>
+                          <div style="font-size:10.5px;font-weight:600;color:#b23a22">{{ p.count }}</div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <div style="padding:8px;border-top:1px solid #ece7e1">
+                  <sc-if value="{{ col.finalized }}">
+                    <div style="height:44px;border:1.5px solid #4d6142;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#4d6142">Un-finalize session</div>
+                  </sc-if>
+                  <sc-if value="{{ col.notFinalized }}">
+                    <div style="height:44px;background:#4d6142;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff">Finalize session</div>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-for>
+
+          </div>
+        </div>
+      </div>
+    </sc-for>
+
+    <div id="idle" style="display:flex;flex-direction:column;gap:14px;width:1920px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-weight:700;font-size:11px;letter-spacing:1.4px;color:#8a5140;background:#fdf6f2;border:1px solid #f0ddd2;border-radius:999px;padding:7px 14px">IDLE</div>
+        <div style="font-size:20px;font-weight:700;color:#292524">Nothing running — what's on the wall all day</div>
+      </div>
+      <div style="font-size:15px;line-height:1.5;color:#57534e;width:1100px">A clock big enough to read from the squat rack, the mark, one number for the week, and a slow rotation of members' recent bests. No calls to action, no dashboard.</div>
+      <div style="width:1920px;height:1080px;background:#faf8f6;overflow:hidden;box-shadow:0 18px 50px rgba(68,64,60,0.16);display:flex;flex-direction:column;border-radius:6px">
+        <div style="height:60px;flex:0 0 60px;background:#fff;border-bottom:1px solid #ece7e1;display:flex;align-items:center;gap:14px;padding:0 20px">
+          <img src="assets/kova-logo.jpg" alt="Kova Strength" style="width:32px;height:32px;border-radius:16px;object-fit:cover">
+
+          <div style="font-weight:700;font-size:17px;color:#8a5140">Kova Strength</div>
+          <div style="font-size:13.5px;color:#6f6862">SPC session board</div>
+        </div>
+        <div style="flex:1;display:flex;padding:64px 72px;gap:72px;align-items:stretch">
+          <div style="flex:1.35;display:flex;flex-direction:column;justify-content:center;gap:10px">
+            <img src="assets/kova-logo.jpg" alt="Kova Strength" style="width:150px;height:150px;border-radius:75px;object-fit:cover;margin-bottom:26px">
+            <div style="font-size:13px;font-weight:700;letter-spacing:2.4px;color:#6f6862">THURSDAY · AUGUST 21</div>
+            <div style="font-family:'Protest Strike',sans-serif;font-size:250px;line-height:0.9;color:#44403c;letter-spacing:-4px">3:41</div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:20px;justify-content:center">
+            <div style="border:1px solid #ece7e1;background:#fff;border-radius:20px;padding:30px 32px;display:flex;flex-direction:column;gap:6px">
+              <div style="font-size:12px;font-weight:700;letter-spacing:1.6px;color:#8a5140">THIS WEEK AT KOVA</div>
+              <div style="display:flex;align-items:baseline;gap:12px">
+                <div style="font-family:'Protest Strike',sans-serif;font-size:88px;line-height:1;color:#a46a57">128</div>
+                <div style="font-size:19px;color:#6f6862;padding-bottom:10px">sessions logged</div>
+              </div>
+            </div>
+            <div style="border:1px solid #f0ddd2;background:#fdf6f2;border-radius:20px;padding:30px 32px;display:flex;flex-direction:column;gap:14px">
+              <div style="font-size:12px;font-weight:700;letter-spacing:1.6px;color:#8a5140">RECENT BESTS</div>
+              <sc-for list="{{ wins }}" as="w" hint-placeholder-count="3">
+                <div style="display:flex;align-items:baseline;gap:12px">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:22px;font-weight:700;color:#292524">{{ w.name }}</div>
+                    <div style="font-size:15px;color:#6f6862;margin-top:2px">{{ w.lift }}</div>
+                  </div>
+                  <div style="font-family:'Protest Strike',sans-serif;font-size:38px;color:#a46a57;white-space:nowrap">{{ w.value }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="phone" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-weight:700;font-size:11px;letter-spacing:1.4px;color:#8a5140;background:#fdf6f2;border:1px solid #f0ddd2;border-radius:999px;padding:7px 14px">COACH PHONE</div>
+        <div style="font-size:20px;font-weight:700;color:#292524">Setup, then the same card the wall uses</div>
+      </div>
+      <div style="font-size:15px;line-height:1.5;color:#57534e;width:1100px">Same expand-in-place card, same keypad dock, same history — one pattern, two widths. First-name tabs stay. The modal, the sliced Next button and the double note field are all gone.</div>
+      <div style="display:flex;gap:36px;align-items:flex-start">
+
+        <div style="width:390px;height:844px;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(68,64,60,0.16);display:flex;flex-direction:column">
+          <div style="height:52px;flex:0 0 52px;border-bottom:1px solid #ece7e1;display:flex;align-items:center;gap:10px;padding:0 16px">
+            <div style="font-size:20px;color:#57534e">☰</div>
+            <img src="assets/kova-logo.jpg" alt="" style="width:26px;height:26px;border-radius:13px;object-fit:cover">
+            <div style="font-weight:700;font-size:15px;color:#8a5140">Kova Strength</div>
+          </div>
+          <div style="flex:1;padding:18px 16px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+            <div style="font-size:13px;font-weight:600;color:#8a5140">‹ Back</div>
+            <div style="font-family:'Protest Strike',sans-serif;font-size:30px;color:#a46a57">Live session</div>
+            <div style="font-size:13.5px;line-height:1.5;color:#6f6862">Up to four clients. Each defaults to their next incomplete session this week.</div>
+            <sc-for list="{{ emptySlots }}" as="s" hint-placeholder-count="4">
+              <div style="border:1px dashed #ddd6cd;background:#fdfbf8;border-radius:16px;padding:16px;display:flex;align-items:center;gap:10px">
+                <div style="width:32px;height:32px;border-radius:16px;border:1.5px solid #e3d9d0;display:flex;align-items:center;justify-content:center;font-size:17px;color:#a46a57">+</div>
+                <div style="flex:1;font-size:15px;font-weight:600;color:#8a5140">Add client</div>
+                <div style="font-size:12px;font-weight:700;letter-spacing:0.8px;color:#9a9187;white-space:nowrap">{{ s }}</div>
+              </div>
+            </sc-for>
+            <div style="flex:1"></div>
+            <div style="height:52px;border-radius:14px;background:#a46a57;opacity:0.4;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff">Start live session</div>
+          </div>
+        </div>
+
+        <div style="width:390px;height:844px;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(68,64,60,0.16);display:flex;flex-direction:column">
+          <div style="height:52px;flex:0 0 52px;border-bottom:1px solid #ece7e1;display:flex;align-items:center;gap:10px;padding:0 16px">
+            <div style="font-size:20px;color:#57534e">☰</div>
+            <img src="assets/kova-logo.jpg" alt="" style="width:26px;height:26px;border-radius:13px;object-fit:cover">
+            <div style="font-weight:700;font-size:15px;color:#8a5140">Kova Strength</div>
+          </div>
+          <div style="flex:1;padding:18px 16px;display:flex;flex-direction:column;gap:10px;overflow:hidden">
+            <div style="font-size:13px;font-weight:600;color:#8a5140">‹ Back</div>
+            <div style="font-family:'Protest Strike',sans-serif;font-size:30px;color:#a46a57">Live session</div>
+            <div style="border:1px solid #f0ddd2;background:#fdf6f2;border-radius:16px;padding:13px 14px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1"><div style="font-size:15.5px;font-weight:700;color:#292524">Bob Getsinger</div><div style="font-size:12px;color:#6f6862;margin-top:1px">Week 3</div></div>
+                <div style="font-size:18px;color:#6f6862">×</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <div style="border-radius:999px;background:#a46a57;padding:8px 12px;font-size:12.5px;font-weight:600;color:#fff;white-space:nowrap">Session 1 · Push</div>
+                <div style="border-radius:999px;background:#fff;border:1px solid #ece7e1;padding:8px 12px;font-size:12.5px;font-weight:600;color:#57534e;white-space:nowrap">✓ Session 2</div>
+              </div>
+            </div>
+            <div style="border:1px solid #f0ddd2;background:#fdf6f2;border-radius:16px;padding:13px 14px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1"><div style="font-size:15.5px;font-weight:700;color:#292524">Terra</div><div style="font-size:12px;color:#6f6862;margin-top:1px">Week 3</div></div>
+                <div style="font-size:18px;color:#6f6862">×</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <div style="border-radius:999px;background:#a46a57;padding:8px 12px;font-size:12.5px;font-weight:600;color:#fff;white-space:nowrap">Session 2 · Upper</div>
+              </div>
+            </div>
+            <div style="border:1px solid #ece7e1;background:#fff;border-radius:16px;padding:13px 14px;display:flex;flex-direction:column;gap:4px">
+              <div style="font-size:15.5px;font-weight:700;color:#292524">Amanda Smout</div>
+              <div style="font-size:12px;font-weight:600;color:#b23a22">Nothing published this week</div>
+            </div>
+            <div style="border:1px dashed #ddd6cd;background:#fdfbf8;border-radius:16px;padding:16px;display:flex;align-items:center;gap:10px">
+              <div style="width:32px;height:32px;border-radius:16px;border:1.5px solid #e3d9d0;display:flex;align-items:center;justify-content:center;font-size:17px;color:#a46a57">+</div>
+              <div style="flex:1;font-size:15px;font-weight:600;color:#8a5140">Add client</div>
+              <div style="font-size:12px;font-weight:700;letter-spacing:0.8px;color:#9a9187">SLOT 4</div>
+            </div>
+            <div style="flex:1"></div>
+            <div style="height:52px;border-radius:14px;background:#a46a57;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff">Start live session (2)</div>
+          </div>
+        </div>
+
+        <div style="width:390px;height:844px;background:#faf8f6;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(68,64,60,0.16);display:flex;flex-direction:column">
+          <div style="height:52px;flex:0 0 52px;background:#fff;border-bottom:1px solid #ece7e1;display:flex;align-items:center;gap:10px;padding:0 16px">
+            <div style="font-size:20px;color:#57534e">☰</div>
+            <img src="assets/kova-logo.jpg" alt="" style="width:26px;height:26px;border-radius:13px;object-fit:cover">
+            <div style="font-weight:700;font-size:15px;color:#8a5140">Kova Strength</div>
+            <div style="flex:1"></div>
+            <div style="border:1px solid #ece7e1;border-radius:999px;padding:6px 11px;font-size:11.5px;font-weight:600;color:#6f6862">End</div>
+          </div>
+          <div style="flex:1;min-height:0;display:flex;flex-direction:column;padding:10px;gap:8px">
+            <div style="display:flex;gap:4px;background:#f4f0ec;border-radius:12px;padding:4px">
+              <div style="flex:1;height:38px;border-radius:9px;background:#fff;box-shadow:0 1px 3px rgba(68,64,60,0.1);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#292524">Bob</div>
+              <div style="flex:1;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#6f6862">Terra</div>
+              <div style="flex:1;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#6f6862">Amanda</div>
+            </div>
+            <div style="flex:1;min-height:0;background:#fff;border:1px solid #ece7e1;border-radius:18px;display:flex;flex-direction:column;overflow:hidden">
+              <div style="padding:10px 12px 8px;border-bottom:1px solid #ece7e1">
+                <div style="font-size:17px;font-weight:700;color:#292524">Bob Getsinger</div>
+                <div style="font-size:11.5px;color:#6f6862;margin-top:1px">Week 3 | Session 1 | Push</div>
+              </div>
+              <div style="flex:1;min-height:0;padding:8px;display:flex;flex-direction:column;gap:5px;overflow:hidden">
+                <div style="display:flex;align-items:center;gap:8px;border:1px solid #ece7e1;border-radius:11px;padding:7px 10px">
+                  <div style="flex:1;min-width:0;font-weight:600;font-size:13.5px;color:#292524;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Face Pull</div>
+                  <div style="font-size:12px;font-weight:600;color:#6f6862;white-space:nowrap">10×40 · 10×40</div>
+                  <div style="font-size:15px;color:#4d6142">✓</div>
+                </div>
+                <div style="border:2px solid #a46a57;border-radius:16px;padding:8px;display:flex;flex-direction:column;gap:5px;box-shadow:0 6px 20px rgba(68,64,60,0.07)">
+                  <div style="display:flex;align-items:flex-start;gap:8px">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-weight:700;font-size:17px;color:#8a5140;line-height:1.2">DB Bench Press</div>
+                      <div style="font-size:11.5px;color:#6f6862;margin-top:2px">3 × 8 | Rest 90s | A1</div>
+                    </div>
+                    <div style="width:38px;height:38px;flex:0 0 38px;border-radius:19px;border:1.5px solid #f0ddd2;background:#fdf6f2;display:flex;align-items:center;justify-content:center;font-size:13px;color:#8a5140">⌃</div>
+                  </div>
+                  <div style="display:flex;gap:6px">
+                    <div style="border-radius:999px;background:#a46a57;padding:7px 11px;font-size:12px;font-weight:600;color:#fff;white-space:nowrap">A1 Bench</div>
+                    <div style="border-radius:999px;background:#fff;border:1px solid #ece7e1;padding:7px 11px;font-size:12px;font-weight:600;color:#57534e;white-space:nowrap">A2 Row</div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <div style="display:flex;gap:8px">
+                      <div style="width:22px;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#6f6862">SET</div>
+                      <div style="flex:1;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#6f6862;text-align:center">REPS</div>
+                      <div style="flex:1;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#6f6862;text-align:center">LB</div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                      <div style="width:22px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#57534e">1</div>
+                      <div style="flex:1;height:44px;border:1px solid #dbe8cf;background:#f3f6ef;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:600;color:#3f4a36">8</div>
+                      <div style="flex:1;height:44px;border:1px solid #dbe8cf;background:#f3f6ef;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:600;color:#3f4a36">70</div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                      <div style="width:22px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#57534e">2</div>
+                      <div style="flex:1;height:44px;border:1.5px dashed #ddd6cd;background:#fdfbf8;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                        <div style="font-size:9px;font-weight:700;letter-spacing:0.8px;color:#9a9187">TARGET</div>
+                        <div style="font-size:16px;font-weight:600;color:#9a9187">8</div>
+                      </div>
+                      <div style="flex:1;height:44px;border:2px solid #a46a57;background:#fff;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:5px">
+                        <div style="font-size:19px;font-weight:600;color:#292524">7</div>
+                        <div style="width:2px;height:20px;background:#a46a57"></div>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                      <div style="width:22px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#57534e">3</div>
+                      <div style="flex:1;height:44px;border:1.5px dashed #ddd6cd;background:#fdfbf8;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                        <div style="font-size:9px;font-weight:700;letter-spacing:0.8px;color:#9a9187">TARGET</div>
+                        <div style="font-size:16px;font-weight:600;color:#9a9187">8</div>
+                      </div>
+                      <div style="flex:1;height:44px;border:1.5px dashed #ddd6cd;background:#fdfbf8;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#9a9187">–</div>
+                    </div>
+                  </div>
+                  <div style="border:1px solid #f0ddd2;background:#fdf6f2;border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:3px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <div style="font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8a5140;white-space:nowrap">WEEK 2</div>
+                      <div style="flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px">
+                        <div style="border-radius:8px;background:#fff;border:1px solid #f0ddd2;padding:2px 6px;display:flex;align-items:baseline;gap:2px"><span style="font-size:13px;font-weight:700;color:#292524">8</span><span style="font-size:10px;color:#6f6862">×65</span></div>
+                        <div style="border-radius:8px;background:#fff;border:1px solid #f0ddd2;padding:2px 6px;display:flex;align-items:baseline;gap:2px"><span style="font-size:13px;font-weight:700;color:#292524">8</span><span style="font-size:10px;color:#6f6862">×65</span></div>
+                        <div style="border-radius:8px;background:#fff;border:1px solid #f0ddd2;padding:2px 6px;display:flex;align-items:baseline;gap:2px"><span style="font-size:13px;font-weight:700;color:#292524">7</span><span style="font-size:10px;color:#6f6862">×65</span></div>
+                      </div>
+                      <div style="font-size:11.5px;font-weight:600;color:#8a5140;white-space:nowrap">2 wks ›</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <div style="flex:1;min-width:0;font-size:11.5px;color:#57534e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Grind on the last set — hold 65. — Georgie</div>
+                      <div style="font-size:11.5px;font-weight:700;color:#8a5140;white-space:nowrap">+ Note</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style="border-top:2px solid #a46a57;background:#faf8f6;padding:8px;display:flex;gap:8px;align-items:stretch;justify-content:flex-end">
+                <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:6px">
+                  <div style="display:flex;align-items:flex-start;gap:6px">
+                    <div style="flex:1;min-width:0;font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8a5140;line-height:1.4">SET 2 WEIGHT</div>
+                    <div style="width:30px;height:30px;flex:0 0 30px;border-radius:15px;border:1px solid #e3d9d0;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;color:#8a5140">⌄</div>
+                  </div>
+                  <div style="flex:1"></div>
+                  <div style="height:38px;border-radius:999px;border:1px solid #e3d9d0;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;color:#8a5140;white-space:nowrap">▦ Calc</div>
+                  <div style="height:44px;background:#a46a57;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff">Next</div>
+                </div>
+                <div style="flex:0 0 214px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-end">
+                  <sc-for list="{{ keys }}" as="k" hint-placeholder-count="12">
+                    <div style="flex:1 1 28%;min-width:58px;height:44px;background:#fff;border:1px solid #ece7e1;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:600;color:#292524">{{ k }}</div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="padding:8px;border-top:1px solid #ece7e1">
+                <div style="height:46px;background:#4d6142;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:700;color:#fff">Finalize session</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  renderVals() {
+    const chips = (arr, logged) => arr.map((v) => ({ v, logged: !!logged, empty: !logged }));
+
+    const full = (name, scheme, done, vals, logged, note) => ({
+      full: true, compact: false, name, scheme,
+      done: !!done, notDone: !done, noteMark: note ? "✎" : "",
+      chips: chips(vals, logged),
+    });
+    const compact = (name, summary, done) => ({
+      compact: true, full: false, name, summary, mark: done ? "✓" : "",
+    });
+
+    const setRow = (n, reps, weight, o = {}) => ({
+      n,
+      reps: reps ?? "",
+      repsTarget: o.target ?? "8",
+      repsKeyed: reps != null && !o.repsActive,
+      repsActive: !!o.repsActive,
+      repsEmpty: reps == null && !o.repsActive,
+      weight: weight ?? "",
+      wKeyed: o.tracksWeight !== false && weight != null && !o.wActive,
+      wActive: !!o.wActive,
+      wEmpty: o.tracksWeight !== false && weight == null && !o.wActive,
+    });
+
+    const benchWeeks = [
+      { latest: true, older: false, label: "WEEK 2", date: "Aug 14",
+        sets: [{ reps: "8", weight: "×65" }, { reps: "8", weight: "×65" }, { reps: "7", weight: "×65" }],
+        note: "Grind on the last set — hold 65.", author: "Georgie" },
+      { latest: false, older: true, label: "WEEK 1", date: "Aug 7",
+        sets: [{ reps: "10", weight: "×60" }, { reps: "10", weight: "×60" }, { reps: "10", weight: "×60" }],
+        note: "Flew up. Go heavier next week.", author: "Bob" },
+    ];
+
+    const benchStrip = {
+      label: "WEEK 2",
+      pills: [{ reps: "8", weight: "×65" }, { reps: "8", weight: "×65" }, { reps: "7", weight: "×65" }],
+      more: "2 weeks ›",
+      note: "Grind on the last set — hold 65.", author: "Georgie",
+    };
+
+    const benchSets = [
+      setRow(1, "8", "70", { target: "8" }),
+      setRow(2, null, "7", { target: "8", wActive: true }),
+      setRow(3, null, null, { target: "8" }),
+    ];
+
+    const benchSiblings = [
+      { label: "A1 DB Bench Press", active: true, idle: false },
+      { label: "A2 Chest Supported Row", active: false, idle: true },
+    ];
+
+    // Card variants — what the column width can afford.
+    const cardTight = {
+      name: "DB Bench Press", scheme: "3 × 8 | Rest 90s | A1", siblings: benchSiblings,
+      tracksWeight: true, sets: benchSets, weekLabel: "WEEK 3",
+      noteBox: null, noteRow: "Add a note for week 3…", strip: benchStrip, weeks: null, tabbed: false,
+    };
+    const cardRoomy = {
+      name: "DB Bench Press", scheme: "3 × 8 | Rest 90s | A1", siblings: benchSiblings,
+      tracksWeight: true, sets: benchSets, weekLabel: "WEEK 3",
+      noteBox: "What happened this week — coach or client.", noteRow: null, strip: null,
+      weeks: benchWeeks, tabbed: false,
+    };
+    const cardTabbed = {
+      name: "DB Bench Press", scheme: "3 × 8 | Rest 90s | A1", siblings: null,
+      tracksWeight: true, sets: benchSets, weekLabel: "WEEK 3",
+      noteBox: null, noteRow: null, strip: benchStrip, weeks: null, tabbed: true,
+    };
+    const cardRepsOnly = {
+      name: "Banded Assisted Wide Grip Pull Up", scheme: "2 × AMRAP | no weight tracked", siblings: null,
+      tracksWeight: false,
+      sets: [setRow(1, "9", null, { target: "AMRAP", tracksWeight: false }),
+             setRow(2, null, null, { target: "AMRAP", tracksWeight: false, repsActive: true })],
+      weekLabel: "WEEK 3", noteBox: null, noteRow: "Add a note for week 3…",
+      strip: { label: "WEEK 2", pills: [{ reps: "10", weight: "" }, { reps: "8", weight: "" }], more: "2 weeks ›", note: "Green band, dropped to 8.", author: "Georgie" },
+      weeks: null, tabbed: false,
+    };
+
+    const bobCompact = [
+      compact("Face Pull", "10×40 · 10×40 · 10×40", true),
+      compact("Chest Supported Row — A2", "10-12", false),
+      compact("Leg Curl", "10-12", false),
+      compact("Tricep Pushdown w/rope", "12-15", false),
+    ];
+    const bobFull = [
+      full("Face Pull", "3 × 10-15 | Rest 60s", true, ["10×40", "10×40", "10×40"], true, false),
+      full("DB Bench Press — A1", "3 × 8 | Rest 90s", false, ["8×70", "8", "8"], false, true),
+      full("Chest Supported Row — A2", "3 × 10-12 | Rest 90s", false, ["10-12", "10-12", "10-12"], false, false),
+      full("Leg Curl", "3 × 10-12 | Rest 90s", false, ["10-12", "10-12", "10-12"], false, false),
+      full("Tricep Pushdown w/rope", "3 × 12-15,12-15,AMRAP", false, ["12-15", "12-15", "AMRAP"], false, false),
+    ];
+    const bobFullNoBench = [
+      full("Face Pull", "3 × 10-15 | Rest 60s", true, ["10×40", "10×40", "10×40"], true, false),
+      full("Chest Supported Row — A2", "3 × 10-12 | Rest 90s", false, ["10-12", "10-12", "10-12"], false, false),
+      full("Leg Curl", "3 × 10-12 | Rest 90s", false, ["10-12", "10-12", "10-12"], false, false),
+      full("Tricep Pushdown w/rope", "3 × 12-15,12-15,AMRAP", false, ["12-15", "12-15", "AMRAP"], false, false),
+    ];
+
+    const terraFull = [
+      full("Bench Supported Single Arm Lat Pulldown", "3 × 10-12,10-12,5-7", true, ["9×35", "9×35", "6×38"], true, true),
+      full("DB Lateral Raise", "3 × 12-15,6-8,6-8", true, ["12×10", "8×12", "8×12"], true, false),
+      full("Banded Assisted Wide Grip Pull Up", "2 × AMRAP", false, ["9", "7"], true, false),
+      full("Smith Machine Incline Press", "3 × 6-10 | Rest 90s", true, ["11×25", "12×25", "10×30"], true, true),
+      full("Bench Supported Single Arm Cable Row", "3 × 5-7,10-12,10-12", false, ["5-7", "10-12", "10-12"], false, false),
+    ];
+    const amandaFull = [
+      full("RDL - Barbell", "3 × 10-12 | Rest 90s", false, ["10-12", "10-12", "10-12"], false, false),
+      full("High Incline Shoulder Press", "3 × 8", false, ["8", "8", "8"], false, false),
+      full("Inverted Row", "3 × 10", false, ["10", "10", "10"], false, false),
+      full("Leg Extension", "3 × 10", false, ["10", "10", "10"], false, false),
+      full("Shoulder Taps", "3 × 10", false, ["10", "10", "10"], false, false),
+    ];
+    const kelseyCompact = [
+      compact("Trap Bar Deadlift", "5×135 · 5×135", true),
+      compact("Front Foot Elevated Split Squat", "8×30", true),
+      compact("Banded Assisted Pull Up", "9", false),
+      compact("Standing Calf Raise", "15", false),
+      compact("Pallof Press", "10", false),
+    ];
+    const kelseyFull = [
+      full("Trap Bar Deadlift", "4 × 5 | Rest 120s", true, ["5×135", "5×135", "5×145", "5×145"], true, true),
+      full("Front Foot Elevated Split Squat", "3 × 8 | Rest 90s", true, ["8×30", "8×30", "8×30"], true, false),
+      full("Banded Assisted Wide Grip Pull Up", "2 × AMRAP", false, ["9", "7"], false, false),
+      full("Standing Calf Raise", "3 × 15", false, ["15", "15", "15"], false, false),
+      full("Pallof Press", "3 × 10", false, ["10", "10", "10"], false, false),
+      full("Seated Hamstring Curl", "3 × 12", false, ["12", "12", "12"], false, false),
+      full("Cable Crunch", "3 × 15", false, ["15", "15", "15"], false, false),
+      full("Copenhagen Plank", "3 × 20s", false, ["20s", "20s", "20s"], false, false),
+      full("Dead Bug", "2 × 10", false, ["10", "10"], false, false),
+    ];
+
+    const bobH = { name: "Bob Getsinger", meta: "Week 3 | Session 1 | Push", warmup: "Cat Cow · Quadruped T Spine · Adductor Rock Backs · Deadbug" };
+    const terraH = { name: "Terra", meta: "Week 3 | Session 2 | Upper | Georgie", warmup: "Band Pull Apart · Scap Push Up · Wall Slide · Deadbug" };
+    const amandaH = { name: "Amanda Smout", meta: "Week 1 | Session 1", warmup: "" };
+    const kelseyH = { name: "Kelsey Ward", meta: "Week 2 | Session 3 | Lower", warmup: "90/90 Hip Switch · Glute Bridge · Leg Swings" };
+
+    const plain = (h, rows, o = {}) => ({
+      ...h, rows, card: null, keypad: null, calc: false, hist: false,
+      maxW: o.maxW ?? "none",
+      finalized: !!o.finalized, notFinalized: !o.finalized,
+      emptyMsg: o.emptyMsg ?? "", overflowNote: o.overflowNote ?? "",
+    });
+    const open = (h, rows, card, label, o = {}) => ({
+      ...h, rows, card,
+      keypad: o.calc || o.hist ? null : { label, calcPill: o.calcPill !== false },
+      calc: !!o.calc, hist: !!o.hist,
+      maxW: o.maxW ?? "none",
+      finalized: false, notFinalized: true, emptyMsg: "", overflowNote: "",
+    });
+
+    return {
+      keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"],
+      histWeeks: benchWeeks,
+      plates: [
+        { w: "45", count: "×2" }, { w: "35", count: "" }, { w: "25", count: "×2" },
+        { w: "15", count: "" }, { w: "10", count: "" }, { w: "5", count: "" }, { w: "2.5", count: "" },
+      ],
+      wins: [
+        { name: "Terra", lift: "Trap bar deadlift", value: "245" },
+        { name: "Amanda", lift: "Smith incline press", value: "12×30" },
+        { name: "Kelsey", lift: "Assisted pull up", value: "11 reps" },
+      ],
+      emptySlots: ["SLOT 1", "SLOT 2", "SLOT 3", "SLOT 4"],
+
+      frames: [
+        {
+          id: "2a", option: true, state: false, badge: "DECIDED", margin: true,
+          title: "Two clients keep the four-client column",
+          desc: "One and two clients hold the 463px column a four-up board uses, centre themselves, and give the leftover wall to the clock. Three expands to fill (620px each) and four is the standard width — those two are unchanged. So a column is only ever one of two widths, and the card inside it never has to be redrawn for the session size. The week's number and the recent bests stay on the idle screen; they read as noise the moment a session starts.",
+          cols: [
+            open(bobH, bobCompact, cardTight, "BOB · DB BENCH PRESS · SET 2 WEIGHT", { maxW: "463px" }),
+            plain(terraH, terraFull, { maxW: "463px" }),
+          ],
+        },
+        {
+          id: "2h", option: false, state: true, badge: "HISTORY OPEN", margin: false,
+          title: "Where “2 weeks ›” goes",
+          desc: "The block history opens into the dock — the same corner, the same footprint the keypad and the calculator use. Weeks read most-recent-first with that week's sets and the note whoever was standing there wrote. The sets she is entering stay on screen above it, which is the whole point: this is the view a coach makes a call from. Back to keypad returns.",
+          cols: [
+            open(bobH, bobCompact, cardTight, "", { hist: true }),
+            plain(terraH, terraFull),
+            plain(amandaH, amandaFull),
+          ],
+        },
+        {
+          id: "1a", option: true, state: false, badge: "1A",
+          title: "Open card — everything on it",
+          desc: "Sets, the one notes field and the block history are all on the card. The column's other lifts drop to one-line rows to pay for it. At three clients the history is the last-completed week plus a way into the rest; at one or two clients the same card opens out into the paper sheet's week columns (see the 1-client and 2-client frames).",
+          cols: [
+            open(bobH, bobCompact, cardTight, "BOB · DB BENCH PRESS · SET 2 WEIGHT"),
+            plain(terraH, terraFull),
+            plain(amandaH, amandaFull),
+          ],
+        },
+        {
+          id: "1b", option: true, state: false, badge: "1B",
+          title: "Tabbed card — short at every width",
+          desc: "Log | History | Note across the top. The card is the same height at one client or four — about 120px shorter than 1a's — so the column keeps more of its lifts on screen and the keypad never crowds the sets. Last week's sets and note stay pinned under the sets even on the Log tab, so the tap only buys the weeks behind it.",
+          cols: [
+            open(bobH, bobCompact, cardTabbed, "BOB · DB BENCH PRESS · SET 2 WEIGHT"),
+            plain(terraH, terraFull),
+            plain(amandaH, amandaFull),
+          ],
+        },
+        {
+          id: "s4", option: false, state: true, badge: "4 CLIENTS · RESTING",
+          title: "Four columns, nothing expanded",
+          desc: "The everyday state. Four states packed into one frame: a session in progress, a finalized client (olive, still on the wall), a client with nothing published, and a session with more lifts than fit — that column scrolls on its own and nothing else moves.",
+          cols: [
+            plain(bobH, bobFull),
+            plain(terraH, terraFull, { finalized: true }),
+            plain(amandaH, [], { emptyMsg: "Nothing published for this session yet. A coach can publish it from their phone and it appears here within a few seconds." }),
+            plain(kelseyH, kelseyFull, { overflowNote: "2 more lifts" }),
+          ],
+        },
+        {
+          id: "s2x", option: false, state: true, badge: "TWO EXPANDED AT ONCE",
+          title: "Two people typing, four columns up",
+          desc: "Each keypad is docked in its own column above that column's Finalize, and labelled with the client, the lift and the field it is typing into. Nothing dims, nothing reflows — Terra and Amanda's columns are untouched. Kelsey's lift is reps-only, so the LB column is gone rather than shown empty.",
+          cols: [
+            open(bobH, bobCompact, cardTight, "BOB · DB BENCH · SET 2 WEIGHT"),
+            plain(terraH, terraFull),
+            plain(amandaH, amandaFull),
+            open(kelseyH, kelseyCompact, cardRepsOnly, "KELSEY · PULL UP · SET 2 REPS"),
+          ],
+        },
+        {
+          id: "s1", option: false, state: true, badge: "1 CLIENT · CALCULATOR", margin: true,
+          title: "One client, and the calculator in place",
+          desc: "One on the floor: the column holds the same 463px, centres, and the clock keeps the wall company. The calculator is the existing member-app component, opened from the Calculator pill in the dock and taking the pad's place in the same corner at the same size — it never covers the sets it is filling in, and it never touches another client's column because there isn't one to touch.",
+          cols: [
+            open(bobH, bobCompact, cardTight, "BOB · DB BENCH PRESS · SET 2 WEIGHT", { calc: true, maxW: "463px" }),
+          ],
+        },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

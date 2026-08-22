@@ -165,7 +165,7 @@ export function HubSessionSetup({ profile, onStarted }) {
         const session = s.sessions.find((x) => x.spcWorkoutId === s.selected);
         return { userId: s.userId, clientName: s.name, spcWorkoutId: s.selected, weekNumber: s.weekNumber, session };
       });
-      const started = await startHubSession({ coachId: profile.id, slots: payload });
+      const started = await startHubSession({ coachId: profile.id, coachName: profile.name ?? null, slots: payload });
       onStarted?.(started);
     } catch (e) {
       showToast(e?.message ?? "Couldn't start the session.");
@@ -192,7 +192,7 @@ export function HubSessionSetup({ profile, onStarted }) {
   return (
     <View>
       <Text style={{ fontFamily: fonts.sans, fontSize: type.body, color: colors.muted, marginBottom: 14 }}>
-        Pick up to 4 clients for this session. Each defaults to their next incomplete session this week — tap a session pill to change it.
+        Up to four clients. Each defaults to their next incomplete session this week — tap a session pill to change it.
       </Text>
 
       {slots.map((slot, i) => (
@@ -201,8 +201,9 @@ export function HubSessionSetup({ profile, onStarted }) {
           style={{
             borderRadius: 16,
             borderWidth: 1,
-            borderColor: slot ? "#f0ddd2" : CARD_BORDER,
-            backgroundColor: slot ? "#fdf6f2" : "white",
+            borderStyle: slot ? "solid" : "dashed",
+            borderColor: slot ? "#f0ddd2" : "#ddd6cd",
+            backgroundColor: slot ? "#fdf6f2" : "transparent",
             padding: 14,
             marginBottom: 10,
           }}
@@ -210,9 +211,10 @@ export function HubSessionSetup({ profile, onStarted }) {
           {!slot ? (
             <PressFade onPress={() => setPickerFor(i)} style={{ flexDirection: "row", alignItems: "center" }}>
               <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: type.bodyLg, color: colors.primaryOnWhite, marginLeft: 8 }}>
+              <Text style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: type.bodyLg, color: colors.primaryOnWhite, marginLeft: 8 }}>
                 Add client
               </Text>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 1, color: colors.hint }}>{`SLOT ${i + 1}`}</Text>
             </PressFade>
           ) : (
             <View>

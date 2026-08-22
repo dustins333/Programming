@@ -95,7 +95,7 @@ export default function SpcLiveSession() {
           </View>
         ) : (
           <View style={{ flex: 1, minHeight: 480 }}>
-            <HubLiveSession hub={hub} authorId={profile?.id ?? null} scale="phone" />
+            <HubLiveSession hub={hub} authorId={profile?.id ?? null} authorName={profile?.name?.split(" ")[0] ?? null} scale="phone" />
           </View>
         )}
       </ScrollView>
