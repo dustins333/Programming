@@ -198,9 +198,10 @@ export default function CoachPrep() {
       exercises: state.exercisesByWorkout[workout.id] ?? [],
       warmups: state.warmupsByWorkout[workout.id] ?? [],
       // A box a coach opened and never filled in is not content — drop it
-      // rather than render an empty card on the read side.
+      // rather than render an empty card on the read side. A note carrying
+      // only videos still counts.
       education: (state.educationBySession[activeSession] ?? []).filter(
-        (e) => (e.notes ?? "").trim() || (e.video_url ?? "").trim()
+        (e) => (e.notes ?? "").trim() || (e.video_urls ?? []).some((u) => (u ?? "").trim())
       ),
     };
   }, [state, activeSession]);

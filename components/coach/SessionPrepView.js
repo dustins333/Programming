@@ -59,7 +59,7 @@ function EducationCard({ item, first, expanded, onToggle }) {
   const generalWarmup = !item.exercise_id && item.scope === "warmup";
   const heading = item.exercises?.name ?? (generalWarmup ? "Warm-up notes" : "General");
   const notes = (item.notes ?? "").trim();
-  const video = (item.video_url ?? "").trim();
+  const videos = (item.video_urls ?? []).map((u) => (u ?? "").trim()).filter(Boolean);
 
   return (
     <View
@@ -81,7 +81,14 @@ function EducationCard({ item, first, expanded, onToggle }) {
           {heading}
         </Text>
         <View style={{ flex: 1 }} />
-        {video ? <Ionicons name="videocam" size={14} color="#c08a76" /> : null}
+        {videos.length > 0 ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+            <Ionicons name="videocam" size={14} color="#c08a76" />
+            {videos.length > 1 ? (
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#c08a76" }}>{videos.length}</Text>
+            ) : null}
+          </View>
+        ) : null}
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={15} color="#c08a76" />
       </Pressable>
 
@@ -90,16 +97,27 @@ function EducationCard({ item, first, expanded, onToggle }) {
           {notes ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 14, lineHeight: 21, color: "#44403c" }}>{notes}</Text>
           ) : null}
-          {video ? (
+          {/* Numbered only when there's more than one — "Video 1" on its own
+              reads like there should be a second one somewhere. */}
+          {videos.map((url, i) => (
             <PressFade
-              onPress={() => openVideo(video)}
+              key={i}
+              onPress={() => openVideo(url)}
               hitSlop={8}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: notes ? 11 : 0, alignSelf: "flex-start" }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                marginTop: i === 0 ? (notes ? 11 : 0) : 7,
+                alignSelf: "flex-start",
+              }}
             >
               <Ionicons name="play-circle" size={19} color={colors.primary} />
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: colors.primaryOnWhite }}>Watch video ›</Text>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: colors.primaryOnWhite }}>
+                {videos.length > 1 ? `Video ${i + 1} ›` : "Watch video ›"}
+              </Text>
             </PressFade>
-          ) : null}
+          ))}
         </View>
       ) : (
         <Text

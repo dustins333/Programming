@@ -42,7 +42,7 @@ const SECTIONS = [
   { key: "exercise", label: "EXERCISES" },
 ];
 
-function Field({ label, value, onCommit, multiline = false, placeholder }) {
+function Field({ label, value, onCommit, multiline = false, placeholder, compact = false }) {
   const [draft, setDraft] = useState(value ?? "");
   const timer = useRef(null);
   // Re-seed only when the row identity changes upstream (a fresh fetch), not
@@ -61,8 +61,8 @@ function Field({ label, value, onCommit, multiline = false, placeholder }) {
   };
 
   return (
-    <View style={{ marginTop: 9 }}>
-      <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>{label}</Eyebrow>
+    <View style={compact ? null : { marginTop: 9 }}>
+      {compact ? null : <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>{label}</Eyebrow>}
       <TextInput
         value={draft}
         placeholder={placeholder}
@@ -95,6 +95,56 @@ function Field({ label, value, onCommit, multiline = false, placeholder }) {
   );
 }
 
+// One input per link, plus a "+" once there's at least one — a coach
+// introducing a new lift usually wants the setup clip and the common-fault
+// clip, not one of them.
+//
+// The blank slot lives in local state rather than as an empty string in the
+// stored array: persisting blanks would mean filtering them out on every
+// read, and re-indexing mid-type can yank the input out from under whoever
+// is typing in it. The "+" hides while a blank slot is open, so blanks can't
+// stack up.
+function VideoLinks({ urls, onChange }) {
+  const [slot, setSlot] = useState(false);
+  const list = urls.length ? urls : [""];
+  const shown = slot ? [...list, ""] : list;
+
+  const commit = (index, value) => {
+    const next = [...list];
+    next[index] = value;
+    onChange(next.map((u) => (u ?? "").trim()).filter(Boolean));
+    setSlot(false);
+  };
+
+  const removeAt = (index) => {
+    onChange(list.filter((_, i) => i !== index).map((u) => (u ?? "").trim()).filter(Boolean));
+    setSlot(false);
+  };
+
+  return (
+    <View style={{ marginTop: 9 }}>
+      <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>{shown.length > 1 ? "VIDEO LINKS" : "VIDEO LINK"}</Eyebrow>
+      {shown.map((url, i) => (
+        <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: i === 0 ? 0 : 6 }}>
+          <View style={{ flex: 1 }}>
+            <Field value={url} placeholder="https://…" onCommit={(t) => commit(i, t)} compact />
+          </View>
+          {url ? (
+            <PressFade onPress={() => removeAt(i)} hitSlop={8} accessibilityLabel="Remove video">
+              <Ionicons name="close" size={15} color="#a8a29e" />
+            </PressFade>
+          ) : null}
+        </View>
+      ))}
+      {!slot && urls.length > 0 ? (
+        <PressFade onPress={() => setSlot(true)} hitSlop={8} style={{ marginTop: 6, alignSelf: "flex-start" }}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: colors.primaryOnWhite }}>+ Add another video</Text>
+        </PressFade>
+      ) : null}
+    </View>
+  );
+}
+
 function headingFor(item) {
   if (item.exercises?.name) return item.exercises.name;
   return item.scope === "warmup" ? "Warm-up notes" : "General";
@@ -105,7 +155,7 @@ function EducationCard({ item, groups, expanded, onToggle, onChange, onRemove, c
   // the dropdown itself keeps the groups so warm-ups stay separated.
   const all = groups.flatMap((g) => g.items);
   const note = (item.notes ?? "").trim();
-  const hasVideo = Boolean((item.video_url ?? "").trim());
+  const videos = (item.video_urls ?? []).map((u) => (u ?? "").trim()).filter(Boolean);
 
   return (
     <View
@@ -128,7 +178,14 @@ function EducationCard({ item, groups, expanded, onToggle, onChange, onRemove, c
             >
               {headingFor(item)}
             </Text>
-            {hasVideo ? <Ionicons name="videocam" size={13} color="#a8a29e" /> : null}
+            {videos.length > 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                <Ionicons name="videocam" size={13} color="#a8a29e" />
+                {videos.length > 1 ? (
+                  <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, color: "#a8a29e" }}>{videos.length}</Text>
+                ) : null}
+              </View>
+            ) : null}
             <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color="#a8a29e" />
           </View>
           {/* Collapsed rows still have to be worth reading, or collapsing
@@ -195,11 +252,9 @@ function EducationCard({ item, groups, expanded, onToggle, onChange, onRemove, c
             placeholder="What should a coach know before they run this?"
             onCommit={(t) => onChange(item.id, { notes: t })}
           />
-          <Field
-            label="VIDEO LINK"
-            value={item.video_url}
-            placeholder="https://…"
-            onCommit={(t) => onChange(item.id, { video_url: t })}
+          <VideoLinks
+            urls={item.video_urls ?? []}
+            onChange={(urls) => onChange(item.id, { video_urls: urls })}
           />
 
           <PressFade onPress={() => onRemove(item.id)} hitSlop={8} style={{ marginTop: 9, alignSelf: "flex-start" }}>
