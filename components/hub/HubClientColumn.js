@@ -565,7 +565,7 @@ export function HubClientColumn({
             the one line this column has room for. A solid clay pill rather
             than the quieter ghost line the member app uses: this one has to
             read from across the gym. */}
-        <ClientGoalLine goal={entry.goal} tone="pill" style={{ marginTop: 8 }} />
+        <ClientGoalLine goal={entry.goal} tone="pill" size="md" style={{ marginTop: 8 }} />
       </View>
 
       {/* Warm-up strip — states its own count so the chevron has something to

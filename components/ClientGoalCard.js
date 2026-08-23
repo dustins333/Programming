@@ -266,33 +266,49 @@ export function ClientGoalCard({
 
 // ---------------------------------------------------------------------------
 // One-line forms for the surfaces with no room for the card.
-//   tone="pill"  — the wall display: a solid clay pill reads across a room.
-//   tone="ghost" — the member's session header: quieter, that screen is busy.
+//   tone="pill"  — a solid clay pill. size="sm" is the wall display, sized to
+//                  a 460px column; size="md" is the member's own session
+//                  header, where it's the first thing they should read.
+//   tone="ghost" — quiet, icon + text, no fill.
+//
+// The md pill is deliberately SHORTER than the session tabs below it (which
+// are paddingVertical 8 + a border): it should make a statement without
+// competing with the control a member actually has to press.
 // ---------------------------------------------------------------------------
-export function ClientGoalLine({ goal, tone = "ghost", style }) {
+const PILL_SIZES = {
+  sm: { icon: 11, font: type.caption, padV: 5, padH: 11, gap: 6, family: fonts.sansSemiBold },
+  md: { icon: 13, font: 15, padV: 4, padH: 14, gap: 7, family: fonts.sansBold },
+};
+
+export function ClientGoalLine({ goal, tone = "ghost", size = "sm", style }) {
   if (!goal) return null;
 
   if (tone === "pill") {
+    const s = PILL_SIZES[size] ?? PILL_SIZES.sm;
     return (
       <View
         style={[
           {
             flexDirection: "row",
             alignItems: "center",
-            gap: 6,
+            gap: s.gap,
             backgroundColor: colors.primary,
             borderRadius: 999,
-            paddingVertical: 5,
-            paddingHorizontal: 11,
+            paddingVertical: s.padV,
+            paddingHorizontal: s.padH,
+            // Hugs its text so it reads as a pill rather than a bar, but a
+            // long goal still stops at the container edge and truncates.
+            alignSelf: "flex-start",
+            maxWidth: "100%",
           },
           style,
         ]}
       >
-        <Ionicons name="flag" size={11} color={CLAY_EYEBROW} />
+        <Ionicons name="flag" size={s.icon} color={CLAY_EYEBROW} />
         <Text
           numberOfLines={1}
           maxFontSizeMultiplier={1.1}
-          style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: CLAY_TEXT }}
+          style={{ flexShrink: 1, fontFamily: s.family, fontSize: s.font, color: CLAY_TEXT }}
         >
           {goal}
         </Text>

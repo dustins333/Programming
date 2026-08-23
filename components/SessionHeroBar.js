@@ -128,7 +128,7 @@ export function SessionHeroBar({
       {/* What they're working toward — written by their coach, the same card
           the coach sees on their programming page. Renders nothing when no
           goal is set; a member is never told they're missing one. */}
-      <ClientGoalLine goal={goal} tone="ghost" style={{ marginTop: 10 }} />
+      <ClientGoalLine goal={goal} tone="pill" size="md" style={{ marginTop: 11 }} />
 
       {tabs && tabs.length > 1 ? (
         <View style={{ flexDirection: "row", gap: 6, marginTop: 12 }}>
