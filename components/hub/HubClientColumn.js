@@ -247,9 +247,21 @@ export function HubClientColumn({
   const noteSeed = useRef("");
   const rowsRef = useRef([]);
   rowsRef.current = rows;
-  // Set only once the coach actually changes something, so opening a lift to
-  // look at it and closing it again writes nothing.
-  const dirtyRef = useRef(false);
+  // A draft counts as dirty from the keystroke until the WRITE LANDS, not
+  // until the debounce merely fires. Those are different moments, and
+  // treating them as one is what let the poll adopt pre-edit logs over
+  // digits that were still in flight, clearing the box a beat after it was
+  // typed into (reported 2026-08-23).
+  //
+  // Seq numbers rather than a boolean, mirroring useHubBoard's own: a
+  // keystroke arriving while a write is in flight bumps editSeq, so the
+  // write that is finishing cannot declare the newer digits saved. Equal
+  // seqs — including the 0/0 a freshly opened card starts at — mean nothing
+  // is pending, so opening a lift to look at it and closing it writes nothing.
+  const editSeq = useRef(0);
+  const savedSeq = useRef(0);
+  const inFlightSeq = useRef(-1);
+  const isDirty = () => editSeq.current !== savedSeq.current;
 
   // Superset letters precomputed per item id — a counter mutated during
   // render hands out wrong suffixes under list re-render.
@@ -311,7 +323,9 @@ export function HubClientColumn({
       if (i === seeded.length - 1) focus = { set: i, field: wantsWeight ? "weight" : "reps" };
     }
     setActive(focus);
-    dirtyRef.current = false;
+    editSeq.current = 0;
+    savedSeq.current = 0;
+    inFlightSeq.current = -1;
     setDock("keypad");
     calc.reset();
     setHistory(undefined);
@@ -339,7 +353,7 @@ export function HubClientColumn({
   // typed into doesn't disappear underneath the coach.
   useEffect(() => {
     if (!expandedItem) return;
-    if (dirtyRef.current || saveTimer.current) return;
+    if (isDirty() || saveTimer.current) return;
     const logs = entry.logsByExerciseId.get(expandedItem.exercise.id) ?? [];
     const merged = rowsFromLogs(expandedItem, logs, rowsRef.current.length);
     if (!sameRows(rowsRef.current, merged)) {
@@ -356,16 +370,31 @@ export function HubClientColumn({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry.logsByExerciseId, entry.noteForWeekByExerciseId, expandedItem?.id, note]);
 
+  // The one place a write is issued. Marks the draft saved only once the
+  // write resolves, and only if nothing was typed in the meantime — so the
+  // merge effect above can never adopt the board's pre-edit snapshot over
+  // work that hasn't reached the database yet. A FAILED write deliberately
+  // leaves the draft dirty: the numbers on screen are the only copy, and the
+  // poll must not be allowed to paint over them.
+  const runSave = (item, nextRows) => {
+    if (!item) return;
+    const seq = editSeq.current;
+    if (inFlightSeq.current === seq) return; // these exact rows are already being written
+    inFlightSeq.current = seq;
+    return Promise.resolve(onSaveSets?.({ exerciseId: item.exercise.id, rows: nextRows }))
+      .then(() => {
+        if (editSeq.current === seq) savedSeq.current = seq;
+      })
+      .catch(() => {});
+  };
+
   const scheduleSave = (nextRows) => {
-    dirtyRef.current = true;
+    editSeq.current += 1;
     onEditDirty?.(userId); // hold the poll off this lift until the write lands
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
-      // Cleared here too, so collapsing after the debounce has already landed
-      // doesn't write the identical rows a second time.
-      dirtyRef.current = false;
-      onSaveSets?.({ exerciseId: expandedItem.exercise.id, rows: nextRows });
+      runSave(expandedItem, nextRows);
     }, SAVE_DEBOUNCE_MS);
   };
 
@@ -397,10 +426,14 @@ export function HubClientColumn({
   };
 
   const collapse = () => {
-    flushLift(expandedItem);
+    // Tell the board the edit is over only once the write has landed —
+    // dropping the entry immediately unfreezes the poll while the write is
+    // still in flight, which puts pre-edit sets back on the row you just
+    // closed.
+    const pending = flushLift(expandedItem);
     setExpandedId(null);
     seededFor.current = null;
-    onEndEdit?.(userId);
+    Promise.resolve(pending).finally(() => onEndEdit?.(userId));
   };
 
   const expand = (item) => {
@@ -450,11 +483,9 @@ export function HubClientColumn({
   const flushLift = (item) => {
     flushSets();
     if (!item) return;
-    if (dirtyRef.current) {
-      dirtyRef.current = false;
-      onSaveSets?.({ exerciseId: item.exercise.id, rows: rowsRef.current });
-    }
+    const pending = isDirty() ? runSave(item, rowsRef.current) : null;
     commitNote(item);
+    return pending;
   };
 
   const handleSameAsLast = () => {
