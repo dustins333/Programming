@@ -3689,9 +3689,11 @@ Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supa
 - `0066_truecoach_imports.sql` — **run**, verified live 2026-08-18 (2 tables, trigger, 2 RPCs, `logs.truecoach_import_id`, `logs_source_check` widened). TrueCoach history staging + member linking. See the section above.
 - `0071_spc_live_hub.sql` — **run**, verified live 2026-08-20 (3 tables, flag column, 3 functions, 12 display policies, 2 widening policies; PostgREST `[]` not PGRST205). SPC Live Session Hub + per-client-per-lift coaching notes + the staff completions-write widening. See its own section above.
 - `0072_announcement_expiry.sql` — **run**, verified live 2026-08-21. Adds `programming.announcements.expires_at` (nullable; null = never expires, so every pre-existing row is unaffected) and rewrites the `members read due announcements` policy to `send_at <= now() and (expires_at is null or expires_at > now())`. Enforced in RLS deliberately, not in the app — an expired announcement stops existing for members the same way an unsent one already does. (0074, 0075 and 0076 are all applied — see their own entries and the audit
-sections; next number is 0077.)
+sections; next number after 0080 is 0081.)
 - `0073_logs_unique_set.sql` — **run**, verified live 2026-08-21. De-duplicates `programming.logs` and adds `logs_unique_set_idx`, a `UNIQUE NULLS NOT DISTINCT` index over user, exercise, date, set number, all three session references, `week_number` and `truecoach_import_id`. `logResult()` was a hand-rolled select-then-update-or-insert with nothing backing it, so two racing autosaves both inserted the same set. **`NULLS NOT DISTINCT` is load-bearing** — every session column is null for a row with no session reference, and plain UNIQUE treats each of those as distinct, which would let the duplicates straight back through. **The key is wide on purpose**: two genuinely different sessions on one date must stay separate rows, and linking two TrueCoach imports to the same Kova lift (0066, in active use on five exercises) each materialises its own set rows. `ON CONFLICT` inference against a nulls-not-distinct index was verified on a throwaway table before the code was changed.
 - `0076_hub_notes_and_idle_stats.sql` — **run**, verified live 2026-08-22 (dry-run in a rolled-back transaction first, then applied + `NOTIFY pgrst`). Everything in it exists because of one constraint from 0071: the wall display signs in as an account with **no read policy on `core.users` at all** and no access to any client outside the open hub session, so anything the TV needs to *show* about a person has to be snapshotted onto a row it can already read, or served by a security-definer function. Adds (a) `programming.exercise_coaching_notes.author_name` and `programming.hub_sessions.coach_name` — name snapshots, the same answer 0071 already used for `hub_session_clients.client_name`, nullable with no backfill so older notes render unattributed rather than guessed; (b) `programming.hub_idle_stats()`, security-definer, returning the gym's weekly session count and recent personal bests for the idle board. **The bests gate lives inside the function**, keyed on `core.settings.hub_idle_show_recent_bests` (seeded `false`) — so while it is off the TV never receives a client's name at all, and it needs no read on `core.settings` either (which it also has no policy for). "Best" = a lift logged in the last 7 days beating that client's own previous best, with at least 2 earlier days of that lift on record so a first-ever log is never announced; reps-only lifts are judged on reps, matching `getExerciseStats`/`countPersonalRecordsOn`.
+- `0079_session_education.sql` — **run**, verified live 2026-08-22 (10 columns, 3 FKs, RLS on, 1 policy, index, grants, PostgREST `200 []`, plus an impersonation test in a rolled-back transaction: coach reads and writes, member sees zero rows and is blocked from inserting). Adds `programming.session_education` — coach education per (block, session), staff-only. See the Coach Prep section.
+- `0080_session_education_scope.sql` — **run**, verified live 2026-08-23 (column + default confirmed, a bad value rejected by the check, all existing rows defaulted to `'session'` with nothing to backfill). Adds `session_education.scope` (`session`/`warmup`/`exercises`) so "general" can mean the warm-up block as well as the whole day.
 
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
@@ -5272,6 +5274,69 @@ did NOT reach react-native-web's `useWindowDimensions` either — a width-
 dependent branch tested that way reads as broken when it is fine. Reload at
 the target width instead; that is also the real case for a wall display.
 
+## Coach Prep: reading a block before it goes out (2026-08-22/23)
+
+Coaches were meeting a new block for the first time on the gym floor. Two
+surfaces: a **Coach ed** tab in the group session builder's right rail where
+the notes are written, and a new **Coach Prep** coach tab where they're read
+(program -> block -> session tabs -> the session overview and its education
+in one column). Group only, by decision. Phone-first, because that's where a
+coach reads it.
+
+**Notes are keyed to (block, session_number), NOT to a `group_workouts` row**
+(`programming.session_education`, migration 0079). You explain a block's lifts
+once, so a note written on Session 1 shows for Session 1 every week of that
+block; keying it to a workout would mean retyping the same coaching point six
+times and a coach reading week 3 would see nothing. `exercise_id` is a
+**pointer, not ownership** — the note isn't a property of the library exercise
+— and it's `ON DELETE SET NULL` so archiving an exercise can never silently
+bin something a coach typed. Staff-only RLS in every direction, no member
+policy at all, same reasoning as `client_limitations` (0057).
+
+**`scope` (0080) is only consulted when `exercise_id` is null.** 0079 encoded
+"general" as a null exercise, which was unambiguous while there was one kind
+of general; adding "the whole warm-up" made two. The rail writes `scope` back
+to `'session'` whenever a specific exercise is picked, so clearing the
+dropdown afterwards can't resurface a stale general. The constraint allows
+`'exercises'` even though nothing offers it — Terra's call was that "the main
+session in general" and "the whole session" are the same note, so adding it
+later is UI-only.
+
+**The dropdown reads in programmed order, not alphabetically**: `Whole
+session` / `Warm-ups` (with "General — the whole warm-up" first inside that
+group) / `Exercises`, sorted `(week, position, id)` and deduped on first
+appearance — the earliest week's running order with anything introduced later
+in the block appended. **The `id` tiebreak is load-bearing**: warm-up
+positions genuinely collided before `nextPosition()` landed (600f0d3), and a
+tie left to Postgres comes back in whatever order it feels like, which would
+reshuffle the dropdown between loads. A warm-up saved as free text with no
+exercise row can't be referenced at all — there's nothing to point at.
+
+**Coach Prep shows one representative week** (earliest with lifts) and names
+it on screen — the lifts belong to the session, the sets and reps belong to
+one week. Drafts are drawn with a DRAFT chip, which is the whole point.
+Session tabs come from what's in the block, not the program's current
+`sessions_per_week`, since an older block carries the count it was built with.
+`components/coach/SessionPrepView.js` is split out of the route specifically
+so it can be rendered against fixed data in a harness.
+
+**The builder rail is resizable** (`components/builder/RailResizer.js`,
+web-only, raw `<div>`): 7px handle in place of the old border, drag,
+double-click to reset, width in `localStorage`. **It clamps against the width
+of the row it lives in, not the viewport** — the exercise library sits to the
+left, so clamping on `window.innerWidth` let the rail reach 620px and squeezed
+the session column to 365px, well under the 520px floor it claimed to
+guarantee. Worth generalising: **clamp a resizable pane against its actual
+container, and treat a measured width of 0 as "not laid out yet", never as
+"unlimited room"**.
+
+Files: `app/(coach)/prep/`, `components/builder/CoachEducationRail.js`,
+`components/builder/RailResizer.js`, `components/coach/SessionPrepView.js`,
+`lib/programming/sessionEducation.js`, plus block-wide reads appended to
+`lib/programming/workouts.js`. **Not click-tested behind a real login** —
+standing limitation; the path most worth a real pass is writing a general
+warm-up note and confirming it lands on Prep.
+
 ## Working notes for future sessions
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.
@@ -5284,6 +5349,14 @@ the target width instead; that is also the real case for a wall display.
 - **`git push` is NOT reliably available even in a session where Supabase/Vercel/EAS CLIs are authenticated** — hit this for real 2026-08-07 (the Web Push session): `git push origin main` failed with `could not read Username for 'https://github.com': Device not configured` (no reachable `osxkeychain` entry for github.com, no `gh` CLI installed). Don't assume a push will succeed just because other tool auth has — commit locally, then explicitly tell the user the commit is local-only and ask them to push (or fix git credentials) rather than silently treating "committed" as "deployed." This matters more than usual for this project specifically, since Vercel's connected-repo auto-deploy is the *only* deploy path (see the "real Vercel-deploy lesson" note above) — a local-only commit means nothing shipped at all, not even a stale-but-present deploy.
 
 - **Never commit unless Terra explicitly asks, and when you do, stage only the exact files you changed — never `git add -A`, `git add .`, or `git commit -a`.** Terra frequently runs **several sessions against this same working tree at once**, so at any moment another session may have unrelated files mid-edit, including throwaway test harnesses. Blanket staging sweeps them into your commit. This caused a real near-miss on 2026-08-10: a commit meant only for `lib/webAutofillSuppression.js` staged everything modified and picked up a temporary visual harness that had been mounted on `app/(auth)/login.js` (the standing preview trick documented above), plus two other files from a parallel session. That harness `return`s a static swatch page **before** the real login form — had it been pushed, every web user would have hit a dead sign-in screen. It was caught only because the other session went to revert its harness and found it already committed. Two habits prevent it: don't commit unasked, and always `git add <specific paths>`. Also worth a `git status` glance before committing — if files you never touched are modified, another session owns them, so leave them alone.
+
+- **Test a pure helper against REAL data by running the shipped source, not a paraphrase.** `lib/programming/workouts.js`'s ordering helper was verified by reading the file in Node, slicing the function's own text out of it, `eval`ing that, and feeding it 38 real rows pulled from a live session in deliberately shuffled order — then comparing against the order a SQL query over the same block predicts. Copying the logic into a test file proves the copy works; this proves the shipped code does. Cheap whenever the thing under test is a pure function that doesn't need the Supabase client.
+
+- **A PostgREST embed fails at RUNTIME, not at build.** A `.select("…, group_workouts(week_number), …")` with a relationship PostgREST can't resolve returns `PGRST200` when a user hits the screen — `expo export` and the Babel scope pass both stay clean. Confirm a new embed before relying on it by curling the REST endpoint with the anon key: `200 []` means the embed parsed (RLS just hid the rows), an error body means it didn't.
+
+- **Dry-run a migration before applying it**, even an additive one: `{ echo "begin;"; cat supabase/migrations/00XX_*.sql; echo "rollback;"; } > /tmp/dry.sql && supabase db query --linked -f /tmp/dry.sql`, then confirm the object is still absent. Proves the whole script executes without leaving anything behind — which is exactly what caught the table-ordering bug in 0036 the hard way.
+
+- **After dispatching synthetic events in the browser, `await` before reading state back.** React batches, so measuring in the same synchronous block as the `dispatchEvent` returns the *pre-update* DOM — this produced a confidently wrong "the clamp isn't working" reading during the rail-resizer work, twice, before a `setTimeout` between the dispatch and the assert showed it had been correct all along. Same trap as the ResizeObserver/rAF gaps already noted above: when a measurement disagrees with a screenshot, trust the screenshot and re-measure after a settle.
 
 - **Prefer a throwaway top-level route over the login-screen harness.** A file
   like `app/zz-harness.js` (outside the `(auth)`/`(member)`/`(coach)` groups) is
