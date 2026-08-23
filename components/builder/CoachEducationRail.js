@@ -37,7 +37,7 @@ const GENERAL_WARMUP = "__warmup__";
 // Same order as the dropdown, so a card sits in the section its own
 // selection names.
 const SECTIONS = [
-  { key: "session", label: "WHOLE SESSION" },
+  { key: "session", label: "GENERAL" },
   { key: "warmup", label: "WARM-UPS" },
   { key: "exercise", label: "EXERCISES" },
 ];
@@ -97,7 +97,7 @@ function Field({ label, value, onCommit, multiline = false, placeholder }) {
 
 function headingFor(item) {
   if (item.exercises?.name) return item.exercises.name;
-  return item.scope === "warmup" ? "The whole warm-up" : "Whole session";
+  return item.scope === "warmup" ? "Warm-up notes" : "General";
 }
 
 function EducationCard({ item, groups, expanded, onToggle, onChange, onRemove, controls }) {
@@ -166,7 +166,7 @@ function EducationCard({ item, groups, expanded, onToggle, onChange, onRemove, c
           >
             {/* Blank is a real, useful choice — a note about the session as a
                 whole ("this week's theme is tempo") has nothing to hang on. */}
-            <option value="">Whole session (nothing specific)</option>
+            <option value="">General</option>
             {groups
               .filter((g) => g.items.length > 0 || g.general)
               .map((g) => (
@@ -237,7 +237,7 @@ export function CoachEducationRail({
     {
       label: "Warm-ups",
       items: warmups ?? [],
-      general: { value: GENERAL_WARMUP, label: "General — the whole warm-up" },
+      general: { value: GENERAL_WARMUP, label: "Warm-up notes" },
     },
     { label: "Exercises", items: lifts ?? [] },
   ];

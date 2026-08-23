@@ -57,7 +57,7 @@ function openVideo(url) {
 
 function EducationCard({ item, first, expanded, onToggle }) {
   const generalWarmup = !item.exercise_id && item.scope === "warmup";
-  const heading = item.exercises?.name ?? (generalWarmup ? "The whole warm-up" : "Whole session");
+  const heading = item.exercises?.name ?? (generalWarmup ? "Warm-up notes" : "General");
   const notes = (item.notes ?? "").trim();
   const video = (item.video_url ?? "").trim();
 
@@ -170,7 +170,7 @@ function SectionCard({ title, count, children, style }) {
 // coach writes them grouped, so reading them ungrouped meant re-sorting the
 // list in your head.
 const EDU_SECTIONS = [
-  { key: "session", label: "Whole session" },
+  { key: "session", label: "General" },
   { key: "warmup", label: "Warm-ups" },
   { key: "exercise", label: "Exercises" },
 ];
@@ -254,7 +254,7 @@ export function SessionPrepView({ workout, exercises, warmups, education, weeks,
         </SectionCard>
       ) : null}
 
-      <SectionCard title="LIFTS" count={exercises.length}>
+      <SectionCard title="EXERCISES" count={exercises.length}>
         {exercises.length === 0 ? (
           <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#6f6862" }}>
             Nothing programmed for this session yet.
