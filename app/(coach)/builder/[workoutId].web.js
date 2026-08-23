@@ -30,6 +30,7 @@ import {
   createSessionEducation,
   updateSessionEducation,
   deleteSessionEducation,
+  reorderSessionEducation,
 } from "../../../lib/programming/sessionEducation";
 import { CoachEducationRail } from "../../../components/builder/CoachEducationRail";
 import { RailResizer, loadRailWidth } from "../../../components/builder/RailResizer";
@@ -351,15 +352,23 @@ export default function WorkoutBuilderWeb() {
       const created = await createSessionEducation({
         groupBlockId: educationBlockId,
         sessionNumber: educationSession,
-        position: education.length,
+        position: nextPosition(education),
         createdBy: profile?.id ?? null,
       });
       setEducation((prev) => [...prev, created]);
       setSaveState("saved");
+      // Handed back so the rail can open the new card straight away.
+      return created;
     } catch (err) {
       setSaveState("error");
       toastError("Couldn't add the note", err);
+      return null;
     }
+  };
+
+  const handleReorderEducation = (next) => {
+    setEducation(next);
+    track(reorderSessionEducation(next), "Couldn't save the new order");
   };
 
   const handleEducationChange = (id, fields) => {
@@ -621,6 +630,7 @@ export default function WorkoutBuilderWeb() {
                   onAdd={handleAddEducation}
                   onChange={handleEducationChange}
                   onRemove={handleRemoveEducation}
+                  onReorder={handleReorderEducation}
                   onRetry={loadEducation}
                 />
               )}
@@ -672,7 +682,7 @@ export default function WorkoutBuilderWeb() {
 function RailTabs({ tab, onChange, educationCount }) {
   const tabs = [
     { key: "week", label: "This week" },
-    { key: "education", label: "Coach ed", count: educationCount },
+    { key: "education", label: "Coach Ed", count: educationCount },
   ];
   return (
     <View style={{ flexDirection: "row", backgroundColor: "#f4f1ec", borderRadius: 10, padding: 3, marginBottom: 18 }}>
