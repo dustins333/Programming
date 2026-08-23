@@ -1,4 +1,5 @@
-import { View, Text, Linking } from "react-native";
+import { useState } from "react";
+import { View, Text, Pressable, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../PressFade";
 import { toastError } from "../../lib/toast";
@@ -54,13 +55,12 @@ function openVideo(url) {
   Linking.openURL(href).catch((err) => toastError("Couldn't open that link", err));
 }
 
-function EducationCard({ item, isWarmup }) {
-  // scope only means anything when there's no exercise on the row — see
-  // migration 0080.
+function EducationCard({ item, first, expanded, onToggle }) {
   const generalWarmup = !item.exercise_id && item.scope === "warmup";
   const heading = item.exercises?.name ?? (generalWarmup ? "The whole warm-up" : "Whole session");
   const notes = (item.notes ?? "").trim();
   const video = (item.video_url ?? "").trim();
+
   return (
     <View
       style={{
@@ -68,57 +68,134 @@ function EducationCard({ item, isWarmup }) {
         borderWidth: 1,
         borderColor: "#f0ddd2",
         borderRadius: 14,
-        padding: 14,
-        marginTop: 10,
+        marginTop: first ? 0 : 8,
+        overflow: "hidden",
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 7 }}>
-        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansBold, fontSize: 14.5, color: colors.primaryOnWhite }}>
+      <Pressable onPress={onToggle} style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13, paddingVertical: 11 }}>
+        <Text
+          maxFontSizeMultiplier={1.2}
+          numberOfLines={1}
+          style={{ flexShrink: 1, fontFamily: fonts.sansBold, fontSize: 14, color: colors.primaryOnWhite }}
+        >
           {heading}
         </Text>
-        {/* Which half of the session this belongs to — a warm-up name on its
-            own reads like a lift you can't find in the list above. A general
-            warm-up card says so in its own heading, so it needs no chip. */}
-        {isWarmup && !generalWarmup ? (
-          <View style={{ borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: "#fff", borderWidth: 1, borderColor: "#e0b6a5" }}>
-            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.7, color: colors.primaryOnWhite }}>
-              WARM-UP
-            </Text>
-          </View>
-        ) : null}
-      </View>
-      {notes ? (
-        <Text style={{ fontFamily: fonts.sans, fontSize: 14, lineHeight: 21, color: "#44403c", marginTop: 7 }}>{notes}</Text>
-      ) : null}
-      {video ? (
-        <PressFade
-          onPress={() => openVideo(video)}
-          hitSlop={8}
-          style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 11, alignSelf: "flex-start" }}
+        <View style={{ flex: 1 }} />
+        {video ? <Ionicons name="videocam" size={14} color="#c08a76" /> : null}
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={15} color="#c08a76" />
+      </Pressable>
+
+      {expanded ? (
+        <View style={{ paddingHorizontal: 13, paddingBottom: 13 }}>
+          {notes ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 14, lineHeight: 21, color: "#44403c" }}>{notes}</Text>
+          ) : null}
+          {video ? (
+            <PressFade
+              onPress={() => openVideo(video)}
+              hitSlop={8}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: notes ? 11 : 0, alignSelf: "flex-start" }}
+            >
+              <Ionicons name="play-circle" size={19} color={colors.primary} />
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: colors.primaryOnWhite }}>Watch video ›</Text>
+            </PressFade>
+          ) : null}
+        </View>
+      ) : (
+        <Text
+          numberOfLines={1}
+          style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#8a7f77", paddingHorizontal: 13, paddingBottom: 11, marginTop: -4 }}
         >
-          <Ionicons name="play-circle" size={19} color={colors.primary} />
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: colors.primaryOnWhite }}>Watch video ›</Text>
-        </PressFade>
-      ) : null}
+          {notes || "Video only"}
+        </Text>
+      )}
     </View>
   );
 }
 
-export function SessionPrepView({ workout, exercises, warmups, education, weeks, warmupExerciseIds }) {
-  const letters = supersetLetters(exercises);
-  const published = workout.status === "published";
+// One block per part of the session, each with its own tinted header band.
+//
+// These used to be small grey eyebrows inside one white card, which read as a
+// single continuous list — you could not tell at a glance where the warm-up
+// stopped and the lifting started. Same two-tone treatment My Week's program
+// cards use: the band is edge-to-edge via overflow:"hidden" on the rounded
+// container rather than inset by the card's own padding, so it reads as a
+// header rather than a highlighted first row.
+function SectionCard({ title, count, children, style }) {
   return (
-    <>
-      <View
-        style={{
+    <View
+      style={[
+        {
           backgroundColor: "#fff",
           borderWidth: 1,
           borderColor: CARD_BORDER,
           borderRadius: 16,
-          padding: 16,
+          overflow: "hidden",
           marginTop: 14,
+        },
+        style,
+      ]}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          backgroundColor: "#f4f1ec",
+          borderBottomWidth: 1,
+          borderBottomColor: CARD_BORDER,
+          paddingHorizontal: 14,
+          paddingVertical: 9,
         }}
       >
+        <Text
+          maxFontSizeMultiplier={1.2}
+          style={{ fontFamily: fonts.sansBold, fontSize: 11.5, letterSpacing: 1.1, color: "#57534e" }}
+        >
+          {title}
+        </Text>
+        {count != null ? (
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: "#a8a29e" }}>
+            {count}
+          </Text>
+        ) : null}
+      </View>
+      <View style={{ paddingHorizontal: 14, paddingVertical: 12 }}>{children}</View>
+    </View>
+  );
+}
+
+// Same three groups, in the same order, as the builder's Coach Ed rail — a
+// coach writes them grouped, so reading them ungrouped meant re-sorting the
+// list in your head.
+const EDU_SECTIONS = [
+  { key: "session", label: "Whole session" },
+  { key: "warmup", label: "Warm-ups" },
+  { key: "exercise", label: "Exercises" },
+];
+
+export function SessionPrepView({ workout, exercises, warmups, education, weeks, warmupExerciseIds }) {
+  const letters = supersetLetters(exercises);
+  const published = workout.status === "published";
+  // Single-open, matching the rail. Reading surface, so the collapsed row
+  // carries the note's first line rather than just a title — you should be
+  // able to skim the session's coaching without opening anything.
+  const [openNoteId, setOpenNoteId] = useState(null);
+
+  const eduKind = (item) => {
+    if (!item.exercise_id) return item.scope === "warmup" ? "warmup" : "session";
+    return warmupExerciseIds?.has(item.exercise_id) ? "warmup" : "exercise";
+  };
+  const eduBySection = { session: [], warmup: [], exercise: [] };
+  for (const item of education) eduBySection[eduKind(item)].push(item);
+  const eduSections = EDU_SECTIONS.filter((sec) => eduBySection[sec.key].length > 0);
+  return (
+    <>
+      {/* The session's own heading sits outside the cards — it names what all
+          three of them belong to, so boxing it would make it read as a fourth
+          section rather than the thing above them. */}
+      <View style={{ marginTop: 16 }}>
         <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           <Text style={{ flexShrink: 1, fontFamily: fonts.display, fontSize: 21, color: "#2a211c" }}>
             {workout.title || `Session ${workout.session_number}`}
@@ -148,83 +225,108 @@ export function SessionPrepView({ workout, exercises, warmups, education, weeks,
         <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#6f6862", marginTop: 4 }}>
           Showing week {workout.week_number} of {weeks}
         </Text>
-
-        {warmups.length > 0 ? (
-          <View style={{ marginTop: 16 }}>
-            <PrepEyebrow>WARM-UP</PrepEyebrow>
-            {warmups.map((w, i) => (
-              <View key={w.id ?? `${w.position}-${i}`} style={{ flexDirection: "row", justifyContent: "space-between", gap: 10, paddingVertical: 5 }}>
-                <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 14, color: "#44403c" }}>
-                  {w.exercises?.name ?? w.label ?? "Warm-up"}
-                </Text>
-                {w.sets || w.reps ? (
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#6f6862" }}>
-                    {w.sets ?? "–"} × {w.reps || "–"}
-                  </Text>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        <View style={{ marginTop: warmups.length > 0 ? 18 : 16 }}>
-          <PrepEyebrow>LIFTS · {exercises.length}</PrepEyebrow>
-          {exercises.length === 0 ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#6f6862", marginTop: 6 }}>
-              Nothing programmed for this session yet.
-            </Text>
-          ) : (
-            exercises.map((ex, i) => {
-              const letter = ex.superset_group_id ? letters[ex.superset_group_id] : null;
-              return (
-                <View
-                  key={ex.id}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                    paddingVertical: 9,
-                    borderTopWidth: i === 0 ? 0 : 1,
-                    borderTopColor: "#f4f1ec",
-                  }}
-                >
-                  <Text maxFontSizeMultiplier={1.1} style={{ width: 20, fontFamily: fonts.sansBold, fontSize: 12, color: "#c9c4bd" }}>
-                    {i + 1}
-                  </Text>
-                  <Text style={{ flexShrink: 1, fontFamily: fonts.sansSemiBold, fontSize: 14.5, color: "#2a211c" }}>
-                    {ex.exercises?.name ?? "Exercise"}
-                  </Text>
-                  {/* The pairing gets its own mark rather than replacing the
-                      ordinal — 1 / A / A / 4 down the left reads as a hole in
-                      the numbering, not as a superset. */}
-                  {letter ? (
-                    <View style={{ borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1, backgroundColor: "#fdf1ea", borderWidth: 1, borderColor: "#e0b6a5" }}>
-                      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, color: colors.primaryOnWhite }}>
-                        {letter}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <View style={{ flex: 1 }} />
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#6f6862" }}>{prescriptionLine(ex)}</Text>
-                </View>
-              );
-            })
-          )}
-        </View>
       </View>
 
-      <View style={{ marginTop: 22 }}>
-        <PrepEyebrow>COACH EDUCATION</PrepEyebrow>
+      {warmups.length > 0 ? (
+        <SectionCard title="WARM-UP" count={warmups.length}>
+          {warmups.map((w, i) => (
+            <View
+              key={w.id ?? `${w.position}-${i}`}
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                gap: 10,
+                paddingVertical: 7,
+                borderTopWidth: i === 0 ? 0 : 1,
+                borderTopColor: "#f4f1ec",
+              }}
+            >
+              <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 14, color: "#44403c" }}>
+                {w.exercises?.name ?? w.label ?? "Warm-up"}
+              </Text>
+              {w.sets || w.reps ? (
+                <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#6f6862" }}>
+                  {w.sets ?? "–"} × {w.reps || "–"}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+        </SectionCard>
+      ) : null}
+
+      <SectionCard title="LIFTS" count={exercises.length}>
+        {exercises.length === 0 ? (
+          <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#6f6862" }}>
+            Nothing programmed for this session yet.
+          </Text>
+        ) : (
+          exercises.map((ex, i) => {
+            const letter = ex.superset_group_id ? letters[ex.superset_group_id] : null;
+            return (
+              <View
+                key={ex.id}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingVertical: 9,
+                  borderTopWidth: i === 0 ? 0 : 1,
+                  borderTopColor: "#f4f1ec",
+                }}
+              >
+                <Text maxFontSizeMultiplier={1.1} style={{ width: 20, fontFamily: fonts.sansBold, fontSize: 12, color: "#c9c4bd" }}>
+                  {i + 1}
+                </Text>
+                <Text style={{ flexShrink: 1, fontFamily: fonts.sansSemiBold, fontSize: 14.5, color: "#2a211c" }}>
+                  {ex.exercises?.name ?? "Exercise"}
+                </Text>
+                {/* The pairing gets its own mark rather than replacing the
+                    ordinal — 1 / A / A / 4 down the left reads as a hole in
+                    the numbering, not as a superset. */}
+                {letter ? (
+                  <View style={{ borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1, backgroundColor: "#fdf1ea", borderWidth: 1, borderColor: "#e0b6a5" }}>
+                    <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, color: colors.primaryOnWhite }}>
+                      {letter}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={{ flex: 1 }} />
+                <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#6f6862" }}>{prescriptionLine(ex)}</Text>
+              </View>
+            );
+          })
+        )}
+      </SectionCard>
+
+      <SectionCard title="COACH EDUCATION" count={education.length || null}>
         {education.length === 0 ? (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, lineHeight: 20, color: "#6f6862", marginTop: 7 }}>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, lineHeight: 20, color: "#6f6862" }}>
             Nothing written for this session. Not every session needs it.
           </Text>
         ) : (
-          education.map((item) => (
-            <EducationCard key={item.id} item={item} isWarmup={Boolean(item.exercise_id && warmupExerciseIds?.has(item.exercise_id))} />
+          eduSections.map((sec, si) => (
+            <View key={sec.key} style={{ marginTop: si === 0 ? 0 : 16 }}>
+              {/* The group says which half of the session it belongs to, so
+                  the per-card WARM-UP chip that used to do that job is gone. */}
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.9, color: "#a8a29e", marginBottom: 7 }}
+              >
+                {sec.label.toUpperCase()}
+              </Text>
+              {eduBySection[sec.key].map((item, i) => (
+                <EducationCard
+                  key={item.id}
+                  item={item}
+                  first={i === 0}
+                  expanded={openNoteId === item.id}
+                  onToggle={() => setOpenNoteId((prev) => (prev === item.id ? null : item.id))}
+                />
+              ))}
+            </View>
           ))
         )}
-      </View>
+      </SectionCard>
     </>
   );
 }
