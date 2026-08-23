@@ -7,6 +7,7 @@ import { fonts, colors } from "../../lib/theme";
 const ROWS = [
   { href: "/(coach)/blocks", title: "Group Programs", subtitle: "Shared calendars & blocks" },
   { href: "/(coach)/spc", title: "SPC", subtitle: "Individualized, staggered blocks", permission: "can_view_spc" },
+  { href: "/(coach)/prep", title: "Coach Prep", subtitle: "Preview a block & read the coaching notes" },
 ];
 
 export default function Programs() {

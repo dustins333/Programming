@@ -21,8 +21,18 @@ import {
   copyWorkoutContent,
   setWorkoutStatus,
   setWorkoutTitle,
+  listDistinctLiftsForWorkouts,
+  listDistinctWarmupsForWorkouts,
 } from "../../../lib/programming/workouts";
 import { listWorkoutsForBlock } from "../../../lib/programming/blocks";
+import {
+  listSessionEducation,
+  createSessionEducation,
+  updateSessionEducation,
+  deleteSessionEducation,
+} from "../../../lib/programming/sessionEducation";
+import { CoachEducationRail } from "../../../components/builder/CoachEducationRail";
+import { RailResizer, loadRailWidth } from "../../../components/builder/RailResizer";
 import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../components/ExercisePickerModal";
 import { ExerciseLibrarySidebar } from "../../../components/ExerciseLibrarySidebar";
@@ -86,6 +96,16 @@ export default function WorkoutBuilderWeb() {
   const [publishing, setPublishing] = useState(false);
   const [copyingLastWeek, setCopyingLastWeek] = useState(false);
   const [saveState, setSaveState] = useState("saved"); // saved | saving | error
+  // Right rail is two tabs now: what's programmed this week, and the coach
+  // education that goes out with the block (migration 0079).
+  const [railTab, setRailTab] = useState("week"); // week | education
+  const [education, setEducation] = useState([]);
+  const [educationLifts, setEducationLifts] = useState([]);
+  const [educationWarmups, setEducationWarmups] = useState([]);
+  const [educationState, setEducationState] = useState("loading"); // loading | ready | error
+  // Lazy initialiser, so the stored width is read once rather than on every
+  // render — and so server rendering never touches localStorage.
+  const [railWidth, setRailWidth] = useState(() => loadRailWidth(268));
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -116,6 +136,41 @@ export default function WorkoutBuilderWeb() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Education is keyed to (block, session_number), not to this workout — so
+  // the dropdown offers every lift programmed for this session anywhere in
+  // the block, not just the week that happens to be open.
+  const educationBlockId = workout?.group_blocks?.id ?? null;
+  const educationSession = workout?.session_number ?? null;
+  const sessionWorkoutIds = useMemo(
+    () => blockWorkouts.filter((w) => w.session_number === educationSession).map((w) => w.id),
+    [blockWorkouts, educationSession]
+  );
+
+  // Fetched separately from load(), not inside its Promise.all: a failure
+  // here must leave the builder itself perfectly usable.
+  const loadEducation = useCallback(async () => {
+    if (!educationBlockId || !educationSession) return;
+    setEducationState("loading");
+    try {
+      const [rows, lifts, warmups] = await Promise.all([
+        listSessionEducation(educationBlockId, educationSession),
+        listDistinctLiftsForWorkouts(sessionWorkoutIds),
+        listDistinctWarmupsForWorkouts(sessionWorkoutIds),
+      ]);
+      setEducation(rows);
+      setEducationLifts(lifts);
+      setEducationWarmups(warmups);
+      setEducationState("ready");
+    } catch (err) {
+      console.error("Builder: failed to load coach education", err);
+      setEducationState("error");
+    }
+  }, [educationBlockId, educationSession, sessionWorkoutIds]);
+
+  useEffect(() => {
+    loadEducation();
+  }, [loadEducation]);
 
   // Every write on this screen is optimistic-then-persist, so the header's
   // "Saved" light is the only thing telling a coach the round trip landed.
@@ -278,6 +333,43 @@ export default function WorkoutBuilderWeb() {
   const handleTitleChange = (title) => {
     setWorkout((w) => ({ ...w, title }));
     track(setWorkoutTitle(workoutId, title), "Couldn't save title");
+  };
+
+  const handleAddEducation = async () => {
+    try {
+      setSaveState("saving");
+      const created = await createSessionEducation({
+        groupBlockId: educationBlockId,
+        sessionNumber: educationSession,
+        position: education.length,
+        createdBy: profile?.id ?? null,
+      });
+      setEducation((prev) => [...prev, created]);
+      setSaveState("saved");
+    } catch (err) {
+      setSaveState("error");
+      toastError("Couldn't add the note", err);
+    }
+  };
+
+  const handleEducationChange = (id, fields) => {
+    setEducation((prev) => prev.map((e) => (e.id === id ? { ...e, ...fields } : e)));
+    track(updateSessionEducation(id, fields), "Couldn't save the note");
+  };
+
+  const handleRemoveEducation = async (id) => {
+    const removed = education.find((e) => e.id === id);
+    const index = education.findIndex((e) => e.id === id);
+    setEducation((prev) => prev.filter((e) => e.id !== id));
+    try {
+      setSaveState("saving");
+      await deleteSessionEducation(id);
+      setSaveState("saved");
+    } catch (err) {
+      setSaveState("error");
+      toastError("Couldn't remove the note", err);
+      if (removed) setEducation((prev) => [...prev.slice(0, index), removed, ...prev.slice(index)]);
+    }
   };
 
   const handleCopyLastWeek = async () => {
@@ -482,19 +574,42 @@ export default function WorkoutBuilderWeb() {
               </View>
             </ScrollView>
 
+            {/* The resizer IS the divider now, so the rail drops its own
+                left border rather than drawing a second line beside it. */}
+            <RailResizer width={railWidth} onResize={setRailWidth} />
+
             <ScrollView
-              style={{ width: 268, flexGrow: 0, flexShrink: 0, borderLeftWidth: 1, borderLeftColor: BUILDER_CARD_BORDER, backgroundColor: "#faf8f6" }}
+              style={{ width: railWidth, flexGrow: 0, flexShrink: 0, backgroundColor: "#faf8f6" }}
               contentContainerStyle={{ padding: 18, flexGrow: 1 }}
             >
-              <BalanceRail counts={patternCounts} note={balanceNote} />
-              <LastWeekRail lastWeek={lastWeek} onCopy={handleCopyLastWeek} copying={copyingLastWeek} />
-              {/* Not in the v2 mock, kept deliberately: block notes are
-                  coach-to-coach and the native builder still shows them, so
-                  dropping them here would mean a note written on a phone was
-                  invisible on the platform the work actually happens on. */}
-              <View style={{ marginTop: 26 }}>
-                <CommentThread groupBlockId={workout.group_blocks.id} />
-              </View>
+              <RailTabs tab={railTab} onChange={setRailTab} educationCount={education.length} />
+
+              {railTab === "week" ? (
+                <>
+                  <BalanceRail counts={patternCounts} note={balanceNote} />
+                  <LastWeekRail lastWeek={lastWeek} onCopy={handleCopyLastWeek} copying={copyingLastWeek} />
+                  {/* Not in the v2 mock, kept deliberately: block notes are
+                      coach-to-coach and the native builder still shows them, so
+                      dropping them here would mean a note written on a phone was
+                      invisible on the platform the work actually happens on. */}
+                  <View style={{ marginTop: 26 }}>
+                    <CommentThread groupBlockId={workout.group_blocks.id} />
+                  </View>
+                </>
+              ) : (
+                <CoachEducationRail
+                  sessionNumber={workout.session_number}
+                  items={education}
+                  lifts={educationLifts}
+                  warmups={educationWarmups}
+                  loading={educationState === "loading"}
+                  error={educationState === "error"}
+                  onAdd={handleAddEducation}
+                  onChange={handleEducationChange}
+                  onRemove={handleRemoveEducation}
+                  onRetry={loadEducation}
+                />
+              )}
             </ScrollView>
           </View>
         </View>
@@ -532,5 +647,45 @@ export default function WorkoutBuilderWeb() {
         }))}
       />
     </DndContext>
+  );
+}
+
+/* ------------------------------------------------------------ rail tabs */
+
+// Two-up strip at the top of the right rail. The count sits on the tab
+// itself so a coach can tell there's education on this session without
+// switching tabs to find out.
+function RailTabs({ tab, onChange, educationCount }) {
+  const tabs = [
+    { key: "week", label: "This week" },
+    { key: "education", label: "Coach ed", count: educationCount },
+  ];
+  return (
+    <View style={{ flexDirection: "row", backgroundColor: "#f4f1ec", borderRadius: 10, padding: 3, marginBottom: 18 }}>
+      {tabs.map((t) => {
+        const active = t.key === tab;
+        return (
+          <Pressable
+            key={t.key}
+            onPress={() => onChange(t.key)}
+            style={{ flex: 1, borderRadius: 8, paddingVertical: 7, backgroundColor: active ? "#fff" : "transparent" }}
+          >
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.1}
+              style={{
+                textAlign: "center",
+                fontFamily: active ? fonts.sansBold : fonts.sansMedium,
+                fontSize: 12,
+                color: active ? "#2a211c" : "#78716c",
+              }}
+            >
+              {t.label}
+              {t.count ? ` · ${t.count}` : ""}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }

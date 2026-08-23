@@ -17,6 +17,9 @@ const NAV_ITEMS = [
   // gated on can_view_spc, Ops Hours on can_log_ops_hours).
   { key: "payroll", label: "Payroll", href: "/(coach)/payroll", icon: "cash" },
   { key: "blocks", label: "Group Programs", href: "/(coach)/blocks", icon: "barbell" },
+  // No permission gate — coach education is for every coach who runs the
+  // floor, which is the whole reason it exists.
+  { key: "prep", label: "Coach Prep", href: "/(coach)/prep", icon: "school" },
   // No permission gate — the spec is explicit that every coach can view
   // CCrew. Uploading a month is admin-only, enforced on the upload screen
   // and by RLS, not by hiding the nav item.
