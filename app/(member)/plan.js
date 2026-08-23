@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { getClientGoal } from "../../lib/programming/clientGoals";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
@@ -167,6 +168,7 @@ export default function MyFitness() {
   const [spcDetailError, setSpcDetailError] = useState(null);
   const [spcDetailRetryKey, setSpcDetailRetryKey] = useState(0);
   const [oneOffs, setOneOffs] = useState([]);
+  const [goal, setGoal] = useState(null);
   const [hasNutrition, setHasNutrition] = useState(false);
   // Set once the member picks an option from ProgramPickerModal — either the
   // one auto-shown when My Fitness is opened with no session context and 2+
@@ -456,6 +458,16 @@ export default function MyFitness() {
     } catch (err) {
       console.error("My Fitness: failed to load one-offs", err);
       if (!isStale()) setOneOffs([]);
+    }
+
+    // What their coach wrote they're working toward. Own try/catch, same as
+    // every other domain on this page — and this one throws outright until
+    // migration 0078 is run.
+    try {
+      const goalRow = await getClientGoal(profile.id);
+      if (!isStale()) setGoal(goalRow?.goal ?? null);
+    } catch {
+      if (!isStale()) setGoal(null);
     }
 
     // Only to tell a nutrition-only member apart from a genuinely
@@ -845,6 +857,7 @@ export default function MyFitness() {
           tabs={activeFinalize.tabs}
           selectedTab={activeFinalize.selectedTab}
           onSelectTab={activeFinalize.onSelectTab}
+          goal={goal}
         />
       </View>
     ) : focus?.type === "extras" && oneOffs.length > 0 ? (
@@ -857,6 +870,7 @@ export default function MyFitness() {
           onPickProgram={candidates.length > 1 ? () => setPickerOpen(true) : null}
           title={oneOffs.length === 1 ? oneOffs[0].workout.title || "One-off workout" : `${oneOffs.length} one-off workouts`}
           onOpenSettings={() => router.push("/(member)/settings")}
+          goal={goal}
         />
       </View>
     ) : (

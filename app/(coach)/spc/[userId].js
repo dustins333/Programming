@@ -29,6 +29,7 @@ export default function SpcClientDetailNative() {
       <CoachSpcOverview
         userId={userId}
         showBack
+        goalEditable
         backTo="/(coach)/spc"
         footer={
           <View style={{ marginTop: 18, alignItems: "center" }}>

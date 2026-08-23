@@ -31,6 +31,8 @@ import { SessionPreviewModal } from "../../../../components/SessionPreviewModal"
 import { CommentThread } from "../../../../components/CommentThread";
 import { ClientLimitationsCard } from "../../../../components/ClientLimitationsCard";
 import { listClientLimitations } from "../../../../lib/programming/clientNotes";
+import { getClientGoal } from "../../../../lib/programming/clientGoals";
+import { ClientGoalCard } from "../../../../components/ClientGoalCard";
 import { PressFade } from "../../../../components/PressFade";
 import {
   BUILDER_CANVAS,
@@ -90,6 +92,7 @@ export default function SpcWorkoutBuilderWeb() {
   // Own state, own failure mode — migration 0057 may not be run in every
   // environment, and a builder must never fail to open over a rail panel.
   const [limitations, setLimitations] = useState(null);
+  const [goal, setGoal] = useState(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -117,6 +120,11 @@ export default function SpcWorkoutBuilderWeb() {
         setLimitations(await listClientLimitations(w.spc_blocks.spc_client_id));
       } catch {
         setLimitations([]);
+      }
+      try {
+        setGoal((await getClientGoal(w.spc_blocks.spc_client_id))?.goal ?? null);
+      } catch {
+        setGoal(null);
       }
       setLastWeek(previousWeek);
     } catch (err) {
@@ -501,7 +509,13 @@ export default function SpcWorkoutBuilderWeb() {
               style={{ width: 268, flexGrow: 0, flexShrink: 0, borderLeftWidth: 1, borderLeftColor: BUILDER_CARD_BORDER, backgroundColor: "#faf8f6" }}
               contentContainerStyle={{ padding: 18, flexGrow: 1 }}
             >
-              {/* Limitations lead the rail — they're a constraint on what
+              {/* The goal leads the rail, then limitations: what she's working
+                  toward is the frame, and the limitations are the constraints
+                  on it. Read-only — editing belongs on her own page. */}
+              {goal ? (
+                <ClientGoalCard goal={goal} showSharedMark={false} style={{ marginBottom: 18 }} />
+              ) : null}
+              {/* Limitations lead the constraints — they're a constraint on what
                   you're about to write, so they have to be read before the
                   balance and last-week panels, not after. Read-only here:
                   editing them belongs on the client's own page, which is

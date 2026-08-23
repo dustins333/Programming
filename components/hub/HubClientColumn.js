@@ -3,6 +3,7 @@ import { ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { PressFade } from "../PressFade";
+import { ClientGoalLine } from "../ClientGoalCard";
 import { SetBubbleRow } from "./HubSetBubbles";
 import { HubLiftCard } from "./HubLiftCard";
 import { HubDock, DockPill } from "./HubDock";
@@ -558,6 +559,13 @@ export function HubClientColumn({
             <Ionicons name={editOrder ? "close-circle" : "swap-vertical"} size={compact ? 22 : 25} color={editOrder ? colors.primary : colors.muted} />
           </PressFade>
         </View>
+
+        {/* What she's working toward — the same shared card the coach edits on
+            her programming page and she reads on her own session, reduced to
+            the one line this column has room for. A solid clay pill rather
+            than the quieter ghost line the member app uses: this one has to
+            read from across the gym. */}
+        <ClientGoalLine goal={entry.goal} tone="pill" style={{ marginTop: 8 }} />
       </View>
 
       {/* Warm-up strip — states its own count so the chevron has something to

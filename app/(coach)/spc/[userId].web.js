@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getUser, listCoaches } from "../../../lib/programming/clients";
 import { getSpcClient, updateSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
@@ -18,6 +19,7 @@ import { getExerciseStats } from "../../../lib/programming/exerciseStats";
 import { currentWeekNumber } from "../../../lib/programming/schedule";
 import { getClient as getNutritionClient } from "../../../lib/nutrition/clients";
 import { getSetting } from "../../../lib/settings";
+import { getClientGoal } from "../../../lib/programming/clientGoals";
 import { SpcSessionReadout } from "../../../components/SpcSessionReadout";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
 import { PrintBlockPickerModal } from "../../../components/PrintBlockPickerModal";
@@ -26,6 +28,7 @@ import { CommentThread } from "../../../components/CommentThread";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { CoachSpcOverview } from "../../../components/coach/CoachSpcOverview";
 import { PressFade } from "../../../components/PressFade";
+import { ClientGoalCard } from "../../../components/ClientGoalCard";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { STATUS_LABELS, STATUS_ORDER } from "../../../lib/programming/spcStatus";
 import { todayInBoise } from "../../../lib/boiseDate";
@@ -360,6 +363,7 @@ function SpcClientDesktop() {
   const [copyTargets, setCopyTargets] = useState(new Set());
   const [copyBusy, setCopyBusy] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
+  const [goalRow, setGoalRow] = useState(null);
   const [defaultLengthWeeks, setDefaultLengthWeeks] = useState(4);
   const [latestBlockPreview, setLatestBlockPreview] = useState([]);
 
@@ -368,13 +372,17 @@ function SpcClientDesktop() {
   const load = useCallback(async () => {
     try {
       setLoadError(null);
-      const [memberRow, clientRow, coachRows, blockRows, lengthSetting] = await Promise.all([
+      const [memberRow, clientRow, coachRows, blockRows, lengthSetting, goal] = await Promise.all([
         getUser(userId),
         getSpcClient(userId),
         listCoaches(),
         listBlocksForSpcClient(userId),
         getSetting("default_block_length_weeks", 4).catch(() => 4),
+        // Isolated: until 0078 is run this throws, and a goal is the least
+        // important thing on this page — it must not blank the block.
+        getClientGoal(userId).catch(() => null),
       ]);
+      setGoalRow(goal);
       setDefaultLengthWeeks(Number(lengthSetting) || 4);
       setMember(memberRow);
       setSpcClient(clientRow);
@@ -640,8 +648,11 @@ function SpcClientDesktop() {
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#a8a29e" }}>‹ SPC</Text>
         </Pressable>
 
-        {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+        {/* Header. Two rows now: identity + the shared goal card across the
+            top, actions underneath. The goal card needs real width, and this
+            header was already carrying four buttons — putting both on one
+            line left neither enough room. */}
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
           <View
             style={{ width: 46, height: 46, borderRadius: 99, backgroundColor: "#fdece5", alignItems: "center", justifyContent: "center" }}
           >
@@ -668,7 +679,54 @@ function SpcClientDesktop() {
             </Text>
           </View>
 
-          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+          {/* The one card the client sees too. Its `notes` slot pulls
+              spc_clients.notes_goals_feedback up here — those notes used to
+              live four scrolls down the rail, which is why nobody read them.
+              Shared on top, private underneath, visibly one object. */}
+          <ClientGoalCard
+            goal={goalRow?.goal}
+            userId={userId}
+            clientName={member.name}
+            editable
+            editorId={profile?.id}
+            onSaved={setGoalRow}
+            style={{ width: 380, flexGrow: 1, flexShrink: 0, minWidth: 300 }}
+            notes={
+              <>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 }}>
+                  <Ionicons name="lock-closed" size={11} color="#a8a29e" />
+                  <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1, color: "#a8a29e" }}>
+                    COACH NOTES
+                  </Text>
+                </View>
+                <TextInput
+                  value={notesDraft}
+                  onChangeText={setNotesDraft}
+                  onBlur={() => {
+                    if (notesDraft !== (spcClient?.notes_goals_feedback ?? ""))
+                      patch({ notes_goals_feedback: notesDraft }, "Notes saved");
+                  }}
+                  multiline
+                  placeholder="Only you and the other coaches see this…"
+                  placeholderTextColor={colors.hint}
+                  style={{
+                    minHeight: 54,
+                    borderWidth: 1,
+                    borderColor: CARD_BORDER,
+                    borderRadius: 8,
+                    padding: 9,
+                    fontFamily: fonts.sans,
+                    fontSize: 12.5,
+                    color: "#2a211c",
+                    textAlignVertical: "top",
+                  }}
+                />
+              </>
+            }
+          />
+        </View>
+
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 14, marginBottom: 18 }}>
             {detail ? (
               <PressFade
                 onPress={() => setPrintPickerOpen(true)}
@@ -702,7 +760,6 @@ function SpcClientDesktop() {
             >
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>Build next block</Text>
             </PressFade>
-          </View>
         </View>
 
         {/* Block tabs */}
@@ -973,29 +1030,6 @@ function SpcClientDesktop() {
                       onSelect={(key) => patch({ sessions_per_week: Number(key) })}
                     />
 
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginTop: 12, marginBottom: 5 }}>
-                      Goals & feedback
-                    </Text>
-                    <TextInput
-                      value={notesDraft}
-                      onChangeText={setNotesDraft}
-                      onBlur={() => {
-                        if (notesDraft !== (spcClient?.notes_goals_feedback ?? "")) patch({ notes_goals_feedback: notesDraft }, "Notes saved");
-                      }}
-                      multiline
-                      placeholder="What the client is working toward…"
-                      style={{
-                        minHeight: 70,
-                        borderWidth: 1,
-                        borderColor: CARD_BORDER,
-                        borderRadius: 8,
-                        padding: 10,
-                        fontFamily: fonts.sans,
-                        fontSize: 12.5,
-                        color: "#2a211c",
-                        textAlignVertical: "top",
-                      }}
-                    />
                   </View>
                 </>
               ) : null}
@@ -1116,6 +1150,7 @@ function SpcClientMobileWeb() {
       <CoachSpcOverview
         userId={userId}
         showBack
+        goalEditable
         backTo="/(coach)/spc"
         footer={
           <View style={{ marginTop: 18, alignItems: "center" }}>

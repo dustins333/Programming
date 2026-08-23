@@ -4,6 +4,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { todayInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
+import { useAuth } from "../../lib/auth/AuthProvider";
+import { getClientGoal } from "../../lib/programming/clientGoals";
+import { ClientGoalCard } from "../ClientGoalCard";
 import { getUser } from "../../lib/programming/clients";
 import { getSpcClient } from "../../lib/programming/spcClients";
 import { listSpcWorkoutsForBlock, listBlocksForSpcClient, labelBlocks } from "../../lib/programming/spcBlocks";
@@ -34,7 +37,12 @@ function prescriptionLine(ex) {
 
 // `showBack`/`showName` are on when this is pushed as its own route and off
 // when it's embedded in the client page, which already has both.
-export function CoachSpcOverview({ userId, showBack = false, embedded = false, footer = null, backTo = null }) {
+// `goalEditable` is opt-in because this same component backs the web
+// "Preview" route, which is meant to be the member's own view — an edit
+// affordance there would misrepresent what she actually sees.
+export function CoachSpcOverview({ userId, showBack = false, embedded = false, footer = null, backTo = null, goalEditable = false }) {
+  const { profile } = useAuth();
+  const [goalRow, setGoalRow] = useState(null);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [selectedBlockId, setSelectedBlockId] = useState(null);
@@ -49,6 +57,8 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
     setSessionContent({});
     try {
       const [member, spcClient] = await Promise.all([getUser(userId), getSpcClient(userId)]);
+      // Isolated: throws until 0078 is run, and must never blank the block.
+      setGoalRow(await getClientGoal(userId).catch(() => null));
       if (!spcClient) return setState({ status: "not_enrolled", member });
 
       const today = todayInBoise();
@@ -179,6 +189,19 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
         </Text>
       ) : (
         <>
+          {/* The shared goal — same card the coach edits on the web SPC
+              page and the member reads on her session. */}
+          <ClientGoalCard
+            goal={goalRow?.goal}
+            userId={userId}
+            clientName={state.member?.name}
+            editable={goalEditable}
+            editorId={profile?.id}
+            showSharedMark={goalEditable}
+            onSaved={setGoalRow}
+            style={{ marginBottom: 14 }}
+          />
+
           <BlockPicker blocks={state.blocks} selectedId={state.block.id} onSelect={setSelectedBlockId} today={state.today} />
 
           <BlockProgressHero

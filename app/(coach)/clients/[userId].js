@@ -8,6 +8,8 @@ import { listGroupPrograms } from "../../../lib/programming/blocks";
 import { getCurrentBlock } from "../../../lib/programming/memberPlan";
 import { currentWeekNumber, blockLengthWeeks } from "../../../lib/programming/schedule";
 import { getMissedSessionFlagsByUser } from "../../../lib/programming/flags";
+import { getClientGoal } from "../../../lib/programming/clientGoals";
+import { ClientGoalCard } from "../../../components/ClientGoalCard";
 import { getSpcClient, assignSpcClient, setSpcStatus, updateSpcClient } from "../../../lib/programming/spcClients";
 import { getCurrentSpcBlock } from "../../../lib/programming/spcBlocks";
 import { getClient as getNutritionClient, createOrReactivateClient, setClientStatus as setNutritionStatus } from "../../../lib/nutrition/clients";
@@ -240,6 +242,7 @@ export default function ClientProfile() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [member, setMember] = useState(null);
+  const [goalRow, setGoalRow] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [currentBlocksByProgramId, setCurrentBlocksByProgramId] = useState({});
@@ -333,7 +336,14 @@ export default function ClientProfile() {
       ]);
       setMember(memberRow);
 
-      const [spcResult, nutritionResult] = await Promise.allSettled([getSpcClient(userId), getNutritionClient(userId)]);
+      const [spcResult, nutritionResult, goalResult] = await Promise.allSettled([
+        getSpcClient(userId),
+        getNutritionClient(userId),
+        getClientGoal(userId),
+      ]);
+      // Isolated for the same reason as the two above, plus: this throws
+      // until 0078 is run, and a goal must never blank the page.
+      setGoalRow(goalResult.status === "fulfilled" ? goalResult.value : null);
       if (spcResult.status === "fulfilled") {
         setSpcClient(spcResult.value);
         setSpcError(null);
@@ -754,7 +764,7 @@ export default function ClientProfile() {
           <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>‹ Back</Text>
         </Pressable>
 
-        <View className="mb-6 flex-row items-center gap-3.5">
+        <View className="mb-6 flex-row flex-wrap items-start gap-3.5">
           <View
             className="items-center justify-center rounded-full"
             style={{ width: 52, height: 52, backgroundColor: "#fdf6f2" }}
@@ -763,7 +773,7 @@ export default function ClientProfile() {
               {initials(member.name)}
             </Text>
           </View>
-          <View>
+          <View style={{ flex: 1, minWidth: 220 }}>
             <View className="flex-row flex-wrap items-center gap-2.5">
               <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 22 }}>
                 {member.name}
@@ -800,6 +810,21 @@ export default function ClientProfile() {
               </Text>
             ) : null}
           </View>
+
+          {/* The one card the client sees too — same graphic here as on the
+              SPC page and at the top of the session they log. Coach-private
+              notes are NOT stacked here the way they are on the SPC page:
+              this page already has its own Notes card (client_notes, 0057)
+              further down, and notes_goals_feedback is SPC-only. */}
+          <ClientGoalCard
+            goal={goalRow?.goal}
+            userId={userId}
+            clientName={member.name}
+            editable
+            editorId={profile?.id}
+            onSaved={setGoalRow}
+            style={{ width: 340, flexGrow: 1, flexShrink: 0, minWidth: 280 }}
+          />
         </View>
 
         <SnapshotRow wide={wideCards}>

@@ -1,6 +1,7 @@
 import { View, Text, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "./PressFade";
+import { ClientGoalLine } from "./ClientGoalCard";
 import { fonts, colors, type } from "../lib/theme";
 
 // My Fitness's session header (design_handoff_member_lift_v1).
@@ -38,6 +39,7 @@ export function SessionHeroBar({
   tabs,
   selectedTab,
   onSelectTab,
+  goal,
 }) {
   // "{PROGRAM} | SESSION n" — "|" is the house separator (v5 house rule 4).
   const eyebrow = [programLabel, eyebrowDetail].filter(Boolean).join(" | ").toUpperCase();
@@ -122,6 +124,11 @@ export function SessionHeroBar({
           <Image source={require("../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
         </View>
       </View>
+
+      {/* What they're working toward — written by their coach, the same card
+          the coach sees on their programming page. Renders nothing when no
+          goal is set; a member is never told they're missing one. */}
+      <ClientGoalLine goal={goal} tone="ghost" style={{ marginTop: 10 }} />
 
       {tabs && tabs.length > 1 ? (
         <View style={{ flexDirection: "row", gap: 6, marginTop: 12 }}>
