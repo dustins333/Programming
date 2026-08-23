@@ -37,15 +37,25 @@ export function useHubBoard({ idlePoll = true } = {}) {
   const [warmups, setWarmups] = useState(new Map()); // Map<spcWorkoutId, rows>
   const [pollError, setPollError] = useState(false);
 
-  // While a lift is expanded, poll results must not stomp that lift's logs
-  // (the card holds the draft; a client's phone write arriving mid-edit would
-  // visually revert the coach's typing). Everything else on the board still
-  // updates live.
+  // While a lift has UNSAVED keystrokes in it, poll results must not stomp
+  // that lift's logs — the card holds the draft, and a write arriving
+  // mid-typing would visually revert what the coach just entered.
+  //
+  // The freeze is scoped to unsaved edits, NOT to "the card is open". An open
+  // card that has nothing pending is showing exactly what is in the database,
+  // so letting the poll through is a no-op locally and is the only way a set
+  // entered on another device ever reaches it. Freezing for the whole time a
+  // card was open is what made a remote set invisible until you collapsed and
+  // re-expanded (reported 2026-08-23).
+  //
+  // seq/savedSeq rather than a boolean: a keystroke landing while a write is
+  // in flight bumps seq again, so the write that is finishing can't declare
+  // the draft clean and let the next poll overwrite the newer digits.
   //
   // A MAP, not a single ref: two columns can be expanded at once — a coach
-  // running four people moves between two racks — so freezing "the one open
+  // running four people moves between two racks — so tracking "the one open
   // lift" would be wrong the moment a second column is opened.
-  const editingRef = useRef(new Map()); // Map<userId, exerciseId>
+  const editingRef = useRef(new Map()); // Map<userId, {exerciseId, seq, savedSeq}>
   const sessionRef = useRef(undefined);
   sessionRef.current = hubSession;
   const boardRef = useRef(null);
@@ -75,15 +85,16 @@ export function useHubBoard({ idlePoll = true } = {}) {
     try {
       const next = await fetchHubBoard(session.clients);
       setPollError(false);
-      for (const [editUserId, editExerciseId] of editingRef.current) {
+      for (const [editUserId, edit] of editingRef.current) {
+        if (edit.seq === edit.savedSeq) continue; // nothing unsaved — let the poll through
         const prevEntry = boardRef.current?.get(editUserId);
         const nextEntry = next.get(editUserId);
         if (!prevEntry || !nextEntry) continue;
         const kept = new Map(nextEntry.logsByExerciseId);
-        if (prevEntry.logsByExerciseId.has(editExerciseId)) {
-          kept.set(editExerciseId, prevEntry.logsByExerciseId.get(editExerciseId));
+        if (prevEntry.logsByExerciseId.has(edit.exerciseId)) {
+          kept.set(edit.exerciseId, prevEntry.logsByExerciseId.get(edit.exerciseId));
         } else {
-          kept.delete(editExerciseId);
+          kept.delete(edit.exerciseId);
         }
         next.set(editUserId, { ...nextEntry, logsByExerciseId: kept });
       }
@@ -148,7 +159,13 @@ export function useHubBoard({ idlePoll = true } = {}) {
   }, [refreshSession, refreshBoard, idlePoll]);
 
   const setEditing = useCallback((userId, exerciseId) => {
-    editingRef.current.set(userId, exerciseId);
+    editingRef.current.set(userId, { exerciseId, seq: 0, savedSeq: 0 });
+  }, []);
+  // A keystroke landed. Until the matching write finishes, the poll leaves
+  // this lift alone.
+  const markEdit = useCallback((userId) => {
+    const edit = editingRef.current.get(userId);
+    if (edit) edit.seq += 1;
   }, []);
   const clearEditing = useCallback((userId) => {
     if (userId == null) editingRef.current.clear();
@@ -157,10 +174,13 @@ export function useHubBoard({ idlePoll = true } = {}) {
 
   // Write one lift's sets. Called on a debounce while the coach types and
   // again on collapse — the design has no Save button anywhere, matching the
-  // member app's own autosave. Deliberately does NOT refreshBoard(): the
-  // draft in the card is the truth while the lift is open (the poll is
-  // frozen for exactly this lift), so a refresh per keystroke-debounce would
-  // be four columns of queries for nothing.
+  // member app's own autosave.
+  //
+  // Refreshes the board once the write lands, which is what makes the rest of
+  // this screen agree with the card immediately: without it the collapsed row
+  // underneath, the column's own summary and the other device all sat on
+  // pre-edit logs until the next 3s tick happened to arrive. One refresh per
+  // typing pause, not per keystroke.
   //
   // Same write contract as the member phone: every set row rewritten, source
   // "spc", the session stamped — so hub-entered sets are indistinguishable
@@ -169,6 +189,7 @@ export function useHubBoard({ idlePoll = true } = {}) {
   // everyone is standing at the same rack.
   const saveSets = useCallback(async ({ userId, spcWorkoutId, weekNumber, exerciseId, rows }) => {
     const datePerformed = todayInBoise();
+    const startedAt = editingRef.current.get(userId)?.seq ?? 0;
     await Promise.all(
       rows.map((row, i) =>
         logResult({
@@ -183,7 +204,13 @@ export function useHubBoard({ idlePoll = true } = {}) {
         })
       )
     );
-  }, []);
+    // Only declare the draft clean if nothing was typed while this write was
+    // in flight — otherwise the refresh below would pull the pre-keystroke
+    // rows back over the newer digits.
+    const edit = editingRef.current.get(userId);
+    if (edit && edit.seq === startedAt) edit.savedSeq = startedAt;
+    await refreshBoard();
+  }, [refreshBoard]);
 
   // The lift's one note for this week. Append-only — the display account has
   // INSERT but no UPDATE on exercise_coaching_notes (0071), so "one note per
@@ -271,6 +298,7 @@ export function useHubBoard({ idlePoll = true } = {}) {
     refreshSession,
     refreshBoard,
     setEditing,
+    markEdit,
     clearEditing,
     saveSets,
     saveNote,

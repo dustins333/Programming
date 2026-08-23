@@ -60,6 +60,7 @@ export function HubBoard({ hubSession, board, warmups, scale = "tv", now, author
           onMoveLift={(itemId, dir) => handlers.onMoveLift(slot, itemId, dir)}
           onToggleFinalize={() => handlers.onToggleFinalize(slot)}
           onBeginEdit={handlers.onBeginEdit}
+          onEditDirty={handlers.onEditDirty}
           onEndEdit={handlers.onEndEdit}
           onSaveSets={(payload) => handlers.onSaveSets(slot, payload)}
           onSaveNote={(payload) => handlers.onSaveNote(slot, payload)}

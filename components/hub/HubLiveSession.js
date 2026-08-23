@@ -21,7 +21,7 @@ import { fonts, colors, type } from "../../lib/theme";
 // own on their phone, the hub session's coach on the TV (the display account
 // is a device, not a person, and cannot read core.users to look one up).
 export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now }) {
-  const { hubSession, board, warmups, setEditing, clearEditing, saveSets, saveNote, toggleExerciseComplete, toggleFinalize, moveLift } = hub;
+  const { hubSession, board, warmups, setEditing, markEdit, clearEditing, saveSets, saveNote, toggleExerciseComplete, toggleFinalize, moveLift } = hub;
   const { width } = useWindowDimensions();
   const [activeClientId, setActiveClientId] = useState(null); // phone-width tabs
 
@@ -95,6 +95,7 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now })
     onMoveLift: handleMoveLift,
     onToggleFinalize: handleToggleFinalize,
     onBeginEdit: setEditing,
+    onEditDirty: markEdit,
     onEndEdit: clearEditing,
     onSaveSets: handleSaveSets,
     onSaveNote: handleSaveNote,
@@ -127,6 +128,7 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now })
             onMoveLift={(itemId, dir) => handleMoveLift(slot, itemId, dir)}
             onToggleFinalize={() => handleToggleFinalize(slot)}
             onBeginEdit={setEditing}
+            onEditDirty={markEdit}
             onEndEdit={clearEditing}
             onSaveSets={(payload) => handleSaveSets(slot, payload)}
             onSaveNote={(payload) => handleSaveNote(slot, payload)}

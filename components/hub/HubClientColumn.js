@@ -49,6 +49,27 @@ function summaryText(item, logs) {
     .join(" · ");
 }
 
+// The draft rows for a lift, built from what is already logged. Shared by the
+// initial seed and by the poll merge below so the two cannot drift on set
+// count or on what an empty box means.
+function rowsFromLogs(item, logs, atLeast = 0) {
+  const targetSets = item.targetSets > 0 ? item.targetSets : 3;
+  const maxSet = (logs ?? []).reduce((m, r) => Math.max(m, r.set_number ?? 1), 0);
+  const count = Math.max(targetSets, maxSet, atLeast);
+  return Array.from({ length: count }, (_, i) => {
+    const row = (logs ?? []).find((r) => (r.set_number ?? 1) === i + 1);
+    return {
+      reps: row?.reps != null ? String(row.reps) : "",
+      weight: row?.weight != null ? String(row.weight) : "",
+    };
+  });
+}
+
+function sameRows(a, b) {
+  if (a.length !== b.length) return false;
+  return a.every((r, i) => r.reps === b[i].reps && r.weight === b[i].weight);
+}
+
 function CompletionTick({ completed, onPress, size = 26 }) {
   return (
     <PressFade onPress={onPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingLeft: 6 }}>
@@ -205,6 +226,7 @@ export function HubClientColumn({
   onToggleFinalize,
   onBeginEdit,
   onEndEdit,
+  onEditDirty,
   onSaveSets,
   onSaveNote,
 }) {
@@ -266,16 +288,7 @@ export function HubClientColumn({
     if (seededFor.current === key) return;
     seededFor.current = key;
     const logs = entry.logsByExerciseId.get(expandedItem.exercise.id) ?? [];
-    const targetSets = expandedItem.targetSets > 0 ? expandedItem.targetSets : 3;
-    const maxSet = logs.reduce((m, r) => Math.max(m, r.set_number ?? 1), 0);
-    const count = Math.max(targetSets, maxSet);
-    const seeded = Array.from({ length: count }, (_, i) => {
-      const row = logs.find((r) => (r.set_number ?? 1) === i + 1);
-      return {
-        reps: row?.reps != null ? String(row.reps) : "",
-        weight: row?.weight != null ? String(row.weight) : "",
-      };
-    });
+    const seeded = rowsFromLogs(expandedItem, logs);
     setRows(seeded);
     const existing = entry.noteForWeekByExerciseId?.get(expandedItem.exercise.id) ?? null;
     setNote(existing?.body ?? "");
@@ -316,8 +329,36 @@ export function HubClientColumn({
 
   useEffect(() => () => flushSets(), [flushSets]);
 
+  // Take in sets entered somewhere else — the client's own phone, the coach's
+  // phone while the wall display has the same lift up — WITHOUT closing the
+  // card. Only when nothing local is pending: a clean draft is by definition
+  // equal to what is stored, so adopting the poll is a no-op here and the
+  // only thing it can ever bring in is somebody else's change.
+  //
+  // Never shrinks the row count, so a set added with "+ Add set" and not yet
+  // typed into doesn't disappear underneath the coach.
+  useEffect(() => {
+    if (!expandedItem) return;
+    if (dirtyRef.current || saveTimer.current) return;
+    const logs = entry.logsByExerciseId.get(expandedItem.exercise.id) ?? [];
+    const merged = rowsFromLogs(expandedItem, logs, rowsRef.current.length);
+    if (!sameRows(rowsRef.current, merged)) {
+      rowsRef.current = merged;
+      setRows(merged);
+    }
+    // A note typed elsewhere lands the same way, unless this coach has started
+    // editing it here.
+    const remote = entry.noteForWeekByExerciseId?.get(expandedItem.exercise.id)?.body ?? "";
+    if (note.trim() === (noteSeed.current ?? "").trim() && remote !== note) {
+      noteSeed.current = remote; // no local edit in progress — adopt it
+      setNote(remote);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry.logsByExerciseId, entry.noteForWeekByExerciseId, expandedItem?.id, note]);
+
   const scheduleSave = (nextRows) => {
     dirtyRef.current = true;
+    onEditDirty?.(userId); // hold the poll off this lift until the write lands
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
@@ -328,12 +369,19 @@ export function HubClientColumn({
     }, SAVE_DEBOUNCE_MS);
   };
 
+  // Writes go through here rather than from inside a setRows updater. An
+  // updater must stay pure — React may call it twice, and scheduling a save
+  // (or telling the board an edit is pending) from inside one is a side
+  // effect in the render phase. rowsRef is advanced by hand so two keystrokes
+  // in the same tick compose instead of the second overwriting the first.
+  const commitRows = (next) => {
+    rowsRef.current = next;
+    setRows(next);
+    scheduleSave(next);
+  };
+
   const setValue = (setIndex, field, value) => {
-    setRows((prev) => {
-      const next = prev.map((r, i) => (i === setIndex ? { ...r, [field]: value } : r));
-      scheduleSave(next);
-      return next;
-    });
+    commitRows(rowsRef.current.map((r, i) => (i === setIndex ? { ...r, [field]: value } : r)));
   };
 
   // Takes the lift explicitly rather than reading expandedItem, because the
@@ -392,11 +440,10 @@ export function HubClientColumn({
   };
 
   const handleAddSet = () => {
-    setRows((prev) => {
-      const next = [...prev, { reps: "", weight: "" }];
-      setActive({ set: next.length - 1, field: "reps" });
-      return next;
-    });
+    const next = [...rowsRef.current, { reps: "", weight: "" }];
+    rowsRef.current = next;
+    setRows(next);
+    setActive({ set: next.length - 1, field: "reps" });
   };
 
   // One place that decides whether a pending draft is worth writing.
@@ -412,11 +459,8 @@ export function HubClientColumn({
 
   const handleSameAsLast = () => {
     if (active.set === 0) return;
-    setRows((prev) => {
-      const next = prev.map((r, i) => (i === active.set ? { ...prev[active.set - 1] } : r));
-      scheduleSave(next);
-      return next;
-    });
+    const prev = rowsRef.current;
+    commitRows(prev.map((r, i) => (i === active.set ? { ...prev[active.set - 1] } : r)));
   };
 
   const handleInsertWeight = (total) => {
