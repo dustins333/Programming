@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
+import { readSections, writeSection, SCREEN_MY_WEEK } from "../../lib/screenCache";
 import { todayInBoise, dayOfWeekInBoise, dateInBoise, addDays } from "../../lib/boiseDate";
 import { currentWeekNumber, sessionNumberForDate, formatSessionDays, blockLengthWeeks } from "../../lib/programming/schedule";
 import { listMyAssignments, getCurrentBlock, listWorkoutsForWeek, listLogsForSession } from "../../lib/programming/memberPlan";
@@ -11,7 +12,14 @@ import { listWarmups, listWorkoutExercises } from "../../lib/programming/workout
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
 import { listSpcWorkoutExercises, listSpcWarmups } from "../../lib/programming/spcWorkouts";
-import { listGroupCompletionDetailsForWorkouts, listSpcCompletionDetailsForWorkouts, finalizeGroupSession } from "../../lib/programming/sessionCompletions";
+import {
+  listGroupCompletionDetailsForWorkouts,
+  listSpcCompletionDetailsForWorkouts,
+  finalizeGroupSession,
+  getGroupCompletion,
+  getSpcCompletion,
+  getOneOffCompletion,
+} from "../../lib/programming/sessionCompletions";
 import { listWeekOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import { hasUnreadMessages } from "../../lib/programming/messages";
 import { listLiveEventsForUser, listMyResponses } from "../../lib/programming/events";
@@ -702,6 +710,8 @@ function MyWeekSkeleton() {
   );
 }
 
+const CACHE_SECTIONS = ["groups", "spc", "nutrition", "oneOffs", "messaging", "events"];
+
 export default function MemberHome() {
   const { profile } = useAuth();
   const router = useRouter();
@@ -731,200 +741,292 @@ export default function MemberHome() {
   // already uses, applied here to the whole multi-section load().
   const requestIdRef = useRef(0);
 
+  // Whether this screen has ever had real content on it (from cache or from
+  // the network). Gates the skeleton: without it, every refocus replaced a
+  // fully-rendered week with a skeleton while the fan-out re-ran.
+  const hasPaintedRef = useRef(false);
+
+  // Every section below is cached under this screen name, keyed by the member
+  // and by today's Boise date. The date is part of the key on purpose: this is
+  // a "this week, and which day am I on" screen (isToday, dayPassed, the
+  // nutrition strip's elapsed count), so an entry written yesterday must never
+  // be painted today. That costs the first open of each day a cache miss,
+  // which is the right trade — a wrong-day paint is worse than a slow one.
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     const isStale = () => requestIdRef.current !== requestId;
-    setGroupsLoading(true);
     const today = todayInBoise();
 
-    // Each membership loads independently — a client can hold several
-    // group program memberships at once (e.g. Flagship plus a specialty
-    // program), and one program's failure shouldn't hide another's, same
-    // reasoning as group-vs-SPC-vs-nutrition below. Each section is wrapped
-    // in retryOnce: a transient failure on the very first request batch
-    // right after a page reload (cold connections, browser resource
-    // contention from many parallel fetches firing at once) used to get
-    // swallowed by the plain catch below and render identically to "no data
-    // here" — indistinguishable from genuinely not being enrolled, and only
-    // "fixed" by navigating away and back (which re-triggers load() via
-    // useFocusEffect, giving it a second, now-successful attempt). One
-    // retry covers that blip without masking a real, persistent failure.
-    try {
-      const results = await retryOnce(async () => {
-        const assignments = await listMyAssignments(profile.id);
-        return Promise.all(
-          assignments.map(async (assignment) => {
-            const program = assignment.group_programs;
-            try {
-              const block = await getCurrentBlock(program.id, today);
-              if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };
+    // Only fall back to the skeleton when there is genuinely nothing on
+    // screen. Tabs stay mounted and useFocusEffect re-runs this on every
+    // focus, so unconditionally flipping to loading meant flipping away from
+    // My Nutrition and back replaced a fully-rendered week with a skeleton
+    // for the length of the whole fan-out.
+    if (!hasPaintedRef.current) setGroupsLoading(true);
 
-              const weekNumber = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), today);
-              const workouts = await listWorkoutsForWeek(block.id, weekNumber);
-              const workoutIds = workouts.map((w) => w.id);
-              // The details variant (a Map of id -> completed_at) rather than the
-              // plain id Set: the session sheet's "LOGGED {date}" pill needs the
-              // day it happened, and .has() reads identically for the counts.
-              const completedIds = await listGroupCompletionDetailsForWorkouts(profile.id, workoutIds);
-
-              // Every program owns its own session count and day-of-week map
-              // now (migrations 0010/0011) — Flagship/BWA's 3-sessions-
-              // Mon/Tue-Wed/Thu-Fri/Sat shape is just this program's data,
-              // not a rule every group program follows. sessionsPerWeek is
-              // the per-client *target* (how many the member is expected to
-              // attend), not a restriction on which slots they're allowed to
-              // see — a 1x/week client can still attend whichever of the
-              // week's sessions fits their schedule, they just only need to
-              // do one of them. So every session slot for the program still
-              // gets its own stripe with its own real day-of-week caption,
-              // regardless of the client's target.
-              const sessionsPerWeek = assignment.sessions_per_week ?? program.sessions_per_week;
-              const todaysSessionNumber = sessionNumberForDate(today, program.session_days);
-              const rows = Array.from({ length: program.sessions_per_week }, (_, i) => i + 1).map((sessionNumber) => {
-                const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
-                return {
-                  key: `session-${sessionNumber}`,
-                  sessionNumber,
-                  workout,
-                  published: !!workout,
-                  label: `Session ${sessionNumber}`,
-                  sessionLabel: `S${sessionNumber}`,
-                  title: workout?.title || "Untitled session",
-                  caption: formatSessionDays(program.session_days?.[sessionNumber - 1]),
-                  dayName: firstDayName(program.session_days?.[sessionNumber - 1]),
-                  completed: workout ? completedIds.has(workout.id) : false,
-                  completedAt: workout ? completedIds.get(workout.id) ?? null : null,
-                  isToday: sessionNumber === todaysSessionNumber,
-                  // Both of this session's days are behind us in the current
-                  // week — so tapping it is a back-log, not a "log today".
-                  // Weekday ints are 0=Sun..6=Sat but the week runs Mon-Sun
-                  // here, so both sides shift to a Monday-based index first.
-                  dayPassed: (() => {
-                    const days = program.session_days?.[sessionNumber - 1];
-                    if (!Array.isArray(days) || days.length === 0) return false;
-                    const monBased = (d) => (d + 6) % 7;
-                    return Math.max(...days.map(monBased)) < monBased(dayOfWeekInBoise(today));
-                  })(),
-                };
-              });
-
-              return {
-                groupProgramId: program.id,
-                programName: program.name,
-                status: "ready",
-                weekNumber,
-                blockLengthWeeks: blockLengthWeeks(block, program),
-                sessionsPerWeek,
-                rows,
-              };
-            } catch (err) {
-              return { groupProgramId: program.id, programName: program.name, status: "error", message: err.message ?? String(err) };
-            }
-          })
-        );
-      });
-      if (!isStale()) setGroups(results);
-    } catch (err) {
-      console.error("My Week: failed to load group programs", err);
-      if (!isStale()) setGroups([{ status: "error", message: err.message ?? String(err) }]);
-    } finally {
-      if (!isStale()) setGroupsLoading(false);
+    // Paint last-known state first. This read is local storage, single-digit
+    // milliseconds against a fan-out measured in seconds, and every section
+    // below still fetches and overwrites — the cache decides what's on screen
+    // while that happens, never what's true.
+    const cached = await readSections(SCREEN_MY_WEEK, profile.id, today, CACHE_SECTIONS);
+    if (isStale()) return;
+    // `in` rather than truthiness throughout: a cached null is a real answer
+    // ("not enrolled"), not a miss.
+    if ("groups" in cached) {
+      setGroups(cached.groups);
+      hasPaintedRef.current = true;
+      setGroupsLoading(false);
     }
-
-    try {
-      const spcResult = await retryOnce(async () => {
-        const spcClient = await getSpcClient(profile.id);
-        if (!isSpcActive(spcClient)) return { status: "inactive" };
-
-        const block = await getCurrentSpcBlock(profile.id, today);
-        if (!block) return { status: "no_block" };
-
-        const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
-        const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber);
-        if (workouts.length === 0) return { status: "not_published" };
-
-        const sessionsPerWeek = spcClient.sessions_per_week;
-        const workoutIds = workouts.map((w) => w.id);
-        const completedIds = await listSpcCompletionDetailsForWorkouts(profile.id, workoutIds);
-
-        const rows = Array.from({ length: sessionsPerWeek }, (_, i) => i + 1).map((sessionNumber) => {
-          const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
-          return {
-            key: `spc-session-${sessionNumber}`,
-            sessionNumber,
-            workout,
-            published: !!workout,
-            label: `Session ${sessionNumber}`,
-            sessionLabel: `S${sessionNumber}`,
-            title: workout?.title || "Untitled session",
-            completed: workout ? completedIds.has(`${workout.id}:${weekNumber}`) : false,
-            completedAt: workout ? completedIds.get(`${workout.id}:${weekNumber}`) ?? null : null,
-          };
-        });
-
-        return { status: "ready", weekNumber, blockLengthWeeks: block.block_length_weeks, sessionsPerWeek, rows };
-      });
-      if (!isStale()) setSpc(spcResult.status === "inactive" ? null : spcResult);
-    } catch (err) {
-      console.error("My Week: failed to load SPC", err);
-      // A genuine fetch failure is not the same as "not enrolled" — setting
-      // spc to null here made a failed SPC fetch indistinguishable from a
-      // client who was never on SPC at all, which fed straight into the
-      // "not assigned to a program yet" message below even for an SPC-only
-      // member. An error-status object still fails every ready/no_block/
-      // not_published render check below, but `!spc` is now false, so the
-      // false claim is suppressed.
-      if (!isStale()) setSpc({ status: "error", message: err.message ?? String(err) });
+    if ("spc" in cached) setSpc(cached.spc);
+    if ("nutrition" in cached) {
+      setNutritionEnrolled(cached.nutrition?.enrolled ?? false);
+      setNutrition(cached.nutrition?.data ?? null);
     }
+    if ("oneOffs" in cached) setOneOffs(cached.oneOffs);
+    if ("messaging" in cached) {
+      setMessagingEnabled(cached.messaging?.enabled ?? false);
+      setHasUnread(cached.messaging?.unread ?? false);
+    }
+    if ("events" in cached) setPendingEvents(cached.events);
 
-    // Monday-Sunday of the current week, regardless of which day "today"
-    // falls on — dayOfWeekInBoise is 0=Sunday..6=Saturday, so Sunday needs
-    // its own offset (Monday was 6 days ago) rather than 1 - day.
-    try {
-      const result = await retryOnce(async () => {
-        const nutritionClient = await getNutritionClient(profile.id);
-        // Enrollment (any active row, approved or not) is tracked
-        // separately from the strip — it gates the "not assigned to a
-        // program" message below, which used to fire for nutrition-only
-        // members.
-        if (!isStale()) setNutritionEnrolled(nutritionClient?.status === "active");
-        if (!nutritionClient || nutritionClient.status !== "active") return null;
+    // On a failed refresh the display-only sections below keep whatever was
+    // painted from cache instead of blanking themselves. Before caching, a
+    // blip showed a skeleton and then an empty section; now it would show
+    // real content and then take it away, which reads as "my data is gone".
+    // Slightly stale beats vanished — the same reasoning retryOnce already
+    // encodes. Deliberately NOT applied to groups/spc: those have real error
+    // UI with a Retry, and silently hiding a persistent failure behind stale
+    // content would be worse than showing it.
+    //
+    // Fire-and-forget by design — a cache write must never delay a render.
+    const save = (section, value) => {
+      void writeSection(SCREEN_MY_WEEK, profile.id, today, section, value);
+    };
 
-        // Mid-onboarding (sent, not yet approved): My Week still shows a
-        // normal-looking Nutrition card with an "Onboarding" button where
-        // the day circles will eventually be.
-        if (!nutritionClient.objective_tracking_approved_at) {
-          return nutritionClient.onboarding_sent_at ? { status: "onboarding" } : null;
+    // The six sections run concurrently. They were already fully independent
+    // (own try/catch, own state, own retryOnce) — they were just awaited one
+    // after another, which made the screen's cost the SUM of six chains
+    // (~15 round trips, ~2s at the 124ms per-request latency measured
+    // 2026-08-23) instead of the longest single one (~4). allSettled rather
+    // than all: every section already catches its own failures, and this
+    // guarantees that stays true even if a future edit throws outside one.
+    // Nothing here is cached on the error paths — a failed section keeps
+    // whatever was last known good rather than persisting the failure.
+    await Promise.allSettled([
+      // Each membership loads independently — a client can hold several
+      // group program memberships at once (e.g. Flagship plus a specialty
+      // program), and one program's failure shouldn't hide another's, same
+      // reasoning as group-vs-SPC-vs-nutrition below. Each section is wrapped
+      // in retryOnce: a transient failure on the very first request batch
+      // right after a page reload (cold connections, browser resource
+      // contention from many parallel fetches firing at once) used to get
+      // swallowed by the plain catch below and render identically to "no data
+      // here" — indistinguishable from genuinely not being enrolled, and only
+      // "fixed" by navigating away and back (which re-triggers load() via
+      // useFocusEffect, giving it a second, now-successful attempt). One
+      // retry covers that blip without masking a real, persistent failure.
+      (async () => {
+        try {
+          const results = await retryOnce(async () => {
+            const assignments = await listMyAssignments(profile.id);
+            return Promise.all(
+              assignments.map(async (assignment) => {
+                const program = assignment.group_programs;
+                try {
+                  const block = await getCurrentBlock(program.id, today);
+                  if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };
+
+                  const weekNumber = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), today);
+                  const workouts = await listWorkoutsForWeek(block.id, weekNumber);
+                  const workoutIds = workouts.map((w) => w.id);
+                  // The details variant (a Map of id -> completed_at) rather than the
+                  // plain id Set: the session sheet's "LOGGED {date}" pill needs the
+                  // day it happened, and .has() reads identically for the counts.
+                  const completedIds = await listGroupCompletionDetailsForWorkouts(profile.id, workoutIds);
+
+                  // Every program owns its own session count and day-of-week map
+                  // now (migrations 0010/0011) — Flagship/BWA's 3-sessions-
+                  // Mon/Tue-Wed/Thu-Fri/Sat shape is just this program's data,
+                  // not a rule every group program follows. sessionsPerWeek is
+                  // the per-client *target* (how many the member is expected to
+                  // attend), not a restriction on which slots they're allowed to
+                  // see — a 1x/week client can still attend whichever of the
+                  // week's sessions fits their schedule, they just only need to
+                  // do one of them. So every session slot for the program still
+                  // gets its own stripe with its own real day-of-week caption,
+                  // regardless of the client's target.
+                  const sessionsPerWeek = assignment.sessions_per_week ?? program.sessions_per_week;
+                  const todaysSessionNumber = sessionNumberForDate(today, program.session_days);
+                  const rows = Array.from({ length: program.sessions_per_week }, (_, i) => i + 1).map((sessionNumber) => {
+                    const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
+                    return {
+                      key: `session-${sessionNumber}`,
+                      sessionNumber,
+                      workout,
+                      published: !!workout,
+                      label: `Session ${sessionNumber}`,
+                      sessionLabel: `S${sessionNumber}`,
+                      title: workout?.title || "Untitled session",
+                      caption: formatSessionDays(program.session_days?.[sessionNumber - 1]),
+                      dayName: firstDayName(program.session_days?.[sessionNumber - 1]),
+                      completed: workout ? completedIds.has(workout.id) : false,
+                      completedAt: workout ? completedIds.get(workout.id) ?? null : null,
+                      isToday: sessionNumber === todaysSessionNumber,
+                      // Both of this session's days are behind us in the current
+                      // week — so tapping it is a back-log, not a "log today".
+                      // Weekday ints are 0=Sun..6=Sat but the week runs Mon-Sun
+                      // here, so both sides shift to a Monday-based index first.
+                      dayPassed: (() => {
+                        const days = program.session_days?.[sessionNumber - 1];
+                        if (!Array.isArray(days) || days.length === 0) return false;
+                        const monBased = (d) => (d + 6) % 7;
+                        return Math.max(...days.map(monBased)) < monBased(dayOfWeekInBoise(today));
+                      })(),
+                    };
+                  });
+
+                  return {
+                    groupProgramId: program.id,
+                    programName: program.name,
+                    status: "ready",
+                    weekNumber,
+                    blockLengthWeeks: blockLengthWeeks(block, program),
+                    sessionsPerWeek,
+                    rows,
+                  };
+                } catch (err) {
+                  return { groupProgramId: program.id, programName: program.name, status: "error", message: err.message ?? String(err) };
+                }
+              })
+            );
+          });
+          if (!isStale()) {
+            setGroups(results);
+            // A per-membership error object is a legitimate cached value (the
+            // member really does have a program that failed to resolve), but
+            // caching a whole-screen failure is not — see the catch below.
+            save("groups", results);
+          }
+        } catch (err) {
+          console.error("My Week: failed to load group programs", err);
+          if (!isStale()) setGroups([{ status: "error", message: err.message ?? String(err) }]);
+        } finally {
+          if (!isStale()) {
+            hasPaintedRef.current = true;
+            setGroupsLoading(false);
+          }
         }
+      })(),
 
-        const dow = dayOfWeekInBoise(today);
-        const weekStart = addDays(today, dow === 0 ? -6 : 1 - dow);
-        const weekEnd = addDays(weekStart, 6);
-        const logs = await listLogsForDateRange(profile.id, weekStart, weekEnd);
-        const finalizedDates = new Set(logs.filter((l) => l.finalized_at).map((l) => l.date));
-        const days = Array.from({ length: 7 }, (_, i) => {
-          const date = addDays(weekStart, i);
-          return { date, label: DAY_LABELS[i], finalized: finalizedDates.has(date), isToday: date === today };
-        });
-        // Adherence is measured against days elapsed, not 7 (house rule 3).
-        const elapsed = days.filter((d) => d.date <= today).length;
-        const loggedCount = days.filter((d) => d.date <= today && d.finalized).length;
-        return { status: "ready", days, elapsed, loggedCount };
-      });
-      if (!isStale()) setNutrition(result ?? null);
-    } catch (err) {
-      console.error("My Week: failed to load nutrition", err);
-      if (!isStale()) setNutrition(null);
-    }
+      (async () => {
+        try {
+          const spcResult = await retryOnce(async () => {
+            const spcClient = await getSpcClient(profile.id);
+            if (!isSpcActive(spcClient)) return { status: "inactive" };
 
-    // One-offs load independently too — an away workout or trial session
-    // assignment has nothing to do with group/SPC/nutrition, so its
-    // failure shouldn't hide any of those sections.
-    try {
-      const workouts = await retryOnce(() => listWeekOneOffWorkoutsForUser(profile.id, today));
-      if (!isStale()) {
-        setOneOffs(
-          workouts.map((w) => ({
+            const block = await getCurrentSpcBlock(profile.id, today);
+            if (!block) return { status: "no_block" };
+
+            const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+            const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber);
+            if (workouts.length === 0) return { status: "not_published" };
+
+            const sessionsPerWeek = spcClient.sessions_per_week;
+            const workoutIds = workouts.map((w) => w.id);
+            const completedIds = await listSpcCompletionDetailsForWorkouts(profile.id, workoutIds);
+
+            const rows = Array.from({ length: sessionsPerWeek }, (_, i) => i + 1).map((sessionNumber) => {
+              const workout = workouts.find((w) => w.session_number === sessionNumber) ?? null;
+              return {
+                key: `spc-session-${sessionNumber}`,
+                sessionNumber,
+                workout,
+                published: !!workout,
+                label: `Session ${sessionNumber}`,
+                sessionLabel: `S${sessionNumber}`,
+                title: workout?.title || "Untitled session",
+                completed: workout ? completedIds.has(`${workout.id}:${weekNumber}`) : false,
+                completedAt: workout ? completedIds.get(`${workout.id}:${weekNumber}`) ?? null : null,
+              };
+            });
+
+            return { status: "ready", weekNumber, blockLengthWeeks: block.block_length_weeks, sessionsPerWeek, rows };
+          });
+          if (!isStale()) {
+            const value = spcResult.status === "inactive" ? null : spcResult;
+            setSpc(value);
+            save("spc", value);
+          }
+        } catch (err) {
+          console.error("My Week: failed to load SPC", err);
+          // A genuine fetch failure is not the same as "not enrolled" — setting
+          // spc to null here made a failed SPC fetch indistinguishable from a
+          // client who was never on SPC at all, which fed straight into the
+          // "not assigned to a program yet" message below even for an SPC-only
+          // member. An error-status object still fails every ready/no_block/
+          // not_published render check below, but `!spc` is now false, so the
+          // false claim is suppressed.
+          if (!isStale()) setSpc({ status: "error", message: err.message ?? String(err) });
+        }
+      })(),
+
+      // Monday-Sunday of the current week, regardless of which day "today"
+      // falls on — dayOfWeekInBoise is 0=Sunday..6=Saturday, so Sunday needs
+      // its own offset (Monday was 6 days ago) rather than 1 - day.
+      (async () => {
+        try {
+          // enrolled comes back alongside the strip rather than being set from
+          // inside retryOnce, so a retried attempt can't set it twice and a
+          // total failure leaves the last known value alone instead of
+          // half-applying this run.
+          const result = await retryOnce(async () => {
+            const nutritionClient = await getNutritionClient(profile.id);
+            // Enrollment (any active row, approved or not) is tracked
+            // separately from the strip — it gates the "not assigned to a
+            // program" message below, which used to fire for nutrition-only
+            // members.
+            const enrolled = nutritionClient?.status === "active";
+            if (!nutritionClient || nutritionClient.status !== "active") return { enrolled, data: null };
+
+            // Mid-onboarding (sent, not yet approved): My Week still shows a
+            // normal-looking Nutrition card with an "Onboarding" button where
+            // the day circles will eventually be.
+            if (!nutritionClient.objective_tracking_approved_at) {
+              return { enrolled, data: nutritionClient.onboarding_sent_at ? { status: "onboarding" } : null };
+            }
+
+            const dow = dayOfWeekInBoise(today);
+            const weekStart = addDays(today, dow === 0 ? -6 : 1 - dow);
+            const weekEnd = addDays(weekStart, 6);
+            const logs = await listLogsForDateRange(profile.id, weekStart, weekEnd);
+            const finalizedDates = new Set(logs.filter((l) => l.finalized_at).map((l) => l.date));
+            const days = Array.from({ length: 7 }, (_, i) => {
+              const date = addDays(weekStart, i);
+              return { date, label: DAY_LABELS[i], finalized: finalizedDates.has(date), isToday: date === today };
+            });
+            // Adherence is measured against days elapsed, not 7 (house rule 3).
+            const elapsed = days.filter((d) => d.date <= today).length;
+            const loggedCount = days.filter((d) => d.date <= today && d.finalized).length;
+            return { enrolled, data: { status: "ready", days, elapsed, loggedCount } };
+          });
+          if (!isStale()) {
+            setNutritionEnrolled(result.enrolled);
+            setNutrition(result.data);
+            save("nutrition", result);
+          }
+        } catch (err) {
+          console.error("My Week: failed to load nutrition", err);
+          if (!isStale() && !("nutrition" in cached)) setNutrition(null);
+        }
+      })(),
+
+      // One-offs load independently too — an away workout or trial session
+      // assignment has nothing to do with group/SPC/nutrition, so its
+      // failure shouldn't hide any of those sections.
+      (async () => {
+        try {
+          const workouts = await retryOnce(() => listWeekOneOffWorkoutsForUser(profile.id, today));
+          const mapped = workouts.map((w) => ({
             key: w.id,
             workoutId: w.id,
             label: w.title,
@@ -934,53 +1036,74 @@ export default function MemberHome() {
             // group/SPC session slot which can legitimately be an
             // unpublished placeholder.
             published: true,
-          }))
-        );
-      }
-    } catch (err) {
-      console.error("My Week: failed to load one-offs", err);
-      if (!isStale()) setOneOffs([]);
-    }
+          }));
+          if (!isStale()) {
+            setOneOffs(mapped);
+            save("oneOffs", mapped);
+          }
+        } catch (err) {
+          console.error("My Week: failed to load one-offs", err);
+          if (!isStale() && !("oneOffs" in cached)) setOneOffs([]);
+        }
+      })(),
 
-    // Admin-configurable kill switch/audience (lib/programming/
-    // messagingSettings.js) — checked first since the icon itself and its
-    // unread dot are both pointless to show/fetch when messaging's off for
-    // this member. Own isolated fetch, defaults to hidden on failure.
-    let messagingIsEnabled = false;
-    try {
-      messagingIsEnabled = await retryOnce(() => isMessagingEnabledForUser(profile.id));
-      if (!isStale()) setMessagingEnabled(messagingIsEnabled);
-    } catch (err) {
-      console.error("My Week: failed to check messaging settings", err);
-      if (!isStale()) setMessagingEnabled(false);
-    }
+      // Admin-configurable kill switch/audience (lib/programming/
+      // messagingSettings.js) — the unread check stays chained behind it
+      // rather than running alongside, since both the icon and its dot are
+      // pointless to fetch when messaging is off for this member. Own
+      // isolated section, defaults to hidden on failure.
+      (async () => {
+        let messagingIsEnabled = false;
+        try {
+          messagingIsEnabled = await retryOnce(() => isMessagingEnabledForUser(profile.id));
+          if (!isStale()) setMessagingEnabled(messagingIsEnabled);
+        } catch (err) {
+          console.error("My Week: failed to check messaging settings", err);
+          if (!isStale() && !("messaging" in cached)) setMessagingEnabled(false);
+          return;
+        }
 
-    if (messagingIsEnabled) {
-      try {
-        const unread = await retryOnce(() => hasUnreadMessages(profile.id));
-        if (!isStale()) setHasUnread(unread);
-      } catch (err) {
-        console.error("My Week: failed to check unread messages", err);
-        if (!isStale()) setHasUnread(false);
-      }
-    } else if (!isStale()) {
-      setHasUnread(false);
-    }
+        if (!messagingIsEnabled) {
+          if (!isStale()) {
+            setHasUnread(false);
+            save("messaging", { enabled: false, unread: false });
+          }
+          return;
+        }
 
-    // Own try/catch, like every other domain on this screen — an events
-    // failure must not take down the training or nutrition cards.
-    try {
-      const live = await retryOnce(() => listLiveEventsForUser(profile.id));
-      // Only the ones that actually want something back. A read-only notice
-      // has no deadline to miss, and nagging about it here would just be
-      // noise on top of the announcement that already went out.
-      const wantsResponse = live.filter((e) => e.response_type === "signup" || e.response_type === "order");
-      const responded = await retryOnce(() => listMyResponses(profile.id, wantsResponse.map((e) => e.id)));
-      if (!isStale()) setPendingEvents(wantsResponse.filter((e) => !responded[e.id]));
-    } catch (err) {
-      console.error("My Week: failed to check events", err);
-      if (!isStale()) setPendingEvents([]);
-    }
+        try {
+          const unread = await retryOnce(() => hasUnreadMessages(profile.id));
+          if (!isStale()) {
+            setHasUnread(unread);
+            save("messaging", { enabled: true, unread });
+          }
+        } catch (err) {
+          console.error("My Week: failed to check unread messages", err);
+          if (!isStale() && !("messaging" in cached)) setHasUnread(false);
+        }
+      })(),
+
+      // Own try/catch, like every other domain on this screen — an events
+      // failure must not take down the training or nutrition cards.
+      (async () => {
+        try {
+          const live = await retryOnce(() => listLiveEventsForUser(profile.id));
+          // Only the ones that actually want something back. A read-only notice
+          // has no deadline to miss, and nagging about it here would just be
+          // noise on top of the announcement that already went out.
+          const wantsResponse = live.filter((e) => e.response_type === "signup" || e.response_type === "order");
+          const responded = await retryOnce(() => listMyResponses(profile.id, wantsResponse.map((e) => e.id)));
+          const pending = wantsResponse.filter((e) => !responded[e.id]);
+          if (!isStale()) {
+            setPendingEvents(pending);
+            save("events", pending);
+          }
+        } catch (err) {
+          console.error("My Week: failed to check events", err);
+          if (!isStale() && !("events" in cached)) setPendingEvents([]);
+        }
+      })(),
+    ]);
   }, [profile.id]);
 
   // Refetch on every focus, not just first mount — Tabs keep this screen
@@ -1176,14 +1299,25 @@ export default function MemberHome() {
       exercises: [],
     });
     try {
-      const [warmups, exercises, logs] = await Promise.all([
+      // Completion is re-read from the network here rather than trusted from
+      // the row. My Week can paint from cache (lib/screenCache.js), so a
+      // session finalized since that snapshot would otherwise open in "log
+      // this" mode with empty set boxes — showing a member a workout they
+      // already did as undone, and inviting them to log it a second time.
+      // It rides the same parallel batch as the warmups, so it costs nothing.
+      const [warmups, exercises, logs, completion] = await Promise.all([
         listWarmups(row.workout.id),
         listWorkoutExercises(row.workout.id),
-        row.completed ? listLogsForSession(profile.id, { groupWorkoutId: row.workout.id }) : Promise.resolve(null),
+        listLogsForSession(profile.id, { groupWorkoutId: row.workout.id }),
+        getGroupCompletion(profile.id, row.workout.id),
       ]);
+      const completed = !!completion;
       setPreview((p) => ({
         ...p,
         loading: false,
+        state: completed ? "logged" : row.isToday ? "today" : row.dayPassed ? "backlog" : "today",
+        pillLabel: completed ? null : row.isToday ? null : row.dayPassed ? null : "LATER THIS WEEK",
+        completedDateLabel: completion?.completed_at ? formatDateMDY(dateInBoise(new Date(completion.completed_at))) : null,
         warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
         exercises: exercises.map((ex) => ({
           id: ex.id,
@@ -1194,7 +1328,7 @@ export default function MemberHome() {
           supersetGroupId: ex.superset_group_id,
           targetSets: ex.sets,
         })),
-        loggedSets: setsByExercise(logs, exercises),
+        loggedSets: setsByExercise(completed ? logs : null, exercises),
       }));
     } catch (err) {
       setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));
@@ -1221,16 +1355,25 @@ export default function MemberHome() {
       exercises: [],
     });
     try {
-      const [warmups, exerciseRows, logs] = await Promise.all([
+      // Completion is re-read from the network here rather than trusted from
+      // the row. My Week can paint from cache (lib/screenCache.js), so a
+      // session finalized since that snapshot would otherwise open in "log
+      // this" mode with empty set boxes — showing a member a workout they
+      // already did as undone, and inviting them to log it a second time.
+      // It rides the same parallel batch as the warmups, so it costs nothing.
+      const [warmups, exerciseRows, logs, completion] = await Promise.all([
         listSpcWarmups(row.workout.id),
         listSpcWorkoutExercises(row.workout.id),
-        row.completed
-          ? listLogsForSession(profile.id, { spcWorkoutId: row.workout.id, weekNumber: spcEntry.weekNumber })
-          : Promise.resolve(null),
+        listLogsForSession(profile.id, { spcWorkoutId: row.workout.id, weekNumber: spcEntry.weekNumber }),
+        getSpcCompletion(profile.id, row.workout.id, spcEntry.weekNumber),
       ]);
+      const completed = !!completion;
       setPreview((p) => ({
         ...p,
         loading: false,
+        state: completed ? "logged" : "today",
+        pillLabel: completed ? null : "THIS WEEK",
+        completedDateLabel: completion?.completed_at ? formatDateMDY(dateInBoise(new Date(completion.completed_at))) : null,
         warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
         exercises: exerciseRows.map((ex) => ({
           id: ex.id,
@@ -1241,7 +1384,7 @@ export default function MemberHome() {
           supersetGroupId: ex.superset_group_id,
           targetSets: ex.sets,
         })),
-        loggedSets: setsByExercise(logs, exerciseRows),
+        loggedSets: setsByExercise(completed ? logs : null, exerciseRows),
       }));
     } catch (err) {
       setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));
@@ -1265,14 +1408,25 @@ export default function MemberHome() {
       exercises: [],
     });
     try {
-      const [warmups, exercises, logs] = await Promise.all([
+      // Completion is re-read from the network here rather than trusted from
+      // the row. My Week can paint from cache (lib/screenCache.js), so a
+      // session finalized since that snapshot would otherwise open in "log
+      // this" mode with empty set boxes — showing a member a workout they
+      // already did as undone, and inviting them to log it a second time.
+      // It rides the same parallel batch as the warmups, so it costs nothing.
+      const [warmups, exercises, logs, completion] = await Promise.all([
         listOneOffWarmups(item.workoutId),
         listOneOffExercises(item.workoutId),
-        item.completed ? listLogsForSession(profile.id, { oneOffWorkoutId: item.workoutId }) : Promise.resolve(null),
+        listLogsForSession(profile.id, { oneOffWorkoutId: item.workoutId }),
+        getOneOffCompletion(profile.id, item.workoutId),
       ]);
+      const completed = !!completion;
       setPreview((p) => ({
         ...p,
         loading: false,
+        state: completed ? "logged" : "today",
+        pillLabel: completed ? null : "ANYTIME",
+        completedDateLabel: completion?.completed_at ? formatDateMDY(dateInBoise(new Date(completion.completed_at))) : null,
         warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
         exercises: exercises.map((ex) => ({
           id: ex.id,
@@ -1283,7 +1437,7 @@ export default function MemberHome() {
           supersetGroupId: ex.superset_group_id,
           targetSets: ex.sets,
         })),
-        loggedSets: setsByExercise(logs, exercises),
+        loggedSets: setsByExercise(completed ? logs : null, exercises),
       }));
     } catch (err) {
       setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));

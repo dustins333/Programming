@@ -30,6 +30,7 @@ import {
   unfinalizeSpcSession,
 } from "../../lib/programming/sessionCompletions";
 import { retryOnce } from "../../lib/retry";
+import { clearScreen, SCREEN_MY_WEEK } from "../../lib/screenCache";
 import { SessionLogger } from "../../components/SessionLogger";
 import { SessionHeroBar } from "../../components/SessionHeroBar";
 import { ProgramPickerModal } from "../../components/ProgramPickerModal";
@@ -211,274 +212,299 @@ export default function MyFitness() {
     setGroupsLoading(true);
     const today = todayInBoise();
 
-    // Every membership loads independently — a client can hold several
-    // group program memberships at once (e.g. Flagship plus a specialty
-    // program), and one program's failure shouldn't hide another's, same
-    // reasoning as group-vs-SPC-vs-one-offs below. Wrapped in retryOnce:
-    // same reasoning as My Week's load() — a transient failure on the
-    // first request batch right after a reload used to render identically
-    // to "nothing here," only "fixed" by navigating away and back.
-    try {
-      const results = await retryOnce(async () => {
-        const assignments = await listMyAssignments(profile.id);
-        return Promise.all(
-        assignments.map(async (assignment) => {
-          const program = assignment.group_programs;
-          // logs.source predates multi-membership and only ever special-
-          // cased BWA by name (migration 0004); everything else tags with
-          // the generic 'group' value added in 0010. Nothing reads this
-          // column back — history matches on the completion row, not on
-          // source — so rows written before Flagship was renamed to Group
-          // keep their old 'flagship' tag harmlessly.
-          const source = program.name === "Better With Age" ? "bwa" : "group";
-          try {
-            const block = await getCurrentBlock(program.id, today);
-            if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };
+    // The five sections below run concurrently. They were already fully
+    // independent (own try/catch, own state, own retryOnce) — they were
+    // just awaited one after another, which made this screen's cost the
+    // SUM of five chains (~13 round trips) rather than the longest single
+    // one (~5). At the 124ms per-request latency measured 2026-08-23 that
+    // is most of a second and a half, on every focus. allSettled rather
+    // than all: every section already catches its own failures, and this
+    // keeps that true even if a future edit throws outside one.
+    //
+    // Deliberately NOT cache-hydrated the way My Week is: which session
+    // this screen resolves depends on the deep-link params, so painting a
+    // remembered session before that resolves could show the wrong one —
+    // and this is the screen where a member acts, not just reads.
+    await Promise.allSettled([
+      (async () => {
+      // Every membership loads independently — a client can hold several
+      // group program memberships at once (e.g. Flagship plus a specialty
+      // program), and one program's failure shouldn't hide another's, same
+      // reasoning as group-vs-SPC-vs-one-offs below. Wrapped in retryOnce:
+      // same reasoning as My Week's load() — a transient failure on the
+      // first request batch right after a reload used to render identically
+      // to "nothing here," only "fixed" by navigating away and back.
+      try {
+        const results = await retryOnce(async () => {
+          const assignments = await listMyAssignments(profile.id);
+          return Promise.all(
+          assignments.map(async (assignment) => {
+            const program = assignment.group_programs;
+            // logs.source predates multi-membership and only ever special-
+            // cased BWA by name (migration 0004); everything else tags with
+            // the generic 'group' value added in 0010. Nothing reads this
+            // column back — history matches on the completion row, not on
+            // source — so rows written before Flagship was renamed to Group
+            // keep their old 'flagship' tag harmlessly.
+            const source = program.name === "Better With Age" ? "bwa" : "group";
+            try {
+              const block = await getCurrentBlock(program.id, today);
+              if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };
 
-            const weekNumber = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), today);
+              const weekNumber = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), today);
 
-            // An explicit deep link from My Week (tapping a specific
-            // bubble's preview → "Log/Update session") always wins for its
-            // own program — it must be able to reach that exact session
-            // even if the member already hit their weekly cap via a
-            // different one, so it bypasses the cap check below entirely.
-            // Only applies while the live current week still matches what
-            // the link was generated for; a stale link spanning a week
-            // rollover falls through to normal resolution instead of
-            // forcing a week that's no longer current.
-            const isExplicitTarget =
-              params.session === "group" && params.groupProgramId === program.id && Number(params.weekNumber) === weekNumber;
+              // An explicit deep link from My Week (tapping a specific
+              // bubble's preview → "Log/Update session") always wins for its
+              // own program — it must be able to reach that exact session
+              // even if the member already hit their weekly cap via a
+              // different one, so it bypasses the cap check below entirely.
+              // Only applies while the live current week still matches what
+              // the link was generated for; a stale link spanning a week
+              // rollover falls through to normal resolution instead of
+              // forcing a week that's no longer current.
+              const isExplicitTarget =
+                params.session === "group" && params.groupProgramId === program.id && Number(params.weekNumber) === weekNumber;
 
-            let sessionNumber;
-            if (isExplicitTarget) {
-              sessionNumber = Number(params.sessionNumber);
-            } else {
-              // A client on a reduced schedule (e.g. 1x/week) can already be
-              // done for the week on a day that the program's own calendar
-              // mapping still assigns to a *different* session number — the
-              // day-of-week map is shared program-wide, it has no idea this
-              // particular client only needs 1 of the 3 slots. Check the
-              // per-client target against this week's actual completions
-              // first, same as SPC's "no remaining sessions this week" done
-              // state below, before falling through to "what does today map
-              // to" at all. Crucially this counts *any* completed session
-              // this week toward the cap, not specifically the first N in
-              // session-number order — unlike SPC, a group client isn't
-              // restricted to a fixed subset of slots; they can attend
-              // whichever day's session fits their schedule that week (a
-              // 1x/week client who did Wednesday's Session 2 has met their
-              // cap just as much as one who did Monday's Session 1).
-              const sessionsPerWeek = assignment.sessions_per_week ?? program.sessions_per_week;
-              const weekWorkouts = await listWorkoutsForWeek(block.id, weekNumber);
-              const completedThisWeek = await listGroupCompletionsForWorkouts(profile.id, weekWorkouts.map((w) => w.id));
-              const completedCountThisWeek = weekWorkouts.filter((w) => completedThisWeek.has(w.id)).length;
-              if (weekWorkouts.length > 0 && completedCountThisWeek >= sessionsPerWeek) {
-                return { groupProgramId: program.id, programName: program.name, status: "done", weekNumber };
+              let sessionNumber;
+              if (isExplicitTarget) {
+                sessionNumber = Number(params.sessionNumber);
+              } else {
+                // A client on a reduced schedule (e.g. 1x/week) can already be
+                // done for the week on a day that the program's own calendar
+                // mapping still assigns to a *different* session number — the
+                // day-of-week map is shared program-wide, it has no idea this
+                // particular client only needs 1 of the 3 slots. Check the
+                // per-client target against this week's actual completions
+                // first, same as SPC's "no remaining sessions this week" done
+                // state below, before falling through to "what does today map
+                // to" at all. Crucially this counts *any* completed session
+                // this week toward the cap, not specifically the first N in
+                // session-number order — unlike SPC, a group client isn't
+                // restricted to a fixed subset of slots; they can attend
+                // whichever day's session fits their schedule that week (a
+                // 1x/week client who did Wednesday's Session 2 has met their
+                // cap just as much as one who did Monday's Session 1).
+                const sessionsPerWeek = assignment.sessions_per_week ?? program.sessions_per_week;
+                const weekWorkouts = await listWorkoutsForWeek(block.id, weekNumber);
+                const completedThisWeek = await listGroupCompletionsForWorkouts(profile.id, weekWorkouts.map((w) => w.id));
+                const completedCountThisWeek = weekWorkouts.filter((w) => completedThisWeek.has(w.id)).length;
+                if (weekWorkouts.length > 0 && completedCountThisWeek >= sessionsPerWeek) {
+                  return { groupProgramId: program.id, programName: program.name, status: "done", weekNumber };
+                }
+
+                // Every program owns its own day-of-week map now (migration
+                // 0011) — Flagship/BWA's Mon/Tue-Wed/Thu-Fri/Sat scheme is just
+                // this program's data, not a rule every group program follows.
+                sessionNumber = sessionNumberForDate(today, program.session_days);
+                if (!sessionNumber) return { groupProgramId: program.id, programName: program.name, status: "rest_day" };
               }
 
-              // Every program owns its own day-of-week map now (migration
-              // 0011) — Flagship/BWA's Mon/Tue-Wed/Thu-Fri/Sat scheme is just
-              // this program's data, not a rule every group program follows.
-              sessionNumber = sessionNumberForDate(today, program.session_days);
-              if (!sessionNumber) return { groupProgramId: program.id, programName: program.name, status: "rest_day" };
-            }
+              const workout = await getWorkout(block.id, weekNumber, sessionNumber);
+              if (!workout) {
+                return { groupProgramId: program.id, programName: program.name, status: "not_published", weekNumber, sessionNumber };
+              }
 
-            const workout = await getWorkout(block.id, weekNumber, sessionNumber);
-            if (!workout) {
-              return { groupProgramId: program.id, programName: program.name, status: "not_published", weekNumber, sessionNumber };
+              const [completion, warmups, exerciseRows] = await Promise.all([
+                getGroupCompletion(profile.id, workout.id),
+                listWarmups(workout.id),
+                listWorkoutExercises(workout.id),
+              ]);
+              return {
+                groupProgramId: program.id,
+                programName: program.name,
+                source,
+                status: "ready",
+                weekNumber,
+                sessionNumber,
+                workout,
+                warmups,
+                completed: !!completion,
+                // Reopening an already-completed session (e.g. "Update session"
+                // from My Week for a session logged on a past date) must read
+                // and keep writing against whatever date it was actually
+                // performed, not today — otherwise the member's real logged
+                // sets never show up, since they're stored under a different
+                // date_performed. Only a not-yet-completed session defaults to
+                // today, since that's genuinely when it's being logged.
+                datePerformed: completion?.completed_at ? dateInBoise(new Date(completion.completed_at)) : today,
+                exercises: exerciseRows.map((ex) => ({
+                  id: ex.id,
+                  exercise: ex.exercises,
+                  targetSets: ex.sets,
+                  targetReps: ex.reps,
+                  repScheme: ex.rep_scheme,
+                  supersetGroupId: ex.superset_group_id,
+                  tempo: ex.tempo,
+                  rest: ex.rest,
+                  notes: ex.notes,
+                })),
+              };
+            } catch (err) {
+              return { groupProgramId: program.id, programName: program.name, status: "error", message: err.message ?? String(err) };
             }
+          })
+          );
+        });
+        if (!isStale()) setGroups(results);
+      } catch (err) {
+        console.error("My Fitness: failed to load group programs", err);
+        if (!isStale()) setGroups([{ status: "error", message: err.message ?? String(err) }]);
+      } finally {
+        if (!isStale()) setGroupsLoading(false);
+      }
+      })(),
 
-            const [completion, warmups, exerciseRows] = await Promise.all([
-              getGroupCompletion(profile.id, workout.id),
-              listWarmups(workout.id),
-              listWorkoutExercises(workout.id),
-            ]);
-            return {
-              groupProgramId: program.id,
-              programName: program.name,
-              source,
-              status: "ready",
+      (async () => {
+      try {
+        const spcResult = await retryOnce(async () => {
+          const spcClient = await getSpcClient(profile.id);
+          const active = isSpcActive(spcClient);
+          if (!active) return { active };
+
+          const block = await getCurrentSpcBlock(profile.id, today);
+          if (!block) return { active, spc: { status: "no_block" } };
+
+          const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+          const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber);
+          if (workouts.length === 0) return { active, spc: { status: "not_published" } };
+
+          const sessionsPerWeek = spcClient.sessions_per_week;
+          const relevant = workouts.slice(0, sessionsPerWeek);
+          const workoutIds = relevant.map((w) => w.id);
+          // Detail version (not just the id Set) so a completed session's
+          // real completed_at date is available — reopening it via "Update
+          // session" needs to read/write against that date, not today (same
+          // reasoning as the group loader above).
+          const completionDetails = await listSpcCompletionDetailsForWorkouts(profile.id, workoutIds);
+          const sessions = relevant.map((w) => {
+            const completedAt = completionDetails.get(`${w.id}:${weekNumber}`) ?? null;
+            return { sessionNumber: w.session_number, workout: w, completed: !!completedAt, completedAt };
+          });
+          // Explicit deep link from My Week (a bubble's preview → "Log/Update
+          // session") resolved right here, the same way the group branch
+          // above resolves its own isExplicitTarget — NOT via a separate
+          // reactive useEffect keyed on spc?.status/weekNumber, which this
+          // used to be. That effect only re-ran when those two primitives
+          // actually changed value between loads; load() itself runs on
+          // every focus (useFocusEffect) and always recomputed
+          // selectedSessionNumber fresh, so any repeat visit where status and
+          // weekNumber happened to come out the same as last time (the common
+          // case — still mid-week, tapping a session bubble again) never
+          // re-triggered the effect, and the just-recomputed default silently
+          // won over the deep link every time. Computing it inline instead
+          // means there's no second render pass to race against.
+          const isExplicitSpcTarget =
+            params.session === "spc" && params.sessionNumber && String(weekNumber) === String(params.weekNumber);
+          const explicitSession = isExplicitSpcTarget
+            ? sessions.find((s) => s.sessionNumber === Number(params.sessionNumber))
+            : null;
+          const defaultSession = explicitSession ?? sessions.find((s) => !s.completed) ?? sessions[0];
+          // An explicit target also bypasses the "done" status the same way
+          // the group branch's isExplicitTarget bypasses its weekly-cap
+          // check — reopening a specific already-completed session via
+          // "Update session" must still land on "ready" with that session
+          // selected, not the whole-week "done" card, even if every session
+          // in the relevant slice happens to be complete.
+          const allCompleted = sessions.every((s) => s.completed);
+          return {
+            active,
+            spc: {
+              status: allCompleted && !isExplicitSpcTarget ? "done" : "ready",
               weekNumber,
-              sessionNumber,
+              sessionsPerWeek,
+              sessions,
+              selectedSessionNumber: defaultSession?.sessionNumber ?? null,
+            },
+          };
+        });
+        if (!isStale()) {
+          setHasSpc(spcResult.active);
+          setSpc(spcResult.active ? spcResult.spc : null);
+          setSpcLoadError(null);
+        }
+      } catch (err) {
+        console.error("My Fitness: failed to load SPC", err);
+        if (!isStale()) {
+          setHasSpc(false);
+          setSpc(null);
+          // Distinct from "genuinely not on SPC" — see the guard below, which
+          // used to show "You're not assigned to a program yet" to an
+          // SPC-only member whose SPC fetch simply failed.
+          setSpcLoadError(err.message ?? String(err));
+        }
+      }
+      })(),
+
+      (async () => {
+      // One-offs load independently too, same reasoning — an away workout or
+      // trial session assignment has nothing to do with group/SPC, so its
+      // failure shouldn't hide either of those sections.
+      try {
+        const withContent = await retryOnce(async () => {
+          const activeOneOffs = await listActiveOneOffWorkoutsForUser(profile.id);
+          // My Week keeps a one-off visible (checked off) for the rest of the
+          // day it was finished and offers "Update session" on it — but the
+          // active list above drops it the moment it's completed, so that
+          // button resolved to nothing and silently dumped the member on an
+          // unrelated session. Pull the specifically-requested one back in.
+          let oneOffList = activeOneOffs;
+          const wantedId = params.session === "one_off" ? params.oneOffWorkoutId : null;
+          if (wantedId && !activeOneOffs.some((w) => w.id === wantedId)) {
+            const weekOneOffs = await listWeekOneOffWorkoutsForUser(profile.id, today);
+            const wanted = weekOneOffs.find((w) => w.id === wantedId);
+            if (wanted) oneOffList = [...activeOneOffs, wanted];
+          }
+          return Promise.all(
+          oneOffList.map(async (workout) => {
+            const [warmupRows, exerciseRows] = await Promise.all([listOneOffWarmups(workout.id), listOneOffExercises(workout.id)]);
+            return {
               workout,
-              warmups,
-              completed: !!completion,
-              // Reopening an already-completed session (e.g. "Update session"
-              // from My Week for a session logged on a past date) must read
-              // and keep writing against whatever date it was actually
-              // performed, not today — otherwise the member's real logged
-              // sets never show up, since they're stored under a different
-              // date_performed. Only a not-yet-completed session defaults to
-              // today, since that's genuinely when it's being logged.
-              datePerformed: completion?.completed_at ? dateInBoise(new Date(completion.completed_at)) : today,
+              warmups: warmupRows,
               exercises: exerciseRows.map((ex) => ({
                 id: ex.id,
                 exercise: ex.exercises,
                 targetSets: ex.sets,
                 targetReps: ex.reps,
                 repScheme: ex.rep_scheme,
-                supersetGroupId: ex.superset_group_id,
                 tempo: ex.tempo,
                 rest: ex.rest,
                 notes: ex.notes,
               })),
             };
-          } catch (err) {
-            return { groupProgramId: program.id, programName: program.name, status: "error", message: err.message ?? String(err) };
-          }
-        })
-        );
-      });
-      if (!isStale()) setGroups(results);
-    } catch (err) {
-      console.error("My Fitness: failed to load group programs", err);
-      if (!isStale()) setGroups([{ status: "error", message: err.message ?? String(err) }]);
-    } finally {
-      if (!isStale()) setGroupsLoading(false);
-    }
-
-    try {
-      const spcResult = await retryOnce(async () => {
-        const spcClient = await getSpcClient(profile.id);
-        const active = isSpcActive(spcClient);
-        if (!active) return { active };
-
-        const block = await getCurrentSpcBlock(profile.id, today);
-        if (!block) return { active, spc: { status: "no_block" } };
-
-        const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
-        const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber);
-        if (workouts.length === 0) return { active, spc: { status: "not_published" } };
-
-        const sessionsPerWeek = spcClient.sessions_per_week;
-        const relevant = workouts.slice(0, sessionsPerWeek);
-        const workoutIds = relevant.map((w) => w.id);
-        // Detail version (not just the id Set) so a completed session's
-        // real completed_at date is available — reopening it via "Update
-        // session" needs to read/write against that date, not today (same
-        // reasoning as the group loader above).
-        const completionDetails = await listSpcCompletionDetailsForWorkouts(profile.id, workoutIds);
-        const sessions = relevant.map((w) => {
-          const completedAt = completionDetails.get(`${w.id}:${weekNumber}`) ?? null;
-          return { sessionNumber: w.session_number, workout: w, completed: !!completedAt, completedAt };
+          })
+          );
         });
-        // Explicit deep link from My Week (a bubble's preview → "Log/Update
-        // session") resolved right here, the same way the group branch
-        // above resolves its own isExplicitTarget — NOT via a separate
-        // reactive useEffect keyed on spc?.status/weekNumber, which this
-        // used to be. That effect only re-ran when those two primitives
-        // actually changed value between loads; load() itself runs on
-        // every focus (useFocusEffect) and always recomputed
-        // selectedSessionNumber fresh, so any repeat visit where status and
-        // weekNumber happened to come out the same as last time (the common
-        // case — still mid-week, tapping a session bubble again) never
-        // re-triggered the effect, and the just-recomputed default silently
-        // won over the deep link every time. Computing it inline instead
-        // means there's no second render pass to race against.
-        const isExplicitSpcTarget =
-          params.session === "spc" && params.sessionNumber && String(weekNumber) === String(params.weekNumber);
-        const explicitSession = isExplicitSpcTarget
-          ? sessions.find((s) => s.sessionNumber === Number(params.sessionNumber))
-          : null;
-        const defaultSession = explicitSession ?? sessions.find((s) => !s.completed) ?? sessions[0];
-        // An explicit target also bypasses the "done" status the same way
-        // the group branch's isExplicitTarget bypasses its weekly-cap
-        // check — reopening a specific already-completed session via
-        // "Update session" must still land on "ready" with that session
-        // selected, not the whole-week "done" card, even if every session
-        // in the relevant slice happens to be complete.
-        const allCompleted = sessions.every((s) => s.completed);
-        return {
-          active,
-          spc: {
-            status: allCompleted && !isExplicitSpcTarget ? "done" : "ready",
-            weekNumber,
-            sessionsPerWeek,
-            sessions,
-            selectedSessionNumber: defaultSession?.sessionNumber ?? null,
-          },
-        };
-      });
-      if (!isStale()) {
-        setHasSpc(spcResult.active);
-        setSpc(spcResult.active ? spcResult.spc : null);
-        setSpcLoadError(null);
+        if (!isStale()) setOneOffs(withContent);
+      } catch (err) {
+        console.error("My Fitness: failed to load one-offs", err);
+        if (!isStale()) setOneOffs([]);
       }
-    } catch (err) {
-      console.error("My Fitness: failed to load SPC", err);
-      if (!isStale()) {
-        setHasSpc(false);
-        setSpc(null);
-        // Distinct from "genuinely not on SPC" — see the guard below, which
-        // used to show "You're not assigned to a program yet" to an
-        // SPC-only member whose SPC fetch simply failed.
-        setSpcLoadError(err.message ?? String(err));
+      })(),
+
+      (async () => {
+      // What their coach wrote they're working toward. Own try/catch, same as
+      // every other domain on this page — and this one throws outright until
+      // migration 0078 is run.
+      try {
+        const goalRow = await getClientGoal(profile.id);
+        if (!isStale()) setGoal(goalRow?.goal ?? null);
+      } catch {
+        if (!isStale()) setGoal(null);
       }
-    }
+      })(),
 
-    // One-offs load independently too, same reasoning — an away workout or
-    // trial session assignment has nothing to do with group/SPC, so its
-    // failure shouldn't hide either of those sections.
-    try {
-      const withContent = await retryOnce(async () => {
-        const activeOneOffs = await listActiveOneOffWorkoutsForUser(profile.id);
-        // My Week keeps a one-off visible (checked off) for the rest of the
-        // day it was finished and offers "Update session" on it — but the
-        // active list above drops it the moment it's completed, so that
-        // button resolved to nothing and silently dumped the member on an
-        // unrelated session. Pull the specifically-requested one back in.
-        let oneOffList = activeOneOffs;
-        const wantedId = params.session === "one_off" ? params.oneOffWorkoutId : null;
-        if (wantedId && !activeOneOffs.some((w) => w.id === wantedId)) {
-          const weekOneOffs = await listWeekOneOffWorkoutsForUser(profile.id, today);
-          const wanted = weekOneOffs.find((w) => w.id === wantedId);
-          if (wanted) oneOffList = [...activeOneOffs, wanted];
-        }
-        return Promise.all(
-        oneOffList.map(async (workout) => {
-          const [warmupRows, exerciseRows] = await Promise.all([listOneOffWarmups(workout.id), listOneOffExercises(workout.id)]);
-          return {
-            workout,
-            warmups: warmupRows,
-            exercises: exerciseRows.map((ex) => ({
-              id: ex.id,
-              exercise: ex.exercises,
-              targetSets: ex.sets,
-              targetReps: ex.reps,
-              repScheme: ex.rep_scheme,
-              tempo: ex.tempo,
-              rest: ex.rest,
-              notes: ex.notes,
-            })),
-          };
-        })
-        );
-      });
-      if (!isStale()) setOneOffs(withContent);
-    } catch (err) {
-      console.error("My Fitness: failed to load one-offs", err);
-      if (!isStale()) setOneOffs([]);
-    }
-
-    // What their coach wrote they're working toward. Own try/catch, same as
-    // every other domain on this page — and this one throws outright until
-    // migration 0078 is run.
-    try {
-      const goalRow = await getClientGoal(profile.id);
-      if (!isStale()) setGoal(goalRow?.goal ?? null);
-    } catch {
-      if (!isStale()) setGoal(null);
-    }
-
-    // Only to tell a nutrition-only member apart from a genuinely
-    // unassigned one on the empty state below — this tab used to tell
-    // nutrition-only clients "you're not assigned to a program yet."
-    try {
-      const nutritionClient = await getNutritionClient(profile.id);
-      if (!isStale()) setHasNutrition(nutritionClient?.status === "active");
-    } catch {
-      if (!isStale()) setHasNutrition(false);
-    }
+      (async () => {
+      // Only to tell a nutrition-only member apart from a genuinely
+      // unassigned one on the empty state below — this tab used to tell
+      // nutrition-only clients "you're not assigned to a program yet."
+      try {
+        const nutritionClient = await getNutritionClient(profile.id);
+        if (!isStale()) setHasNutrition(nutritionClient?.status === "active");
+      } catch {
+        if (!isStale()) setHasNutrition(false);
+      }
+      })(),
+    ]);
     // params.session/groupProgramId/weekNumber/sessionNumber deliberately
     // included — a fresh My Week deep link needs to re-resolve which
     // specific group session this loads even when the tab doesn't actually
@@ -570,11 +596,15 @@ export default function MyFitness() {
   const handleFinalizeGroup = async (groupEntry) => {
     if (groupEntry.completed) {
       await unfinalizeGroupSession(profile.id, groupEntry.workout.id);
+      void clearScreen(SCREEN_MY_WEEK, profile.id);
       setGroups((prev) => prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: false } : g)));
       toastSuccess("Un-finalized — keep logging.");
       return;
     }
     await finalizeGroupSession(profile.id, groupEntry.workout.id);
+    // My Week reflects this, and it can paint from cache — drop its
+    // snapshot so the next visit can't show this session as still to do.
+    void clearScreen(SCREEN_MY_WEEK, profile.id);
     setGroups((prev) => prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: true } : g)));
     try {
       const progress = await getGroupWeeklyProgress(profile.id, groupEntry.groupProgramId);
@@ -607,11 +637,13 @@ export default function MyFitness() {
       }));
     if (session.completed) {
       await unfinalizeSpcSession(profile.id, session.workout.id, spc.weekNumber);
+      void clearScreen(SCREEN_MY_WEEK, profile.id);
       setCompleted(false);
       toastSuccess("Un-finalized — keep logging.");
       return;
     }
     await finalizeSpcSession(profile.id, session.workout.id, spc.weekNumber);
+    void clearScreen(SCREEN_MY_WEEK, profile.id);
     setCompleted(true);
     try {
       const progress = await getSpcWeeklyProgress(profile.id);
@@ -635,6 +667,7 @@ export default function MyFitness() {
   // just drops out of the active list rather than showing a completed state.
   const handleFinalizeOneOff = async (workoutId) => {
     await finalizeOneOffSession(profile.id, workoutId);
+    void clearScreen(SCREEN_MY_WEEK, profile.id);
     setOneOffs((prev) => prev.filter((o) => o.workout.id !== workoutId));
     toastSuccess("Workout finalized — nice work!");
   };

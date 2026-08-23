@@ -265,11 +265,18 @@ export function SessionSheet({
 
           <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 22 + insets.bottom, borderTopWidth: 1, borderTopColor: "#f0ece7" }}>
             {copy.cta && onCta ? (
+              // Also disabled while loading, not just while saving. The footer
+              // sits outside the loading gate above, so until this resolves the
+              // button is labelled from whatever state the opener guessed —
+              // and My Week can open this from a cached row (lib/screenCache.js),
+              // where that guess can be "not logged yet" for a session the
+              // member has in fact already finished. Acting on it then would
+              // log the same workout twice.
               <PressFade
                 onPress={() => onCta(state === "backlog" ? logDate : undefined)}
-                disabled={ctaBusy}
+                disabled={ctaBusy || loading}
                 style={{
-                  opacity: ctaBusy ? 0.5 : 1,
+                  opacity: ctaBusy || loading ? 0.5 : 1,
                   backgroundColor: CLAY,
                   borderRadius: 15,
                   paddingVertical: 16,
