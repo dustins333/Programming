@@ -45,6 +45,7 @@ import {
   Eyebrow,
   SaveLight,
   WarmupGrid,
+  WARMUP_SLOTS,
   SortableLift,
   BalanceRail,
   LastWeekRail,
@@ -54,8 +55,9 @@ import {
   balanceNoteFor,
 } from "../../../components/builder/SessionBuilderParts";
 import { confirmOverwrite } from "../../../lib/confirmDialog";
-import { toastError, toastSuccess } from "../../../lib/toast";
+import { toastError, toastSuccess, showToast } from "../../../lib/toast";
 import { fonts, colors } from "../../../lib/theme";
+import { nextPosition } from "../../../lib/position";
 
 // Session builder, coach web (design_handoff_coach_web_v2, 1e).
 //
@@ -190,7 +192,7 @@ export default function WorkoutBuilderWeb() {
       const created = await addWorkoutExercise({
         workoutId,
         exerciseId: exercise.id,
-        position: exercises.length + 1,
+        position: nextPosition(exercises),
         sets: exercise.default_sets != null ? Number(exercise.default_sets) : undefined,
         reps: exercise.default_reps || undefined,
       });
@@ -282,12 +284,20 @@ export default function WorkoutBuilderWeb() {
   };
 
   const handleAddWarmup = async (exercise) => {
+    // The library sidebar and the drag-drop zone both land here, and neither
+    // was capped the way the grid's own "+ Add" is (that button hides at six).
+    // So a coach already at six could keep clicking warm-ups in the sidebar;
+    // each one saved, and none of them appeared.
+    if (warmups.length >= WARMUP_SLOTS) {
+      showToast(`Warm-up is full at ${WARMUP_SLOTS} — remove one first`, { type: "info" });
+      return;
+    }
     try {
       setSaveState("saving");
       const created = await addWarmup({
         workoutId,
         exerciseId: exercise.id,
-        position: warmups.length + 1,
+        position: nextPosition(warmups),
         sets: exercise.default_sets != null ? String(exercise.default_sets) : undefined,
         reps: exercise.default_reps || undefined,
       });
@@ -427,9 +437,13 @@ export default function WorkoutBuilderWeb() {
           onNewExercise={() => setNewExerciseModalVisible(true)}
           onInsertLift={handleInsertExercise}
           onInsertWarmup={handleAddWarmup}
-          onBack={() =>
-            router.canGoBack() ? router.back() : router.push(`/(coach)/blocks?program=${workout.group_blocks.group_program_id}`)
-          }
+          // dismissTo, not back(). back() returns to whatever screen came
+          // last, which after paging through sessions with the < > arrows is
+          // the *previous session's builder*, not the grid. dismissTo unwinds
+          // the stack to the grid if it is in there (restoring the program tab
+          // the URL now carries) and replaces the current screen with it if
+          // this builder was opened cold from a link.
+          onBack={() => router.dismissTo(`/(coach)/blocks?program=${workout.group_blocks.group_program_id}`)}
         />
 
         <View style={{ flex: 1 }}>

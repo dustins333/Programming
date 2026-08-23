@@ -19,6 +19,7 @@ import {
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
 import { toastError } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
+import { nextPosition } from "../../../../lib/position";
 
 const CATEGORY_LABELS = { away: "Away programming", trial: "Trial session" };
 
@@ -86,13 +87,13 @@ export default function TemplateBuilder() {
   const handlePick = async (exercise) => {
     try {
       if (pickerTarget === "warmup") {
-        const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: warmups.length + 1 });
+        const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: nextPosition(warmups) });
         setWarmups((prev) => [...prev, created]);
       } else if (pickerTarget === "exercise") {
         const created = await addTemplateExercise({
           templateId,
           exerciseId: exercise.id,
-          position: exercises.length + 1,
+          position: nextPosition(exercises),
           sets: exercise.default_sets != null ? Number(exercise.default_sets) : undefined,
           reps: exercise.default_reps || undefined,
         });

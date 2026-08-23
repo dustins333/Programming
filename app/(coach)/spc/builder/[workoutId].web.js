@@ -40,6 +40,7 @@ import {
   Eyebrow,
   SaveLight,
   WarmupGrid,
+  WARMUP_SLOTS,
   SortableLift,
   BalanceRail,
   LastWeekRail,
@@ -49,8 +50,9 @@ import {
   balanceNoteFor,
 } from "../../../../components/builder/SessionBuilderParts";
 import { confirmOverwrite } from "../../../../lib/confirmDialog";
-import { toastError, toastSuccess } from "../../../../lib/toast";
+import { toastError, toastSuccess, showToast } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
+import { nextPosition } from "../../../../lib/position";
 
 // SPC session builder, coach web (design_handoff_coach_web_v2, screen 06).
 //
@@ -154,7 +156,7 @@ export default function SpcWorkoutBuilderWeb() {
       const created = await addSpcWorkoutExercise({
         workoutId,
         exerciseId: exercise.id,
-        position: exercises.length + 1,
+        position: nextPosition(exercises),
         userId: workout.spc_blocks.spc_client_id,
         defaultSets: exercise.default_sets,
         defaultReps: exercise.default_reps,
@@ -247,12 +249,20 @@ export default function SpcWorkoutBuilderWeb() {
   };
 
   const handleAddWarmup = async (exercise) => {
+    // The library sidebar and the drag-drop zone both land here, and neither
+    // was capped the way the grid's own "+ Add" is (that button hides at six).
+    // So a coach already at six could keep clicking warm-ups in the sidebar;
+    // each one saved, and none of them appeared.
+    if (warmups.length >= WARMUP_SLOTS) {
+      showToast(`Warm-up is full at ${WARMUP_SLOTS} — remove one first`, { type: "info" });
+      return;
+    }
     try {
       setSaveState("saving");
       const created = await addSpcWarmup({
         workoutId,
         exerciseId: exercise.id,
-        position: warmups.length + 1,
+        position: nextPosition(warmups),
         sets: exercise.default_sets != null ? String(exercise.default_sets) : undefined,
         reps: exercise.default_reps || undefined,
       });
@@ -355,9 +365,10 @@ export default function SpcWorkoutBuilderWeb() {
           onNewExercise={() => setNewExerciseModalVisible(true)}
           onInsertLift={handleInsertExercise}
           onInsertWarmup={handleAddWarmup}
-          onBack={() =>
-            router.canGoBack() ? router.back() : router.push(`/(coach)/spc/${workout.spc_blocks.spc_client_id}`)
-          }
+          // Same reasoning as the group builder: after paging sessions with
+          // the < > arrows, back() lands on the previous session's builder
+          // rather than the client. dismissTo unwinds to the client page.
+          onBack={() => router.dismissTo(`/(coach)/spc/${workout.spc_blocks.spc_client_id}`)}
         />
 
         <View style={{ flex: 1 }}>

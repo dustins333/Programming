@@ -78,25 +78,36 @@ export function SaveLight({ state }) {
 
 /* ------------------------------------------------------------- warm-up */
 
+// The grid is a fixed 2x3, and the add handlers refuse to exceed it. Both
+// halves have to agree or you get a row that exists but cannot be reached.
+export const WARMUP_SLOTS = 6;
+
 // A fixed 2×3 grid of six slots rather than a growing list — the coaching
 // convention here is five or six movements, so the empty slots are the
 // prompt and there's nothing to "add a row" to.
 export function WarmupGrid({ warmups, onChange, onRemove, onAdd, editable = true }) {
+  // Pad to six, but never truncate past it. This used to render
+  // slots.slice(0, 6), so a seventh warm-up saved fine and then simply was
+  // not drawn — invisible to the coach who added it, while still showing to
+  // members and on the printed sheet, and with no way to remove it because
+  // the row it lived on did not exist. Over-cap rows now render so they can
+  // be seen and deleted; the add paths refuse to create them in the first
+  // place.
   const slots = [...warmups];
-  while (slots.length < 6) slots.push(null);
+  while (slots.length < WARMUP_SLOTS) slots.push(null);
 
   return (
     <View>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
-        <Eyebrow>WARM-UP · {warmups.length} OF 6</Eyebrow>
-        {warmups.length < 6 ? (
+        <Eyebrow>WARM-UP · {warmups.length} OF {WARMUP_SLOTS}</Eyebrow>
+        {warmups.length < WARMUP_SLOTS ? (
           <Pressable onPress={onAdd}>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>+ Add</Text>
           </Pressable>
         ) : null}
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-        {slots.slice(0, 6).map((w, i) =>
+        {slots.map((w, i) =>
           w ? (
             <View
               key={w.id}

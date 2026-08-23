@@ -693,7 +693,17 @@ function BlocksDesktop() {
             return (
               <Pressable
                 key={program.id}
-                onPress={() => setSelectedProgramId(program.id)}
+                onPress={() => {
+                  setSelectedProgramId(program.id)
+                  // Mirror the tab into the URL. It used to live only in
+                  // component state, so /blocks was the same address whichever
+                  // program was showing — open a session from the BWA tab and
+                  // come back, and the mount effect fell through to
+                  // programData[0] ("Group" is pinned first), landing you on
+                  // the wrong program. Now the address describes what you are
+                  // looking at, so back, refresh and a pasted link all agree.
+                  router.setParams({ program: program.id })
+                }}
                 style={{ paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: active ? colors.primary : "transparent" }}
               >
                 <Text style={{ fontFamily: active ? fonts.sansBold : fonts.sans, fontSize: 15, color: active ? colors.primaryOnWhite : "#57534e" }}>

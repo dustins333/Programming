@@ -27,11 +27,13 @@ import {
   Eyebrow,
   SaveLight,
   WarmupGrid,
+  WARMUP_SLOTS,
   SortableLift,
   schemeLabel,
 } from "../../../../components/builder/SessionBuilderParts";
 import { fonts, colors } from "../../../../lib/theme";
-import { toastError } from "../../../../lib/toast";
+import { toastError, showToast } from "../../../../lib/toast";
+import { nextPosition } from "../../../../lib/position";
 
 // Template builder, coach web — the third consumer of the shared session
 // builder (design_handoff_coach_web_v2, screen 06).
@@ -108,7 +110,7 @@ export default function TemplateBuilderWeb() {
       const created = await addTemplateExercise({
         templateId,
         exerciseId: exercise.id,
-        position: exercises.length + 1,
+        position: nextPosition(exercises),
         sets: exercise.default_sets != null ? Number(exercise.default_sets) : undefined,
         reps: exercise.default_reps || undefined,
       });
@@ -167,9 +169,17 @@ export default function TemplateBuilderWeb() {
   };
 
   const handleAddWarmup = async (exercise) => {
+    // The library sidebar and the drag-drop zone both land here, and neither
+    // was capped the way the grid's own "+ Add" is (that button hides at six).
+    // So a coach already at six could keep clicking warm-ups in the sidebar;
+    // each one saved, and none of them appeared.
+    if (warmups.length >= WARMUP_SLOTS) {
+      showToast(`Warm-up is full at ${WARMUP_SLOTS} — remove one first`, { type: "info" });
+      return;
+    }
     try {
       setSaveState("saving");
-      const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: warmups.length + 1 });
+      const created = await addTemplateWarmup({ templateId, exerciseId: exercise.id, position: nextPosition(warmups) });
       setWarmups((prev) => [...prev, created]);
       setSaveState("saved");
     } catch (err) {
