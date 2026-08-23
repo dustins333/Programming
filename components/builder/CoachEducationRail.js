@@ -107,8 +107,8 @@ function EducationCard({ item, groups, onChange, onRemove }) {
         }}
       >
         {/* Blank is a real, useful choice — a note about the session as a
-            whole ("this week's theme is tempo") has no one lift to hang on. */}
-        <option value="">Whole session (no specific lift)</option>
+            whole ("this week's theme is tempo") has nothing to hang on. */}
+        <option value="">Whole session (nothing specific)</option>
         {groups
           .filter((g) => g.items.length > 0)
           .map((g) => (
@@ -149,9 +149,10 @@ function EducationCard({ item, groups, onChange, onRemove }) {
 }
 
 export function CoachEducationRail({ sessionNumber, items, lifts, warmups, loading, error, onAdd, onChange, onRemove, onRetry }) {
+  // Warm-ups first, then the main session — the order a coach runs it in.
   const groups = [
-    { label: "Lifts", items: lifts ?? [] },
     { label: "Warm-ups", items: warmups ?? [] },
+    { label: "Exercises", items: lifts ?? [] },
   ];
   return (
     <View>
