@@ -34,6 +34,11 @@ export function WebPushBanner() {
   }, [profile?.id]);
 
   if (Platform.OS !== "web" || !profile?.id) return null;
+  // The gym-floor wall display: Chromium on the Pi supports web push, so the
+  // display account gets offered notifications like anyone else — and then
+  // the banner sits on the wall forever, because there is nobody standing at
+  // it to either accept or dismiss it. It has no use for push regardless.
+  if (profile.is_gym_display) return null;
   if (["checking", "dismissed", "subscribed", "unsupported", "denied"].includes(status)) return null;
 
   function dismiss() {

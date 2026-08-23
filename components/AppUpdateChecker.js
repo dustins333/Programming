@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { PassThroughOverlay } from "./PassThroughOverlay";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../lib/auth/AuthProvider";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
 
@@ -25,11 +26,23 @@ import { fonts, colors } from "../lib/theme";
 //     half-typed into it.
 const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
+// The gym-floor wall display is the one place the "quiet, never self-reload"
+// stance above is wrong: there is nobody standing at it to tap Refresh, so
+// the pill would sit on the wall indefinitely while the board quietly ran an
+// old bundle. It reloads itself instead — but never the instant an update
+// lands. The hub's set entry autosaves on a 700ms debounce, so a reload
+// mid-set would both drop an in-flight keystroke and visibly blink the board
+// in front of clients. Wait for a screen nobody has touched.
+const DISPLAY_IDLE_MS = 60 * 1000;
+const DISPLAY_IDLE_POLL_MS = 5 * 1000;
+
 function extractScriptSrc(html) {
   return html.match(/<script[^>]+src="([^"]+)"/)?.[1] ?? null;
 }
 
 export function AppUpdateChecker() {
+  const { profile } = useAuth();
+  const isDisplay = Boolean(profile?.is_gym_display);
   const [latestSrc, setLatestSrc] = useState(null);
   const insets = useSafeAreaInsets();
   const currentSrcRef = useRef(null);
@@ -69,12 +82,34 @@ export function AppUpdateChecker() {
     };
   }, []);
 
+  // Display only. Armed once an update is detected, then reloads as soon as
+  // the screen has gone quiet — so a coach mid-session is never interrupted,
+  // and a board sitting idle on the rack picks the new build up within a
+  // minute. Date.now() here measures elapsed time, not a calendar day, so
+  // the todayInBoise rule deliberately doesn't apply.
+  useEffect(() => {
+    if (Platform.OS !== "web" || !isDisplay || !latestSrc) return;
+    let lastTouched = Date.now();
+    const bump = () => {
+      lastTouched = Date.now();
+    };
+    const events = ["pointerdown", "touchstart", "keydown", "wheel"];
+    events.forEach((name) => window.addEventListener(name, bump, { passive: true }));
+    const interval = setInterval(() => {
+      if (Date.now() - lastTouched >= DISPLAY_IDLE_MS) window.location.reload();
+    }, DISPLAY_IDLE_POLL_MS);
+    return () => {
+      clearInterval(interval);
+      events.forEach((name) => window.removeEventListener(name, bump));
+    };
+  }, [isDisplay, latestSrc]);
+
   const handleDismiss = useCallback(() => {
     if (latestSrc) dismissedRef.current.add(latestSrc);
     setLatestSrc(null);
   }, [latestSrc]);
 
-  if (Platform.OS !== "web" || !latestSrc) return null;
+  if (Platform.OS !== "web" || !latestSrc || isDisplay) return null;
 
   return (
     // PassThroughOverlay, not a Modal: this pill sits there until it's
