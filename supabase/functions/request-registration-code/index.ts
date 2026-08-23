@@ -27,6 +27,56 @@ function generateCode() {
   return String(100000 + (n % 900000));
 }
 
+const GHL_BASE = "https://services.leadconnectorhq.com";
+
+function ghlHeaders() {
+  return {
+    Authorization: `Bearer ${Deno.env.get("GHL_API_KEY")}`,
+    Version: "2021-07-28",
+    "Content-Type": "application/json",
+  };
+}
+
+function sendCodeSms(contactId: string, code: string) {
+  return fetch(`${GHL_BASE}/conversations/messages`, {
+    method: "POST",
+    headers: ghlHeaders(),
+    body: JSON.stringify({
+      locationId: Deno.env.get("GHL_LOCATION_ID"),
+      contactId,
+      type: "SMS",
+      message: `Your Kova Strength verification code is ${code}. It expires in ${CODE_TTL_MINUTES} minutes.`,
+    }),
+  });
+}
+
+// Merging two GHL contacts deletes the losing one, but Kova keeps the id it
+// imported — so the send fails with "contact not found" and the member just
+// never gets a text (they only find out by telling a coach). Look the
+// survivor up by email so the stored id can repair itself.
+async function findContactIdByEmail(email: string): Promise<string | null> {
+  const url = `${GHL_BASE}/contacts/?locationId=${Deno.env.get("GHL_LOCATION_ID")}&query=${encodeURIComponent(email)}`;
+  const res = await fetch(url, { headers: ghlHeaders() });
+  if (!res.ok) {
+    console.error("GHL contact lookup failed:", res.status, await res.text());
+    return null;
+  }
+  const contacts = (await res.json())?.contacts ?? [];
+  // `query` is a fuzzy search, so a partial hit can be a different person
+  // entirely — require an exact email match before trusting anything.
+  const exact = contacts.filter(
+    (c: Record<string, unknown>) =>
+      typeof c?.email === "string" && c.email.toLowerCase() === email.toLowerCase(),
+  );
+  // Never guess between two contacts sharing an email: the wrong pick texts
+  // a verification code to the wrong phone. Leave it for a human instead.
+  if (exact.length !== 1) {
+    console.error(`GHL contact heal: ${exact.length} exact matches for the email, not healing`);
+    return null;
+  }
+  return typeof exact[0].id === "string" ? exact[0].id : null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -55,7 +105,7 @@ Deno.serve(async (req) => {
   const { data: user } = await adminClient
     .schema("core")
     .from("users")
-    .select("id, ghl_contact_id")
+    .select("id, email, ghl_contact_id")
     .ilike("email", email)
     .maybeSingle();
 
@@ -102,23 +152,37 @@ Deno.serve(async (req) => {
     return genericResponse;
   }
 
-  const ghlResponse = await fetch("https://services.leadconnectorhq.com/conversations/messages", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${Deno.env.get("GHL_API_KEY")}`,
-      Version: "2021-07-28",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      locationId: Deno.env.get("GHL_LOCATION_ID"),
-      contactId: user.ghl_contact_id,
-      type: "SMS",
-      message: `Your Kova Strength verification code is ${code}. It expires in ${CODE_TTL_MINUTES} minutes.`,
-    }),
-  });
+  let ghlResponse = await sendCodeSms(user.ghl_contact_id, code);
+  // Read each failure body exactly once — a Response body can only be
+  // consumed a single time, and reading it twice throws.
+  let failureBody = ghlResponse.ok ? null : await ghlResponse.text();
+
+  // Self-heal a stale contact id (see findContactIdByEmail). Scoped to the
+  // contact-not-found statuses so an auth/rate-limit failure doesn't burn a
+  // lookup, and retried exactly once — never in a loop.
+  if (!ghlResponse.ok && (ghlResponse.status === 400 || ghlResponse.status === 404)) {
+    const healedId = await findContactIdByEmail(user.email);
+    if (healedId && healedId !== user.ghl_contact_id) {
+      const { error: healError } = await adminClient
+        .schema("core")
+        .from("users")
+        .update({ ghl_contact_id: healedId })
+        .eq("id", user.id);
+      // ghl_contact_id is UNIQUE (migration 0026). If another member already
+      // holds this id the update fails — that's ambiguous enough that we stop
+      // rather than text a contact we can't confidently attribute.
+      if (healError) {
+        console.error("GHL contact heal: could not store repaired id:", healError.message);
+      } else {
+        console.log("GHL contact heal: repaired stale contact id, retrying send");
+        ghlResponse = await sendCodeSms(healedId, code);
+        failureBody = ghlResponse.ok ? null : await ghlResponse.text();
+      }
+    }
+  }
 
   if (!ghlResponse.ok) {
-    console.error("GHL send-message failed:", ghlResponse.status, await ghlResponse.text());
+    console.error("GHL send-message failed:", ghlResponse.status, failureBody);
   }
 
   return genericResponse;
