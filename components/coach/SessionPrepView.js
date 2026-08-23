@@ -55,7 +55,10 @@ function openVideo(url) {
 }
 
 function EducationCard({ item, isWarmup }) {
-  const heading = item.exercises?.name ?? "Whole session";
+  // scope only means anything when there's no exercise on the row — see
+  // migration 0080.
+  const generalWarmup = !item.exercise_id && item.scope === "warmup";
+  const heading = item.exercises?.name ?? (generalWarmup ? "The whole warm-up" : "Whole session");
   const notes = (item.notes ?? "").trim();
   const video = (item.video_url ?? "").trim();
   return (
@@ -74,8 +77,9 @@ function EducationCard({ item, isWarmup }) {
           {heading}
         </Text>
         {/* Which half of the session this belongs to — a warm-up name on its
-            own reads like a lift you can't find in the list above. */}
-        {isWarmup ? (
+            own reads like a lift you can't find in the list above. A general
+            warm-up card says so in its own heading, so it needs no chip. */}
+        {isWarmup && !generalWarmup ? (
           <View style={{ borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: "#fff", borderWidth: 1, borderColor: "#e0b6a5" }}>
             <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.7, color: colors.primaryOnWhite }}>
               WARM-UP

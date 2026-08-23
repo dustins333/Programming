@@ -23,6 +23,10 @@ import { fonts, colors } from "../../lib/theme";
 
 const SAVE_DELAY = 700;
 
+// "General warm-up" has no exercise id to carry, so the select needs a
+// sentinel for it. It can't collide with a real uuid.
+const GENERAL_WARMUP = "__warmup__";
+
 function Field({ label, value, onCommit, multiline = false, placeholder }) {
   const [draft, setDraft] = useState(value ?? "");
   const timer = useRef(null);
@@ -93,8 +97,14 @@ function EducationCard({ item, groups, onChange, onRemove }) {
     >
       <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>WHAT IT'S ABOUT</Eyebrow>
       <select
-        value={item.exercise_id ?? ""}
-        onChange={(e) => onChange(item.id, { exercise_id: e.target.value || null })}
+        value={item.exercise_id ?? (item.scope === "warmup" ? GENERAL_WARMUP : "")}
+        onChange={(e) => {
+          const picked = e.target.value;
+          if (picked === GENERAL_WARMUP) return onChange(item.id, { exercise_id: null, scope: "warmup" });
+          // scope is written back even when a specific exercise is picked, so
+          // clearing the dropdown afterwards can't resurface the old general.
+          onChange(item.id, { exercise_id: picked || null, scope: "session" });
+        }}
         style={{
           width: "100%",
           fontFamily: fonts.sans,
@@ -110,9 +120,12 @@ function EducationCard({ item, groups, onChange, onRemove }) {
             whole ("this week's theme is tempo") has nothing to hang on. */}
         <option value="">Whole session (nothing specific)</option>
         {groups
-          .filter((g) => g.items.length > 0)
+          .filter((g) => g.items.length > 0 || g.general)
           .map((g) => (
             <optgroup key={g.label} label={g.label}>
+              {/* Sits first in its own group so it reads as "this block, in
+                  general" rather than as another movement in the list. */}
+              {g.general ? <option value={g.general.value}>{g.general.label}</option> : null}
               {g.items.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
@@ -150,8 +163,16 @@ function EducationCard({ item, groups, onChange, onRemove }) {
 
 export function CoachEducationRail({ sessionNumber, items, lifts, warmups, loading, error, onAdd, onChange, onRemove, onRetry }) {
   // Warm-ups first, then the main session — the order a coach runs it in.
+  //
+  // Only the warm-up block gets a "general": the main session in general and
+  // the whole session are the same note, and offering both would make a coach
+  // choose between two options that mean the same thing.
   const groups = [
-    { label: "Warm-ups", items: warmups ?? [] },
+    {
+      label: "Warm-ups",
+      items: warmups ?? [],
+      general: { value: GENERAL_WARMUP, label: "General — the whole warm-up" },
+    },
     { label: "Exercises", items: lifts ?? [] },
   ];
   return (
