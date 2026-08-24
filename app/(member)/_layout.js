@@ -204,6 +204,9 @@ function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, isStaff }
           not-its-own-tab reasoning as settings above. */}
       <Tabs.Screen name="messages" options={{ href: null }} />
 
+      {/* Reached from the Help card in Settings. */}
+      <Tabs.Screen name="how-to" options={{ href: null }} />
+
       {/* Nested screens inside the nutrition/history folders have no nested
           _layout of their own, so expo-router flattens them as siblings —
           without these, each one leaks into the tab bar as its own item. */}

@@ -148,6 +148,20 @@ export default function More() {
 
       {profile?.role === "admin" ? (
         <Pressable
+          onPress={() => router.push("/(coach)/help-videos")}
+          className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+        >
+          <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+            Help Videos
+          </Text>
+          <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+            How-to walkthroughs members see under Help
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {profile?.role === "admin" ? (
+        <Pressable
           onPress={() => router.push("/(coach)/settings")}
           className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
         >

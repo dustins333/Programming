@@ -408,7 +408,20 @@ export default function MemberSettings() {
           inside the app — it was only ever the App Store's support URL. */}
       <Card>
         <CardTitle>Help</CardTitle>
-        <Pressable onPress={() => router.push("/support")} className="flex-row items-center justify-between py-1">
+        <Pressable
+          onPress={() => router.push("/(member)/how-to")}
+          className="flex-row items-center justify-between py-1 pb-3"
+          style={{ borderBottomWidth: 1, borderBottomColor: "#f1efed" }}
+        >
+          <View>
+            <Text style={{ fontFamily: fonts.sansMedium, color: "#44403c" }}>How-to videos</Text>
+            <Text className="mt-0.5 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Short walkthroughs of the app
+            </Text>
+          </View>
+          <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>›</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push("/support")} className="flex-row items-center justify-between pt-3 py-1">
           <Text style={{ fontFamily: fonts.sansMedium, color: "#44403c" }}>Contact support</Text>
           <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>›</Text>
         </Pressable>

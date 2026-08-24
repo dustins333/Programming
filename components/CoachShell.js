@@ -108,6 +108,12 @@ function NavList({ profile, pathname, messagingEnabled, onNavigate, onSignOut })
           <NavRow active={isActive(pathname, "/(coach)/events")} icon="calendar" label="Events" onPress={() => onNavigate("/(coach)/events")} />
         ) : null}
 
+        {/* The member-facing how-to library (Settings → Help → How-to
+            videos). Admin-only to manage, same as the two above. */}
+        {isAdmin ? (
+          <NavRow active={isActive(pathname, "/(coach)/help-videos")} icon="videocam" label="Help Videos" onPress={() => onNavigate("/(coach)/help-videos")} />
+        ) : null}
+
         {isAdmin ? (
           <NavRow active={isActive(pathname, "/(coach)/settings")} icon="settings" label="Settings" onPress={() => onNavigate("/(coach)/settings")} />
         ) : null}
