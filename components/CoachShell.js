@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, Image, Pressable, Platform, Modal, useWindowDimensions } from "react-native";
+import { View, Text, Image, Pressable, Platform, Modal, ScrollView, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,27 +7,98 @@ import { useAuth } from "../lib/auth/AuthProvider";
 import { getMessagingSettings } from "../lib/programming/messagingSettings";
 import { colors, fonts } from "../lib/theme";
 
-const NAV_ITEMS = [
-  { key: "dashboard", label: "Dashboard", href: "/(coach)", icon: "home" },
-  { key: "clients", label: "Clients", href: "/(coach)/clients", icon: "people" },
-  { key: "messages", label: "Messages", href: "/(coach)/messages", icon: "chatbubbles" },
-  // No permission gate — every coach logs their own hours, unlike the
-  // optional SPC/Nutrition/Exercise Library modules below. The entry form
-  // itself still filters which categories it shows per coach (SPC/Programs
-  // gated on can_view_spc, Ops Hours on can_log_ops_hours).
-  { key: "payroll", label: "Payroll", href: "/(coach)/payroll", icon: "cash" },
-  { key: "blocks", label: "Group Programs", href: "/(coach)/blocks", icon: "barbell" },
-  // No permission gate — coach education is for every coach who runs the
-  // floor, which is the whole reason it exists.
-  { key: "prep", label: "Coach Prep", href: "/(coach)/prep", icon: "school" },
-  // No permission gate — the spec is explicit that every coach can view
-  // CCrew. Uploading a month is admin-only, enforced on the upload screen
-  // and by RLS, not by hiding the nav item.
-  { key: "ccrew", label: "CCrew", href: "/(coach)/ccrew", icon: "trophy" },
-  { key: "spc", label: "SPC", href: "/(coach)/spc", icon: "clipboard", permission: "can_view_spc" },
-  { key: "nutrition", label: "Nutrition", href: "/(coach)/nutrition", icon: "restaurant", permission: "can_view_nutrition" },
-  { key: "exercises", label: "Exercise Library", href: "/(coach)/exercises", icon: "library", permission: "can_view_exercise_library" },
+// Sidebar structure (per Terra's grouping, 2026-08-24): two plain top-level
+// rows (Dashboard, Settings) with three collapsible groups between them.
+// Group headers TOGGLE only — they never navigate. None of the groups has a
+// natural landing page ("Coach"/"Admin" would have to arbitrarily pick a
+// child), and a header that sometimes navigates and sometimes doesn't is
+// worse than either behavior applied consistently.
+//
+// Per-item gates are unchanged from the old flat list — a gated item just
+// hides inside its group, and a group with zero visible children renders
+// nothing at all (header included):
+//  - Messages: admin messaging kill switch (messagingEnabled)
+//  - SPC / Nutrition / Exercise Library: per-coach can_view_* flags
+//  - Admin group + Settings: admin role
+// Payroll/Coach Prep/CCrew stay ungated on purpose — every coach logs their
+// own hours, coach education is for every coach who runs the floor, and the
+// CCrew spec is explicit that every coach can view it (its upload screen is
+// admin-only via RLS, not via hiding the nav item).
+const NAV_SECTIONS = [
+  { type: "item", item: { key: "dashboard", label: "Dashboard", href: "/(coach)", icon: "home" } },
+  {
+    type: "group",
+    key: "clients",
+    label: "Clients",
+    children: [
+      { key: "clients", label: "All Clients", href: "/(coach)/clients", icon: "people" },
+      { key: "messages", label: "Messages", href: "/(coach)/messages", icon: "chatbubbles" },
+      { key: "blocks", label: "Group", href: "/(coach)/blocks", icon: "barbell" },
+      { key: "spc", label: "SPC", href: "/(coach)/spc", icon: "clipboard", permission: "can_view_spc" },
+      { key: "nutrition", label: "Nutrition", href: "/(coach)/nutrition", icon: "restaurant", permission: "can_view_nutrition" },
+      { key: "prep", label: "Coach Prep", href: "/(coach)/prep", icon: "school" },
+      { key: "ccrew", label: "CCrew", href: "/(coach)/ccrew", icon: "trophy" },
+      { key: "exercises", label: "Exercise Library", href: "/(coach)/exercises", icon: "library", permission: "can_view_exercise_library" },
+    ],
+  },
+  {
+    type: "group",
+    key: "coach",
+    label: "Coach",
+    children: [
+      // Where a coach sets their OWN group/SPC memberships (nutrition is
+      // admin-only, deliberately absent there).
+      { key: "my-training", label: "My Training", href: "/(coach)/my-training", icon: "fitness" },
+      { key: "payroll", label: "Payroll", href: "/(coach)/payroll", icon: "cash" },
+      // Every coach/admin account is also a real training client — this
+      // jumps into the same member tab experience any client uses. The
+      // member layout's staff-only "Coaching" tab is the way back.
+      // noActive: stripGroups("/(member)") is "" — same as Dashboard's
+      // "/(coach)" — so without this flag both rows would light up on "/".
+      { key: "member-view", label: "Member View", href: "/(member)", icon: "body", noActive: true },
+    ],
+  },
+  {
+    type: "group",
+    key: "admin",
+    label: "Admin",
+    adminOnly: true,
+    children: [
+      { key: "announcements", label: "Announcements", href: "/(coach)/announcements", icon: "megaphone" },
+      { key: "events", label: "Events", href: "/(coach)/events", icon: "calendar" },
+      { key: "help-videos", label: "Help Videos", href: "/(coach)/help-videos", icon: "videocam" },
+    ],
+  },
+  { type: "item", adminOnly: true, item: { key: "settings", label: "Settings", href: "/(coach)/settings", icon: "settings" } },
 ];
+
+// User toggles persist per device so the sidebar doesn't re-collapse on
+// every page load — CoachShell remounts fresh on every web navigation, so
+// without this an expanded group would snap shut the moment you used it.
+// Stored as explicit per-group overrides ({ clients: false, ... }); a group
+// with no override falls back to the context default (expanded on the
+// desktop sidebar, collapsed in the phone drawer) or auto-expands when it
+// contains the active page.
+const GROUPS_STORAGE_KEY = "kova.coachNavGroups";
+
+function readStoredGroupOverrides() {
+  try {
+    const raw = globalThis.localStorage?.getItem(GROUPS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredGroupOverrides(overrides) {
+  try {
+    globalThis.localStorage?.setItem(GROUPS_STORAGE_KEY, JSON.stringify(overrides));
+  } catch {
+    // Storage unavailable (private mode, SSR) — toggles still work for the
+    // life of this mount, they just don't persist.
+  }
+}
 
 // Below this width, the persistent 232px sidebar doesn't fit — this is the
 // same breakpoint this project's own preview tooling treats as "mobile" vs
@@ -52,72 +123,107 @@ function isActive(pathname, href) {
   return pathname === target || pathname.startsWith(`${target}/`);
 }
 
-function NavRow({ active, icon, label, onPress }) {
+function NavRow({ active, icon, label, onPress, indent }) {
   return (
     <Pressable
       onPress={onPress}
       className="mb-1 flex-row items-center gap-3 rounded-lg px-3 py-2.5"
-      style={active ? { backgroundColor: "#fdf6f2" } : undefined}
+      style={[indent ? { marginLeft: 12 } : null, active ? { backgroundColor: "#fdf6f2" } : null]}
     >
       <Ionicons name={active ? icon : `${icon}-outline`} size={18} color={active ? colors.primaryOnWhite : "#78716c"} />
-      <Text style={{ fontFamily: active ? fonts.sansSemiBold : fonts.sansMedium, color: active ? colors.primaryOnWhite : "#44403c", fontSize: 14 }}>
+      <Text numberOfLines={1} style={{ fontFamily: active ? fonts.sansSemiBold : fonts.sansMedium, color: active ? colors.primaryOnWhite : "#44403c", fontSize: 14 }}>
         {label}
       </Text>
     </Pressable>
   );
 }
 
-// The full nav list (module items + My Training + admin-only extras +
-// profile/sign-out footer) — shared by the desktop sidebar and the mobile
-// drawer, which show identical content in different containers.
-// onNavigate lets the mobile drawer close itself before pushing; the
-// desktop sidebar just pushes directly.
-function NavList({ profile, pathname, messagingEnabled, onNavigate, onSignOut }) {
-  const isAdmin = profile?.role === "admin";
-  const visibleNavItems = NAV_ITEMS.filter(
-    (item) => (item.key !== "messages" || messagingEnabled) && (isAdmin || !item.permission || profile?.[item.permission])
+function GroupHeader({ label, expanded, onToggle }) {
+  return (
+    <Pressable
+      onPress={onToggle}
+      className="mb-1 mt-3 flex-row items-center justify-between rounded-lg px-3 py-1.5"
+      hitSlop={{ top: 4, bottom: 4 }}
+    >
+      <Text style={{ fontFamily: fonts.sansSemiBold, color: "#78716c", fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase" }}>
+        {label}
+      </Text>
+      <Ionicons name={expanded ? "chevron-down" : "chevron-forward"} size={14} color="#a8a29e" />
+    </Pressable>
   );
+}
 
-  // Three direct children (items block, flexible spacer, footer block) so
-  // whichever full-height flex-column container renders <NavList/> — the
-  // desktop sidebar or the mobile drawer — gets the footer pinned to its
-  // bottom the same way the original single-file sidebar did. A Fragment
-  // doesn't introduce a layout boundary, so these become direct flex items
-  // of that container, not of some wrapper local to NavList.
+// The full nav list (top-level rows + collapsible groups + profile/sign-out
+// footer) — shared by the desktop sidebar and the mobile drawer, which show
+// identical content in different containers. onNavigate lets the mobile
+// drawer close itself before pushing; the desktop sidebar pushes directly.
+// defaultExpanded: groups with no stored user toggle start open on the
+// desktop sidebar (vertical room to spare) and closed in the phone drawer
+// (where it's scarce); the group containing the active page always starts
+// open either way. A user's explicit toggle beats both.
+// Exported so a harness route can render it with fake data — CoachShell
+// itself needs a real signed-in profile.
+export function NavList({ profile, pathname, messagingEnabled, onNavigate, onSignOut, defaultExpanded = true }) {
+  const isAdmin = profile?.role === "admin";
+  const [overrides, setOverrides] = useState(readStoredGroupOverrides);
+
+  const childVisible = (item) =>
+    (item.key !== "messages" || messagingEnabled) && (isAdmin || !item.permission || profile?.[item.permission]);
+
+  const toggleGroup = (key, expanded) => {
+    setOverrides((prev) => {
+      const next = { ...prev, [key]: !expanded };
+      writeStoredGroupOverrides(next);
+      return next;
+    });
+  };
+
+  // Three direct children (scrollable items block, flexible spacer, footer
+  // block) so whichever full-height flex-column container renders
+  // <NavList/> — the desktop sidebar or the mobile drawer — gets the footer
+  // pinned to its bottom. A Fragment doesn't introduce a layout boundary,
+  // so these become direct flex items of that container. The ScrollView's
+  // explicit flexGrow:0/flexShrink:1 is load-bearing (RNW ScrollView
+  // defaults to flex:1 internally, which would eat the spacer): short list
+  // → natural height, footer pinned by the spacer; list taller than the
+  // window → the nav scrolls instead of pushing Sign out off screen.
   return (
     <>
-      <View>
-        {visibleNavItems.map((item) => (
-          <NavRow key={item.key} active={isActive(pathname, item.href)} icon={item.icon} label={item.label} onPress={() => onNavigate(item.href)} />
-        ))}
+      <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false}>
+        {NAV_SECTIONS.map((section) => {
+          if (section.adminOnly && !isAdmin) return null;
 
-        {/* Every coach/admin account is also a real training client (per
-            explicit ask) — this jumps into the same member tab experience
-            any client uses, reading this account's own program data. The
-            member layout's staff-only "Coaching" tab is the way back. */}
-        <NavRow active={false} icon="body" label="Member View" onPress={() => onNavigate("/(member)")} />
-        {/* Where a coach sets their OWN group/SPC memberships (nutrition
-            is admin-only, deliberately absent there). */}
-        <NavRow active={isActive(pathname, "/(coach)/my-training")} icon="fitness" label="My Training" onPress={() => onNavigate("/(coach)/my-training")} />
+          if (section.type === "item") {
+            const it = section.item;
+            return (
+              <NavRow key={it.key} active={isActive(pathname, it.href)} icon={it.icon} label={it.label} onPress={() => onNavigate(it.href)} />
+            );
+          }
 
-        {isAdmin ? (
-          <NavRow active={isActive(pathname, "/(coach)/announcements")} icon="megaphone" label="Announcements" onPress={() => onNavigate("/(coach)/announcements")} />
-        ) : null}
+          const children = section.children.filter(childVisible);
+          if (children.length === 0) return null;
+          const containsActive = children.some((c) => !c.noActive && isActive(pathname, c.href));
+          const expanded = overrides[section.key] ?? (defaultExpanded || containsActive);
 
-        {isAdmin ? (
-          <NavRow active={isActive(pathname, "/(coach)/events")} icon="calendar" label="Events" onPress={() => onNavigate("/(coach)/events")} />
-        ) : null}
-
-        {/* The member-facing how-to library (Settings → Help → How-to
-            videos). Admin-only to manage, same as the two above. */}
-        {isAdmin ? (
-          <NavRow active={isActive(pathname, "/(coach)/help-videos")} icon="videocam" label="Help Videos" onPress={() => onNavigate("/(coach)/help-videos")} />
-        ) : null}
-
-        {isAdmin ? (
-          <NavRow active={isActive(pathname, "/(coach)/settings")} icon="settings" label="Settings" onPress={() => onNavigate("/(coach)/settings")} />
-        ) : null}
-      </View>
+          return (
+            <View key={section.key}>
+              <GroupHeader label={section.label} expanded={expanded} onToggle={() => toggleGroup(section.key, expanded)} />
+              {expanded
+                ? children.map((c) => (
+                    <NavRow
+                      key={c.key}
+                      indent
+                      active={!c.noActive && isActive(pathname, c.href)}
+                      icon={c.icon}
+                      label={c.label}
+                      onPress={() => onNavigate(c.href)}
+                    />
+                  ))
+                : null}
+            </View>
+          );
+        })}
+      </ScrollView>
 
       <View style={{ flex: 1 }} />
 
@@ -226,6 +332,7 @@ export function CoachShell({ children }) {
                 profile={profile}
                 pathname={pathname}
                 messagingEnabled={messagingEnabled}
+                defaultExpanded={false}
                 onNavigate={(href) => {
                   setDrawerOpen(false);
                   router.push(href);
