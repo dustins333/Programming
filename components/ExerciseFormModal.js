@@ -167,7 +167,22 @@ function MuscleGroupPicker({ selected, onToggle }) {
 // reflects the exercise's own stored type regardless of which tab it was
 // opened from. allExercises: the full current library, used to build the
 // "Variation of" picker's options.
-export function ExerciseFormModal({ visible, initialExercise, initialType = "lift", allExercises = [], usage, onUseExisting, onClose, onSubmit }) {
+// initialName: pre-fills the Name field for a brand-new exercise — the
+// picker's "+ New" hands over whatever the coach had already typed into its
+// search box. submitLabel: overrides the save button's text ("Save & insert"
+// when the created exercise is going straight into a session).
+export function ExerciseFormModal({
+  visible,
+  initialExercise,
+  initialType = "lift",
+  initialName = "",
+  submitLabel,
+  allExercises = [],
+  usage,
+  onUseExisting,
+  onClose,
+  onSubmit,
+}) {
   const [form, setForm] = useState(emptyForm(initialType));
   const [saving, setSaving] = useState(false);
   // "Keep both" is a per-open decision, not stored — the pairs a coach
@@ -213,12 +228,12 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
               cues: initialExercise.cues || "",
               videoUrl: initialExercise.video_url || "",
             }
-          : emptyForm(initialType)
+          : { ...emptyForm(initialType), name: initialName || "" }
       );
       setDuplicateAccepted(false);
       setTaggedFromParent(false);
     }
-  }, [visible, initialExercise, initialType]);
+  }, [visible, initialExercise, initialType, initialName]);
 
   const isWarmup = form.type === "warmup";
   const videoUrlLooksOff = form.videoUrl && !LOOKS_LIKE_VIDEO_LINK.test(form.videoUrl);
@@ -598,7 +613,7 @@ export function ExerciseFormModal({ visible, initialExercise, initialType = "lif
                 className="rounded-lg bg-primary px-4 py-3"
               >
                 <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "Saving…" : submitLabel ?? "Save"}
                 </Text>
               </Pressable>
             </View>

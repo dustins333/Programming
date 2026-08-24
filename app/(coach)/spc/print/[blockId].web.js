@@ -4,6 +4,7 @@ import { getUser } from "../../../../lib/programming/clients";
 import { getSpcBlock, listSpcWorkoutsForBlock } from "../../../../lib/programming/spcBlocks";
 import { listSpcWarmups, listSpcWorkoutExercises } from "../../../../lib/programming/spcWorkouts";
 import { schemeLabel } from "../../../../components/builder/SessionBuilderParts";
+import { liftLabelsFor, warmupNumbersFor } from "../../../../lib/programming/sessionLabels";
 
 // Web-only print view reproducing the gym's paper "SPC TEMPLATE" Google
 // Sheet (Team Kova/SPC) for ONE session of ONE block, one landscape Letter
@@ -120,25 +121,12 @@ function warmupReps(w) {
 }
 
 // Superset letters the way the paper does it: A, B, C for singles, E1/E2
-// for the two halves of a superset (both share the letter).
+// for the two halves of a superset (both share the letter). Backed by the
+// shared labeler so the sheet, the builders, and the member app can't
+// drift on what a lift is called.
 function labelExercises(exercises) {
-  const out = [];
-  let letterIdx = 0;
-  let lastGroup = null;
-  let inGroupCount = 0;
-  for (const ex of exercises) {
-    const group = ex.superset_group_id ?? null;
-    if (group && group === lastGroup) {
-      inGroupCount += 1;
-    } else {
-      letterIdx += 1;
-      inGroupCount = 1;
-    }
-    const letter = String.fromCharCode(64 + letterIdx);
-    out.push({ ...ex, label: group ? `${letter}${inGroupCount}` : letter });
-    lastGroup = group;
-  }
-  return out;
+  const labels = liftLabelsFor(exercises);
+  return exercises.map((ex) => ({ ...ex, label: labels[ex.id] }));
 }
 
 // What makes two weeks "the same page": lifts, order, superset pairing,
@@ -155,7 +143,17 @@ function weekSignature(week) {
     }
     return `${e.exercise_id}${g}`;
   });
-  const wu = week.warmups.map((w) => `${w.exercise_id ?? ""}|${(w.label ?? "").trim()}`);
+  // Warm-up superset grouping is part of the signature too — repairing the
+  // warm-ups mid-block changes the printed numbering, so those weeks get
+  // their own page rather than silently sharing one.
+  const wu = week.warmups.map((w) => {
+    let g = "";
+    if (w.superset_group_id) {
+      if (!seen.has(w.superset_group_id)) seen.set(w.superset_group_id, ++groupSeq);
+      g = `s${seen.get(w.superset_group_id)}`;
+    }
+    return `${w.exercise_id ?? ""}|${(w.label ?? "").trim()}${g}`;
+  });
   return JSON.stringify([ex, wu]);
 }
 
@@ -285,6 +283,10 @@ export function PrintPage({ name, run }) {
   // stored position number — a gap (e.g. positions 1,2,3,5) used to make
   // the fallback repeat one warm-up in two rows.
   const sortedWarmups = [...first.warmups].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  // Superset members repeat the shared number; the blank pre-printed rows
+  // keep counting from wherever the real warm-ups left off.
+  const warmupNumbers = warmupNumbersFor(sortedWarmups);
+  const lastWarmupNumber = sortedWarmups.length ? warmupNumbers[sortedWarmups.length - 1] : 0;
   const rowCount = Math.max(MIN_MAIN_ROWS, exercises.length);
   const rows = Array.from({ length: rowCount }, (_, i) => exercises[i] ?? null);
 
@@ -321,9 +323,10 @@ export function PrintPage({ name, run }) {
         </div>
         {Array.from({ length: WARMUP_ROWS }, (_, i) => {
           const w = sortedWarmups[i];
+          const number = w ? warmupNumbers[i] : lastWarmupNumber + (i - sortedWarmups.length) + 1;
           return (
             <div key={i} className="row">
-              <div className="cell center">{i + 1}</div>
+              <div className="cell center">{number}</div>
               <div className="cell wrap">{w ? warmupName(w) : ""}</div>
               <div className="cell center">{w ? warmupSets(w) : ""}</div>
               <div className="cell center">{w ? warmupReps(w) : ""}</div>

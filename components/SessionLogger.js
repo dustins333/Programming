@@ -216,9 +216,10 @@ export function SessionLogger({
       source={source}
       session={session}
       item={item}
-      // A superset's members share the group's number and get a/b suffixes,
-      // so the count still reads as "lift 5 of 6" rather than jumping.
-      numberLabel={`${groupIndex + 1}${group.length > 1 ? String.fromCharCode(97 + indexInGroup) : ""}`}
+      // One labeling language everywhere (2026-08-23): lifts are lettered,
+      // a superset shares its letter and numbers its members — A, B1, B2 —
+      // matching the builder and the printed SPC sheet.
+      numberLabel={`${String.fromCharCode(65 + groupIndex)}${group.length > 1 ? indexInGroup + 1 : ""}`}
       expanded={expandedIds.has(item.id)}
       onToggleExpanded={handleToggleExpanded}
       completed={completions ? completions.has(item.id) : undefined}

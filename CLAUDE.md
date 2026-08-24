@@ -3693,6 +3693,7 @@ sections; next number after 0080 is 0081.)
 - `0073_logs_unique_set.sql` — **run**, verified live 2026-08-21. De-duplicates `programming.logs` and adds `logs_unique_set_idx`, a `UNIQUE NULLS NOT DISTINCT` index over user, exercise, date, set number, all three session references, `week_number` and `truecoach_import_id`. `logResult()` was a hand-rolled select-then-update-or-insert with nothing backing it, so two racing autosaves both inserted the same set. **`NULLS NOT DISTINCT` is load-bearing** — every session column is null for a row with no session reference, and plain UNIQUE treats each of those as distinct, which would let the duplicates straight back through. **The key is wide on purpose**: two genuinely different sessions on one date must stay separate rows, and linking two TrueCoach imports to the same Kova lift (0066, in active use on five exercises) each materialises its own set rows. `ON CONFLICT` inference against a nulls-not-distinct index was verified on a throwaway table before the code was changed.
 - `0076_hub_notes_and_idle_stats.sql` — **run**, verified live 2026-08-22 (dry-run in a rolled-back transaction first, then applied + `NOTIFY pgrst`). Everything in it exists because of one constraint from 0071: the wall display signs in as an account with **no read policy on `core.users` at all** and no access to any client outside the open hub session, so anything the TV needs to *show* about a person has to be snapshotted onto a row it can already read, or served by a security-definer function. Adds (a) `programming.exercise_coaching_notes.author_name` and `programming.hub_sessions.coach_name` — name snapshots, the same answer 0071 already used for `hub_session_clients.client_name`, nullable with no backfill so older notes render unattributed rather than guessed; (b) `programming.hub_idle_stats()`, security-definer, returning the gym's weekly session count and recent personal bests for the idle board. **The bests gate lives inside the function**, keyed on `core.settings.hub_idle_show_recent_bests` (seeded `false`) — so while it is off the TV never receives a client's name at all, and it needs no read on `core.settings` either (which it also has no policy for). "Best" = a lift logged in the last 7 days beating that client's own previous best, with at least 2 earlier days of that lift on record so a first-ever log is never announced; reps-only lifts are judged on reps, matching `getExerciseStats`/`countPersonalRecordsOn`.
 - `0079_session_education.sql` — **run**, verified live 2026-08-22 (10 columns, 3 FKs, RLS on, 1 policy, index, grants, PostgREST `200 []`, plus an impersonation test in a rolled-back transaction: coach reads and writes, member sees zero rows and is blocked from inserting). Adds `programming.session_education` — coach education per (block, session), staff-only. See the Coach Prep section.
+- `0085_warmup_and_template_supersets.sql` — **run**, verified live 2026-08-24 (all 8 columns confirmed by direct query, `NOTIFY pgrst` sent). `superset_group_id` on all four warm-up tables + `template_exercises`/`one_off_exercises`, `rep_scheme` on `one_off_exercises` (backfilled 0030-style). See "Builder tweak batch" above.
 - `0080_session_education_scope.sql` — **run**, verified live 2026-08-23 (column + default confirmed, a bad value rejected by the check, all existing rows defaulted to `'session'` with nothing to backfill). Adds `session_education.scope` (`session`/`warmup`/`exercises`) so "general" can mean the warm-up block as well as the whole day.
 
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
@@ -5336,6 +5337,76 @@ Files: `app/(coach)/prep/`, `components/builder/CoachEducationRail.js`,
 `lib/programming/workouts.js`. **Not click-tested behind a real login** —
 standing limitation; the path most worth a real pass is writing a general
 warm-up note and confirming it lands on Prep.
+
+## Builder tweak batch: one labeling language, warm-up supersets, template supersets, tempo-delete fix, picker "+ New", compact reps (2026-08-23/24)
+
+A batch of direct asks about the web builders, all built and driven through a
+throwaway harness (screenshots + real clicks). **Migration
+`0085_warmup_and_template_supersets.sql` — run and verified live** (all 8 new
+columns confirmed, `NOTIFY pgrst` sent): `superset_group_id` on all four
+warm-up tables plus `template_exercises`/`one_off_exercises`, and `rep_scheme`
+on `one_off_exercises` (0030 never gave one-offs either column, so a
+template's per-set reps were silently flattened on assignment — fixed in
+`createOneOffFromTemplate`, which now carries both, and warm-up copies in
+`copyWorkoutContent`/`copySpcWorkoutContent` carry the warm-up pairing too).
+
+- **One labeling language** (new `lib/programming/sessionLabels.js`, pure —
+  no dnd-kit, safe for the member bundle): lifts are lettered, a superset
+  consumes one letter and numbers its members (A, B1+B2, C); warm-ups are
+  numbered with superset members REPEATING the shared number (3,4,5
+  supersetted all read "3"), numbering continuing after the group. Applied to
+  the builders (`SortableLift`'s circle shows the label; the old "SS A" pill
+  and `SessionBuilderParts`' own `supersetLettersFor` are gone — the hub and
+  `SpcSessionReadout` keep their separate copy in `spcBlockDetail.js`,
+  deliberately untouched since that's the parallel live-SPC session's
+  territory), the printed SPC sheet (`labelExercises` now wraps the shared
+  helper; warm-up rows number with repeats and blank rows continue the
+  sequence; `weekSignature` includes warm-up grouping so a mid-block re-pair
+  splits pages), and the member app (`SessionLogger`'s numberLabel,
+  `SessionSheetParts.buildGroups` — both were number+a/b before).
+- **Warm-up grid is column-major** (1,2,3 down the left / 4,5,6 down the
+  right — two real column Views, since flex-wrap order is row-major), sets/
+  reps are real boxed inputs (the borderless ones read as static text,
+  reported twice), and every cell but the first gets a **link toggle**
+  ("superset with the previous warm-up") — chains of 3+ allowed, unlike lift
+  pairs. Unlinking a member whose group would be left solo clears that one
+  too; unlinking the middle of a 3-chain leaves the outer two paired
+  (first-occurrence numbering keeps that consistent, verified).
+- **Templates get supersets** — reverses 0030's deliberate exclusion per
+  direct confirmation. `showSuperset={false}` removed, toggle wired via
+  `updateTemplateExercise`, warm-up links via re-added
+  `updateTemplateWarmup`. Tempo stays off templates (no column).
+- **Tempo is deletable now** — the real bug: `TempoDigits` derived its boxes
+  from the prop each render, so clearing a box zero-filled the saved value
+  and the echo popped "0" straight back; all four boxes could never be blank
+  at once, which was the only path to null. Now local state with an
+  echo-guard reseed; emptying all four writes null (verified: change stream
+  ends `tempo: null`, boxes stay blank). Partial clears still zero-fill the
+  stored value.
+- **Picker "+ New"** — `ExercisePickerModal` takes `onCreateNew(searchText)`;
+  all three builders pass it gated on `role === "admin" ||
+  can_view_exercise_library`. Opens `ExerciseFormModal` (new `initialName` —
+  prefilled from the picker's search — and `submitLabel` "Save & insert");
+  on save the exercise lands in the library AND the session in one go,
+  routed by the TYPE actually saved (flipping the form to Warm-up mid-create
+  inserts as a warm-up, not into the main session).
+- **Reps entry defaults compact** — `SetTable` shows a Sets stepper × one
+  Reps field + quick-pick chips (6-8 / 8-10 / 10-12 / 10-15, writing the
+  range to every set — rep_scheme is text-per-set so ranges store fine)
+  behind "Vary reps by set ⌄"; a lift whose sets already differ opens
+  straight into the per-set table, and the collapse link only shows once
+  they're uniform again (collapsing non-uniform sets would discard the
+  variation).
+
+**Not touched, deliberately**: the hub board and `SpcSessionReadout` (their
+letter helper still letters only superset pairs), the native builders, and
+`SessionPreviewModal`/`SessionDetailModal`'s plain comma-joined warm-up
+lists. **Verified**: migration dry-run then applied live; clean `expo export`
+×2; Babel parse/scope pass over all 15 touched files; harness-driven at
+1280px — warm-up chain link/unlink with live numbering, tempo clear-to-null,
+chips, compact↔per-set, picker + New carrying the search text. **Not
+verified behind a real login** — standing limitation; worth a click-through
+of a real superset warm-up showing on a member's phone and the printed sheet.
 
 ## Working notes for future sessions
 

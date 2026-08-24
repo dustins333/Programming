@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DndContext, PointerSensor, useSensor, useSensors, pointerWithin } from "@dnd-kit/core";
@@ -9,6 +9,7 @@ import {
   getTemplate,
   listTemplateWarmups,
   addTemplateWarmup,
+  updateTemplateWarmup,
   removeTemplateWarmup,
   listTemplateExercises,
   addTemplateExercise,
@@ -31,6 +32,7 @@ import {
   SortableLift,
   schemeLabel,
 } from "../../../../components/builder/SessionBuilderParts";
+import { liftLabelsFor } from "../../../../lib/programming/sessionLabels";
 import { fonts, colors } from "../../../../lib/theme";
 import { toastError, showToast } from "../../../../lib/toast";
 import { nextPosition } from "../../../../lib/position";
@@ -38,14 +40,18 @@ import { nextPosition } from "../../../../lib/position";
 // Template builder, coach web — the third consumer of the shared session
 // builder (design_handoff_coach_web_v2, screen 06).
 //
-// A template is one flat prescription reused across clients, so three things
+// A template is one flat prescription reused across clients, so some things
 // the group and SPC builders have don't apply and are switched off rather
 // than faked:
 //   · no draft/publish — a template isn't visible to any member directly
-//   · no supersets — deliberately excluded from templates in migration 0030
 //   · no tempo — template_exercises has no tempo column
 //   · no balance / last-week rails — there's no block or sibling sessions
 //     to compare a standalone template against
+//
+// Supersets ARE here now (lift pairs and warm-up chains) — migration 0085
+// reversed 0030's "templates are single flat prescriptions" exclusion per
+// direct confirmation 2026-08-23, and createOneOffFromTemplate carries the
+// pairing onto the client's copy.
 //
 // template_warmups also has no sets/reps columns (unlike group and SPC), so
 // the warm-up grid runs with editable={false} and lists the movement alone.
@@ -65,6 +71,10 @@ export default function TemplateBuilderWeb() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
+  // Set when the new-exercise form was reached through a picker's "+ New" —
+  // the created exercise then gets inserted into this template immediately.
+  const [pendingInsert, setPendingInsert] = useState(null); // null | "lift" | "warmup"
+  const [pendingName, setPendingName] = useState("");
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -148,10 +158,92 @@ export default function TemplateBuilderWeb() {
     try {
       const created = await createExercise({ ...form, createdBy: profile.id });
       setLibrary((prev) => [...prev, created]);
+      // Came through a picker's "+ New": drop it straight into the template,
+      // routed by the TYPE actually saved (see the group builder's note).
+      if (pendingInsert) {
+        if (created.type === "warmup") await handleAddWarmup(created);
+        else await handleInsertExercise(created);
+        setPendingInsert(null);
+        setPendingName("");
+      }
     } catch (err) {
       toastError("Failed to save exercise", err);
       throw err;
     }
+  };
+
+  const canManageLibrary = profile?.role === "admin" || profile?.can_view_exercise_library;
+
+  const openCreateAndInsert = (target) => (searchText) => {
+    setExercisePickerVisible(false);
+    setWarmupPickerVisible(false);
+    setPendingInsert(target);
+    setPendingName(searchText ?? "");
+    setNewExerciseModalVisible(true);
+  };
+
+  // One tap does both directions: link this lift to the next one, or break
+  // whichever pairing it's already in — same semantics as the group builder.
+  const handleToggleSuperset = (item) => {
+    if (item.superset_group_id) {
+      const partner = exercises.find((e) => e.id !== item.id && e.superset_group_id === item.superset_group_id);
+      setExercises((prev) => prev.map((e) => (e.id === item.id || e.id === partner?.id ? { ...e, superset_group_id: null } : e)));
+      track(
+        Promise.all([
+          updateTemplateExercise(item.id, { superset_group_id: null }),
+          partner ? updateTemplateExercise(partner.id, { superset_group_id: null }) : Promise.resolve(),
+        ]),
+        "Couldn't unlink superset"
+      );
+      return;
+    }
+    const index = exercises.findIndex((e) => e.id === item.id);
+    const next = exercises[index + 1];
+    if (!next) {
+      toastError("Nothing to superset with", "This is the last lift in the template");
+      return;
+    }
+    const groupId = crypto.randomUUID();
+    setExercises((prev) => prev.map((e) => (e.id === item.id || e.id === next.id ? { ...e, superset_group_id: groupId } : e)));
+    track(
+      Promise.all([
+        updateTemplateExercise(item.id, { superset_group_id: groupId }),
+        updateTemplateExercise(next.id, { superset_group_id: groupId }),
+      ]),
+      "Couldn't link superset"
+    );
+  };
+
+  // Superset with the PREVIOUS warm-up — chains of 3+ are allowed, unlike
+  // lift supersets. Same semantics as the group builder's copy.
+  const handleToggleWarmupLink = (w) => {
+    if (w.superset_group_id) {
+      const remaining = warmups.filter((x) => x.id !== w.id && x.superset_group_id === w.superset_group_id);
+      const alsoClear = remaining.length === 1 ? remaining[0] : null;
+      setWarmups((prev) =>
+        prev.map((x) => (x.id === w.id || x.id === alsoClear?.id ? { ...x, superset_group_id: null } : x))
+      );
+      track(
+        Promise.all([
+          updateTemplateWarmup(w.id, { superset_group_id: null }),
+          alsoClear ? updateTemplateWarmup(alsoClear.id, { superset_group_id: null }) : Promise.resolve(),
+        ]),
+        "Couldn't unlink warm-ups"
+      );
+      return;
+    }
+    const index = warmups.findIndex((x) => x.id === w.id);
+    const prevWarmup = index > 0 ? warmups[index - 1] : null;
+    if (!prevWarmup) return;
+    const groupId = prevWarmup.superset_group_id ?? crypto.randomUUID();
+    setWarmups((prev) => prev.map((x) => (x.id === w.id || x.id === prevWarmup.id ? { ...x, superset_group_id: groupId } : x)));
+    track(
+      Promise.all([
+        updateTemplateWarmup(w.id, { superset_group_id: groupId }),
+        prevWarmup.superset_group_id ? Promise.resolve() : updateTemplateWarmup(prevWarmup.id, { superset_group_id: groupId }),
+      ]),
+      "Couldn't link warm-ups"
+    );
   };
 
   const handleDragEnd = (event) => {
@@ -199,6 +291,8 @@ export default function TemplateBuilderWeb() {
       if (removed) setWarmups((prev) => [...prev.slice(0, removedIndex), removed, ...prev.slice(removedIndex)]);
     }
   };
+
+  const liftLabels = useMemo(() => liftLabelsFor(exercises), [exercises]);
 
   if (loadError) {
     return (
@@ -288,6 +382,7 @@ export default function TemplateBuilderWeb() {
               warmups={warmups}
               onRemove={handleRemoveWarmup}
               onAdd={() => setWarmupPickerVisible(true)}
+              onToggleLink={handleToggleWarmupLink}
               editable={false}
             />
 
@@ -312,12 +407,16 @@ export default function TemplateBuilderWeb() {
                       key={item.id}
                       item={item}
                       index={i}
+                      label={liftLabels[item.id]}
                       expanded={expandedId === item.id}
                       onExpand={setExpandedId}
                       onChange={handleExerciseChange}
                       onRemove={handleRemoveExercise}
+                      onToggleSuperset={handleToggleSuperset}
+                      linkedToNext={Boolean(
+                        item.superset_group_id && item.superset_group_id === exercises[i + 1]?.superset_group_id
+                      )}
                       showTempo={false}
-                      showSuperset={false}
                     />
                   ))
                 )}
@@ -335,8 +434,15 @@ export default function TemplateBuilderWeb() {
       <ExerciseFormModal
         visible={newExerciseModalVisible}
         initialExercise={null}
+        initialType={pendingInsert === "warmup" ? "warmup" : "lift"}
+        initialName={pendingName}
+        submitLabel={pendingInsert ? "Save & insert" : undefined}
         allExercises={library}
-        onClose={() => setNewExerciseModalVisible(false)}
+        onClose={() => {
+          setNewExerciseModalVisible(false);
+          setPendingInsert(null);
+          setPendingName("");
+        }}
         onSubmit={handleNewExerciseCreated}
       />
       <ExercisePickerModal
@@ -344,12 +450,14 @@ export default function TemplateBuilderWeb() {
         library={library.filter((e) => e.type === "warmup")}
         onClose={() => setWarmupPickerVisible(false)}
         onPick={handleAddWarmup}
+        onCreateNew={canManageLibrary ? openCreateAndInsert("warmup") : undefined}
       />
       <ExercisePickerModal
         visible={exercisePickerVisible}
         library={library.filter((e) => e.type !== "warmup")}
         onClose={() => setExercisePickerVisible(false)}
         onPick={handleInsertExercise}
+        onCreateNew={canManageLibrary ? openCreateAndInsert("lift") : undefined}
       />
       <SessionPreviewModal
         visible={previewOpen}

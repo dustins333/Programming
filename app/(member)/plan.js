@@ -9,6 +9,7 @@ import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
 import { currentWeekNumber, sessionNumberForDate, blockLengthWeeks } from "../../lib/programming/schedule";
 import { listMyAssignments, getCurrentBlock, getWorkout, listWorkoutsForWeek } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
+import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
 import { listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
@@ -89,6 +90,7 @@ function WarmupCard({ warmups }) {
   const [open, setOpen] = useState(false);
   const [checked, setChecked] = useState(() => new Set());
   if (!warmups || warmups.length === 0) return null;
+  const warmupNumbers = warmupNumbersFor(warmups);
   const toggle = (key) =>
     setChecked((prev) => {
       const next = new Set(prev);
@@ -122,12 +124,22 @@ function WarmupCard({ warmups }) {
             const key = w.id ?? i;
             const detail = w.sets && w.reps ? `${w.sets}×${w.reps}` : w.sets || w.reps || "";
             const isChecked = checked.has(key);
+            // Superset members share a number (3, 3, 3 — the coach's "do
+            // these back-to-back" cue), matching the builder and the
+            // printed sheet. warmupNumbers is computed once per card below.
+            const number = warmupNumbers[i];
             return (
               <View
                 key={key}
                 className="flex-row items-center justify-between py-2.5"
                 style={{ borderTopWidth: 1, borderTopColor: "#f4efe9" }}
               >
+                <Text
+                  maxFontSizeMultiplier={1.15}
+                  style={{ fontFamily: fonts.sansBold, fontSize: 12, color: "#c9c4bd", width: 18 }}
+                >
+                  {number}
+                </Text>
                 <View className="flex-1 pr-2">
                   <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>{w.exercises?.name ?? w.label}</Text>
                   {w.notes ? (
@@ -466,6 +478,7 @@ export default function MyFitness() {
                 targetSets: ex.sets,
                 targetReps: ex.reps,
                 repScheme: ex.rep_scheme,
+                supersetGroupId: ex.superset_group_id,
                 tempo: ex.tempo,
                 rest: ex.rest,
                 notes: ex.notes,

@@ -45,10 +45,10 @@ import {
   BalanceRail,
   LastWeekRail,
   schemeLabel,
-  supersetLettersFor,
   patternCountsFor,
   balanceNoteFor,
 } from "../../../../components/builder/SessionBuilderParts";
+import { liftLabelsFor } from "../../../../lib/programming/sessionLabels";
 import { confirmOverwrite } from "../../../../lib/confirmDialog";
 import { toastError, toastSuccess, showToast } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
@@ -85,6 +85,10 @@ export default function SpcWorkoutBuilderWeb() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [newExerciseModalVisible, setNewExerciseModalVisible] = useState(false);
+  // Set when the new-exercise form was reached through a picker's "+ New" —
+  // the created exercise then gets inserted into this session immediately.
+  const [pendingInsert, setPendingInsert] = useState(null); // null | "lift" | "warmup"
+  const [pendingName, setPendingName] = useState("");
   const [warmupPickerVisible, setWarmupPickerVisible] = useState(false);
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -228,10 +232,60 @@ export default function SpcWorkoutBuilderWeb() {
     try {
       const created = await createExercise({ ...form, createdBy: profile.id });
       setLibrary((prev) => [...prev, created]);
+      // Came through a picker's "+ New": drop it straight into the session,
+      // routed by the TYPE actually saved (see the group builder's note).
+      if (pendingInsert) {
+        if (created.type === "warmup") await handleAddWarmup(created);
+        else await handleInsertExercise(created);
+        setPendingInsert(null);
+        setPendingName("");
+      }
     } catch (err) {
       toastError("Failed to save exercise", err);
       throw err;
     }
+  };
+
+  const canManageLibrary = profile?.role === "admin" || profile?.can_view_exercise_library;
+
+  const openCreateAndInsert = (target) => (searchText) => {
+    setExercisePickerVisible(false);
+    setWarmupPickerVisible(false);
+    setPendingInsert(target);
+    setPendingName(searchText ?? "");
+    setNewExerciseModalVisible(true);
+  };
+
+  // Superset with the PREVIOUS warm-up — chains of 3+ are allowed, unlike
+  // lift supersets. Same semantics as the group builder's copy.
+  const handleToggleWarmupLink = (w) => {
+    if (w.superset_group_id) {
+      const remaining = warmups.filter((x) => x.id !== w.id && x.superset_group_id === w.superset_group_id);
+      const alsoClear = remaining.length === 1 ? remaining[0] : null;
+      setWarmups((prev) =>
+        prev.map((x) => (x.id === w.id || x.id === alsoClear?.id ? { ...x, superset_group_id: null } : x))
+      );
+      track(
+        Promise.all([
+          updateSpcWarmup(w.id, { superset_group_id: null }),
+          alsoClear ? updateSpcWarmup(alsoClear.id, { superset_group_id: null }) : Promise.resolve(),
+        ]),
+        "Couldn't unlink warm-ups"
+      );
+      return;
+    }
+    const index = warmups.findIndex((x) => x.id === w.id);
+    const prevWarmup = index > 0 ? warmups[index - 1] : null;
+    if (!prevWarmup) return;
+    const groupId = prevWarmup.superset_group_id ?? crypto.randomUUID();
+    setWarmups((prev) => prev.map((x) => (x.id === w.id || x.id === prevWarmup.id ? { ...x, superset_group_id: groupId } : x)));
+    track(
+      Promise.all([
+        updateSpcWarmup(w.id, { superset_group_id: groupId }),
+        prevWarmup.superset_group_id ? Promise.resolve() : updateSpcWarmup(prevWarmup.id, { superset_group_id: groupId }),
+      ]),
+      "Couldn't link warm-ups"
+    );
   };
 
   const handleDragEnd = (event) => {
@@ -325,7 +379,7 @@ export default function SpcWorkoutBuilderWeb() {
     }
   };
 
-  const supersetLetters = useMemo(() => supersetLettersFor(exercises), [exercises]);
+  const liftLabels = useMemo(() => liftLabelsFor(exercises), [exercises]);
   const patternCounts = useMemo(() => patternCountsFor(exercises, siblingLifts), [exercises, siblingLifts]);
   const balanceNote = useMemo(() => balanceNoteFor(patternCounts), [patternCounts]);
 
@@ -472,6 +526,7 @@ export default function SpcWorkoutBuilderWeb() {
                 onChange={handleWarmupChange}
                 onRemove={handleRemoveWarmup}
                 onAdd={() => setWarmupPickerVisible(true)}
+                onToggleLink={handleToggleWarmupLink}
               />
 
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 26, marginBottom: 9 }}>
@@ -500,7 +555,7 @@ export default function SpcWorkoutBuilderWeb() {
                         onChange={handleExerciseChange}
                         onRemove={handleRemoveExercise}
                         onToggleSuperset={handleToggleSuperset}
-                        supersetLetter={item.superset_group_id ? supersetLetters[item.superset_group_id] : null}
+                        label={liftLabels[item.id]}
                         linkedToNext={Boolean(
                           item.superset_group_id && item.superset_group_id === exercises[i + 1]?.superset_group_id
                         )}
@@ -556,8 +611,15 @@ export default function SpcWorkoutBuilderWeb() {
       <ExerciseFormModal
         visible={newExerciseModalVisible}
         initialExercise={null}
+        initialType={pendingInsert === "warmup" ? "warmup" : "lift"}
+        initialName={pendingName}
+        submitLabel={pendingInsert ? "Save & insert" : undefined}
         allExercises={library}
-        onClose={() => setNewExerciseModalVisible(false)}
+        onClose={() => {
+          setNewExerciseModalVisible(false);
+          setPendingInsert(null);
+          setPendingName("");
+        }}
         onSubmit={handleNewExerciseCreated}
       />
       <ExercisePickerModal
@@ -565,12 +627,14 @@ export default function SpcWorkoutBuilderWeb() {
         library={library.filter((e) => e.type === "warmup")}
         onClose={() => setWarmupPickerVisible(false)}
         onPick={handleAddWarmup}
+        onCreateNew={canManageLibrary ? openCreateAndInsert("warmup") : undefined}
       />
       <ExercisePickerModal
         visible={exercisePickerVisible}
         library={library.filter((e) => e.type !== "warmup")}
         onClose={() => setExercisePickerVisible(false)}
         onPick={handleInsertExercise}
+        onCreateNew={canManageLibrary ? openCreateAndInsert("lift") : undefined}
       />
       <SessionPreviewModal
         visible={previewOpen}

@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, Linking } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { summarizeRepScheme } from "../../lib/programming/exercises";
+import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
 import { fonts, colors } from "../../lib/theme";
 
 // The session builder, in pieces — shared by the group, SPC and SPC-template
@@ -85,7 +87,12 @@ export const WARMUP_SLOTS = 6;
 // A fixed 2×3 grid of six slots rather than a growing list — the coaching
 // convention here is five or six movements, so the empty slots are the
 // prompt and there's nothing to "add a row" to.
-export function WarmupGrid({ warmups, onChange, onRemove, onAdd, editable = true }) {
+//
+// Order runs DOWN the columns (1,2,3 left / 4,5,6 right), not across the
+// rows — per Terra 2026-08-23, matching how the paper sheet reads. Numbers
+// come from warmupNumbersFor, so superset members repeat the shared number
+// (3,4,5 supersetted all read "3") and empty slots continue the sequence.
+export function WarmupGrid({ warmups, onChange, onRemove, onAdd, onToggleLink, editable = true }) {
   // Pad to six, but never truncate past it. This used to render
   // slots.slice(0, 6), so a seventh warm-up saved fine and then simply was
   // not drawn — invisible to the coach who added it, while still showing to
@@ -95,6 +102,145 @@ export function WarmupGrid({ warmups, onChange, onRemove, onAdd, editable = true
   // place.
   const slots = [...warmups];
   while (slots.length < WARMUP_SLOTS) slots.push(null);
+  const numbers = warmupNumbersFor(warmups);
+  const lastNumber = warmups.length ? numbers[warmups.length - 1] : 0;
+
+  const renderCell = (w, i) => {
+    if (!w) {
+      // Empty slots keep counting from wherever the real warm-ups left off,
+      // so the blank rows still read like the pre-numbered paper sheet.
+      const emptyOrdinal = i - warmups.length;
+      return (
+        <Pressable
+          key={`slot-${i}`}
+          onPress={onAdd}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            borderWidth: 1,
+            borderStyle: "dashed",
+            borderColor: "#ddd8d1",
+            borderRadius: 10,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+          }}
+        >
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#d6d1ca", width: 14 }}>
+            {lastNumber + emptyOrdinal + 1}
+          </Text>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#a8a29e" }}>+ Insert warm-up</Text>
+        </Pressable>
+      );
+    }
+    const linked = Boolean(w.superset_group_id);
+    return (
+      <View
+        key={w.id}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          backgroundColor: linked ? "#fdf6f2" : "#fff",
+          borderWidth: 1,
+          borderColor: linked ? "#f0ddd2" : CARD_BORDER,
+          borderRadius: 10,
+          paddingVertical: 9,
+          paddingHorizontal: 12,
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: linked ? fonts.sansBold : fonts.sans,
+            fontSize: 11,
+            color: linked ? "#b23a22" : "#c9c4bd",
+            width: 14,
+          }}
+        >
+          {numbers[i]}
+        </Text>
+        {/* Superset with the previous warm-up (in numbering order). Every
+            cell but the first reserves the slot so names line up. */}
+        {onToggleLink ? (
+          i > 0 ? (
+            <Pressable
+              onPress={() => onToggleLink(w, i)}
+              hitSlop={6}
+              accessibilityLabel={
+                linked ? "Break this warm-up superset" : "Superset with the previous warm-up"
+              }
+            >
+              <Ionicons name={linked ? "link" : "link-outline"} size={14} color={linked ? "#b23a22" : "#d5cdc4"} />
+            </Pressable>
+          ) : (
+            <View style={{ width: 14 }} />
+          )
+        ) : null}
+        <Text style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c" }} numberOfLines={1}>
+          {w.exercises?.name ?? w.label ?? "Warm-up"}
+        </Text>
+        {/* template_warmups has no sets/reps columns at all, unlike
+            group and SPC — so the template builder passes editable=false
+            and shows the movement alone rather than dead inputs. */}
+        {editable ? (
+          <>
+            {/* Real boxed inputs — the old borderless fields read as static
+                text, and coaches didn't realise sets/reps were editable
+                here at all (this bit twice: the "stuck" report during the
+                print work, and again 2026-08-23). */}
+            <TextInput
+              value={w.sets ?? ""}
+              onChangeText={(v) => onChange(w.id, { sets: v })}
+              placeholder="—"
+              placeholderTextColor="#c9c4bd"
+              style={{
+                width: 36,
+                borderWidth: 1,
+                borderColor: CARD_BORDER,
+                borderRadius: 6,
+                backgroundColor: "#faf8f6",
+                paddingVertical: 4,
+                paddingHorizontal: 5,
+                fontFamily: fonts.sans,
+                fontSize: 12,
+                color: "#57534e",
+                textAlign: "center",
+              }}
+            />
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>×</Text>
+            <TextInput
+              value={w.reps ?? ""}
+              onChangeText={(v) => onChange(w.id, { reps: v })}
+              placeholder="reps"
+              placeholderTextColor="#c9c4bd"
+              style={{
+                width: 72,
+                borderWidth: 1,
+                borderColor: CARD_BORDER,
+                borderRadius: 6,
+                backgroundColor: "#faf8f6",
+                paddingVertical: 4,
+                paddingHorizontal: 7,
+                fontFamily: fonts.sans,
+                fontSize: 12,
+                color: "#57534e",
+              }}
+            />
+          </>
+        ) : null}
+        <Pressable onPress={() => onRemove(w.id)} hitSlop={8} accessibilityLabel={`Remove ${w.exercises?.name ?? "warm-up"}`}>
+          <Text style={{ color: "#c9c4bd", fontSize: 13 }}>✕</Text>
+        </Pressable>
+      </View>
+    );
+  };
+
+  // Two real column Views rather than a flex-wrap row: wrap order is
+  // row-major, which would put 1,2 / 3,4 / 5,6 back. On a rail too narrow
+  // for two columns the outer row wraps and the columns stack, reading
+  // 1..3 then 4..6 — still in order.
+  const rows = Math.ceil(slots.length / 2);
+  const columns = [slots.slice(0, rows), slots.slice(rows)];
 
   return (
     <View>
@@ -107,83 +253,11 @@ export function WarmupGrid({ warmups, onChange, onRemove, onAdd, editable = true
         ) : null}
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-        {slots.map((w, i) =>
-          w ? (
-            <View
-              key={w.id}
-              style={{
-                flexBasis: "48%",
-                flexGrow: 1,
-                minWidth: 240,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                backgroundColor: "#fff",
-                borderWidth: 1,
-                borderColor: CARD_BORDER,
-                borderRadius: 10,
-                paddingVertical: 9,
-                paddingHorizontal: 12,
-              }}
-            >
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#c9c4bd", width: 12 }}>{i + 1}</Text>
-              <Text style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c" }} numberOfLines={1}>
-                {w.exercises?.name ?? w.label ?? "Warm-up"}
-              </Text>
-              {/* template_warmups has no sets/reps columns at all, unlike
-                  group and SPC — so the template builder passes editable=false
-                  and shows the movement alone rather than dead inputs. */}
-              {editable ? (
-                <>
-                  {/* Placeholders are the "not entered yet" hint. They used
-                      to render in nearly the same grey as a saved value, and
-                      a coach read "2 × 10/side" as real data that then
-                      "didn't print" — it was never saved. Ghost them hard. */}
-                  <TextInput
-                    value={w.sets ?? ""}
-                    onChangeText={(v) => onChange(w.id, { sets: v })}
-                    placeholder="—"
-                    placeholderTextColor="#d5cdc4"
-                    style={{ width: 30, fontFamily: fonts.sans, fontSize: 12, color: "#57534e", textAlign: "right" }}
-                  />
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>×</Text>
-                  <TextInput
-                    value={w.reps ?? ""}
-                    onChangeText={(v) => onChange(w.id, { reps: v })}
-                    placeholder="reps"
-                    placeholderTextColor="#d5cdc4"
-                    style={{ width: 68, fontFamily: fonts.sans, fontSize: 12, color: "#57534e" }}
-                  />
-                </>
-              ) : null}
-              <Pressable onPress={() => onRemove(w.id)} hitSlop={8} accessibilityLabel={`Remove ${w.exercises?.name ?? "warm-up"}`}>
-                <Text style={{ color: "#c9c4bd", fontSize: 13 }}>✕</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable
-              key={`slot-${i}`}
-              onPress={onAdd}
-              style={{
-                flexBasis: "48%",
-                flexGrow: 1,
-                minWidth: 240,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                borderWidth: 1,
-                borderStyle: "dashed",
-                borderColor: "#ddd8d1",
-                borderRadius: 10,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-              }}
-            >
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#d6d1ca", width: 12 }}>{i + 1}</Text>
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#a8a29e" }}>+ Insert warm-up</Text>
-            </Pressable>
-          )
-        )}
+        {columns.map((column, c) => (
+          <View key={c} style={{ flexBasis: "48%", flexGrow: 1, minWidth: 240, gap: 10 }}>
+            {column.map((w, r) => renderCell(w, c * rows + r))}
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -191,58 +265,188 @@ export function WarmupGrid({ warmups, onChange, onRemove, onAdd, editable = true
 
 /* ---------------------------------------------------------------- lifts */
 
+// Common rep ranges as one-tap chips — saves typing the same range into
+// every lift (per Terra 2026-08-23).
+const QUICK_REPS = ["6-8", "8-10", "10-12", "10-15"];
+
 export function SetTable({ item, onChange }) {
   const scheme = item.rep_scheme?.length ? item.rep_scheme : [item.reps ?? ""];
+  // "Uniform" = every set asks the same reps. That's the common case, so the
+  // default view is one Sets × Reps pair — the per-set table (the thing that
+  // was "a pain to type every single time") is behind "Vary reps by set".
+  const uniform = new Set(scheme.map((r) => (r ?? "").trim())).size <= 1;
+  const [perSet, setPerSet] = useState(!uniform);
   const commit = (next) => onChange(item.id, { rep_scheme: next, sets: next.length, reps: summarizeRepScheme(next) });
 
-  return (
-    <View style={{ borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 10, overflow: "hidden", minWidth: 210 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#faf8f6", paddingVertical: 7, paddingHorizontal: 11 }}>
-        <Text style={{ flex: 1, fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.9, color: "#a8a29e" }}>SET</Text>
-        <Text style={{ flex: 1.4, fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.9, color: "#a8a29e" }}>REPS</Text>
-        <Pressable
-          onPress={() => commit([...scheme, scheme[scheme.length - 1] ?? ""])}
-          hitSlop={8}
-          accessibilityLabel="Add a set"
-          style={{ width: 20, height: 20, borderRadius: 6, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}
-        >
-          <Text style={{ color: "#fff", fontFamily: fonts.sansBold, fontSize: 13, lineHeight: 15 }}>+</Text>
+  const reps = scheme[0] ?? "";
+  const setCount = scheme.length;
+
+  if (!perSet) {
+    return (
+      <View style={{ minWidth: 230 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.9, color: "#a8a29e", marginBottom: 5 }}>SETS</Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: CARD_BORDER,
+                borderRadius: 8,
+                backgroundColor: "#fff",
+                overflow: "hidden",
+              }}
+            >
+              <Pressable
+                onPress={() => setCount > 1 && commit(scheme.slice(0, setCount - 1))}
+                hitSlop={6}
+                accessibilityLabel="One fewer set"
+                style={{ paddingVertical: 8, paddingHorizontal: 11, opacity: setCount > 1 ? 1 : 0.35 }}
+              >
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#57534e" }}>−</Text>
+              </Pressable>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c", minWidth: 20, textAlign: "center" }}>
+                {setCount}
+              </Text>
+              <Pressable
+                onPress={() => commit([...scheme, reps])}
+                hitSlop={6}
+                accessibilityLabel="One more set"
+                style={{ paddingVertical: 8, paddingHorizontal: 11 }}
+              >
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#57534e" }}>+</Text>
+              </Pressable>
+            </View>
+          </View>
+          <View style={{ flex: 1, minWidth: 90 }}>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.9, color: "#a8a29e", marginBottom: 5 }}>REPS</Text>
+            <TextInput
+              value={reps}
+              onChangeText={(v) => commit(Array(setCount).fill(v))}
+              placeholder="10"
+              placeholderTextColor="#c9c4bd"
+              style={{
+                borderWidth: 1,
+                borderColor: CARD_BORDER,
+                borderRadius: 8,
+                backgroundColor: "#fff",
+                paddingVertical: 8,
+                paddingHorizontal: 10,
+                fontFamily: fonts.sansSemiBold,
+                fontSize: 13.5,
+                color: "#2a211c",
+              }}
+            />
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 9, flexWrap: "wrap" }}>
+          {QUICK_REPS.map((range) => {
+            const active = reps.trim() === range;
+            return (
+              <Pressable
+                key={range}
+                onPress={() => commit(Array(setCount).fill(range))}
+                style={{
+                  paddingVertical: 5,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  backgroundColor: active ? "#33251f" : "#fff",
+                  borderWidth: 1,
+                  borderColor: active ? "#33251f" : CARD_BORDER,
+                }}
+              >
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: active ? "#f7f3ee" : "#57534e" }}>{range}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable onPress={() => setPerSet(true)} style={{ marginTop: 9 }}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: colors.primaryOnWhite }}>Vary reps by set ⌄</Text>
         </Pressable>
       </View>
-      {scheme.map((reps, i) => (
-        <View
-          key={i}
-          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 11, borderTopWidth: 1, borderTopColor: "#f4f1ec" }}
-        >
-          <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>Set {i + 1}</Text>
-          <TextInput
-            value={reps ?? ""}
-            onChangeText={(v) => commit(scheme.map((r, idx) => (idx === i ? v : r)))}
-            placeholder="10"
-            style={{ flex: 1.4, fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c", paddingVertical: 9 }}
-          />
-          {scheme.length > 1 ? (
-            <Pressable onPress={() => commit(scheme.filter((_, idx) => idx !== i))} hitSlop={8} accessibilityLabel={`Remove set ${i + 1}`} style={{ width: 20 }}>
-              <Text style={{ color: "#c9c4bd", fontSize: 12 }}>✕</Text>
-            </Pressable>
-          ) : (
-            <View style={{ width: 20 }} />
-          )}
+    );
+  }
+
+  return (
+    <View style={{ minWidth: 230 }}>
+      <View style={{ borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 10, overflow: "hidden", minWidth: 210 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#faf8f6", paddingVertical: 7, paddingHorizontal: 11 }}>
+          <Text style={{ flex: 1, fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.9, color: "#a8a29e" }}>SET</Text>
+          <Text style={{ flex: 1.4, fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.9, color: "#a8a29e" }}>REPS</Text>
+          <Pressable
+            onPress={() => commit([...scheme, scheme[scheme.length - 1] ?? ""])}
+            hitSlop={8}
+            accessibilityLabel="Add a set"
+            style={{ width: 20, height: 20, borderRadius: 6, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ color: "#fff", fontFamily: fonts.sansBold, fontSize: 13, lineHeight: 15 }}>+</Text>
+          </Pressable>
         </View>
-      ))}
+        {scheme.map((r, i) => (
+          <View
+            key={i}
+            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 11, borderTopWidth: 1, borderTopColor: "#f4f1ec" }}
+          >
+            <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>Set {i + 1}</Text>
+            <TextInput
+              value={r ?? ""}
+              onChangeText={(v) => commit(scheme.map((prev, idx) => (idx === i ? v : prev)))}
+              placeholder="10"
+              style={{ flex: 1.4, fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c", paddingVertical: 9 }}
+            />
+            {scheme.length > 1 ? (
+              <Pressable onPress={() => commit(scheme.filter((_, idx) => idx !== i))} hitSlop={8} accessibilityLabel={`Remove set ${i + 1}`} style={{ width: 20 }}>
+                <Text style={{ color: "#c9c4bd", fontSize: 12 }}>✕</Text>
+              </Pressable>
+            ) : (
+              <View style={{ width: 20 }} />
+            )}
+          </View>
+        ))}
+      </View>
+      {/* Collapsing when the sets differ would have to throw away the
+          variation, so the link only shows once they're uniform again. */}
+      {uniform ? (
+        <Pressable onPress={() => setPerSet(false)} style={{ marginTop: 9 }}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: colors.primaryOnWhite }}>Same reps every set ⌃</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 // Four digits, not a free string — a tempo is always four numbers and the
 // old text field let "3-1-1-0", "3110" and "3/1/1/0" all mean the same thing.
+const parseTempoDigits = (value) =>
+  String(value ?? "").replace(/[^0-9xX]/g, "").padEnd(4, " ").slice(0, 4).split("");
+
 export function TempoDigits({ value, onChange }) {
-  const digits = String(value ?? "").replace(/[^0-9xX]/g, "").padEnd(4, " ").slice(0, 4).split("");
+  // Local digit state, NOT derived from the prop each render. The old
+  // derived version made tempo un-deletable: clearing a box zero-filled it
+  // in the saved value, the optimistic prop echoed "0-1-1-0" back, and the
+  // "0" popped straight back into the box — so all four boxes could never
+  // be blank at once, which was the only path to saving null. Now blanks
+  // stay blank on screen, and emptying all four writes null (the reported
+  // "coach couldn't delete a tempo" bug, 2026-08-23).
+  const [digits, setDigits] = useState(() => parseTempoDigits(value));
+  const lastEmitted = useRef(value ?? null);
+  useEffect(() => {
+    // Reseed only on a genuinely external change (copy-last-week, switching
+    // lifts) — never off the echo of our own optimistic write.
+    if ((value ?? null) !== lastEmitted.current) {
+      setDigits(parseTempoDigits(value));
+      lastEmitted.current = value ?? null;
+    }
+  }, [value]);
   const set = (i, v) => {
     const next = [...digits];
     next[i] = (v.replace(/[^0-9xX]/g, "").slice(-1) || " ").toUpperCase();
-    const joined = next.join("").trim();
-    onChange(joined ? next.map((d) => (d === " " ? "0" : d)).join("-") : null);
+    setDigits(next);
+    const anyFilled = next.some((d) => d !== " ");
+    const out = anyFilled ? next.map((d) => (d === " " ? "0" : d)).join("-") : null;
+    lastEmitted.current = out;
+    onChange(out);
   };
   return (
     <View style={{ flexDirection: "row", gap: 5 }}>
@@ -338,12 +542,15 @@ export function RestChips({ value, onChange }) {
 export function SortableLift({
   item,
   index,
+  // "A" for a standalone lift, "B1"/"B2" for superset members — from
+  // liftLabelsFor, the one labeling language shared with the printed sheet
+  // and the member app.
+  label,
   expanded,
   onExpand,
   onChange,
   onRemove,
   onToggleSuperset,
-  supersetLetter,
   // True when the lift directly below is the other half of this superset.
   // Was passed by the group builder and never destructured here, so the
   // "these two are joined" cue never rendered at all.
@@ -383,25 +590,28 @@ export function SortableLift({
           </div>
           <View
             style={{
-              width: 22,
+              minWidth: 22,
               height: 22,
               borderRadius: 99,
-              backgroundColor: expanded ? colors.primary : "#f4f1ec",
+              paddingHorizontal: 5,
+              backgroundColor: expanded ? colors.primary : inSuperset ? "#fdece5" : "#f4f1ec",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 11, color: expanded ? "#fff" : "#a8a29e" }}>{index + 1}</Text>
+            <Text
+              style={{
+                fontFamily: fonts.sansBold,
+                fontSize: 11,
+                color: expanded ? "#fff" : inSuperset ? "#b23a22" : "#a8a29e",
+              }}
+            >
+              {label ?? index + 1}
+            </Text>
           </View>
           <Text style={{ flex: 1, fontFamily: fonts.sansBold, fontSize: 14, color: "#2a211c" }} numberOfLines={1}>
             {item.exercises?.name ?? "Unknown exercise"}
           </Text>
-
-          {supersetLetter ? (
-            <View style={{ backgroundColor: "#fdece5", borderRadius: 5, paddingVertical: 3, paddingHorizontal: 7 }}>
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.5, color: "#b23a22" }}>SS {supersetLetter}</Text>
-            </View>
-          ) : null}
 
           {expanded ? null : (
             <>
@@ -566,20 +776,10 @@ export function LastWeekRail({ lastWeek, onCopy, copying }) {
   );
 }
 
-// Superset pairs get a letter (A, B, …) in document order so the two halves
-// of a pairing are identifiable at a glance on the collapsed rows.
-export function supersetLettersFor(exercises) {
-  const letters = {};
-  let next = 0;
-  for (const e of exercises) {
-    if (!e.superset_group_id) continue;
-    if (!(e.superset_group_id in letters)) {
-      letters[e.superset_group_id] = String.fromCharCode(65 + next);
-      next += 1;
-    }
-  }
-  return letters;
-}
+// (The old supersetLettersFor lived here — superseded by
+// lib/programming/sessionLabels.js's liftLabelsFor, the one labeling
+// language shared with the printed sheet and the member app. The hub and
+// SpcSessionReadout keep their own copy in spcBlockDetail.js.)
 
 export function patternCountsFor(exercises, siblingLifts = []) {
   const counts = {};

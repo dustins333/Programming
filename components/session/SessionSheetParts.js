@@ -61,8 +61,9 @@ export function SheetEyebrow({ children, color = MUTED, style }) {
   );
 }
 
-// The numbered square at the head of every exercise row — "1", or "3a"/"3b"
-// for the two halves of a superset.
+// The labeled square at the head of every exercise row — "A" for a
+// standalone lift, "B1"/"B2" for superset members (one labeling language
+// with the builder and the printed sheet, 2026-08-23).
 export function PositionChip({ label }) {
   return (
     <View style={{ width: 23, height: 23, borderRadius: 8, backgroundColor: "#f5f1ec", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -200,8 +201,9 @@ export function LoggedExerciseRow({ position, name, detail, sets, last }) {
 }
 
 // Consecutive singles share one card; each superset gets its own. Position
-// labels follow the coach's ordering — "1", "2", then "3a"/"3b" for the two
-// halves of a superset.
+// labels follow the coach's ordering in the shared labeling language —
+// "A", "B", then "C1"/"C2" for the members of a superset (matching the
+// builder and the printed sheet, 2026-08-23).
 export function buildGroups(exercises) {
   const groups = [];
   let position = 0;
@@ -215,18 +217,19 @@ export function buildGroups(exercises) {
         members.push(exercises[i]);
         i += 1;
       }
+      const letter = String.fromCharCode(65 + position);
       position += 1;
       groups.push({
         key: `ss-${supersetId}`,
         superset: true,
         rounds: members[0]?.targetSets ?? null,
-        items: members.map((m, n) => ({ ...m, position: `${position}${String.fromCharCode(97 + n)}` })),
+        items: members.map((m, n) => ({ ...m, position: `${letter}${n + 1}` })),
       });
     } else {
       const members = [];
       while (i < exercises.length && !exercises[i].supersetGroupId) {
+        members.push({ ...exercises[i], position: String.fromCharCode(65 + position) });
         position += 1;
-        members.push({ ...exercises[i], position: String(position) });
         i += 1;
       }
       groups.push({ key: `solo-${members[0].id}`, superset: false, items: members });
