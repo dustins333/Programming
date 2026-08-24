@@ -12,9 +12,16 @@ import { fonts, colors, type } from "../../lib/theme";
 // (single-select, mid-session). One list rather than two so the two flows
 // can't disagree about who is startable or which session defaults.
 //
-// A client with no published session this week still shows, greyed and
-// unpickable with the reason on the row. Hiding her would read as "she isn't
-// a client any more" to a coach standing at the board looking for her.
+// A client who can't be started still shows, greyed and unpickable with the
+// reason on the row — either "No block running" or "Nothing published this
+// week". A name quietly missing from the list is the kind of thing a coach
+// hunts for.
+//
+// A client who has NEVER had a block is absent entirely, and that is the
+// server's call, not this component's (see migration 0084): an spc_clients
+// row is created by the enrolment toggle whether or not anyone ever
+// programmed for that person, and on real data that is 62 of 72 rows. Showing
+// them would bury the ten real ones.
 
 const CARD_BORDER = "#ece7e1";
 const MAX_SLOTS = 4;
@@ -148,7 +155,9 @@ export function HubClientPickList({
         {rows.map((row) => {
           const selectedWorkout = picked[row.userId];
           const selected = Boolean(selectedWorkout);
-          const unavailable = row.sessions.length === 0;
+          const betweenBlocks = row.weekNumber == null;
+          const unavailable = betweenBlocks || row.sessions.length === 0;
+          const reason = betweenBlocks ? "No block running" : "Nothing published this week";
           const blocked = !selected && (full || unavailable);
           return (
             <View
@@ -174,7 +183,7 @@ export function HubClientPickList({
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: fonts.sansBold, fontSize: compact ? 16 : 19, color: "#292524" }}>{row.name}</Text>
                   <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, color: unavailable ? "#b23a22" : colors.muted, marginTop: 2 }}>
-                    {unavailable ? "Nothing published this week" : `Week ${row.weekNumber}`}
+                    {unavailable ? reason : `Week ${row.weekNumber}`}
                   </Text>
                 </View>
               </PressFade>
