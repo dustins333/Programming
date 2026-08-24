@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { PressFade } from "../PressFade";
 import { ClientGoalLine } from "../ClientGoalCard";
-import { SetBubbleRow } from "./HubSetBubbles";
+import { SetBubbleRow, hubBubbleSize } from "./HubSetBubbles";
 import { HubLiftCard } from "./HubLiftCard";
 import { HubDock, DockPill } from "./HubDock";
 import { HubNumberPad } from "./HubNumberPad";
@@ -13,6 +13,7 @@ import { HubHistoryStrip, HubHistoryPanel } from "./HubLiftHistory";
 import { schemeLabel } from "../builder/SessionBuilderParts";
 import { supersetLettersFor } from "../../lib/programming/spcBlockDetail";
 import { getLiftBlockHistory } from "../../lib/programming/hub";
+import { confirmDropFromBoard } from "../../lib/confirmDialog";
 import { fonts, colors, type } from "../../lib/theme";
 
 // One client's live session — a vertical "phone screen" on the wall display
@@ -36,6 +37,35 @@ const DONE = "#4d6142";
 const PEACH_BG = "#fdf6f2";
 const PEACH_BORDER = "#f0ddd2";
 const SAVE_DEBOUNCE_MS = 700;
+
+// ── The column grid ────────────────────────────────────────────────────────
+// Every block in a column is a FIXED height whether or not it has content, so
+// the client names line up, the goals line up, the warm-up strips line up, and
+// "lift 3" sits at the same y in all four columns. That is the whole point of
+// being able to reorder lifts: a coach scanning the wall reads ACROSS, not
+// down, and a row that has drifted 30px is a row you have to hunt for.
+//
+// So a block with no data reserves its space instead of collapsing. Before
+// this, a client with no goal, or with no warm-ups, or a finalized column
+// (whose 6px olive bar pushed its own content down), each started its lift
+// list at a different height from its neighbours.
+//
+// Two things still break alignment, both deliberately: a column with a lift
+// expanded, and a column somebody has scrolled. Both are the column being
+// actively worked in, which is the one place it doesn't matter.
+const FINALIZED_BAR_H = 6;
+const HEADER_NAME_H_TV = 26;
+const HEADER_NAME_H_COMPACT = 22;
+const HEADER_META_H = 16;
+const GOAL_GAP = 8;
+const GOAL_H = 27; // ClientGoalLine tone="pill" size="md"
+const WARMUP_H = 45; // collapsed strip; expanding is deliberate and local
+const ROW_NAME_H = 26; // governed by the 26px completion tick, not the text
+const ROW_SCHEME_H = 18;
+const ROW_BUBBLES_H = 32;
+// Borders (1.5 x 2) + padding (9 + 10) + the three fixed blocks.
+const RESTING_ROW_H = 3 + 9 + ROW_NAME_H + ROW_SCHEME_H + ROW_BUBBLES_H + 10;
+const RESTING_ROW_GAP = 8;
 
 function summaryText(item, logs) {
   const tracksWeight = item.exercise?.tracks_weight !== false;
@@ -115,10 +145,17 @@ function ReorderArrows({ isFirst, isLast, onMove }) {
 // A resting lift: name, prescription, that lift's sets as bubbles, its tick.
 function RestingRow({ item, letter, logs, completed, hasNote, editOrder, isFirst, isLast, onPress, onToggleComplete, onMove }) {
   const tracksWeight = item.exercise?.tracks_weight !== false;
+  const indent = letter ? 29 : 0;
+  const targetCount = item.targetSets > 0 ? item.targetSets : 3;
+  // A client logging a fourth set on a 3-set lift must not make her row taller
+  // than the same lift in the next column, so the size is chosen off whatever
+  // the row will actually draw, not off the prescription alone.
+  const setCount = Math.max(targetCount, (logs ?? []).reduce((m, r) => Math.max(m, r.set_number ?? 0), 0));
   return (
     <PressFade
       onPress={onPress}
       style={{
+        height: RESTING_ROW_H,
         borderRadius: 14,
         borderWidth: 1.5,
         borderColor: completed ? DONE : CARD_BORDER,
@@ -126,10 +163,11 @@ function RestingRow({ item, letter, logs, completed, hasNote, editOrder, isFirst
         paddingHorizontal: 12,
         paddingTop: 9,
         paddingBottom: 10,
-        marginBottom: 8,
+        marginBottom: RESTING_ROW_GAP,
+        overflow: "hidden",
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <View style={{ height: ROW_NAME_H, flexDirection: "row", alignItems: "center" }}>
         <LetterChip letter={letter} />
         <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 15.5, color: "#292524" }}>
           {item.exercise.name}
@@ -137,17 +175,20 @@ function RestingRow({ item, letter, logs, completed, hasNote, editOrder, isFirst
         {hasNote ? <Ionicons name="chatbox-ellipses-outline" size={15} color={colors.primaryOnWhite} style={{ marginRight: 4 }} /> : null}
         {editOrder ? <ReorderArrows isFirst={isFirst} isLast={isLast} onMove={onMove} /> : <CompletionTick completed={completed} onPress={onToggleComplete} />}
       </View>
-      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted, marginTop: 2, marginLeft: letter ? 29 : 0 }}>
-        {schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps })}
-        {item.rest ? ` | Rest ${item.rest}` : ""}
-      </Text>
-      <View style={{ marginLeft: letter ? 29 : 0 }}>
+      <View style={{ height: ROW_SCHEME_H, justifyContent: "center", marginLeft: indent }}>
+        <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted }}>
+          {schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps })}
+          {item.rest ? ` | Rest ${item.rest}` : ""}
+        </Text>
+      </View>
+      <View style={{ height: ROW_BUBBLES_H, justifyContent: "center", overflow: "hidden", marginLeft: indent }}>
         <SetBubbleRow
           sets={logs}
-          targetCount={item.targetSets > 0 ? item.targetSets : 3}
+          targetCount={targetCount}
           targetFor={(i) => item.repScheme?.[i - 1] ?? item.targetReps ?? null}
           tracksWeight={tracksWeight}
-          size="md"
+          size={hubBubbleSize(setCount)}
+          wrap={false}
         />
       </View>
     </PressFade>
@@ -229,8 +270,10 @@ export function HubClientColumn({
   onEditDirty,
   onSaveSets,
   onSaveNote,
+  onDropClient = null,
 }) {
   const compact = scale !== "tv";
+  const nameH = compact ? HEADER_NAME_H_COMPACT : HEADER_NAME_H_TV;
   const [editOrder, setEditOrder] = useState(false);
   const [showWarmups, setShowWarmups] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -499,7 +542,17 @@ export function HubClientColumn({
     setDock("keypad");
   };
 
+  const handleDrop = async () => {
+    if (!onDropClient) return;
+    if (!(await confirmDropFromBoard(entry.clientName))) return;
+    setEditOrder(false);
+    onDropClient();
+  };
+
   const warmupRows = warmups ?? [];
+  const hasWarmups = warmupRows.length > 0;
+  // showWarmups can survive a client having their warm-ups removed mid-session.
+  const expandWarmups = hasWarmups && showWarmups;
   // On the wall the label has to say WHOSE lift, because four columns are on
   // screen and the keypad is the one thing that must never be ambiguous. On
   // the phone only one client is visible and their name and the lift are
@@ -610,16 +663,18 @@ export function HubClientColumn({
       {/* A finalized column gets a 6px olive bar and a COMPLETE pill rather
           than washing its whole background olive — visual-pass v4's house
           rule is border-and-fill, never a full wash, and the bar carries the
-          same signal from across the room. */}
-      {entry.finalized ? <View style={{ height: 6, backgroundColor: DONE }} /> : null}
+          same signal from across the room. The bar's height is reserved in
+          every column: rendering it only when finalized pushed that one
+          column's entire contents 6px below its neighbours'. */}
+      <View style={{ height: FINALIZED_BAR_H, backgroundColor: entry.finalized ? DONE : "transparent" }} />
 
       <View style={{ paddingHorizontal: 14, paddingTop: 11, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: CARD_BORDER }}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={{ height: nameH + HEADER_META_H, flexDirection: "row", alignItems: "center" }}>
           <View style={{ flex: 1 }}>
-            <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: compact ? 17 : 20, color: "#292524" }}>
+            <Text numberOfLines={1} style={{ height: nameH, lineHeight: nameH, fontFamily: fonts.sansBold, fontSize: compact ? 17 : 20, color: "#292524" }}>
               {entry.clientName}
             </Text>
-            <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, marginTop: 1 }}>
+            <Text numberOfLines={1} style={{ height: HEADER_META_H, lineHeight: HEADER_META_H, fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted }}>
               {[`Week ${entry.weekNumber}`, entry.sessionNumber ? `Session ${entry.sessionNumber}` : null, entry.title || null]
                 .filter(Boolean)
                 .join(" | ")}
@@ -639,18 +694,69 @@ export function HubClientColumn({
             her programming page and she reads on her own session, reduced to
             the one line this column has room for. A solid clay pill rather
             than the quieter ghost line the member app uses: this one has to
-            read from across the gym. */}
-        <ClientGoalLine goal={entry.goal} tone="pill" size="md" style={{ marginTop: 8 }} />
+            read from across the gym.
+
+            The slot is reserved whether or not she has a goal — ClientGoalLine
+            renders nothing without one, and letting it collapse lifted that
+            column's warm-ups and every lift under them out of line. */}
+        <View style={{ height: GOAL_H, marginTop: GOAL_GAP, justifyContent: "center" }}>
+          {/* Dropping a client is buried inside the reorder toggle on purpose:
+              a bare ✕ at the top of a column is far too easy to catch while
+              someone is mid-set. It takes the goal's slot rather than adding a
+              row of its own, so the column's height — and therefore every
+              other column's alignment — does not change when you open reorder
+              mode. While reordering, the goal is not what anyone is reading. */}
+          {editOrder && onDropClient ? (
+            <PressFade
+              onPress={handleDrop}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                alignSelf: "flex-start",
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: "#e8c4b8",
+                backgroundColor: "white",
+                paddingHorizontal: 11,
+                paddingVertical: 4,
+              }}
+            >
+              <Ionicons name="close-circle-outline" size={15} color="#b23a22" style={{ marginRight: 5 }} />
+              <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#b23a22" }}>
+                Drop from board
+              </Text>
+            </PressFade>
+          ) : (
+            <ClientGoalLine goal={entry.goal} tone="pill" size="md" />
+          )}
+        </View>
       </View>
 
       {/* Warm-up strip — states its own count so the chevron has something to
           promise. Expanding pushes the lift list down; the list absorbs it by
-          scrolling rather than the open card being forced shut. */}
-      {warmupRows.length > 0 ? (
-        <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 10, paddingVertical: 7, backgroundColor: colors.canvas, borderBottomWidth: 1, borderBottomColor: CARD_BORDER }}>
-          <Text numberOfLines={showWarmups ? undefined : 1} style={{ flex: 1, fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, paddingRight: 8 }}>
+          scrolling rather than the open card being forced shut.
+
+          The strip is drawn for every client, including one with nothing
+          programmed: skipping it entirely started that column's lifts a whole
+          band above everyone else's. Collapsed it is a fixed height, so a
+          client with eight warm-ups and a client with two still line up. */}
+      <View
+        style={{
+          height: expandWarmups ? undefined : WARMUP_H,
+          flexDirection: "row",
+          alignItems: "center",
+          paddingLeft: 14,
+          paddingRight: 10,
+          paddingVertical: 7,
+          backgroundColor: colors.canvas,
+          borderBottomWidth: 1,
+          borderBottomColor: CARD_BORDER,
+        }}
+      >
+        {hasWarmups ? (
+          <Text numberOfLines={expandWarmups ? undefined : 1} style={{ flex: 1, fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, paddingRight: 8 }}>
             <Text style={{ fontFamily: fonts.sansSemiBold, color: "#57534e" }}>{`Warm-up · ${warmupRows.length} · `}</Text>
-            {showWarmups
+            {expandWarmups
               ? warmupRows
                   .map((w) => {
                     const name = w.label || w.exercises?.name || "—";
@@ -661,15 +767,25 @@ export function HubClientColumn({
                   .join("\n")
               : warmupRows.map((w) => w.label || w.exercises?.name || "—").join(" · ")}
           </Text>
+        ) : (
+          <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.sans, fontSize: type.caption, color: colors.hint, paddingRight: 8 }}>
+            No warm-up programmed
+          </Text>
+        )}
+        {hasWarmups ? (
           <PressFade
             onPress={() => setShowWarmups((v) => !v)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: CARD_BORDER, backgroundColor: "white", alignItems: "center", justifyContent: "center" }}
           >
-            <Ionicons name={showWarmups ? "chevron-up" : "chevron-down"} size={16} color={colors.muted} />
+            <Ionicons name={expandWarmups ? "chevron-up" : "chevron-down"} size={16} color={colors.muted} />
           </PressFade>
-        </View>
-      ) : null}
+        ) : (
+          // Keeps the text column the same width as a client who does have
+          // warm-ups, so the two strips read as the same band.
+          <View style={{ width: 30, height: 30 }} />
+        )}
+      </View>
 
       {/* Lifts. The list scrolls INSIDE its own column — nothing in any other
           column moves, and columns never resize or reflow. */}

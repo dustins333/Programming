@@ -16,12 +16,25 @@ const LOGGED_BORDER = "#dbe8cf";
 const LOGGED_TEXT = "#3f4a36";
 
 const SIZES = {
+  // xs exists only so a single-line row can never clip — see hubBubbleSize().
+  xs: { reps: 12, weight: 8.5, padH: 5, padV: 2, minWidth: 32, gap: 4 },
   sm: { reps: 13, weight: 9.5, padH: 7, padV: 3, minWidth: 40, gap: 5 },
   md: { reps: 15, weight: 10.5, padH: 8, padV: 4, minWidth: 48, gap: 6 },
   lg: { reps: 17, weight: 11.5, padH: 9, padV: 5, minWidth: 56, gap: 6 },
 };
 
-export function SetBubble({ reps, weight, target, tracksWeight = true, size = "md", tone = "logged" }) {
+// The hub board draws every set on one line in a fixed-height slot, so the
+// bubble has to shrink rather than wrap. Measured in a 463px column (the
+// four-up width, the tightest case) with three-digit weights: md fits 7, sm
+// fits 7 with room, xs fits 8+. Real SPC programming is 2-3 sets and the
+// most anyone has ever logged is 3, so this is headroom, not a common path.
+export function hubBubbleSize(setCount) {
+  if (setCount >= 8) return "xs";
+  if (setCount >= 6) return "sm";
+  return "md";
+}
+
+export function SetBubble({ reps, weight, target, tracksWeight = true, size = "md", tone = "logged", stacked = true }) {
   const s = SIZES[size] ?? SIZES.md;
   const logged = reps != null || weight != null;
   const showWeight = tracksWeight && weight != null;
@@ -32,7 +45,9 @@ export function SetBubble({ reps, weight, target, tracksWeight = true, size = "m
         paddingHorizontal: s.padH,
         paddingVertical: s.padV,
         marginRight: s.gap,
-        marginTop: 4,
+        // A wrapping row needs the gap between its lines; a single-line row is
+        // vertically centred in a fixed-height slot and must not be nudged.
+        marginTop: stacked ? 4 : 0,
         borderRadius: 8,
         borderWidth: 1,
         borderStyle: logged ? "solid" : "dashed",
@@ -72,7 +87,7 @@ export function SetBubble({ reps, weight, target, tracksWeight = true, size = "m
 // sets: log rows (or {reps, weight} drafts) keyed by set_number.
 // targetCount / targetFor fill the row out to the programmed set count with
 // dashed placeholders, so "3 × 8 but only two done" is visible as a shape.
-export function SetBubbleRow({ sets = [], targetCount = 0, targetFor, tracksWeight = true, size = "md", tone = "logged" }) {
+export function SetBubbleRow({ sets = [], targetCount = 0, targetFor, tracksWeight = true, size = "md", tone = "logged", wrap = true }) {
   const real = (sets ?? []).filter((r) => r.reps != null || r.weight != null);
   const maxSet = real.reduce((m, r) => Math.max(m, r.set_number ?? 0), 0);
   const count = Math.max(targetCount, maxSet, real.length);
@@ -88,8 +103,16 @@ export function SetBubbleRow({ sets = [], targetCount = 0, targetFor, tracksWeig
         tracksWeight={tracksWeight}
         size={size}
         tone={tone}
+        stacked={wrap}
       />
     );
   }
-  return <View style={{ flexDirection: "row", flexWrap: "wrap" }}>{bubbles}</View>;
+  // wrap={false} keeps every set on ONE line. The hub board needs it: a
+  // wrapped bubble row makes that lift taller, which pushes every lift below
+  // it out of line with the same lift in the next column.
+  return (
+    <View style={{ flexDirection: "row", flexWrap: wrap ? "wrap" : "nowrap", alignItems: wrap ? "flex-start" : "center" }}>
+      {bubbles}
+    </View>
+  );
 }

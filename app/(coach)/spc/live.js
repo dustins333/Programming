@@ -6,6 +6,9 @@ import { PressFade } from "../../../components/PressFade";
 import { useHubBoard } from "../../../components/hub/useHubBoard";
 import { HubLiveSession } from "../../../components/hub/HubLiveSession";
 import { HubSessionSetup } from "../../../components/hub/HubSessionSetup";
+import { HubPinCard } from "../../../components/hub/HubPinCard";
+import { HubAddClientModal } from "../../../components/hub/HubPickerModals";
+import { removeHubClient } from "../../../lib/programming/hub";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { toastError } from "../../../lib/toast";
 import { fonts, colors, type } from "../../../lib/theme";
@@ -23,10 +26,19 @@ export default function SpcLiveSession() {
   const { hubSession, board, pollError, end, refreshSession, refreshBoard } = hub;
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const handleStarted = async () => {
     await refreshSession();
     await refreshBoard();
+  };
+
+  // Add and drop mid-session, so a no-show or a walk-in doesn't mean ending
+  // the session and building it again (migration 0083). No PIN on this side:
+  // the coach is already signed in.
+  const handleDropClient = async (userId) => {
+    await removeHubClient(userId);
+    await handleStarted();
   };
 
   const handleEnd = async () => {
@@ -54,6 +66,14 @@ export default function SpcLiveSession() {
               Live session
             </Text>
           </View>
+          {hubSession && !confirmEnd ? (
+            <PressFade
+              onPress={() => setAddOpen(true)}
+              style={{ borderRadius: 999, borderWidth: 1, borderColor: "#f0ddd2", backgroundColor: "#fdf6f2", paddingHorizontal: 14, paddingVertical: 8, marginRight: 8 }}
+            >
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>+ Add client</Text>
+            </PressFade>
+          ) : null}
           {hubSession ? (
             confirmEnd ? (
               <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -88,16 +108,35 @@ export default function SpcLiveSession() {
             <ActivityIndicator color={colors.primary} />
           </View>
         ) : !hubSession ? (
-          <HubSessionSetup profile={profile} onStarted={handleStarted} />
+          <View>
+            <HubSessionSetup profile={profile} onStarted={handleStarted} />
+            <HubPinCard />
+          </View>
         ) : !board ? (
           <View style={{ paddingVertical: 40, alignItems: "center" }}>
             <ActivityIndicator color={colors.primary} />
           </View>
         ) : (
           <View style={{ flex: 1, minHeight: 480 }}>
-            <HubLiveSession hub={hub} authorId={profile?.id ?? null} authorName={profile?.name?.split(" ")[0] ?? null} scale="phone" />
+            <HubLiveSession
+              hub={hub}
+              authorId={profile?.id ?? null}
+              authorName={profile?.name?.split(" ")[0] ?? null}
+              scale="phone"
+              onDropClient={handleDropClient}
+            />
           </View>
         )}
+
+        <HubAddClientModal
+          visible={addOpen}
+          onClose={() => setAddOpen(false)}
+          onBoardUserIds={(hubSession?.clients ?? []).map((c) => c.user_id)}
+          onAdded={async () => {
+            setAddOpen(false);
+            await handleStarted();
+          }}
+        />
       </ScrollView>
     </CoachShell>
   );

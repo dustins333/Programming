@@ -64,6 +64,7 @@ export function HubBoard({ hubSession, board, warmups, scale = "tv", now, author
           onEndEdit={handlers.onEndEdit}
           onSaveSets={(payload) => handlers.onSaveSets(slot, payload)}
           onSaveNote={(payload) => handlers.onSaveNote(slot, payload)}
+          onDropClient={handlers.onDropClient ? () => handlers.onDropClient(slot) : null}
         />
       </View>
     );

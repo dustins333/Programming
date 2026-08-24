@@ -4,12 +4,17 @@ import { PressFade } from "../../components/PressFade";
 import { useHubBoard } from "../../components/hub/useHubBoard";
 import { HubLiveSession } from "../../components/hub/HubLiveSession";
 import { HubIdleScreen } from "../../components/hub/HubIdleScreen";
+import { HubStartModal, HubAddClientModal } from "../../components/hub/HubPickerModals";
+import { removeHubClient } from "../../lib/programming/hub";
 import { toastError } from "../../lib/toast";
 import { fonts, colors, type } from "../../lib/theme";
 
 // The wall-mounted gym-floor display (1920x1080 landscape touchscreen).
-// Idle until a coach starts a hub session from their phone
-// (app/(coach)/spc/live.js); then up to 4 client columns, live via the
+// A coach starts a session either from their phone (app/(coach)/spc/live.js)
+// or from here — tap the idle clock, enter a PIN, pick who's training
+// (migration 0083). Clients can be added or dropped while it runs, so a
+// no-show or a walk-in doesn't mean ending the session and starting again.
+// Then up to 4 client columns, live via the
 // 3-second poll in useHubBoard, each column a touch input surface — tap a
 // lift and it expands in place with the keypad docked beneath it. Ending
 // from here goes through the hub_end_session RPC; the display account has no
@@ -30,9 +35,23 @@ function useNow(intervalMs = 15000) {
 
 export default function DisplayBoard() {
   const hub = useHubBoard({ idlePoll: true });
-  const { hubSession, board, pollError, end } = hub;
+  const { hubSession, board, pollError, end, refreshSession, refreshBoard } = hub;
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [startOpen, setStartOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const now = useNow();
+
+  // The 3-second poll would pick these up on its own; refreshing immediately
+  // just means the board reacts on the tap instead of a beat later.
+  const refresh = async () => {
+    const open = await refreshSession();
+    if (open) await refreshBoard();
+  };
+
+  const handleDropClient = async (userId) => {
+    await removeHubClient(userId);
+    await refresh();
+  };
 
   const handleEnd = async () => {
     setConfirmEnd(false);
@@ -69,6 +88,16 @@ export default function DisplayBoard() {
         <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, lineHeight: 19, color: "#57534e", textAlign: "right" }}>
           {now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s?([AP]M)$/i, "\n$1")}
         </Text>
+        {hubSession && !confirmEnd ? (
+          <PressFade
+            onPress={() => setAddOpen(true)}
+            style={{ marginLeft: 16, borderRadius: 999, borderWidth: 1, borderColor: "#f0ddd2", backgroundColor: "#fdf6f2", paddingHorizontal: 16, paddingVertical: 8 }}
+          >
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, lineHeight: 17, color: colors.primaryOnWhite, textAlign: "center" }}>
+              + Add{"\n"}client
+            </Text>
+          </PressFade>
+        ) : null}
         {hubSession ? (
           confirmEnd ? (
             <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
@@ -93,12 +122,37 @@ export default function DisplayBoard() {
 
       {/* Body */}
       {hubSession === undefined ? null : !hubSession ? (
-        <HubIdleScreen now={now} />
+        <HubIdleScreen now={now} onPressClock={() => setStartOpen(true)} />
       ) : !board ? null : (
         <View style={{ flex: 1, padding: 14 }}>
-          <HubLiveSession hub={hub} authorId={hubSession.coach_id} authorName={hubSession.coach_name?.split(" ")[0] ?? null} scale="tv" now={now} />
+          <HubLiveSession
+            hub={hub}
+            authorId={hubSession.coach_id}
+            authorName={hubSession.coach_name?.split(" ")[0] ?? null}
+            scale="tv"
+            now={now}
+            onDropClient={handleDropClient}
+          />
         </View>
       )}
+
+      <HubStartModal
+        visible={startOpen}
+        onClose={() => setStartOpen(false)}
+        onStarted={async () => {
+          setStartOpen(false);
+          await refresh();
+        }}
+      />
+      <HubAddClientModal
+        visible={addOpen}
+        onClose={() => setAddOpen(false)}
+        onBoardUserIds={(hubSession?.clients ?? []).map((c) => c.user_id)}
+        onAdded={async () => {
+          setAddOpen(false);
+          await refresh();
+        }}
+      />
     </View>
   );
 }

@@ -20,7 +20,7 @@ import { fonts, colors, type } from "../../lib/theme";
 // authorName: whose first name a saved note is attributed to — the coach's
 // own on their phone, the hub session's coach on the TV (the display account
 // is a device, not a person, and cannot read core.users to look one up).
-export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now }) {
+export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now, onDropClient = null }) {
   const { hubSession, board, warmups, setEditing, markEdit, clearEditing, saveSets, saveNote, toggleExerciseComplete, toggleFinalize, moveLift } = hub;
   const { width } = useWindowDimensions();
   const [activeClientId, setActiveClientId] = useState(null); // phone-width tabs
@@ -90,8 +90,19 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now })
     }
   };
 
+  const handleDropClient = onDropClient
+    ? async (slot) => {
+        try {
+          await onDropClient(slot.user_id);
+        } catch (e) {
+          toastError("Couldn't take her off the board.", e);
+        }
+      }
+    : null;
+
   const handlers = {
     onToggleComplete: handleToggleComplete,
+    onDropClient: handleDropClient,
     onMoveLift: handleMoveLift,
     onToggleFinalize: handleToggleFinalize,
     onBeginEdit: setEditing,
@@ -132,6 +143,7 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now })
             onEndEdit={clearEditing}
             onSaveSets={(payload) => handleSaveSets(slot, payload)}
             onSaveNote={(payload) => handleSaveNote(slot, payload)}
+            onDropClient={handleDropClient ? () => handleDropClient(slot) : null}
           />
         )}
       </View>

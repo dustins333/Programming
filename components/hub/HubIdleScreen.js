@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Image, Text, View } from "react-native";
+import { PressFade } from "../PressFade";
 import { getHubIdleStats } from "../../lib/programming/hub";
 import { fonts, colors } from "../../lib/theme";
 
@@ -48,7 +49,7 @@ function bestValue(best) {
   return best.reps != null ? `${best.reps}×${best.weight}` : `${best.weight}`;
 }
 
-export function HubIdleScreen({ now }) {
+export function HubIdleScreen({ now, onPressClock = null }) {
   const [stats, setStats] = useState(null);
   const [page, setPage] = useState(0);
 
@@ -93,12 +94,19 @@ export function HubIdleScreen({ now }) {
     <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 56 }}>
       <View>
         <Image source={require("../../assets/kova-logo.jpg")} style={{ width: 150, height: 150, borderRadius: 75, marginBottom: 26 }} />
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, letterSpacing: 2.4, color: colors.muted, textTransform: "uppercase" }}>
-          {now.toLocaleDateString([], { weekday: "long" })} · {now.toLocaleDateString([], { month: "long", day: "numeric" })}
-        </Text>
-        <Text style={{ fontFamily: fonts.display, fontSize: 250, lineHeight: 268, color: "#44403c" }}>
-          {now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s?[AP]M$/i, "")}
-        </Text>
+        {/* The clock is how a coach starts a session from the board: tap it,
+            enter a PIN, pick who's training. Deliberately unlabelled — this
+            screen faces the whole gym, and the one thing it should not say is
+            how to drive it. PressFade gives the tap real feedback, which is
+            what stops an unmarked control reading as broken. */}
+        <PressFade onPress={onPressClock} disabled={!onPressClock}>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, letterSpacing: 2.4, color: colors.muted, textTransform: "uppercase" }}>
+            {now.toLocaleDateString([], { weekday: "long" })} · {now.toLocaleDateString([], { month: "long", day: "numeric" })}
+          </Text>
+          <Text style={{ fontFamily: fonts.display, fontSize: 250, lineHeight: 268, color: "#44403c" }}>
+            {now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s?[AP]M$/i, "")}
+          </Text>
+        </PressFade>
       </View>
 
       {hasCards ? (
