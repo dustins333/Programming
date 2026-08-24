@@ -16,6 +16,7 @@ import {
   SHEET_CANVAS,
   SheetEyebrow,
   StatePill,
+  buildGroups,
 } from "./session/SessionSheetParts";
 import { todayInBoise } from "../lib/boiseDate";
 import { fonts, colors, type } from "../lib/theme";
@@ -47,42 +48,6 @@ const STATE_COPY = {
   logged: { pill: null, cta: "Update this session" },
   future: { pill: null, cta: null },
 };
-
-// Consecutive singles share one card; each superset gets its own. Position
-// labels follow the coach's ordering — "1", "2", then "3a"/"3b" for the two
-// halves of a superset.
-function buildGroups(exercises) {
-  const groups = [];
-  let position = 0;
-  let i = 0;
-  while (i < exercises.length) {
-    const ex = exercises[i];
-    const supersetId = ex.supersetGroupId;
-    if (supersetId) {
-      const members = [];
-      while (i < exercises.length && exercises[i].supersetGroupId === supersetId) {
-        members.push(exercises[i]);
-        i += 1;
-      }
-      position += 1;
-      groups.push({
-        key: `ss-${supersetId}`,
-        superset: true,
-        rounds: members[0]?.targetSets ?? null,
-        items: members.map((m, n) => ({ ...m, position: `${position}${String.fromCharCode(97 + n)}` })),
-      });
-    } else {
-      const members = [];
-      while (i < exercises.length && !exercises[i].supersetGroupId) {
-        position += 1;
-        members.push({ ...exercises[i], position: String(position) });
-        i += 1;
-      }
-      groups.push({ key: `solo-${members[0].id}`, superset: false, items: members });
-    }
-  }
-  return groups;
-}
 
 export function SessionSheet({
   visible,

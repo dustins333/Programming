@@ -8,6 +8,7 @@ import { readSections, writeSection, SCREEN_MY_WEEK } from "../../lib/screenCach
 import { todayInBoise, dayOfWeekInBoise, dateInBoise, addDays } from "../../lib/boiseDate";
 import { currentWeekNumber, sessionNumberForDate, formatSessionDays, blockLengthWeeks } from "../../lib/programming/schedule";
 import { listMyAssignments, getCurrentBlock, listWorkoutsForWeek, listLogsForSession } from "../../lib/programming/memberPlan";
+import { getNextBlockPreview, isFinalWeekOfBlock, nextBlockPreviewIsDue } from "../../lib/programming/nextBlockPreview";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
@@ -29,6 +30,7 @@ import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { retryOnce } from "../../lib/retry";
 import { formatDateMDY } from "../../lib/formatDate";
 import { SessionSheet } from "../../components/SessionSheet";
+import { NextBlockSheet } from "../../components/NextBlockSheet";
 import { ProgressRing } from "../../components/ProgressRing";
 import { PressFade } from "../../components/PressFade";
 import { fonts, colors, type } from "../../lib/theme";
@@ -360,7 +362,7 @@ function SessionStripe({ completed, published, caption, isToday, sessionLabel, o
 
 // A program's week: dot + name + "View full block ›" left, progress ring
 // right, session stripes below. Replaces the count pill (house rule 2).
-function ProgramCard({ title, rows, target, completedCount, onNavigate, navigateLabel, onViewBlock }) {
+function ProgramCard({ title, rows, target, completedCount, onNavigate, navigateLabel, onViewBlock, footer }) {
   const isDone = target > 0 && completedCount >= target;
   return (
     <View
@@ -410,7 +412,45 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
           />
         ))}
       </View>
+      {footer}
     </View>
+  );
+}
+
+// The one-off "your next block is ready" row, below the stripes. It only
+// exists on the final day of a block (see nextBlockPreview.js), so it reads
+// as an event rather than another permanent control competing with "View
+// full block ›" in the header.
+function NextBlockButton({ onPress }) {
+  return (
+    <PressFade
+      onPress={onPress}
+      accessibilityLabel="Preview next block"
+      style={{
+        marginTop: 12,
+        backgroundColor: TODAY_BG,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#f0ddd2",
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <Ionicons name="sparkles-outline" size={15} color={CLAY} />
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.15}
+        style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: BRAND_TEXT, flex: 1, minWidth: 0 }}
+      >
+        Preview next block
+      </Text>
+      <Text maxFontSizeMultiplier={1} style={{ fontSize: 16, color: BRAND_TEXT }}>
+        ›
+      </Text>
+    </PressFade>
   );
 }
 
@@ -729,6 +769,8 @@ export default function MemberHome() {
   const [pendingEvents, setPendingEvents] = useState([]);
   const [heroExerciseCount, setHeroExerciseCount] = useState(null);
   const [preview, setPreview] = useState(null); // see the three open*Preview builders below
+  // Which group membership's next block is open in the look-ahead sheet.
+  const [nextBlockFor, setNextBlockFor] = useState(null);
   const [savingBacklog, setSavingBacklog] = useState(false);
 
   // Tabs stay mounted, and useFocusEffect below re-runs load() on every
@@ -885,13 +927,28 @@ export default function MemberHome() {
                     };
                   });
 
+                  // What's coming after this block, but only worth a round
+                  // trip during its final week — see nextBlockPreview.js. Its
+                  // own try/catch: a look-ahead that fails must never take
+                  // down the week she's actually training.
+                  let nextBlock = null;
+                  if (isFinalWeekOfBlock(weekNumber, blockLengthWeeks(block, program))) {
+                    try {
+                      nextBlock = await getNextBlockPreview({ program, block });
+                    } catch (err) {
+                      console.error("My Week: couldn't load the next block preview", err);
+                    }
+                  }
+
                   return {
                     groupProgramId: program.id,
                     programName: program.name,
                     status: "ready",
                     weekNumber,
                     blockLengthWeeks: blockLengthWeeks(block, program),
+                    blockEndDate: block.block_end_date,
                     sessionsPerWeek,
+                    nextBlock,
                     rows,
                   };
                 } catch (err) {
@@ -1607,6 +1664,15 @@ export default function MemberHome() {
             completedCount={groupEntry.rows.filter((r) => r.completed).length}
             onNavigate={() => router.push({ pathname: "/(member)/plan", params: { program: groupEntry.groupProgramId } })}
             onViewBlock={() => router.push({ pathname: "/(member)/plan-block", params: { programId: groupEntry.groupProgramId } })}
+            footer={
+              // Evaluated at render rather than baked into the fetched entry:
+              // this screen can paint from cache (lib/screenCache.js), and the
+              // clock is the only part of the condition that moves during a
+              // single day.
+              groupEntry.nextBlock && nextBlockPreviewIsDue(groupEntry.blockEndDate) ? (
+                <NextBlockButton onPress={() => setNextBlockFor(groupEntry)} />
+              ) : null
+            }
           />
         );
       })}
@@ -1685,6 +1751,13 @@ export default function MemberHome() {
         session={preview?.session}
         ctaBusy={savingBacklog}
         onCta={handleLogPress}
+      />
+
+      <NextBlockSheet
+        visible={!!nextBlockFor}
+        onClose={() => setNextBlockFor(null)}
+        programName={nextBlockFor?.programName}
+        preview={nextBlockFor?.nextBlock}
       />
     </ScrollView>
   );
