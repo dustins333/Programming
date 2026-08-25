@@ -5,6 +5,7 @@ import { getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { repUnit, repUnitHeader } from "../lib/programming/repUnit";
 import { fonts, colors, type } from "../lib/theme";
 import { formatDateMD } from "../lib/formatDate";
+import { dateInBoise } from "../lib/boiseDate";
 import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
 import { WeightCalculator } from "./WeightCalculator";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
@@ -535,6 +536,13 @@ export function ExerciseCard({
   onDataChanged,
   restReturnTo,
   compact,
+  // The one note on this lift (0087) — the same row the wall display and the
+  // coach's live session page read and write. `note` is this session's, if
+  // one has been written; `previousNote` is the last thing said about this
+  // lift in any earlier session, carried forward.
+  note = null,
+  previousNote = null,
+  onSaveNote,
 }) {
   const targetSets = getTargetSets(item);
   // A lift with nothing to load — inverted row, push-up, plank — logs reps
@@ -544,6 +552,9 @@ export function ExerciseCard({
   const tracksWeight = item.exercise?.tracks_weight !== false;
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
+  // True while the member is mid-edit, so an incoming refetch can't pull the
+  // saved text back over what she's currently typing.
+  const noteDirtyRef = useRef(false);
   const [saveState, setSaveState] = useState("idle"); // idle | pending | saving | saved | error
   const [saveRetry, setSaveRetry] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -572,6 +583,8 @@ export function ExerciseCard({
   const skipCompletionEffectRef = useRef(true);
   const wasFullyFilledRef = useRef(false);
   const cardRef = useRef(null);
+  const noteRef = useRef(note);
+  noteRef.current = note;
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
   const { startRest } = useRestTimer();
 
@@ -601,14 +614,28 @@ export function ExerciseCard({
               : { reps: "", weight: "" };
           })
         );
+        // Legacy fallback only. Notes written before 0087 live on the log
+        // rows themselves; seeding from one keeps an old note visible, and
+        // the moment it's edited it lands in the shared store instead. Never
+        // overrides a real shared note or something being typed right now.
         const notedRow = todaysSets.find((s) => s.notes);
-        if (notedRow) setNotes(notedRow.notes);
+        if (notedRow && !noteRef.current && !noteDirtyRef.current) setNotes(notedRow.notes);
       } catch (err) {
         console.error("Failed to load today's logged sets:", err);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded, completed]);
+
+  // Seed the box whenever the shared note arrives or changes underneath —
+  // a coach typing at the TV mid-session lands here. Deliberately does
+  // nothing when there is no shared note, so it can't wipe the legacy
+  // fallback seeded above.
+  useEffect(() => {
+    if (noteDirtyRef.current) return;
+    if (note?.body != null) setNotes(note.body);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note?.id]);
 
   const updateRow = (index, field, value) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
@@ -633,7 +660,6 @@ export function ExerciseCard({
               setNumber: i + 1,
               reps: row.reps === "" ? null : Number(row.reps) || null,
               weight: !tracksWeight || row.weight === "" ? null : Number(row.weight),
-              notes: notes === "" ? null : notes,
               source,
               session,
             })
@@ -652,8 +678,9 @@ export function ExerciseCard({
     // saveRetry is in here so the "Try again" button below re-runs this
     // effect: it only ever fired on a rows/notes change, so a member whose
     // last save failed had to edit something again to get another attempt.
+    // (The note is no longer in here — it saves on blur, not on this timer.)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, notes, saveRetry]);
+  }, [rows, saveRetry]);
 
   // Fills the checkbox in the moment every set holds both numbers. Fires
   // only on a genuine false→true transition, never on every keystroke, and
@@ -863,17 +890,6 @@ export function ExerciseCard({
               {coachNoteFor(item)}
             </Text>
           ) : null}
-          {/* Coaching note history's latest entry — written per client + LIFT
-              (exercise_coaching_notes, 0071), so unlike the programmed note
-              above it follows her into next week's version of this lift.
-              Rides the item through SessionLogger untouched. */}
-          {item.coachingNote ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#57534e", marginBottom: 8 }}>
-              <Text style={{ fontFamily: fonts.sansSemiBold, color: "#4d6142" }}>From your coach: </Text>
-              {item.coachingNote.body}
-              <Text style={{ color: colors.hint }}>{"  " + formatDateMD(item.coachingNote.created_at.slice(0, 10))}</Text>
-            </Text>
-          ) : null}
           {item.exercise.cues ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#57534e", marginBottom: 8 }}>
               <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Cues: </Text>
@@ -1063,14 +1079,58 @@ export function ExerciseCard({
             </View>
           ) : null}
 
-          {/* Note beside the rest timer on the card's bottom row. Blank —
-              the old prefilled prompt read as content that was already
-              there. */}
+          {/* The last thing said about this lift, carried forward from an
+              earlier session (0087). Shown ABOVE the box rather than
+              pre-filled into it: an untouched note must never be silently
+              re-saved as though it had been said again today, and seeing
+              last week's beside this week's empty box is how the note
+              actually reads as a running conversation. */}
+          {previousNote?.body && !notes ? (
+            <View
+              style={{
+                marginBottom: 8,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#f0ddd2",
+                backgroundColor: "#fdf6f2",
+                paddingHorizontal: 10,
+                paddingVertical: 7,
+              }}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.9, color: colors.primaryOnWhite, marginBottom: 2 }}
+              >
+                {"LAST TIME"}
+                {previousNote.created_at ? ` | ${formatDateMD(dateInBoise(new Date(previousNote.created_at)))}` : ""}
+              </Text>
+              <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, lineHeight: 16, color: "#57534e" }}>
+                {previousNote.body}
+                {previousNote.author_name ? (
+                  <Text style={{ color: colors.muted }}>{` — ${previousNote.author_name}`}</Text>
+                ) : null}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* ONE note field, shared by every surface (0087) — whatever is
+              typed here is the same note the wall display and the coach's
+              live session page show, and it carries into the next time this
+              lift is programmed. Saved on blur, and only when the text has
+              actually changed: the table is append-only, so a blur that
+              re-saved identical text would pile up duplicate rows. */}
           <RestFanGutter>
             <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10 }}>
               <TextInput
                 value={notes}
-                onChangeText={setNotes}
+                onChangeText={(t) => {
+                  noteDirtyRef.current = true;
+                  setNotes(t);
+                }}
+                onBlur={() => {
+                  noteDirtyRef.current = false;
+                  onSaveNote?.(item.exercise.id, notes);
+                }}
                 onFocus={() => scrollFieldIntoView(cardRef.current)}
                 multiline
                 placeholder="Notes"

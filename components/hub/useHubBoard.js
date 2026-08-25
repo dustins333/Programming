@@ -219,7 +219,14 @@ export function useHubBoard({ idlePoll = true } = {}) {
   // core.users to resolve author_id to a person.
   const saveNote = useCallback(
     async ({ userId, spcWorkoutId, weekNumber, exerciseId, body, authorId, authorName }) => {
-      await addCoachingNote({ userId, exerciseId, authorId: authorId ?? null, authorName: authorName ?? null, body, spcWorkoutId, weekNumber });
+      await addCoachingNote({
+        userId,
+        exerciseId,
+        authorId: authorId ?? null,
+        authorName: authorName ?? null,
+        body,
+        session: { spcWorkoutId, weekNumber },
+      });
       await refreshBoard();
     },
     [refreshBoard]

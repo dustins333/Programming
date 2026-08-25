@@ -13,7 +13,6 @@ import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
 import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
-import { listLatestCoachingNotes } from "../../lib/programming/coachingNotes";
 import {
   listActiveOneOffWorkoutsForUser,
   listWeekOneOffWorkoutsForUser,
@@ -566,13 +565,12 @@ export default function MyFitness() {
           listSpcWorkoutExercises(session.workout.id),
           listSpcWarmups(session.workout.id),
         ]);
-        // Latest coaching note per lift ("killed this — go up in weight",
-        // written mid-session at the hub or from the coach's phone). Own
-        // catch: a notes failure must never blank the session itself.
-        const coachingNotes = await listLatestCoachingNotes(
-          profile.id,
-          exerciseRows.map((ex) => ex.exercises.id)
-        ).catch(() => new Map());
+        // Lift notes are NOT fetched here any more. SessionLogger loads them
+        // itself for every program type (0087) — this branch only ever
+        // covered SPC, so group and one-off members saw no note at all, and
+        // it was keyed on values that come back identical after a refocus,
+        // so a note written at the TV mid-week never refreshed onto the
+        // phone until a full reload.
         if (cancelled) return;
         setSpcDetail({
           sessionNumber: session.sessionNumber,
@@ -589,7 +587,6 @@ export default function MyFitness() {
             tempo: ex.tempo,
             rest: ex.rest,
             notes: ex.notes,
-            coachingNote: coachingNotes.get(ex.exercises.id) ?? null,
           })),
         });
       } catch (err) {

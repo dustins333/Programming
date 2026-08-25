@@ -15,6 +15,8 @@ import { PressFade } from "./PressFade";
 import { fonts, colors, type } from "../lib/theme";
 import { toastError } from "../lib/toast";
 import { ExerciseCard } from "./ExerciseCard";
+import { addCoachingNote, listSessionExerciseNotes } from "../lib/programming/coachingNotes";
+import { useAuth } from "../lib/auth/AuthProvider";
 
 // The member's session-logging surface (design_handoff_member_lift_v1).
 //
@@ -72,6 +74,12 @@ export function SessionLogger({
   // null (not an empty Set) when the feature's off for this caller — that's
   // what tells ExerciseCard to render no checkbox at all.
   const [completions, setCompletions] = useState(null);
+  // Map<exerciseId, { current, previous }> — this session's note and the last
+  // thing said about this lift in any earlier session.
+  const [notesByExerciseId, setNotesByExerciseId] = useState(() => new Map());
+  // Whoever is signed in, i.e. the AUTHOR of anything typed here — distinct
+  // from userId, which is whose session is being logged.
+  const { profile } = useAuth();
 
   // Superset pairs render adjacently regardless of stored position — group by
   // supersetGroupId (falling back to the item's own id so an unlinked
@@ -145,6 +153,74 @@ export function SessionLogger({
   useEffect(() => {
     fetchCompletions();
   }, [fetchCompletions]);
+
+  // ---------------------------------------------------------------------
+  // The one note per lift (0087)
+  // ---------------------------------------------------------------------
+  // Batched for the whole session in a single round trip. These are the same
+  // rows the wall display and the coach's live session page read and write,
+  // so a note typed at the TV shows up here and a note typed here shows up
+  // there — which was the entire point of 0087.
+  //
+  // Refetched whenever the session or its exercise list changes, which also
+  // closes the staleness gap that made this look broken: My Fitness's own
+  // detail effect is keyed on values that come back identical after a
+  // refocus mid-week, so a note written at the TV never reached the phone
+  // until a full reload.
+  const sessionKey = [session?.groupWorkoutId, session?.spcWorkoutId, session?.oneOffWorkoutId]
+    .map((v) => v ?? "")
+    .join("|");
+
+  const fetchNotes = useCallback(async () => {
+    if (!userId || exercises.length === 0) return;
+    try {
+      const map = await listSessionExerciseNotes({
+        userId,
+        exerciseIds: exercises.map((item) => item.exercise.id),
+        session,
+      });
+      setNotesByExerciseId(map);
+    } catch (err) {
+      // Never fatal — a notes failure must not blank the session itself.
+      console.error("Failed to load lift notes:", err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, exerciseIdsKey, sessionKey]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
+
+  // Append-only (see coachingNotes.js): a later row supersedes rather than
+  // editing in place, so this must only write when the text actually changed
+  // or a save-on-blur box would pile up identical rows every time the member
+  // tapped away. Author is whoever is LOOKING at the screen, which is not
+  // necessarily whose session it is — a coach at the TV writing on a client's
+  // lift is the normal case.
+  const handleSaveNote = useCallback(
+    async (exerciseId, body) => {
+      const trimmed = (body ?? "").trim();
+      const existing = notesByExerciseId.get(exerciseId)?.current?.body ?? "";
+      // Clearing a note IS a real edit and writes an empty row that
+      // supersedes — but re-blurring unchanged text must not.
+      if (trimmed === existing.trim()) return;
+      try {
+        await addCoachingNote({
+          userId,
+          exerciseId,
+          authorId: profile?.id ?? null,
+          authorName: profile?.name ?? null,
+          body: trimmed,
+          session,
+        });
+        await fetchNotes();
+      } catch (err) {
+        toastError("Couldn't save that note", err);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionKey, notesByExerciseId, profile?.id, profile?.name, fetchNotes]
+  );
 
   const markCompleteFor = (item) => {
     if (exerciseCompletionType === "group") return markGroupExerciseComplete(userId, item.id);
@@ -230,6 +306,9 @@ export function SessionLogger({
       onDataChanged={onDataChanged}
       restReturnTo={restReturnTo}
       compact={group.length > 1}
+      note={notesByExerciseId.get(item.exercise.id)?.current ?? null}
+      previousNote={notesByExerciseId.get(item.exercise.id)?.previous ?? null}
+      onSaveNote={handleSaveNote}
     />
   );
 
