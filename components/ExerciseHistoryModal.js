@@ -7,6 +7,7 @@ import { todayInBoise, daysBetween } from "../lib/boiseDate";
 import { PressFade } from "./PressFade";
 import { TrueCoachMatchModal } from "./TrueCoachMatchModal";
 import { listMyTrueCoachImports } from "../lib/programming/truecoachImports";
+import { formatCount } from "../lib/programming/repUnit";
 import { fonts, colors } from "../lib/theme";
 
 // design_handoff_member_lasttime_v1. This is now the ONLY place a member sees
@@ -74,7 +75,7 @@ function agoLabel(date, today) {
 // read. Rows stay exactly as they were logged — a session with three sets does
 // NOT get padded out to today's four, because inventing an empty fourth pill
 // would read as a set she skipped rather than one that was never asked for.
-function SetPill({ set, tinted, tracksWeight = true }) {
+function SetPill({ set, tinted, tracksWeight = true, exercise }) {
   return (
     <View
       style={{
@@ -89,7 +90,7 @@ function SetPill({ set, tinted, tracksWeight = true }) {
       }}
     >
       <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 19, color: "#44403c" }}>
-        {set.reps ?? "–"}
+        {set.reps == null ? "–" : formatCount(set.reps, exercise)}
       </Text>
       {/* A reps-only lift has no weight line at all — a dash under every
           single pill reads as missing data rather than "there is none". */}
@@ -115,7 +116,7 @@ function SetPill({ set, tinted, tracksWeight = true }) {
 // exact session rather than whatever today's weekday would pick. Absent when
 // the card is being viewed read-only in My History, in which case the full
 // history screen keeps its normal back behaviour.
-export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exerciseName, datePerformed, returnTo, tracksWeight = true, fetchImports = listMyTrueCoachImports }) {
+export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exerciseName, datePerformed, returnTo, tracksWeight = true, exercise, fetchImports = listMyTrueCoachImports }) {
   const router = useRouter();
   const [logs, setLogs] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -309,7 +310,7 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
                       </View>
                       <View style={{ flexDirection: "row", gap: 7 }}>
                         {group.sets.map((s) => (
-                          <SetPill key={s.id} set={s} tinted={isLast} tracksWeight={tracksWeight} />
+                          <SetPill key={s.id} set={s} tinted={isLast} tracksWeight={tracksWeight} exercise={exercise} />
                         ))}
                       </View>
                       {group.notes ? (

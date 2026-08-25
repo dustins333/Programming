@@ -3,6 +3,7 @@ import { View, Text, Pressable, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../PressFade";
 import { toastError } from "../../lib/toast";
+import { repUnit } from "../../lib/programming/repUnit";
 import { fonts, colors } from "../../lib/theme";
 import { liftLabelsFor, warmupNumbersFor } from "../../lib/programming/sessionLabels";
 
@@ -15,12 +16,14 @@ import { liftLabelsFor, warmupNumbersFor } from "../../lib/programming/sessionLa
 const CARD_BORDER = "#ece7e1";
 
 export function prescriptionLine(ex) {
+  const u = repUnit(ex.exercises).suffix;
+  const tag = (v) => (v === "" || v == null ? "–" : `${v}${u}`);
   const scheme = ex.rep_scheme?.length ? ex.rep_scheme : null;
   if (scheme) {
     const unique = [...new Set(scheme.map((r) => (r ?? "").trim()))];
-    return `${scheme.length} × ${unique.length === 1 ? unique[0] || "–" : scheme.join(", ")}`;
+    return `${scheme.length} × ${unique.length === 1 ? tag(unique[0]) : scheme.map(tag).join(", ")}`;
   }
-  return `${ex.sets ?? "–"} × ${ex.reps || "–"}`;
+  return `${ex.sets ?? "–"} × ${tag(ex.reps)}`;
 }
 
 export function PrepEyebrow({ children, style }) {

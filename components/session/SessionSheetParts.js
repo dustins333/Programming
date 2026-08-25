@@ -1,4 +1,5 @@
 import { View, Text } from "react-native";
+import { formatCount } from "../../lib/programming/repUnit";
 import { fonts, colors, type } from "../../lib/theme";
 
 // Shared anatomy for the session sheet (design_handoff_member_block_v1,
@@ -143,7 +144,8 @@ export function ExerciseRow({ position, name, detail, last }) {
 // crushes the lift name if the sets have to share the line with it.
 //
 // sets: [{ reps, weight }] — a null/blank entry renders as the missed box.
-export function LoggedExerciseRow({ position, name, detail, sets, last }) {
+// exercise carries rep_unit so a carry's boxes read "60s", not "60".
+export function LoggedExerciseRow({ position, name, detail, sets, last, exercise }) {
   return (
     <View style={{ paddingHorizontal: 15, paddingVertical: 13, borderBottomWidth: last ? 0 : 1, borderBottomColor: ROW_DIVIDER }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: sets.length > 0 ? 9 : 0 }}>
@@ -178,7 +180,7 @@ export function LoggedExerciseRow({ position, name, detail, sets, last }) {
                 }}
               >
                 <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: missed ? "#b9705c" : INK_DEEP }}>
-                  {missed ? "–" : (set.reps ?? "–")}
+                  {missed || set.reps == null ? "–" : formatCount(set.reps, exercise)}
                 </Text>
                 <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: missed ? type.caption : 12.5, color: missed ? "#b9705c" : INK_DEEP }}>
                   {missed ? "missed" : set.weight != null ? `${set.weight} lb` : "–"}

@@ -3,6 +3,7 @@ import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { listLogsForDate, listLogsForSession } from "../lib/programming/memberPlan";
 import { formatDateMDY } from "../lib/formatDate";
+import { repUnit } from "../lib/programming/repUnit";
 import { fonts, colors } from "../lib/theme";
 
 // Groups one date's flat set rows by exercise, same shape
@@ -14,7 +15,7 @@ function groupByExercise(logs) {
   const byExercise = new Map();
   for (const row of logs) {
     if (!byExercise.has(row.exercise_id)) {
-      const group = { exerciseId: row.exercise_id, name: row.exercises?.name ?? "Exercise", sets: [], notes: null };
+      const group = { exerciseId: row.exercise_id, name: row.exercises?.name ?? "Exercise", exercise: row.exercises ?? null, sets: [], notes: null };
       byExercise.set(row.exercise_id, group);
       groups.push(group);
     }
@@ -114,7 +115,7 @@ export function SessionRow({ userId, session, title, onOpenClient }) {
                 </Text>
                 {g.sets.map((s) => (
                   <Text key={s.id} style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", marginTop: 1 }}>
-                    Set {s.set_number}: {s.reps ?? "–"} reps{s.weight ? ` @ ${s.weight}` : ""}
+                    Set {s.set_number}: {s.reps ?? "–"} {repUnit(g.exercise).word}{s.weight ? ` @ ${s.weight}` : ""}
                   </Text>
                 ))}
                 {g.notes ? (

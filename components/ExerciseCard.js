@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
+import { repUnit, repUnitHeader } from "../lib/programming/repUnit";
 import { fonts, colors, type } from "../lib/theme";
 import { formatDateMD } from "../lib/formatDate";
 import { ExerciseHistoryModal } from "./ExerciseHistoryModal";
@@ -68,24 +69,27 @@ const TARGET_TEXT = colors.hint;
 // either strings (this card's own live rows) or numbers (a logged history
 // row), so one helper covers both the "Logged …" collapsed line and the
 // "Last time …" header line.
-export function summarizeSets(entries) {
+export function summarizeSets(entries, exercise) {
   const val = (v) => (v === "" || v == null ? null : String(v));
+  const unit = (v) => (v == null ? "–" : `${v}${repUnit(exercise).suffix}`);
   const real = entries.filter((s) => val(s.reps) !== null || val(s.weight) !== null);
   if (real.length === 0) return null;
   const reps = real.map((s) => val(s.reps));
   const weights = real.map((s) => val(s.weight));
   if (new Set(reps).size <= 1 && new Set(weights).size <= 1) {
-    return `${real.length} × ${reps[0] ?? "–"}${weights[0] != null ? ` @ ${weights[0]} lb` : ""}`;
+    return `${real.length} × ${unit(reps[0])}${weights[0] != null ? ` @ ${weights[0]} lb` : ""}`;
   }
-  return real.map((s, i) => `${reps[i] ?? "–"}${weights[i] != null ? `@${weights[i]} lb` : ""}`).join(", ");
+  return real.map((s, i) => `${unit(reps[i])}${weights[i] != null ? `@${weights[i]} lb` : ""}`).join(", ");
 }
 
 // Only worth showing as a per-set breakdown when the sets actually differ —
 // a uniform scheme reads better as the existing flat "X sets × Y reps".
-export function repSchemeSummary(repScheme) {
+export function repSchemeSummary(repScheme, exercise) {
   if (!repScheme?.length) return null;
   const unique = [...new Set(repScheme)];
-  return unique.length > 1 ? repScheme.join(", ") : null;
+  if (unique.length <= 1) return null;
+  const suffix = repUnit(exercise).suffix;
+  return repScheme.map((n) => (n == null || n === "" ? "–" : `${n}${suffix}`)).join(", ");
 }
 
 export function getTargetSets(item) {
@@ -705,7 +709,7 @@ export function ExerciseCard({
   };
 
   const currentIndex = rows.findIndex((r) => !isLogged(r));
-  const loggedSummary = summarizeSets(rows);
+  const loggedSummary = summarizeSets(rows, item.exercise);
 
   const titleSize = compact ? 19 : 21;
 
@@ -888,12 +892,18 @@ export function ExerciseCard({
             </Text>
           ) : null}
 
-          {/* REPS / LB said once for the whole lift. A reps-only lift drops
-              the LB column altogether, so REPS takes the full width. */}
+          {/* The count column and LB, said once for the whole lift. A
+              reps-only lift drops the LB column altogether, so the count
+              takes the full width.
+
+              Naming the unit here is the whole of the time/distance design:
+              the header is already printed once per lift rather than beside
+              every set, so a Farmer Carry reads "TIME | LB" over "60 | 62"
+              and nothing repeats. The boxes themselves are untouched. */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: rowGap, marginBottom: 5 }}>
             <View style={{ width: setLabelWidth }} />
             <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1, color: MUTED }}>
-              REPS
+              {repUnitHeader(item.exercise)}
             </Text>
             {tracksWeight ? (
               <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1, color: MUTED }}>
@@ -1125,6 +1135,7 @@ export function ExerciseCard({
 
       <ExerciseHistoryModal
         tracksWeight={tracksWeight}
+        exercise={item.exercise}
         visible={historyOpen}
         onClose={() => setHistoryOpen(false)}
         userId={userId}

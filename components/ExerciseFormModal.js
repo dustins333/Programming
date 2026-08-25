@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { MUSCLE_GROUPS, MUSCLE_SUB_GROUPS, MOVEMENT_PATTERNS, muscleGroupLabel } from "../lib/programming/exercises";
+import { REP_UNITS, DEFAULT_REP_UNIT } from "../lib/programming/repUnit";
 import { fonts, colors } from "../lib/theme";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { KeyboardDoneButton } from "./KeyboardDoneButton";
@@ -11,7 +12,7 @@ import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../lib/
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
 
 function emptyForm(type) {
-  return { name: "", type, muscleGroups: [], movementPatterns: [], parentExerciseId: "", defaultSets: "", defaultReps: "", tracksWeight: true, cues: "", videoUrl: "" };
+  return { name: "", type, muscleGroups: [], movementPatterns: [], parentExerciseId: "", defaultSets: "", defaultReps: "", repUnit: DEFAULT_REP_UNIT, tracksWeight: true, cues: "", videoUrl: "" };
 }
 
 // Single-select against parent-less lift exercises — a variation can't
@@ -224,6 +225,7 @@ export function ExerciseFormModal({
               parentExerciseId: initialExercise.parent_exercise_id ?? "",
               defaultSets: initialExercise.default_sets != null ? String(initialExercise.default_sets) : "",
               defaultReps: initialExercise.default_reps || "",
+              repUnit: initialExercise.rep_unit ?? DEFAULT_REP_UNIT,
               tracksWeight: initialExercise.tracks_weight !== false,
               cues: initialExercise.cues || "",
               videoUrl: initialExercise.video_url || "",
@@ -482,10 +484,39 @@ export function ExerciseFormModal({
 
             {isWarmup ? null : (
               <>
+                {/* What the count column actually holds. The member's logging
+                    card prints this once above the boxes, so a carry reads
+                    "TIME | LB" and needs no other explaining. Anything but Reps
+                    is left out of the gym's volume total — reps x weight is
+                    only arithmetic when the reps are reps. */}
+                <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+                  Measured in
+                </Text>
+                <View className="mb-4 flex-row gap-2">
+                  {REP_UNITS.map((opt) => {
+                    const active = (form.repUnit ?? DEFAULT_REP_UNIT) === opt.key;
+                    return (
+                      <Pressable
+                        key={opt.key}
+                        onPress={() => setForm((f) => ({ ...f, repUnit: opt.key }))}
+                        className="flex-1 items-center rounded-lg py-2.5"
+                        style={{ backgroundColor: active ? colors.primary : "white", borderWidth: active ? 0 : 1, borderColor: "#d9d4cd" }}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          maxFontSizeMultiplier={1.1}
+                          style={{ fontFamily: active ? fonts.sansBold : fonts.sansSemiBold, color: active ? "white" : "#57534e", fontSize: 13 }}
+                        >
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
                 <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
                   Weight
                 </Text>
-                <View className="mb-1 flex-row gap-2">
+                <View className="mb-4 flex-row gap-2">
                   {[
                     { key: true, label: "Track weight" },
                     { key: false, label: "Reps only" },
@@ -505,12 +536,6 @@ export function ExerciseFormModal({
                     );
                   })}
                 </View>
-                <Text className="mb-4 text-xs" style={{ fontFamily: fonts.sans, color: "#a8907f" }}>
-                  {form.tracksWeight
-                    ? "The member logs reps and weight for every set."
-                    : "For lifts with nothing to load — an inverted row, a push-up, a plank. The member logs reps only, with no weight box, and this lift is left out of personal records."}
-                </Text>
-
                 <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
                   Muscle group (select all that apply)
                 </Text>

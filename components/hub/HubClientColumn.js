@@ -71,7 +71,7 @@ function summaryText(item, logs) {
   const tracksWeight = item.exercise?.tracks_weight !== false;
   const real = (logs ?? []).filter((r) => r.reps != null || r.weight != null);
   if (real.length === 0) {
-    return schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps });
+    return schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }, item.exercise);
   }
   return real
     .sort((a, b) => (a.set_number ?? 1) - (b.set_number ?? 1))
@@ -177,7 +177,7 @@ function RestingRow({ item, letter, logs, completed, hasNote, editOrder, isFirst
       </View>
       <View style={{ height: ROW_SCHEME_H, justifyContent: "center", marginLeft: indent }}>
         <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted }}>
-          {schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps })}
+          {schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }, item.exercise)}
           {item.rest ? ` | Rest ${item.rest}` : ""}
         </Text>
       </View>

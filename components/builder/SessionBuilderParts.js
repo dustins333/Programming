@@ -5,6 +5,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { summarizeRepScheme } from "../../lib/programming/exercises";
 import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
+import { repUnit } from "../../lib/programming/repUnit";
 import { fonts, colors } from "../../lib/theme";
 
 // The session builder, in pieces — shared by the group, SPC and SPC-template
@@ -41,13 +42,15 @@ export function formatRest(seconds) {
 
 // "4 × 8,8,6,6" when the sets differ, "3 × 12" when they don't — the same
 // summary the grid tiles and the member app show.
-export function schemeLabel(item) {
+export function schemeLabel(item, exercise = item.exercises) {
+  const u = repUnit(exercise).suffix;
+  const tag = (v) => (v === "" || v == null ? "—" : `${v}${u}`);
   const scheme = item.rep_scheme?.length ? item.rep_scheme : null;
   if (scheme) {
     const unique = [...new Set(scheme.map((r) => (r ?? "").trim()))];
-    return `${scheme.length} × ${unique.length === 1 ? unique[0] || "—" : scheme.join(",")}`;
+    return `${scheme.length} × ${unique.length === 1 ? tag(unique[0]) : scheme.map((r) => tag((r ?? "").trim())).join(",")}`;
   }
-  return `${item.sets ?? 0} × ${item.reps || "—"}`;
+  return `${item.sets ?? 0} × ${tag(item.reps)}`;
 }
 
 export function Eyebrow({ children, style }) {

@@ -204,6 +204,7 @@ export function SessionSheet({
                           name={ex.name}
                           detail={ex.detail}
                           sets={loggedSets?.get(ex.exerciseId) ?? []}
+                          exercise={ex.exercise}
                           last={i === group.items.length - 1}
                         />
                       ))}

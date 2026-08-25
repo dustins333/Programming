@@ -27,7 +27,7 @@ const PEACH_BORDER = "#f0ddd2";
 
 function prescriptionLine(item, letter) {
   return [
-    schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }),
+    schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }, item.exercise),
     item.tempo ? `Tempo ${item.tempo}` : null,
     item.rest ? `Rest ${formatRest(item.rest)}` : null,
     letter || null,
