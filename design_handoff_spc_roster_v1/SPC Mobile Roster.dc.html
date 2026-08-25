@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#eceae6;font-family:'Montserrat',sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#8a5140;text-decoration:none}a:hover{color:#a46a57}
+  *{box-sizing:border-box}
+  input{outline:none}
+  input::placeholder{color:#9a9187}
+  ::-webkit-scrollbar{width:0;height:0}
+  @keyframes kv-pulse{0%{box-shadow:0 0 0 0 rgba(143,180,115,.6)}70%{box-shadow:0 0 0 8px rgba(143,180,115,0)}100%{box-shadow:0 0 0 0 rgba(143,180,115,0)}}
+</style>
+</helmet>
+<div data-screen-label="SPC roster (mobile)" style="width:390px;height:844px;margin:0 auto;background:#faf8f6;position:relative;overflow:hidden;display:flex;flex-direction:column;border-radius:0px">
+
+  <div style="padding:20px 18px 0px 18px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between">
+      <div style="font-family:'Protest Strike';font-size:27px;color:#a46a57;line-height:1">SPC</div>
+      <div style="font-family:'Montserrat';font-weight:600;font-size:12.5px;color:#8a5140;cursor:pointer">Templates ›</div>
+    </div>
+    <div style="font-size:12px;color:#6f6862;margin-top:4px">{{ countLine }}</div>
+
+    <sc-if value="{{ liveEspresso }}" hint-placeholder-val="{{ true }}">
+      <div onClick="{{ noop }}" style="margin-top:14px;background:#33251f;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer">
+        {{ liveDot }}
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14.5px;color:#f7f3ee">Start live session</div>
+          <div style="font-size:11.5px;color:#a89a92;margin-top:1px">Run the floor from one screen</div>
+        </div>
+        <div style="font-size:18px;color:#a89a92">›</div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ liveClay }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ noop }}" style="margin-top:14px;background:#a46a57;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer">
+        {{ liveDot }}
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14.5px;color:#ffffff">Start live session</div>
+          <div style="font-size:11.5px;color:#f0d9d0;margin-top:1px">Run the floor from one screen</div>
+        </div>
+        <div style="font-size:18px;color:#f0d9d0">›</div>
+      </div>
+    </sc-if>
+
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search clients" style="flex:1;height:40px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:0px 13px;font-family:'Montserrat';font-size:13px;color:#2a211c">
+      <div onClick="{{ openSheet }}" style="height:40px;padding:0px 13px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;display:flex;align-items:center;gap:7px;cursor:pointer">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M1 2h12L8.5 7.5V12l-3-1.6V7.5L1 2z" stroke="#57534e" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+        <span style="font-weight:600;font-size:12.5px;color:#44403c">Filter</span>
+        <sc-if value="{{ filterCount }}" hint-placeholder-val="{{ false }}">
+          <span style="min-width:17px;height:17px;border-radius:99px;background:#a46a57;color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0px 4px">{{ filterCount }}</span>
+        </sc-if>
+      </div>
+    </div>
+
+    <sc-if value="{{ hasTokens }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+        <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="1">
+          <div onClick="{{ t.onClear }}" style="display:flex;align-items:center;gap:6px;background:#33251f;border-radius:99px;padding:5px 11px;cursor:pointer">
+            <span style="font-size:11.5px;font-weight:600;color:#f7f3ee">{{ t.label }}</span>
+            <span style="font-size:12px;color:#a89a92">×</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="flex:1;overflow-y:auto;padding:10px 18px 30px 18px">
+    <div style="display:flex;align-items:center;gap:16px;padding:2px 4px 8px 4px">
+      <span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">SORT</span>
+      <span onClick="{{ sortName.onPick }}" style="font-weight:{{ sortName.fw }};font-size:12px;color:{{ sortName.fg }};cursor:pointer">{{ sortName.label }}</span>
+      <span onClick="{{ sortStatus.onPick }}" style="margin-left:auto;font-weight:{{ sortStatus.fw }};font-size:12px;color:{{ sortStatus.fg }};cursor:pointer">{{ sortStatus.label }}</span>
+    </div>
+    <div style="background:#fff;border:1px solid #ece7e1;border-radius:14px;overflow:hidden">
+      <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:30px 20px;text-align:center;font-size:13px;color:#a8a29e">No clients match your filters.</div>
+      </sc-if>
+      <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+        <div onClick="{{ r.onOpen }}" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+          <div style="width:36px;height:36px;border-radius:99px;background:{{ r.toneBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <span style="font-weight:700;font-size:12px;color:{{ r.toneFg }}">{{ r.initials }}</span>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;color:#2a211c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</div>
+            <div style="font-size:11.5px;color:#6f6862;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.sub }}</div>
+          </div>
+          <sc-if value="{{ statusDots }}" hint-placeholder-val="{{ true }}">
+            <div style="text-align:right;flex-shrink:0">
+              <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px">
+                <span style="width:7px;height:7px;border-radius:99px;background:{{ r.toneFg }};display:inline-block"></span>
+                <span style="font-weight:600;font-size:11px;color:{{ r.toneFg }};white-space:nowrap">{{ r.statusShort }}</span>
+              </div>
+              <div style="font-size:10.5px;color:{{ r.leftColor }};margin-top:3px">{{ r.leftText }}</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ statusBadges }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:right;flex-shrink:0">
+              <span style="background:{{ r.toneBg }};color:{{ r.toneFg }};font-weight:700;font-size:9.5px;letter-spacing:0.5px;border-radius:99px;padding:4px 9px;text-transform:uppercase;white-space:nowrap">{{ r.statusShort }}</span>
+              <div style="font-size:10.5px;color:{{ r.leftColor }};margin-top:4px">{{ r.leftText }}</div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <sc-if value="{{ previewOpen }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Session preview" style="position:absolute;inset:0;background:#faf8f6;display:flex;flex-direction:column;z-index:20">
+      <div style="padding:16px 18px 0px 18px;border-bottom:1px solid #ece7e1;background:#faf8f6">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div onClick="{{ closePreview }}" style="font-weight:600;font-size:12.5px;color:#8a5140;cursor:pointer;padding:4px 0px">‹ SPC</div>
+          <span style="background:{{ pv.toneBg }};color:{{ pv.toneFg }};font-weight:700;font-size:9.5px;letter-spacing:0.5px;border-radius:99px;padding:4px 9px;text-transform:uppercase;white-space:nowrap">{{ pv.statusShort }}</span>
+        </div>
+        <div style="font-family:'Protest Strike';font-size:24px;color:#2a211c;margin-top:6px">{{ pv.name }}</div>
+        <div style="font-size:12px;color:#6f6862;margin-top:3px">{{ pv.meta }}</div>
+        <div style="display:flex;align-items:center;gap:7px;margin-top:9px;background:#fdf6f2;border:1px solid #f0ddd2;border-radius:9px;padding:7px 11px">
+          <svg width="12" height="13" viewBox="0 0 12 13" fill="none" style="flex-shrink:0"><path d="M2 1v11M2 1.5h7.5L7.5 4l2 2.5H2" stroke="#8a5140" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"></path></svg>
+          <span style="font-weight:700;font-size:9.5px;letter-spacing:0.8px;color:#b08968;flex-shrink:0">GOAL</span>
+          <span style="font-weight:600;font-size:12px;color:#44403c;min-width:0;line-height:1.35">{{ pv.goal }}</span>
+        </div>
+        <div style="display:flex;gap:0px;background:#efe9e2;border-radius:10px;padding:3px;margin:13px 0px 14px 0px">
+          <sc-for list="{{ pv.tabs }}" as="tb" hint-placeholder-count="2">
+            <div onClick="{{ tb.onPick }}" style="flex:1;text-align:center;padding:8px 0px;border-radius:8px;background:{{ tb.bg }};box-shadow:{{ tb.shadow }};cursor:pointer">
+              <span style="font-weight:700;font-size:12.5px;color:{{ tb.fg }}">{{ tb.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:16px 18px 26px 18px">
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:14px 15px;margin-bottom:14px">
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:10px">WARM UP</div>
+          <sc-for list="{{ pv.warmups }}" as="w" hint-placeholder-count="3">
+            <div style="display:flex;align-items:baseline;gap:10px;padding:4px 0px">
+              <span style="font-weight:700;font-size:11px;color:#a8a29e;width:12px">{{ w.n }}</span>
+              <span style="flex:1;font-weight:600;font-size:13px;color:#2a211c;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ w.name }}</span>
+              <span style="font-size:12px;color:#6f6862;white-space:nowrap;flex-shrink:0">{{ w.rx }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin:0px 2px 9px 2px">MAIN SESSION · {{ pv.weekLine }}</div>
+        <sc-for list="{{ pv.lifts }}" as="l" hint-placeholder-count="5">
+          <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:13px 15px;margin-bottom:10px">
+            <div style="display:flex;align-items:center;gap:11px">
+              <div style="width:30px;height:30px;border:1.5px solid #e0dbd4;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <span style="font-weight:700;font-size:12px;color:#8a5140">{{ l.label }}</span>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:13.5px;color:#2a211c">{{ l.name }}</div>
+                <div style="font-size:11.5px;color:#6f6862;margin-top:1px">{{ l.rx }}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-family:'Protest Strike';font-size:19px;color:#4d6142;line-height:1">{{ l.last }}</div>
+                <div style="font-size:10px;color:#a8a29e;margin-top:2px;white-space:nowrap">{{ l.lastCap }}</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:11px">
+              <sc-for list="{{ l.chips }}" as="c" hint-placeholder-count="4">
+                <div onClick="{{ c.onPick }}" style="flex:1;text-align:center;border:1px {{ c.bs }} {{ c.bd }};background:{{ c.bg }};border-radius:8px;padding:5px 2px;cursor:pointer">
+                  <div style="font-size:9px;font-weight:600;letter-spacing:0.5px;color:#a8a29e">{{ c.k }}</div>
+                  <div style="font-size:12.5px;font-weight:{{ c.fw }};color:{{ c.fg }};margin-top:1px">{{ c.v }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ l.note }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11.5px;color:#57534e;font-style:italic;margin-top:9px;border-top:1px solid #f4f1ec;padding-top:8px">“{{ l.note }}” <span style="font-style:normal;color:#a8a29e">{{ l.noteCap }}</span></div>
+            </sc-if>
+          </div>
+        </sc-for>
+
+        <div style="background:#fdf6f2;border:1px solid #f0ddd2;border-radius:12px;padding:13px 15px;margin-top:4px">
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#b08968;margin-bottom:6px">COACH NOTES</div>
+          <div style="font-size:12.5px;color:#44403c;line-height:1.5">{{ pv.coachNote }}</div>
+        </div>
+
+        <div style="display:flex;gap:9px;margin-top:16px">
+          <div onClick="{{ noop }}" style="flex:1;text-align:center;border:1px solid #d9d4cd;border-radius:10px;background:#fff;padding:11px 0px;cursor:pointer">
+            <span style="font-weight:600;font-size:13px;color:#44403c">Print sheet</span>
+          </div>
+          <div onClick="{{ noop }}" style="flex:1;text-align:center;border-radius:10px;background:#a46a57;padding:11px 0px;cursor:pointer">
+            <span style="font-weight:700;font-size:13px;color:#fff">Open client page</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;justify-content:flex-end">
+      <div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(42,33,28,0.4)"></div>
+      <div data-screen-label="Filter sheet" style="position:relative;background:#fff;border-radius:18px 18px 0px 0px;padding:10px 20px 26px 20px;max-height:70%;overflow-y:auto">
+        <div style="width:36px;height:4px;border-radius:99px;background:#e0dbd4;margin:4px auto 14px auto"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">STATUS</div>
+          <div onClick="{{ clearFilters }}" style="font-weight:600;font-size:12px;color:#8a5140;cursor:pointer">Clear all</div>
+        </div>
+        <sc-for list="{{ statusOptions }}" as="o" hint-placeholder-count="6">
+          <div onClick="{{ o.onPick }}" style="display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+            <span style="width:8px;height:8px;border-radius:99px;background:{{ o.dot }};display:inline-block"></span>
+            <span style="flex:1;font-weight:{{ o.fw }};font-size:13.5px;color:#2a211c">{{ o.label }}</span>
+            <span style="font-size:12px;color:#a8a29e">{{ o.count }}</span>
+            <span style="width:16px;font-weight:700;font-size:13px;color:#8a5140">{{ o.check }}</span>
+          </div>
+        </sc-for>
+        <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin:16px 0px 6px 0px">COACH</div>
+        <sc-for list="{{ coachOptions }}" as="o" hint-placeholder-count="3">
+          <div onClick="{{ o.onPick }}" style="display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+            <span style="flex:1;font-weight:{{ o.fw }};font-size:13.5px;color:#2a211c">{{ o.label }}</span>
+            <span style="font-size:12px;color:#a8a29e">{{ o.count }}</span>
+            <span style="width:16px;font-weight:700;font-size:13px;color:#8a5140">{{ o.check }}</span>
+          </div>
+        </sc-for>
+        <div onClick="{{ closeSheet }}" style="margin-top:16px;text-align:center;border-radius:10px;background:#33251f;padding:12px 0px;cursor:pointer">
+          <span style="font-weight:700;font-size:13px;color:#f7f3ee">{{ doneLabel }}</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;rowStatusStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Dot + label&quot;,&quot;options&quot;:[&quot;Dot + label&quot;,&quot;Tinted badge&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Roster rows&quot;},&quot;liveButton&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Espresso&quot;,&quot;options&quot;:[&quot;Espresso&quot;,&quot;Clay&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Live session button&quot;}}">
+class Component extends DCLogic {
+  state = { search: "", status: null, coach: null, sheet: false, preview: null, sess: 0, week: null, sort: "name", dir: 1 };
+
+  TONES = {
+    urgent: { bg: "#fdece5", fg: "#b23a22" },
+    needsAction: { bg: "#fdf3e3", fg: "#8a6320" },
+    onTrack: { bg: "#e3ead9", fg: "#4d6142" },
+    paused: { bg: "#f1efec", fg: "#78716c" },
+  };
+  STATUS = {
+    new_program_asap: { tone: "urgent", short: "Program ASAP", label: "New Program ASAP" },
+    needs_printed: { tone: "needsAction", short: "Needs printed", label: "Needs Printed" },
+    coming_up_next_week: { tone: "needsAction", short: "Up next week", label: "Coming Up Next Week" },
+    printed_ready: { tone: "onTrack", short: "Ready", label: "Printed & Ready" },
+    paused: { tone: "paused", short: "Paused", label: "Paused" },
+  };
+  ORDER = ["new_program_asap", "needs_printed", "coming_up_next_week", "printed_ready", "paused"];
+
+  DATA = [
+    { id: "m1", goal: "Back squat 225 by ski season", name: "Maddie Kerr", coach: "Terra", perWeek: 2, status: "new_program_asap", daysLeft: -2, ends: "Aug 22", block: "Block 3", week: 4, of: 4, factor: 1, coachNote: "Wants to push squat before ski season. Keep hinge volume moderate — low back lit up in Block 2." },
+    { id: "m2", goal: "First strict pull-up", name: "Jess Alvarado", coach: "Terra", perWeek: 3, status: "needs_printed", daysLeft: 3, ends: "Aug 28", block: "Block 2", week: 4, of: 4, factor: 0.8, coachNote: "Next block: swap sled for hill sprints (her ask). Bench moving fast — jump 10 lb, not 5." },
+    { id: "m3", goal: "405 deadlift", name: "Colin Reyes", coach: "Dustin", perWeek: 2, status: "needs_printed", daysLeft: 5, ends: "Aug 30", block: "Block 5", week: 3, of: 4, factor: 1.4, coachNote: "Deadlift PR attempt week 1 of next block. He travels 9/2–9/6 — front-load the week." },
+    { id: "m4", goal: "Consistency — 2×/wk all fall", name: "Sarah Otte", coach: "Dustin", perWeek: 2, status: "coming_up_next_week", daysLeft: 6, ends: "Aug 31", block: "Block 1", week: 4, of: 4, factor: 0.7, coachNote: "First block done — she's hooked. Keep movements the same one more block, just add load." },
+    { id: "m5", goal: "Pain-free overhead press", name: "Tom Brackett", coach: "Dustin", perWeek: 2, status: "coming_up_next_week", daysLeft: 7, ends: "Sep 1", block: "Block 4", week: 3, of: 4, factor: 1.2, coachNote: "Shoulder cleared by PT. Reintroduce overhead pressing light, 3×10." },
+    { id: "m6", goal: "Add 10 lb lean mass", name: "Ben Fischer", coach: "Terra", perWeek: 2, status: "printed_ready", daysLeft: 11, ends: "Sep 5", block: "Block 2", week: 2, of: 4, factor: 1.1, coachNote: "Sheet printed and in the binder. Watch lunge knee cave on the heavy set." },
+    { id: "m7", goal: "Hold strength through marathon prep", name: "Ana Whitfield", coach: "Dustin", perWeek: 3, status: "printed_ready", daysLeft: 15, ends: "Sep 9", block: "Block 6", week: 2, of: 4, factor: 0.9, coachNote: "Marathon in October — this block is maintenance. Don't chase weight jumps." },
+    { id: "m8", goal: "Bodyweight back squat", name: "Priya Nair", coach: "Terra", perWeek: 2, status: "printed_ready", daysLeft: 18, ends: "Sep 12", block: "Block 3", week: 1, of: 4, factor: 0.75, coachNote: "New block started Monday. She likes knowing the why — write cues on the sheet." },
+    { id: "m9", goal: "150 lb RDL with confident grip", name: "Kate Donnelly", coach: "Terra", perWeek: 2, status: "printed_ready", daysLeft: 21, ends: "Sep 15", block: "Block 2", week: 1, of: 4, factor: 0.85, coachNote: "Grip is the limiter on RDL — straps on top sets only." },
+    { id: "m10", goal: "Restart at 2×/wk in September", name: "Marcus Lee", coach: "Dustin", perWeek: 1, status: "paused", daysLeft: null, ends: null, block: null, week: null, of: null, factor: 1, coachNote: "Paused through August — travel. Check in Sep 1 about restarting at 2×/wk." },
+  ];
+
+  SESSIONS = [
+    {
+      n: 1, title: "Session 1",
+      warmups: [
+        { name: "Bike or row", rx: "5 min easy" },
+        { name: "World's greatest stretch", rx: "2 × 5/side" },
+        { name: "Goblet squat", rx: "2 × 8" },
+      ],
+      lifts: [
+        { label: "A", name: "Back Squat", sets: 4, reps: "5", rest: "2:30", base: [185, 190, 195, null], repsLog: [5, 5, 4], notesLog: [null, "Depth felt way better at the heavier weight, knee was quiet.", "Last set was a grind, only got 4."] },
+        { label: "B", name: "Romanian Deadlift", sets: 3, reps: "8", rest: "1:30", base: [155, 165, 170, null], repsLog: [8, 8, 8] },
+        { label: "C1", name: "Walking Lunge", sets: 3, reps: "10/leg", rest: "—", base: [40, 45, 50, null], repsLog: [10, 10, 10] },
+        { label: "C2", name: "Hanging Knee Raise", sets: 3, reps: "12", rest: "1:00", base: ["BW", "BW", "BW", null], repsLog: [12, 12, 15] },
+        { label: "D", name: "Sled Push", sets: 4, reps: "40 yd", rest: "1:00", base: [90, 115, 115, null], notesLog: [null, "Jump from 90 felt big.", "115 was a grind on the last two runs."] },
+      ],
+    },
+    {
+      n: 2, title: "Session 2",
+      warmups: [
+        { name: "Band pull-apart", rx: "2 × 15" },
+        { name: "Scap push-up", rx: "2 × 10" },
+        { name: "Half-kneeling press", rx: "2 × 8/side" },
+      ],
+      lifts: [
+        { label: "A", name: "Bench Press", sets: 4, reps: "6", rest: "2:00", base: [115, 120, 125, null], repsLog: [6, 6, 5], notesLog: ["Little pinch in the left shoulder.", "Tucked elbows, way better.", "Shoulder pinch gone with elbows tucked."] },
+        { label: "B", name: "One-arm DB Row", sets: 3, reps: "10", rest: "1:30", base: [45, 50, 50, null], repsLog: [10, 10, 10] },
+        { label: "C1", name: "Seated DB Press", sets: 3, reps: "10", rest: "—", base: [25, 30, 30, null], repsLog: [10, 9, 10] },
+        { label: "C2", name: "Lat Pulldown", sets: 3, reps: "12", rest: "1:00", base: [85, 90, 95, null], repsLog: [12, 12, 12] },
+        { label: "D", name: "Farmer Carry", sets: 3, reps: "50 yd", rest: "1:00", base: [70, 70, 80, null] },
+      ],
+    },
+  ];
+
+  round5(n) { return Math.max(5, Math.round(n / 5) * 5); }
+
+  renderVals() {
+    const s = this.state;
+    const rowStatusStyle = this.props.rowStatusStyle ?? "Dot + label";
+    const liveButton = this.props.liveButton ?? "Espresso";
+    const q = s.search.trim().toLowerCase();
+
+    const searched = this.DATA.filter((c) => !q || c.name.toLowerCase().includes(q));
+    const visible = searched.filter((c) => (!s.status || c.status === s.status) && (!s.coach || c.coach === s.coach));
+
+    // Status sort = urgency order (same order as the status system), then
+    // days left within a status; name sort is plain alphabetical.
+    const sorted = [...visible].sort((a, b) => {
+      let cmp;
+      if (s.sort === "name") cmp = a.name.localeCompare(b.name);
+      else {
+        cmp = this.ORDER.indexOf(a.status) - this.ORDER.indexOf(b.status);
+        if (cmp === 0) cmp = (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999);
+        if (cmp === 0) cmp = a.name.localeCompare(b.name);
+      }
+      return cmp * s.dir;
+    });
+    const rows = sorted.map((c) => {
+      const st = this.STATUS[c.status];
+      const tone = this.TONES[st.tone];
+      const ended = c.daysLeft != null && c.daysLeft < 0;
+      return {
+        name: c.name,
+        initials: c.name.split(" ").map((p) => p[0]).join(""),
+        sub: c.status === "paused" ? `${c.coach} · paused` : c.block ? `${c.coach} · ${c.perWeek}×/wk · ${c.block}, wk ${c.week} of ${c.of}` : `${c.coach} · ${c.perWeek}×/wk · no block yet`,
+        toneBg: tone.bg,
+        toneFg: tone.fg,
+        statusShort: st.short,
+        leftText: c.daysLeft == null ? "" : ended ? `ended ${Math.abs(c.daysLeft)}d ago` : `${c.daysLeft}d left`,
+        leftColor: ended ? "#b23a22" : "#a8a29e",
+        onOpen: () => this.setState({ preview: c.id, sess: 0, week: null }),
+      };
+    });
+
+    const runOut = searched.filter((c) => c.daysLeft != null && c.daysLeft >= 0 && c.daysLeft <= 7).length;
+    const countLine = `${searched.length} clients${runOut ? ` · ${runOut} run out this week` : ""}`;
+
+    const countFor = (fn) => searched.filter(fn).length;
+    const statusOptions = [{ key: null, label: "All statuses", dot: "#d6d1ca" }]
+      .concat(this.ORDER.map((k) => ({ key: k, label: this.STATUS[k].label, dot: this.TONES[this.STATUS[k].tone].fg })))
+      .map((o) => ({
+        label: o.label, dot: o.dot,
+        count: String(countFor((c) => (o.key ? c.status === o.key : true))),
+        fw: s.status === o.key ? "700" : "500",
+        check: s.status === o.key ? "✓" : "",
+        onPick: () => this.setState({ status: o.key }),
+      }));
+    const coachOptions = [{ key: null, label: "All coaches" }, { key: "Terra", label: "Terra" }, { key: "Dustin", label: "Dustin" }].map((o) => ({
+      label: o.label,
+      count: String(countFor((c) => (o.key ? c.coach === o.key : true))),
+      fw: s.coach === o.key ? "700" : "500",
+      check: s.coach === o.key ? "✓" : "",
+      onPick: () => this.setState({ coach: o.key }),
+    }));
+
+    const tokens = [];
+    if (s.status) tokens.push({ label: this.STATUS[s.status].label, onClear: () => this.setState({ status: null }) });
+    if (s.coach) tokens.push({ label: `Coach: ${s.coach}`, onClear: () => this.setState({ coach: null }) });
+
+    let pv = null;
+    const client = s.preview ? this.DATA.find((c) => c.id === s.preview) : null;
+    if (client) {
+      const st = this.STATUS[client.status];
+      const tone = this.TONES[st.tone];
+      const sess = this.SESSIONS[s.sess] ?? this.SESSIONS[0];
+      const weekNow = client.week ?? 4;
+      // Global selected week: chips are a week picker shared by every lift.
+      const lastLogged = Math.max(0, weekNow - 2);
+      const sel = s.week != null ? s.week : lastLogged;
+      const lifts = sess.lifts.map((l) => {
+        const weeks = l.base.map((v, i) => {
+          if (i + 1 >= weekNow || v == null) return null;
+          return typeof v === "number" ? this.round5(v * client.factor) : v;
+        });
+        const chips = weeks.map((v, i) => {
+          const active = i === sel;
+          const thisWk = i + 1 === weekNow;
+          const reps = l.repsLog && v != null ? ` × ${l.repsLog[i]}` : "";
+          return {
+            k: thisWk ? "NOW" : `W${i + 1}`,
+            v: v == null ? "—" : `${v}${reps}`,
+            bg: active ? "#e3ead9" : v != null ? "#fff" : "transparent",
+            bd: active ? "#4d6142" : v != null ? "#ece7e1" : "#d6d1ca",
+            bs: v == null ? "dashed" : "solid",
+            fg: active ? "#4d6142" : v != null ? "#57534e" : "#a8a29e",
+            fw: active ? "700" : "600",
+            onPick: v != null ? () => this.setState({ week: i }) : () => {},
+          };
+        });
+        const selVal = weeks[sel];
+        return {
+          label: l.label, name: l.name,
+          rx: `${l.sets} × ${l.reps}${l.rest !== "—" ? ` · rest ${l.rest}` : ""}`,
+          last: selVal != null ? String(selVal) : "—",
+          lastCap: selVal != null ? `wk ${sel + 1}${l.repsLog ? ` · ${l.repsLog[sel]} reps` : ""}` : `wk ${sel + 1} · not logged`,
+          chips,
+          note: (l.notesLog && l.notesLog[sel]) ?? false,
+          noteCap: `— client, wk ${sel + 1}`,
+        };
+      });
+      pv = {
+        name: client.name,
+        goal: client.goal,
+        toneBg: tone.bg, toneFg: tone.fg, statusShort: st.short,
+        meta: client.block ? `${client.block} · Week ${client.week} of ${client.of} · ends ${client.ends} · Coach ${client.coach}` : `No current block · Coach ${client.coach}`,
+        weekLine: `WEEK ${weekNow} OF ${client.of ?? 4}`,
+        tabs: this.SESSIONS.map((x, i) => ({
+          label: x.title,
+          bg: i === s.sess ? "#fff" : "transparent",
+          fg: i === s.sess ? "#2a211c" : "#78716c",
+          shadow: i === s.sess ? "0 1px 3px rgba(42,33,28,0.12)" : "none",
+          onPick: () => this.setState({ sess: i }),
+        })),
+        warmups: sess.warmups.map((w, i) => ({ n: String(i + 1), name: w.name, rx: w.rx })),
+        lifts,
+        coachNote: client.coachNote,
+      };
+    }
+
+    const liveDot = React.createElement("span", {
+      style: { width: 10, height: 10, borderRadius: 99, background: "#8fb473", flexShrink: 0, animation: "kv-pulse 2.2s infinite" },
+    });
+
+    const sortTabs = [
+      { key: "name", label: "Name" },
+      { key: "status", label: "Status" },
+    ].map((t) => {
+      const active = s.sort === t.key;
+      return {
+        label: active ? `${t.label} ${s.dir === 1 ? "↓" : "↑"}` : t.label,
+        fg: active ? "#2a211c" : "#a8a29e",
+        fw: active ? "700" : "600",
+        onPick: () => (active ? this.setState({ dir: -s.dir }) : this.setState({ sort: t.key, dir: 1 })),
+      };
+    });
+
+    return {
+      countLine, rows, empty: rows.length === 0, sortName: sortTabs[0], sortStatus: sortTabs[1],
+      search: s.search,
+      onSearch: (e) => this.setState({ search: e.target.value }),
+      openSheet: () => this.setState({ sheet: true }),
+      closeSheet: () => this.setState({ sheet: false }),
+      clearFilters: () => this.setState({ status: null, coach: null }),
+      sheetOpen: s.sheet,
+      statusOptions, coachOptions,
+      tokens, hasTokens: tokens.length > 0,
+      filterCount: tokens.length > 0 ? String(tokens.length) : false,
+      doneLabel: `Show ${visible.length} client${visible.length === 1 ? "" : "s"}`,
+      previewOpen: Boolean(pv), pv: pv ?? {},
+      closePreview: () => this.setState({ preview: null }),
+      statusDots: rowStatusStyle === "Dot + label",
+      statusBadges: rowStatusStyle === "Tinted badge",
+      liveEspresso: liveButton === "Espresso",
+      liveClay: liveButton === "Clay",
+      liveDot,
+      noop: () => {},
+    };
+  }
+}
+</script>
+</body>
+</html>

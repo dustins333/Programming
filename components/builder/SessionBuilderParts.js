@@ -5,7 +5,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { summarizeRepScheme } from "../../lib/programming/exercises";
 import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
-import { repUnit } from "../../lib/programming/repUnit";
+import { formatRest, schemeLabel } from "../../lib/programming/prescription";
 import { fonts, colors } from "../../lib/theme";
 
 // The session builder, in pieces — shared by the group, SPC and SPC-template
@@ -29,29 +29,10 @@ export const BUILDER_CARD_BORDER = "#ece7e1";
 const CARD_BORDER = BUILDER_CARD_BORDER;
 const REST_CHIPS = [60, 90, 120, 180];
 
-// Coaches say "sixty" and "ninety", not "one minute" and "one thirty" — so
-// anything under two minutes stays in seconds, and only whole minutes from
-// 2:00 up get clock notation.
-export function formatRest(seconds) {
-  if (seconds == null || seconds === "") return "—";
-  const n = Number(String(seconds).replace(/[^0-9]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return String(seconds);
-  if (n < 120 || n % 60 !== 0) return `${n}s`;
-  return `${n / 60}:00`;
-}
-
-// "4 × 8,8,6,6" when the sets differ, "3 × 12" when they don't — the same
-// summary the grid tiles and the member app show.
-export function schemeLabel(item, exercise = item.exercises) {
-  const u = repUnit(exercise).suffix;
-  const tag = (v) => (v === "" || v == null ? "—" : `${v}${u}`);
-  const scheme = item.rep_scheme?.length ? item.rep_scheme : null;
-  if (scheme) {
-    const unique = [...new Set(scheme.map((r) => (r ?? "").trim()))];
-    return `${scheme.length} × ${unique.length === 1 ? tag(unique[0]) : scheme.map((r) => tag((r ?? "").trim())).join(",")}`;
-  }
-  return `${item.sets ?? 0} × ${tag(item.reps)}`;
-}
+// formatRest / schemeLabel live in lib/programming/prescription.js — pure,
+// so a phone screen can read a prescription without pulling @dnd-kit in with
+// it. Re-exported here so every existing call site is unchanged.
+export { formatRest, schemeLabel };
 
 export function Eyebrow({ children, style }) {
   return (
