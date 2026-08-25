@@ -3,7 +3,7 @@ import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator } from "rea
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { listSessionsSinceAllUsers } from "../../lib/programming/coachLogs";
-import { todayInBoise } from "../../lib/boiseDate";
+import { todayInBoise, formatTimeInBoise } from "../../lib/boiseDate";
 import { SessionRow } from "../RecentSessionsCard";
 import { PressFade } from "../PressFade";
 import { fonts, colors } from "../../lib/theme";
@@ -124,6 +124,13 @@ export function SessionsTodayModal({ visible, onClose }) {
                   userId={session.userId}
                   session={session}
                   title={session.userName}
+                  avatarName={session.userName}
+                  // The list is already scoped to today, so the date every
+                  // row would otherwise print says nothing — the time it was
+                  // finalized does, and puts the day in order at a glance.
+                  subtitle={[formatTimeInBoise(session.completedAt), session.label, session.sessionTitle]
+                    .filter(Boolean)
+                    .join(" · ")}
                   onOpenClient={() => {
                     onClose();
                     router.push(`/(coach)/clients/${session.userId}`);

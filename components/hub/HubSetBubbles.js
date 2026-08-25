@@ -34,7 +34,13 @@ export function hubBubbleSize(setCount) {
   return "md";
 }
 
-export function SetBubble({ reps, weight, target, tracksWeight = true, size = "md", tone = "logged", stacked = true }) {
+// `suffix` names what the big number counts when it isn't plain reps ("s",
+// "ft" — repUnit's own suffixes). Off by default: the hub board and the
+// member card both print the unit once in a column header above the row, so
+// repeating it on every bubble there would be noise. A reader with no such
+// header (the coach's session popup) passes it, or a 60-second carry reads
+// as 60 reps.
+export function SetBubble({ reps, weight, target, tracksWeight = true, size = "md", tone = "logged", stacked = true, suffix = "" }) {
   const s = SIZES[size] ?? SIZES.md;
   const logged = reps != null || weight != null;
   const showWeight = tracksWeight && weight != null;
@@ -66,7 +72,7 @@ export function SetBubble({ reps, weight, target, tracksWeight = true, size = "m
         }}
         numberOfLines={1}
       >
-        {logged ? reps ?? "–" : target ?? "–"}
+        {logged ? (reps == null ? "–" : `${reps}${suffix}`) : target ?? "–"}
       </Text>
       {showWeight ? (
         <Text
@@ -87,7 +93,7 @@ export function SetBubble({ reps, weight, target, tracksWeight = true, size = "m
 // sets: log rows (or {reps, weight} drafts) keyed by set_number.
 // targetCount / targetFor fill the row out to the programmed set count with
 // dashed placeholders, so "3 × 8 but only two done" is visible as a shape.
-export function SetBubbleRow({ sets = [], targetCount = 0, targetFor, tracksWeight = true, size = "md", tone = "logged", wrap = true }) {
+export function SetBubbleRow({ sets = [], targetCount = 0, targetFor, tracksWeight = true, size = "md", tone = "logged", wrap = true, suffix = "" }) {
   const real = (sets ?? []).filter((r) => r.reps != null || r.weight != null);
   const maxSet = real.reduce((m, r) => Math.max(m, r.set_number ?? 0), 0);
   const count = Math.max(targetCount, maxSet, real.length);
@@ -104,6 +110,7 @@ export function SetBubbleRow({ sets = [], targetCount = 0, targetFor, tracksWeig
         size={size}
         tone={tone}
         stacked={wrap}
+        suffix={suffix}
       />
     );
   }
