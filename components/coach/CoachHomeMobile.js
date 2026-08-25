@@ -11,6 +11,7 @@ import { listMembers } from "../../lib/programming/clients";
 import { formatDateMDY } from "../../lib/formatDate";
 import { CoachShell } from "../CoachShell";
 import { PressFade } from "../PressFade";
+import { SessionsTodayModal } from "./SessionsTodayModal";
 import { useKeyboardInset } from "../../lib/useKeyboardInset";
 import { fonts, colors } from "../../lib/theme";
 
@@ -69,10 +70,14 @@ function roundWeight(w) {
 // A figure that failed to load renders as an em-dash, never 0 — a broken
 // query must not be able to say "0 sessions logged", which is a number a
 // coach would act on. getGymToday returns null for exactly this reason.
-function PulseFigure({ value, label }) {
+function PulseFigure({ value, label, onPress }) {
   const missing = value === null || value === undefined;
+  const Wrap = onPress ? PressFade : View;
   return (
-    <View style={{ flex: 1, alignItems: "center" }}>
+    <Wrap
+      {...(onPress ? { onPress, accessibilityLabel: `${label}: open details` } : {})}
+      style={{ flex: 1, alignItems: "center" }}
+    >
       <Text style={{ fontFamily: fonts.display, fontSize: 26, color: missing ? "rgba(247,243,238,.35)" : "#f7f3ee", lineHeight: 30 }}>
         {missing ? "—" : value}
       </Text>
@@ -83,7 +88,7 @@ function PulseFigure({ value, label }) {
       >
         {label}
       </Text>
-    </View>
+    </Wrap>
   );
 }
 
@@ -91,7 +96,7 @@ function PulseFigure({ value, label }) {
 // this is three pure training figures now. Volume is the one that says
 // something the other two can't — five sessions is five sessions whether it
 // was a deload or a heavy day.
-function PulseBand({ gym }) {
+function PulseBand({ gym, onOpenSessions }) {
   return (
     <View style={{ backgroundColor: BAND_BG, borderRadius: 18, paddingVertical: 16, paddingHorizontal: 12, overflow: "hidden" }}>
       {/* Corner warmth only. The desktop hero uses a 190px blob, but this
@@ -108,7 +113,7 @@ function PulseBand({ gym }) {
         TODAY IN THE GYM
       </Text>
       <View style={{ flexDirection: "row" }}>
-        <PulseFigure value={gym?.sessions} label="sessions logged" />
+        <PulseFigure value={gym?.sessions} label="sessions logged" onPress={onOpenSessions} />
         <View style={{ width: 1, backgroundColor: "rgba(247,243,238,.13)" }} />
         <PulseFigure value={compactNumber(gym?.volume)} label="lb lifted" />
         <View style={{ width: 1, backgroundColor: "rgba(247,243,238,.13)" }} />
@@ -509,6 +514,7 @@ function RosterChip({ label, value, accent, onPress }) {
 export function CoachHomeMobile() {
   const router = useRouter();
   const [lookupOpen, setLookupOpen] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
   const [sheet, setSheet] = useState(null); // "nutrition" | "spc" | "group" | "payroll"
   const { profile, stats, extras, dismissals, setDismissals, nutritionToday, loadError, reload: load } = useCoachDashboard();
 
@@ -582,7 +588,7 @@ export function CoachHomeMobile() {
           </Text>
         </View>
 
-        <PulseBand gym={safeExtras.gym} />
+        <PulseBand gym={safeExtras.gym} onOpenSessions={() => setSessionsOpen(true)} />
 
         <PressFade
           onPress={() => setLookupOpen(true)}
@@ -716,6 +722,7 @@ export function CoachHomeMobile() {
       </ScrollView>
 
       <ClientLookupSheet visible={lookupOpen} onClose={() => setLookupOpen(false)} router={router} />
+      <SessionsTodayModal visible={sessionsOpen} onClose={() => setSessionsOpen(false)} />
 
       <Sheet
         visible={sheet === "nutrition"}

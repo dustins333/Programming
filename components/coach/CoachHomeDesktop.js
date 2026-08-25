@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
 import { computeAttentionItems, filterDismissedItems } from "../../lib/programming/coachDashboard";
 import { buildLaunchCards, decorateAttentionItems, filterAttentionByPermission, CARD_TONES } from "../../lib/programming/launchpad";
@@ -9,6 +10,7 @@ import { useCoachDashboard } from "../../lib/programming/useCoachDashboard";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
 import { SessionPreviewModal } from "../../components/SessionPreviewModal";
+import { SessionsTodayModal } from "./SessionsTodayModal";
 import { CoachShell } from "../../components/CoachShell";
 import { PressFade } from "../../components/PressFade";
 import { fonts, colors } from "../../lib/theme";
@@ -269,9 +271,11 @@ function NeedsYou({ items, router, onDismiss }) {
 
 /* ------------------------------------------------------------ today panel */
 
-function TodayRow({ label, value, suffix, valueColor = "#2a211c" }) {
+function TodayRow({ label, value, suffix, valueColor = "#2a211c", onPress }) {
+  const Row = onPress ? PressFade : View;
   return (
-    <View
+    <Row
+      {...(onPress ? { onPress, accessibilityLabel: `${label}: open details` } : {})}
       style={{
         borderTopWidth: 1,
         borderTopColor: "#f4f1ec",
@@ -283,11 +287,14 @@ function TodayRow({ label, value, suffix, valueColor = "#2a211c" }) {
       }}
     >
       <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#44403c" }}>{label}</Text>
-      <Text style={{ fontFamily: fonts.display, fontSize: 19, color: valueColor }}>
-        {value}
-        {suffix ? <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e" }}>{suffix}</Text> : null}
-      </Text>
-    </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Text style={{ fontFamily: fonts.display, fontSize: 19, color: valueColor }}>
+          {value}
+          {suffix ? <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e" }}>{suffix}</Text> : null}
+        </Text>
+        {onPress ? <Ionicons name="chevron-forward" size={14} color="#c9c4bd" /> : null}
+      </View>
+    </Row>
   );
 }
 
@@ -296,7 +303,7 @@ function TodayRow({ label, value, suffix, valueColor = "#2a211c" }) {
 // able to say it.
 const show = (n) => (n == null ? "—" : String(n));
 
-function TodayPanel({ gym, nutritionOnly }) {
+function TodayPanel({ gym, nutritionOnly, onOpenSessions }) {
   const rows = nutritionOnly
     ? [
         { label: "Logged today", value: show(gym.nutrition?.logged), suffix: gym.nutrition ? ` / ${gym.nutrition.total}` : null },
@@ -305,7 +312,7 @@ function TodayPanel({ gym, nutritionOnly }) {
         { label: "Unread messages", value: show(gym.unread) },
       ]
     : [
-        { label: "Sessions logged", value: show(gym.sessions) },
+        { label: "Sessions logged", value: show(gym.sessions), onPress: onOpenSessions },
         { label: "Nutrition logged", value: show(gym.nutrition?.logged), suffix: gym.nutrition ? ` / ${gym.nutrition.total}` : null },
         { label: "New PRs", value: show(gym.prs), valueColor: "#4d6142" },
         { label: "Unread messages", value: show(gym.unread) },
@@ -352,6 +359,7 @@ function RosterChip({ label, value, accent, onPress }) {
 export function CoachHomeDesktop() {
   const router = useRouter();
   const [preview, setPreview] = useState(null);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
   const { width } = useWindowDimensions();
   const { profile, stats, extras, dismissals, setDismissals, loadError, reload: load } = useCoachDashboard();
 
@@ -453,6 +461,7 @@ export function CoachHomeDesktop() {
             <TodayPanel
               gym={{ ...(safeExtras.gym ?? {}), checkinsWaiting: stats.checkinsToReview }}
               nutritionOnly={nutritionOnly}
+              onOpenSessions={() => setSessionsOpen(true)}
             />
           </View>
 
@@ -479,6 +488,8 @@ export function CoachHomeDesktop() {
           warmups={preview?.warmups ?? []}
           exercises={preview?.exercises ?? []}
         />
+
+        <SessionsTodayModal visible={sessionsOpen} onClose={() => setSessionsOpen(false)} />
       </ScrollView>
     </CoachShell>
   );
