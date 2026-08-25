@@ -9,6 +9,8 @@ import {
   listBlocksForSpcClient,
   labelBlocks,
   createSpcBlock,
+  publishSpcBlock,
+  deleteSpcBlock,
   addDays,
   listSpcWorkoutsForBlock,
   trimSpcBlockTo,
@@ -22,6 +24,7 @@ import { getSetting } from "../../../lib/settings";
 import { getClientGoal } from "../../../lib/programming/clientGoals";
 import { SpcSessionReadout } from "../../../components/SpcSessionReadout";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
+import { SendSpcBlockModal } from "../../../components/SendSpcBlockModal";
 import { PrintBlockPickerModal } from "../../../components/PrintBlockPickerModal";
 import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CommentThread } from "../../../components/CommentThread";
@@ -34,7 +37,7 @@ import { STATUS_LABELS, STATUS_ORDER } from "../../../lib/programming/spcStatus"
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../lib/toast";
-import { confirmOverwrite, confirmEndBlockHere } from "../../../lib/confirmDialog";
+import { confirmOverwrite, confirmEndBlockHere, confirmDeleteDraftBlock } from "../../../lib/confirmDialog";
 import { fonts, colors } from "../../../lib/theme";
 
 // SPC client block view, coach web (design_handoff_coach_web_v2, screen 15).
@@ -60,6 +63,10 @@ const CELL_STATES = {
   upcoming: { border: CARD_BORDER, bg: "#fff", dot: "#d6d1ca", label: "upcoming" },
   skipped: { border: CARD_BORDER, bg: "#faf8f6", dot: "#c9c4bd", label: "skipped" },
   draft: { border: CARD_BORDER, bg: "#fdfbf8", dot: "#c58a3a", label: "draft" },
+  // Inside a draft block, "published or not" isn't the question — the whole
+  // block is hidden either way — so a session with lifts in it just reads as
+  // written and ready to go out.
+  ready: { border: "#4d6142", bg: "#fff", dot: "#4d6142", label: "ready" },
   empty: { border: "#efe9e2", bg: "#faf8f6", dot: "#e0dbd4", label: "empty" },
 };
 
@@ -87,7 +94,64 @@ function initials(name) {
 
 /* ------------------------------------------------------------ block band */
 
-function BlockBand({ block, label, summary, weekNumber, nextQueued, onBuildNext }) {
+function BlockBand({ block, label, summary, weekNumber, nextQueued, onBuildNext, clientName, onSend, onDeleteDraft }) {
+  // A draft (0089) has no dates, so none of the band's usual arithmetic —
+  // week N of M, days left, adherence — has an answer yet. What matters
+  // about it instead is how much of it is written and whether it's been
+  // sent, so it gets its own band rather than a version of this one with
+  // half the numbers blanked out.
+  if (block.status === "draft") {
+    const written = summary.total - summary.empty;
+    return (
+      <View style={{ backgroundColor: "#33251f", borderRadius: 14, padding: 20, marginBottom: 20 }}>
+        <View style={{ flexDirection: "row", gap: 26, flexWrap: "wrap", alignItems: "center" }}>
+          <View style={{ minWidth: 210 }}>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.2, color: "#e9b8a4" }}>
+              DRAFT · NOT SENT
+            </Text>
+            <Text style={{ fontFamily: fonts.display, fontSize: 25, color: "#f7f3ee", marginTop: 4 }}>
+              {label} · {block.block_length_weeks} week{block.block_length_weeks === 1 ? "" : "s"}
+            </Text>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a89a92", marginTop: 3 }}>
+              No start date yet — {clientName || "your client"} can't see any of it.
+            </Text>
+          </View>
+
+          <View style={{ flex: 1, minWidth: 260 }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#f7f3ee" }}>
+              {written} of {summary.total} sessions written
+            </Text>
+            <View style={{ flexDirection: "row", height: 7, borderRadius: 99, overflow: "hidden", backgroundColor: "#4a382f", marginTop: 9 }}>
+              {written > 0 ? (
+                <View style={{ width: `${(written / (summary.total || 1)) * 100}%`, backgroundColor: "#8fb473" }} />
+              ) : null}
+            </View>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#c9bcb4", marginTop: 9 }}>
+              {summary.empty > 0
+                ? `${summary.empty} still empty — they'd stay hidden if you sent it now.`
+                : "Every session has lifts in it."}
+            </Text>
+          </View>
+
+          <View style={{ gap: 8 }}>
+            <PressFade
+              onPress={onSend}
+              style={{ backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 17 }}
+            >
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>Send to client</Text>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#f0d9d0", marginTop: 2 }}>
+                Pick the week it starts
+              </Text>
+            </PressFade>
+            <PressFade onPress={onDeleteDraft} style={{ alignSelf: "center" }} hitSlop={6}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: "#c9a79a" }}>Delete draft</Text>
+            </PressFade>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   const total = summary.total || 1;
   const seg = (n, color) => (n > 0 ? <View key={color} style={{ width: `${(n / total) * 100}%`, backgroundColor: color }} /> : null);
 
@@ -175,6 +239,7 @@ function SessionCell({ session, onPress, copyRole, onStartCopy }) {
       case "due":
         return "Not logged yet";
       case "upcoming":
+      case "ready":
         return `${session.programmedSets} sets programmed`;
       case "draft":
         return "Draft — not published";
@@ -188,6 +253,7 @@ function SessionCell({ session, onPress, copyRole, onStartCopy }) {
     if (session.state === "due") return "Published · due this week";
     if (session.state === "skipped") return "Not logged";
     if (session.state === "upcoming") return "Published";
+    if (session.state === "ready") return "Ready to send";
     return null;
   })();
 
@@ -352,6 +418,7 @@ function SpcClientDesktop() {
   const [rail, setRail] = useState("Lift progress");
   const [readoutSession, setReadoutSession] = useState(null);
   const [newBlockOpen, setNewBlockOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
   // "Print block" asks which block (newest first), then which session —
   // spc/print/[blockId] renders exactly one session per printed page.
   const [printPickerOpen, setPrintPickerOpen] = useState(false);
@@ -389,12 +456,25 @@ function SpcClientDesktop() {
       setNotesDraft(clientRow?.notes_goals_feedback ?? "");
       setCoaches(coachRows);
 
-      const labelled = labelBlocks(blockRows).sort((a, b) => (a.block_start_date < b.block_start_date ? 1 : -1));
+      // Drafts first (they hold no date, and they're what someone is actively
+      // writing), then real blocks newest-first. Comparing a null start date
+      // with `<` would answer false BOTH ways round and give an inconsistent
+      // comparator, so the two groups are separated before sorting.
+      const labelled = labelBlocks(blockRows).sort((a, b) => {
+        if (!a.block_start_date && !b.block_start_date) return a.created_at < b.created_at ? -1 : 1;
+        if (!a.block_start_date) return -1;
+        if (!b.block_start_date) return 1;
+        return a.block_start_date < b.block_start_date ? 1 : -1;
+      });
       setBlocks(labelled);
 
-      // Default to the block covering today, else the most recent one.
+      // Default to the block covering today, else the draft she's writing,
+      // else the most recent one.
       const current =
-        labelled.find((b) => b.block_start_date <= today && today <= b.block_end_date) ?? labelled[0] ?? null;
+        labelled.find((b) => b.block_start_date && b.block_start_date <= today && today <= b.block_end_date) ??
+        labelled.find((b) => b.status === "draft") ??
+        labelled[0] ??
+        null;
       // Read through a ref, not the state value: `load` must NOT depend on
       // selectedBlockId, or every block-tab click changes load's identity,
       // re-fires the focus effect, and reloads the whole page (member,
@@ -418,8 +498,9 @@ function SpcClientDesktop() {
       // Week 1 of the most recent block, for the "copy last block" preview.
       // Week 1 specifically because since 0016 each week has its own
       // exercise list — there's no single list that represents the block.
-      if (labelled.length > 0) {
-        listSpcWorkoutsForBlock(labelled[0].id)
+      const latestDated = labelled.find((b) => b.block_start_date);
+      if (latestDated) {
+        listSpcWorkoutsForBlock(latestDated.id)
           .then(async (all) => {
             const week1 = all.filter((w) => w.week_number === 1);
             const names = await listSpcWorkoutExercisesForWorkouts(week1.map((w) => w.id));
@@ -508,24 +589,57 @@ function SpcClientDesktop() {
     }
   };
 
+  // Creates a DRAFT — no dates, invisible to the client, nothing scheduled.
+  // The start date is picked in handleSend below, once the block is actually
+  // written. See migration 0089 for why it stopped being decided here.
   const handleCreateBlock = async (mode, lengthWeeks) => {
     if (!blocks.length && mode === "copy") return;
-    const latest = [...blocks].sort((a, b) => (a.block_end_date < b.block_end_date ? -1 : 1)).pop();
+    const latest = [...blocks]
+      .filter((b) => b.block_start_date)
+      .sort((a, b) => (a.block_end_date < b.block_end_date ? -1 : 1))
+      .pop();
     try {
       const created = await createSpcBlock({
         spcClientId: userId,
         coachId: spcClient?.assigned_coach_id ?? profile.id,
-        startDate: latest ? addDays(latest.block_end_date, 1) : today,
         lengthWeeks,
         sessionsPerWeek: spcClient?.sessions_per_week ?? 2,
+        status: "draft",
       });
       if (mode === "copy" && latest) await copyLastBlockContent(latest.id, created.id);
       setNewBlockOpen(false);
+      selectedBlockIdRef.current = created.id;
       setSelectedBlockId(created.id);
       await load();
-      toastSuccess("New block started");
+      toastSuccess("Draft started — nothing goes out until you send it.");
     } catch (err) {
-      toastError("Couldn't create the block", err);
+      toastError("Couldn't start the draft", err);
+    }
+  };
+
+  const handleSend = async (startDate) => {
+    try {
+      const result = await publishSpcBlock(detail.block.id, { startDate });
+      setSendOpen(false);
+      await load();
+      toastSuccess(
+        `Sent — ${result.sessionsSent} session${result.sessionsSent === 1 ? "" : "s"} live from ${formatDateMD(result.startDate)}.`
+      );
+    } catch (err) {
+      toastError("Couldn't send the block", err);
+    }
+  };
+
+  const handleDeleteDraft = async (block) => {
+    if (!(await confirmDeleteDraftBlock())) return;
+    try {
+      await deleteSpcBlock(block.id);
+      selectedBlockIdRef.current = null;
+      setSelectedBlockId(null);
+      await load();
+      toastSuccess("Draft deleted");
+    } catch (err) {
+      toastError("Couldn't delete the draft", err);
     }
   };
 
@@ -539,10 +653,21 @@ function SpcClientDesktop() {
     }
   };
 
+  // "Is there something after this one." A draft counts: it's the next block,
+  // it just hasn't been given a date yet — and prompting "Build next block"
+  // on top of one is how a coach ends up with two.
   const nextQueued = useMemo(() => {
     if (!detail) return false;
-    return blocks.some((b) => b.block_start_date > detail.block.block_end_date);
+    if (blocks.some((b) => b.status === "draft")) return true;
+    if (!detail.block.block_end_date) return false;
+    return blocks.some((b) => b.block_start_date && b.block_start_date > detail.block.block_end_date);
   }, [blocks, detail]);
+
+  const draftBlock = useMemo(() => blocks.find((b) => b.status === "draft") ?? null, [blocks]);
+  // "Last block" for the copy-from / seed-the-length purposes below means the
+  // last SCHEDULED one — drafts sort first now, so blocks[0] can no longer be
+  // assumed to be it.
+  const latestScheduled = useMemo(() => blocks.find((b) => b.block_start_date) ?? null, [blocks]);
 
   // Key lifts and her notes are scoped to the block being viewed, not her
   // whole history — the rail is context for this block's programming.
@@ -622,7 +747,8 @@ function SpcClientDesktop() {
     const ok = await confirmEndBlockHere({
       lastWeek,
       removedWeeks: block.block_length_weeks - lastWeek,
-      endDate: formatDateMD(addDays(block.block_start_date, lastWeek * 7 - 1)),
+      // Null for a draft: it has no start date, so no finish date to name.
+      endDate: block.block_start_date ? formatDateMD(addDays(block.block_start_date, lastWeek * 7 - 1)) : null,
       wasRolling: Boolean(block.auto_extend),
     });
     if (!ok) return;
@@ -754,11 +880,16 @@ function SpcClientDesktop() {
             >
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>SPC blocks</Text>
             </PressFade>
+            {/* One draft at a time: with one already written but unsent, this
+                opens it instead of starting a second. Two undated drafts for
+                one client is only ever a mistake. */}
             <PressFade
-              onPress={() => setNewBlockOpen(true)}
+              onPress={() => (draftBlock ? selectBlock(draftBlock.id) : setNewBlockOpen(true))}
               style={{ backgroundColor: colors.primary, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 17 }}
             >
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>Build next block</Text>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>
+                {draftBlock ? "Open draft" : "Build next block"}
+              </Text>
             </PressFade>
         </View>
 
@@ -767,7 +898,8 @@ function SpcClientDesktop() {
           <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap", borderBottomWidth: 1, borderBottomColor: CARD_BORDER, marginBottom: 20 }}>
             {blocks.map((b) => {
               const active = b.id === selectedBlockId;
-              const isCurrent = b.block_start_date <= today && today <= b.block_end_date;
+              const isDraft = b.status === "draft";
+              const isCurrent = !isDraft && b.block_start_date <= today && today <= b.block_end_date;
               return (
                 <Pressable
                   key={b.id}
@@ -788,6 +920,7 @@ function SpcClientDesktop() {
                   >
                     {b.label}
                     {isCurrent ? " · current" : ""}
+                    {isDraft ? " · not sent" : ""}
                   </Text>
                 </Pressable>
               );
@@ -807,6 +940,9 @@ function SpcClientDesktop() {
             >
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>Start a block</Text>
             </PressFade>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 10, textAlign: "center" }}>
+              It starts as a draft — you pick the week it begins when you send it.
+            </Text>
           </View>
         ) : (
           <View style={{ flexDirection: "row", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
@@ -815,9 +951,16 @@ function SpcClientDesktop() {
                 block={detail.block}
                 label={blocks.find((b) => b.id === detail.block.id)?.label ?? "Block"}
                 summary={detail.summary}
-                weekNumber={currentWeekNumber(detail.block.block_start_date, detail.block.block_length_weeks, today)}
+                weekNumber={
+                  detail.block.block_start_date
+                    ? currentWeekNumber(detail.block.block_start_date, detail.block.block_length_weeks, today)
+                    : null
+                }
                 nextQueued={nextQueued}
                 onBuildNext={() => setNewBlockOpen(true)}
+                clientName={member?.name?.split(" ")[0]}
+                onSend={() => setSendOpen(true)}
+                onDeleteDraft={() => handleDeleteDraft(detail.block)}
               />
 
               <View style={{ flexDirection: "row", gap: 10, paddingLeft: 74, marginBottom: 8 }}>
@@ -878,7 +1021,11 @@ function SpcClientDesktop() {
                         so what stops is everything below and to the right.
                         Column is always reserved so the grid ends flush. */}
                     <View style={{ width: END_HERE_WIDTH, paddingTop: 11 }}>
-                      {week >= currentWeekNumber(detail.block.block_start_date, detail.block.block_length_weeks, today) &&
+                      {/* A draft isn't running, so any week can be the last
+                          one — there's no week in progress to protect. */}
+                      {(detail.block.status === "draft" ||
+                        week >=
+                          currentWeekNumber(detail.block.block_start_date, detail.block.block_length_weeks, today)) &&
                       week < detail.block.block_length_weeks ? (
                         <PressFade
                           onPress={() => handleEndBlockHere(detail.block, week)}
@@ -1108,14 +1255,27 @@ function SpcClientDesktop() {
         })()}
       />
 
+      {detail?.block?.status === "draft" ? (
+        <SendSpcBlockModal
+          visible={sendOpen}
+          clientName={member?.name?.split(" ")[0]}
+          blockLabel={blocks.find((b) => b.id === detail.block.id)?.label ?? "Draft"}
+          lengthWeeks={detail.block.block_length_weeks}
+          sessions={detail.sessions}
+          existingBlocks={blocks}
+          onClose={() => setSendOpen(false)}
+          onSubmit={handleSend}
+        />
+      ) : null}
+
       <NewSpcBlockChoiceModal
         visible={newBlockOpen}
-        nextLabel={`Block ${blocks.length + 1}`}
-        latestBlockLabel={blocks[0]?.label ?? null}
-        weeksAgo={blocks[0] ? weeksSince(blocks[0].block_end_date, today) : 0}
+        clientName={member?.name?.split(" ")[0]}
+        latestBlockLabel={latestScheduled?.label ?? null}
+        weeksAgo={latestScheduled ? weeksSince(latestScheduled.block_end_date, today) : 0}
         preview={latestBlockPreview}
         defaultLengthWeeks={defaultLengthWeeks}
-        lastBlockLengthWeeks={blocks[0]?.block_length_weeks}
+        lastBlockLengthWeeks={latestScheduled?.block_length_weeks}
         onClose={() => setNewBlockOpen(false)}
         onSubmit={handleCreateBlock}
       />

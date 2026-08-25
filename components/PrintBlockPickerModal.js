@@ -67,7 +67,10 @@ export function PrintBlockPickerModal({ visible, blocks, onClose, onPick }) {
                       {b.label}
                     </Text>
                     <Text style={{ fontFamily: fonts.sans, fontSize: 12 }} className="text-stone-500">
-                      {formatDateMDY(b.block_start_date)} – {formatDateMDY(b.block_end_date)} · {b.block_length_weeks} wk
+                      {b.block_start_date
+                        ? `${formatDateMDY(b.block_start_date)} – ${formatDateMDY(b.block_end_date)}`
+                        : "Draft · not sent"}{" "}
+                      · {b.block_length_weeks} wk
                     </Text>
                   </Pressable>
                 ))}

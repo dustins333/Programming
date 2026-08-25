@@ -13,7 +13,7 @@ import {
 } from "../../../../lib/programming/spcBlocks";
 import { todayInBoise } from "../../../../lib/boiseDate";
 import { formatDateMDY } from "../../../../lib/formatDate";
-import { confirmDelete } from "../../../../lib/confirmDialog";
+import { confirmDelete, confirmDeleteDraftBlock } from "../../../../lib/confirmDialog";
 import { toastError } from "../../../../lib/toast";
 import { getBlockStatus } from "../../../../lib/programming/blockStatus";
 import { CoachShell } from "../../../../components/CoachShell";
@@ -43,7 +43,17 @@ export default function SpcClientHistory() {
       setLoadError(null);
       const [memberRow, blockRows] = await Promise.all([getUser(userId), listBlocksForSpcClient(userId)]);
       setMember(memberRow);
-      setBlocks(labelBlocks(blockRows).sort((a, b) => (a.block_start_date < b.block_start_date ? 1 : -1)));
+      // Drafts first — they're the thing waiting on someone. They also have
+      // no start date, and comparing null with `<` answers false both ways
+      // round, which would make the comparator inconsistent.
+      setBlocks(
+        labelBlocks(blockRows).sort((a, b) => {
+          if (!a.block_start_date && !b.block_start_date) return a.created_at < b.created_at ? -1 : 1;
+          if (!a.block_start_date) return -1;
+          if (!b.block_start_date) return 1;
+          return a.block_start_date < b.block_start_date ? 1 : -1;
+        })
+      );
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
@@ -66,7 +76,10 @@ export default function SpcClientHistory() {
   };
 
   const handleDelete = async (block) => {
-    const proceed = await confirmDelete("This permanently deletes this block and every session in it. This can't be undone. Continue?");
+    const proceed =
+      block.status === "draft"
+        ? await confirmDeleteDraftBlock()
+        : await confirmDelete("This permanently deletes this block and every session in it. This can't be undone. Continue?");
     if (!proceed) return;
     setDeletingId(block.id);
     try {
@@ -113,7 +126,8 @@ export default function SpcClientHistory() {
           SPC blocks
         </Text>
         <Text className="mb-6 text-stone-500" style={{ fontFamily: fonts.sans }}>
-          Every block for this client — past, current, and upcoming. Extend a block here, or set it rolling so it keeps going on its own.
+          Every block for this client — drafts, past, current, and upcoming. Extend a block here, or set it rolling so
+          it keeps going on its own. A draft is sent to the client from her SPC page.
         </Text>
 
         {loadError ? (
@@ -139,7 +153,8 @@ export default function SpcClientHistory() {
             renderItem={({ item }) => {
               const today = todayInBoise();
               const status = getBlockStatus(item, today);
-              const isFuture = item.block_start_date > today;
+              const isDraft = status.key === "draft";
+              const isFuture = !isDraft && item.block_start_date > today;
               const canPrint = status.key !== "past" && Platform.OS === "web";
               // Extending a block that already ended would quietly move
               // its end date back into the future — offer it only where
@@ -152,9 +167,11 @@ export default function SpcClientHistory() {
                       <Text style={{ fontFamily: fonts.sansMedium, fontSize: 14 }} className="text-stone-700">
                         {item.label}
                       </Text>
-                      <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                        {formatDateMDY(item.block_start_date)} → {formatDateMDY(item.block_end_date)}
-                      </Text>
+                      {isDraft ? null : (
+                        <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                          {formatDateMDY(item.block_start_date)} → {formatDateMDY(item.block_end_date)}
+                        </Text>
+                      )}
                       <Text style={{ fontFamily: fonts.sansBold, fontSize: 11, color: status.color, textTransform: "uppercase", letterSpacing: 0.4 }}>
                         · {status.label}
                       </Text>
@@ -163,7 +180,11 @@ export default function SpcClientHistory() {
                       </Text>
                     </Pressable>
                     <View className="flex-row items-center gap-3">
-                      {isAdmin && isFuture ? (
+                      {/* Deleting a draft is not the same act as deleting a
+                          real block: nobody has ever seen it, so there is no
+                          history to lose — which is why 0089 lets any SPC
+                          coach do it. */}
+                      {(isAdmin && isFuture) || isDraft ? (
                         <Pressable onPress={() => handleDelete(item)} disabled={deletingId === item.id} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#b23a22" }}>
                             {deletingId === item.id ? "Deleting…" : "Delete"}

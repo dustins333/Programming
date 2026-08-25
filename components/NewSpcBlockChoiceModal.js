@@ -3,15 +3,19 @@ import { Modal, View, Text, Pressable } from "react-native";
 import { fonts, colors } from "../lib/theme";
 import { WeeksStepper } from "./WeeksStepper";
 
-// Replaces the old manual start-date/length-weeks entry — the new block's
-// start date is always computed the same gap-free way the calendar's own
-// "Start new block" button already does (day after whichever block ends
-// last, or today if there's none), so all that's left for the coach to
-// decide is content: reuse the last block's warm-ups/exercises/weekly
-// numbers verbatim, or start from nothing.
+// Starting a block asks two questions and no more: copy the last one, or
+// start blank, and how many weeks.
+//
+// There is deliberately NO start date here. Since 0089 a new SPC block is
+// born as a DRAFT with no dates at all — nothing is scheduled, the client
+// sees nothing, and the coach picks the Monday it starts when she sends it
+// (SendSpcBlockModal). Before that, this dialog computed the date on the
+// spot — day after the last block ended — which meant week 1 was already
+// running while she was still writing it, and a client who got the block
+// three days later had "missed" a week that was never visible to her.
 export function NewSpcBlockChoiceModal({
   visible,
-  nextLabel,
+  clientName,
   latestBlockLabel,
   weeksAgo,
   preview,
@@ -56,10 +60,14 @@ export function NewSpcBlockChoiceModal({
       <View className="flex-1 items-center justify-center bg-black/40 px-4">
         <View className="w-full max-w-lg rounded-2xl bg-white p-6">
           <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 19 }} className="mb-1">
-            Start {nextLabel}
+            Start a new block
           </Text>
-          <Text className="mb-4 text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 12.5 }}>
+          <Text className="mb-1 text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 12.5 }}>
             {hasLastBlock ? `Reuse ${latestBlockLabel} as a starting point, or begin blank.` : "Nothing to copy yet — this will be a blank block."}
+          </Text>
+          <Text className="mb-4" style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+            This starts a draft. Nothing reaches {clientName || "your client"} until you send it, and you pick the start
+            date then.
           </Text>
 
           <View className="flex-row gap-3.5">
@@ -112,7 +120,7 @@ export function NewSpcBlockChoiceModal({
                 Start blank
               </Text>
               <Text className="text-stone-400" style={{ fontFamily: fonts.sans, fontSize: 12 }}>
-                Build {nextLabel} from scratch.
+                Write the whole block from scratch.
               </Text>
             </Pressable>
           </View>
@@ -132,7 +140,7 @@ export function NewSpcBlockChoiceModal({
             </Pressable>
             <Pressable onPress={handleCreate} disabled={saving || !lengthValid} className="rounded-lg px-[18px] py-2.5" style={{ opacity: saving || !lengthValid ? 0.5 : 1, backgroundColor: colors.primary }}>
               <Text className="text-white" style={{ fontFamily: fonts.sansBold, fontSize: 13 }}>
-                {saving ? "Creating…" : `Create ${nextLabel}`}
+                {saving ? "Creating…" : "Start draft"}
               </Text>
             </Pressable>
           </View>

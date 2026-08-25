@@ -35,26 +35,9 @@ function daysBetween(start: string, end: string) {
   return Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function addDays(dateString: string, days: number) {
-  const d = new Date(dateString + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-// Mirrors lib/boiseDate.js's mondayOnOrBefore — every block runs
-// Monday–Sunday so a block week and a calendar week are the same seven
-// days, enforced for real by the CHECK constraint in migration 0063. The
-// snap is a no-op here in practice (a block ends Sunday, so +1 is already
-// Monday); it exists so this function can't be the one path that inserts a
-// row the constraint then rejects, silently stalling a client's next block.
-function mondayOnOrBefore(dateString: string) {
-  const dow = new Date(`${dateString}T12:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
-  return addDays(dateString, dow === 0 ? -6 : 1 - dow);
-}
-
-function rangesOverlap(startA: string, endA: string, startB: string, endB: string) {
-  return startA <= endB && startB <= endA;
-}
+// The date helpers that used to live here (addDays / mondayOnOrBefore /
+// rangesOverlap) went with the dated block this function used to insert.
+// Since 0089 it creates a DRAFT, which has no dates to snap or overlap.
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -103,10 +86,25 @@ Deno.serve(async (req) => {
 
   for (const client of clients ?? []) {
     try {
+      // A draft (migration 0089) is a block the coach has already started
+      // writing and hasn't sent yet. Drafting a second one behind it would be
+      // exactly the duplicate churn this scan exists to remove, so it is
+      // checked before anything else.
+      const { data: draft, error: draftError } = await programming
+        .from("spc_blocks")
+        .select("id")
+        .eq("spc_client_id", client.user_id)
+        .eq("status", "draft")
+        .limit(1)
+        .maybeSingle();
+      if (draftError) throw draftError;
+      if (draft) continue;
+
       const { data: latest, error: latestError } = await programming
         .from("spc_blocks")
         .select("*")
         .eq("spc_client_id", client.user_id)
+        .eq("status", "active")
         .order("block_start_date", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -127,23 +125,18 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const startDate = mondayOnOrBefore(addDays(latest.block_end_date, 1));
       const lengthWeeks = latest.block_length_weeks;
-      const endDate = addDays(startDate, lengthWeeks * 7 - 1);
 
-      // Same overlap guard createSpcBlock() enforces client-side — a coach
-      // could've manually created the next block already, e.g. via "Copy
-      // last block", between one cron run and the next.
-      const { data: existingBlocks, error: existingError } = await programming
-        .from("spc_blocks")
-        .select("block_start_date, block_end_date")
-        .eq("spc_client_id", client.user_id);
-      if (existingError) throw existingError;
-      const overlap = (existingBlocks ?? []).some((b) =>
-        rangesOverlap(startDate, endDate, b.block_start_date, b.block_end_date)
-      );
-      if (overlap) continue;
-
+      // What gets created is a DRAFT: no dates, invisible to the client, and
+      // not on the calendar. Before 0089 this inserted a live block starting
+      // the day after the last one ended, which meant the clock was already
+      // running on week 1 while the coach was still writing it — for an
+      // auto-drafted block, several days before she even sees the push. She
+      // picks the start date when she sends it.
+      //
+      // Because it holds no dates there is no overlap to guard against, which
+      // is why the existing-block check that used to sit here is gone: the
+      // "the coach already made the next block" case is the draft check above.
       const coachId = client.assigned_coach_id ?? latest.coach_id;
 
       const { data: newBlock, error: insertError } = await programming
@@ -151,9 +144,8 @@ Deno.serve(async (req) => {
         .insert({
           spc_client_id: client.user_id,
           coach_id: coachId,
-          block_start_date: startDate,
           block_length_weeks: lengthWeeks,
-          block_end_date: endDate,
+          status: "draft",
         })
         .select()
         .single();
@@ -189,7 +181,7 @@ Deno.serve(async (req) => {
           admin,
           coachId,
           "New SPC block ready",
-          `${clientName}'s next block was auto-drafted — review and publish.`,
+          `${clientName}'s next block was started for you — write it, then send it with a start date.`,
           { type: "spc_block_drafted", spcClientId: client.user_id, blockId: newBlock.id }
         );
         if (pushResult.sent > 0) results.pushed += 1;

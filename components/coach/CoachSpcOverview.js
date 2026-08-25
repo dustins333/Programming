@@ -65,7 +65,9 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
       // Every block this client has had, oldest first and already numbered by
       // labelBlocks — the picker steps through finished ones and anything
       // queued ahead.
-      const blocks = labelBlocks(await listBlocksForSpcClient(userId))
+      // Drafts (0089) are excluded: this is the client's own view of her
+      // programming, and a block she has not been given isn't part of it yet.
+      const blocks = labelBlocks((await listBlocksForSpcClient(userId)).filter((b) => b.status !== "draft"))
         .slice()
         .sort((a, b) => (a.block_start_date < b.block_start_date ? -1 : 1));
       if (blocks.length === 0) return setState({ status: "no_block", member });

@@ -56,8 +56,16 @@ export default function SpcBlockDetail() {
       setWorkouts(workoutRows);
       setExercisesByWorkout(await listSpcWorkoutExercisesForWorkouts(workoutRows.map((w) => w.id)));
       setBlockLabel(labelBlocks(siblingBlocks).find((sb) => sb.id === b.id)?.label ?? "Block");
+      // Undated on either side means there is no "before" to establish, so a
+      // draft has no prior block and is never anyone else's.
       const prior = siblingBlocks
-        .filter((other) => other.id !== b.id && other.block_end_date < b.block_start_date)
+        .filter(
+          (other) =>
+            other.id !== b.id &&
+            other.block_end_date &&
+            b.block_start_date &&
+            other.block_end_date < b.block_start_date
+        )
         .sort((a, c) => (a.block_end_date < c.block_end_date ? 1 : -1))[0];
       setPriorBlock(prior ?? null);
     } catch (err) {
@@ -130,7 +138,8 @@ export default function SpcBlockDetail() {
   const today = todayInBoise();
   const status = getBlockStatus(block, today);
   const isAdmin = profile?.role === "admin";
-  const isFuture = block.block_start_date > today;
+  const isDraft = block.status === "draft";
+  const isFuture = !isDraft && block.block_start_date > today;
   const weeks = [...new Set(workouts.map((w) => w.week_number))].sort((a, b) => a - b);
   const sessions = [...new Set(workouts.map((w) => w.session_number))].sort((a, b) => a - b);
   const groupWidth = sessions.length * SESSION_COL_WIDTH + (sessions.length - 1) * CELL_GAP;
@@ -152,7 +161,9 @@ export default function SpcBlockDetail() {
             </Text>
             <View className="flex-row items-center gap-2">
               <Text className="text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
-                {formatDateMDY(block.block_start_date)} → {formatDateMDY(block.block_end_date)} ({block.block_length_weeks} weeks)
+                {isDraft
+                  ? `${block.block_length_weeks} weeks · no start date yet`
+                  : `${formatDateMDY(block.block_start_date)} → ${formatDateMDY(block.block_end_date)} (${block.block_length_weeks} weeks)`}
               </Text>
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 11, color: status.color, textTransform: "uppercase", letterSpacing: 0.4 }}>
                 · {status.label}
