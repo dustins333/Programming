@@ -12,7 +12,7 @@ import { listWarmups, listWorkoutExercises } from "../../lib/programming/workout
 import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
-import { listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
+import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
 import { listLatestCoachingNotes } from "../../lib/programming/coachingNotes";
 import {
   listActiveOneOffWorkoutsForUser,
@@ -559,7 +559,13 @@ export default function MyFitness() {
     setSpcDetailError(null);
     (async () => {
       try {
-        const exerciseRows = await listSpcWorkoutExercises(session.workout.id);
+        // Warm-ups too — the group and one-off branches always fetched theirs,
+        // but SPC never did, so a member's phone showed no warm-up section at
+        // all while the hub/TV (their own fetchHubWarmups) displayed it fine.
+        const [exerciseRows, warmupRows] = await Promise.all([
+          listSpcWorkoutExercises(session.workout.id),
+          listSpcWarmups(session.workout.id),
+        ]);
         // Latest coaching note per lift ("killed this — go up in weight",
         // written mid-session at the hub or from the coach's phone). Own
         // catch: a notes failure must never blank the session itself.
@@ -572,6 +578,7 @@ export default function MyFitness() {
           sessionNumber: session.sessionNumber,
           title: session.workout.title || null,
           completedAt: session.completedAt,
+          warmups: warmupRows,
           exercises: exerciseRows.map((ex) => ({
             id: ex.id,
             exercise: ex.exercises,
@@ -1111,6 +1118,9 @@ export default function MyFitness() {
               ) : spcDetailLoading || !spcDetail ? (
                 <ActivityIndicator color={colors.primary} />
               ) : (
+                <>
+                <WarmupCard warmups={spcDetail.warmups} />
+
                 <SessionLogger
                   userId={profile.id}
                   datePerformed={spcDetail.completedAt ? dateInBoise(new Date(spcDetail.completedAt)) : todayInBoise()}
@@ -1144,6 +1154,7 @@ export default function MyFitness() {
                     }))
                   }
                 />
+                </>
               )}
             </FitnessCard>
           )}

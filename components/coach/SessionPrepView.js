@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../PressFade";
 import { toastError } from "../../lib/toast";
 import { fonts, colors } from "../../lib/theme";
+import { liftLabelsFor, warmupNumbersFor } from "../../lib/programming/sessionLabels";
 
 // One session, as a coach reads it on Coach Prep: the overview and the
 // education for it in one column rather than two screens. Split out of the
@@ -20,19 +21,6 @@ export function prescriptionLine(ex) {
     return `${scheme.length} × ${unique.length === 1 ? unique[0] || "–" : scheme.join(", ")}`;
   }
   return `${ex.sets ?? "–"} × ${ex.reps || "–"}`;
-}
-
-// Local rather than imported from SessionBuilderParts — that module pulls in
-// dnd-kit, which has no business in a file the native bundle also loads.
-export function supersetLetters(exercises) {
-  const letters = {};
-  let next = 0;
-  for (const e of exercises) {
-    if (!e.superset_group_id || e.superset_group_id in letters) continue;
-    letters[e.superset_group_id] = String.fromCharCode(65 + next);
-    next += 1;
-  }
-  return letters;
 }
 
 export function PrepEyebrow({ children, style }) {
@@ -194,7 +182,12 @@ const EDU_SECTIONS = [
 ];
 
 export function SessionPrepView({ workout, exercises, warmups, education, weeks, warmupExerciseIds }) {
-  const letters = supersetLetters(exercises);
+  // The shared labeling language (lib/programming/sessionLabels.js): lifts
+  // lettered with superset members numbered within their letter (A, B1+B2, C),
+  // warm-ups numbered with superset members repeating the shared number —
+  // matching the builders, the member logger, and the printed SPC sheet.
+  const liftLabels = liftLabelsFor(exercises);
+  const warmupNumbers = warmupNumbersFor(warmups);
   const published = workout.status === "published";
   // Single-open, matching the rail. Reading surface, so the collapsed row
   // carries the note's first line rather than just a title — you should be
@@ -252,6 +245,7 @@ export function SessionPrepView({ workout, exercises, warmups, education, weeks,
               key={w.id ?? `${w.position}-${i}`}
               style={{
                 flexDirection: "row",
+                alignItems: "center",
                 justifyContent: "space-between",
                 gap: 10,
                 paddingVertical: 7,
@@ -259,6 +253,9 @@ export function SessionPrepView({ workout, exercises, warmups, education, weeks,
                 borderTopColor: "#f4f1ec",
               }}
             >
+              <Text maxFontSizeMultiplier={1.1} style={{ width: 20, fontFamily: fonts.sansBold, fontSize: 12, color: "#c9c4bd" }}>
+                {warmupNumbers[i]}
+              </Text>
               <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 14, color: "#44403c" }}>
                 {w.exercises?.name ?? w.label ?? "Warm-up"}
               </Text>
@@ -278,41 +275,30 @@ export function SessionPrepView({ workout, exercises, warmups, education, weeks,
             Nothing programmed for this session yet.
           </Text>
         ) : (
-          exercises.map((ex, i) => {
-            const letter = ex.superset_group_id ? letters[ex.superset_group_id] : null;
-            return (
-              <View
-                key={ex.id}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 10,
-                  paddingVertical: 9,
-                  borderTopWidth: i === 0 ? 0 : 1,
-                  borderTopColor: "#f4f1ec",
-                }}
-              >
-                <Text maxFontSizeMultiplier={1.1} style={{ width: 20, fontFamily: fonts.sansBold, fontSize: 12, color: "#c9c4bd" }}>
-                  {i + 1}
-                </Text>
-                <Text style={{ flexShrink: 1, fontFamily: fonts.sansSemiBold, fontSize: 14.5, color: "#2a211c" }}>
-                  {ex.exercises?.name ?? "Exercise"}
-                </Text>
-                {/* The pairing gets its own mark rather than replacing the
-                    ordinal — 1 / A / A / 4 down the left reads as a hole in
-                    the numbering, not as a superset. */}
-                {letter ? (
-                  <View style={{ borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1, backgroundColor: "#fdf1ea", borderWidth: 1, borderColor: "#e0b6a5" }}>
-                    <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 10, color: colors.primaryOnWhite }}>
-                      {letter}
-                    </Text>
-                  </View>
-                ) : null}
-                <View style={{ flex: 1 }} />
-                <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#6f6862" }}>{prescriptionLine(ex)}</Text>
-              </View>
-            );
-          })
+          exercises.map((ex, i) => (
+            <View
+              key={ex.id}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingVertical: 9,
+                borderTopWidth: i === 0 ? 0 : 1,
+                borderTopColor: "#f4f1ec",
+              }}
+            >
+              {/* The label IS the superset mark now — B1/B2 share a letter,
+                  same as the builder's circle and the member logger. */}
+              <Text maxFontSizeMultiplier={1.1} style={{ width: 24, fontFamily: fonts.sansBold, fontSize: 12, color: "#c9c4bd" }}>
+                {liftLabels[ex.id]}
+              </Text>
+              <Text style={{ flexShrink: 1, fontFamily: fonts.sansSemiBold, fontSize: 14.5, color: "#2a211c" }}>
+                {ex.exercises?.name ?? "Exercise"}
+              </Text>
+              <View style={{ flex: 1 }} />
+              <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#6f6862" }}>{prescriptionLine(ex)}</Text>
+            </View>
+          ))
         )}
       </SectionCard>
 
