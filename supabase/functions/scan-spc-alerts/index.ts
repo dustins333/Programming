@@ -86,20 +86,6 @@ Deno.serve(async (req) => {
 
   for (const client of clients ?? []) {
     try {
-      // A draft (migration 0089) is a block the coach has already started
-      // writing and hasn't sent yet. Drafting a second one behind it would be
-      // exactly the duplicate churn this scan exists to remove, so it is
-      // checked before anything else.
-      const { data: draft, error: draftError } = await programming
-        .from("spc_blocks")
-        .select("id")
-        .eq("spc_client_id", client.user_id)
-        .eq("status", "draft")
-        .limit(1)
-        .maybeSingle();
-      if (draftError) throw draftError;
-      if (draft) continue;
-
       const { data: latest, error: latestError } = await programming
         .from("spc_blocks")
         .select("*")
@@ -124,6 +110,29 @@ Deno.serve(async (req) => {
         else if (outcome.reason) results.errors.push(`${client.user_id}: not extended (${outcome.reason})`);
         continue;
       }
+
+      // A draft (migration 0089) is a block the coach has already started
+      // writing and hasn't sent yet, so there is nothing to draft for her —
+      // a second one would be exactly the duplicate churn this scan exists
+      // to remove.
+      //
+      // It is checked HERE, below the rolling branch, and that placement is
+      // load-bearing: a rolling block still has to grow whether or not a
+      // draft exists behind it. Checking earlier would have stopped a
+      // rolling client's block at its end date the moment anyone started
+      // writing her next one — silently, and she'd simply run out of
+      // training. Creating a draft deliberately does not switch rolling off
+      // either; that happens when the draft is actually sent, so an
+      // abandoned draft can't leave someone with nothing.
+      const { data: draft, error: draftError } = await programming
+        .from("spc_blocks")
+        .select("id")
+        .eq("spc_client_id", client.user_id)
+        .eq("status", "draft")
+        .limit(1)
+        .maybeSingle();
+      if (draftError) throw draftError;
+      if (draft) continue;
 
       const lengthWeeks = latest.block_length_weeks;
 
