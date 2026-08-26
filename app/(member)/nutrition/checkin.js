@@ -9,6 +9,7 @@ import { useNutritionAccess } from "../../../lib/nutrition/useNutritionAccess";
 import { NutritionAccessMessage } from "../../../components/nutrition/NutritionAccessMessage";
 import { computeWeekWindows } from "../../../lib/nutrition/weekCycle";
 import { getClientQuestions, getCheckinForWeek, submitCheckin, getActiveCheckinReopen } from "../../../lib/nutrition/checkin";
+import { shouldAutoSubmit } from "../../../lib/nutrition/checkinAutoSubmit";
 import { listAllPhotos, isPhotoRequirementWeek, hasAllAngles, photosForRequirementWeek } from "../../../lib/nutrition/photos";
 import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { ZoomSchedulerModal } from "../../../components/nutrition/ZoomSchedulerModal";
@@ -204,6 +205,23 @@ export default function WeeklyCheckin() {
   const [skipReason, setSkipReason] = useState(null);
   const [skipModalOpen, setSkipModalOpen] = useState(false);
 
+  // The check-in submits itself once the last task is finished — a member
+  // whose only task was the form used to finish it and reasonably think she
+  // was done, while a separate Finalize button sat below waiting for a tap.
+  //
+  // "Armed" means she just FINISHED an interaction (closed the form, an
+  // upload landed, a skip reason saved), not that the answers happen to be
+  // complete. Auto-submitting straight off completeness would fire the
+  // moment the last box had one character in it, mid-sentence. Arming is
+  // also why a restored draft (useFormDraft below, which can fill every
+  // answer on mount) can't submit on its own.
+  const [autoArmed, setAutoArmed] = useState(false);
+  // Two triggers can land in the same tick (an upload finishing while the
+  // form popup closes). The insert has a UNIQUE (client_id, week_start)
+  // behind it so a duplicate can't create a second row, but it would still
+  // surface a raw Postgres error to the member — cheaper to not race.
+  const submitInFlight = useRef(false);
+
   // A coach-reopened missed week (see CheckinWeekTimeline's "Reopen"
   // action) — a second, independent submission target alongside the live
   // currentWeek above, not a replacement for it.
@@ -216,6 +234,8 @@ export default function WeeklyCheckin() {
   const [reopenSubmitting, setReopenSubmitting] = useState(false);
   const [reopenSubmitError, setReopenSubmitError] = useState(null);
   const [reopenSubmitted, setReopenSubmitted] = useState(false);
+  const [reopenAutoArmed, setReopenAutoArmed] = useState(false);
+  const reopenSubmitInFlight = useRef(false);
 
   // Opened right after a successful submit if the member's answer to a
   // single_choice question matches that question's booking_option (the
@@ -300,6 +320,7 @@ export default function WeeklyCheckin() {
   const reopenPhotosSatisfied = !reopenPhotosRequired || reopenPhotosUploaded || !!reopenSkipReason;
   const reopenFormSatisfied = questions ? questions.every((q) => (reopenAnswers[q.id] || "").trim().length > 0) : false;
   const reopenCanFinalize = reopenPhotosSatisfied && (questions?.length === 0 || reopenFormSatisfied);
+  const reopenTaskTotal = (reopenPhotosRequired ? 1 : 0) + (questions?.length > 0 ? 1 : 0);
 
   // Autosave both forms as they're typed. Answers used to live only in the
   // component state above, with the single write happening on Finalize —
@@ -345,6 +366,21 @@ export default function WeeklyCheckin() {
     return `Before finalizing, ${parts.join(" and ")}.`;
   };
 
+  // Closing the form is the arming action, whichever way she closes it —
+  // the button, the ✕, or the scrim. Deliberately not "the ✕ means cancel":
+  // two doors out of one sheet that do different things is exactly the
+  // ambiguity this change is meant to remove. Answers are already saved as
+  // a draft either way, so nothing is lost.
+  const closeFormPopup = () => {
+    setFormPopupOpen(false);
+    setAutoArmed(true);
+  };
+
+  const closeReopenFormPopup = () => {
+    setReopenFormPopupOpen(false);
+    setReopenAutoArmed(true);
+  };
+
   const handlePhotosUploaded = async () => {
     setPhotoPopupOpen(false);
     try {
@@ -352,6 +388,10 @@ export default function WeeklyCheckin() {
     } catch (err) {
       console.error("Failed to refresh photos:", err);
     }
+    // Armed after the refetch, not before: photosUploaded is derived from
+    // `photos`, so arming first would have the effect evaluate against the
+    // pre-upload list and decide nothing had changed.
+    setAutoArmed(true);
   };
 
   const handleReopenPhotosUploaded = async () => {
@@ -361,6 +401,7 @@ export default function WeeklyCheckin() {
     } catch (err) {
       console.error("Failed to refresh photos:", err);
     }
+    setReopenAutoArmed(true);
   };
 
   const handleReopenSubmit = async () => {
@@ -368,6 +409,8 @@ export default function WeeklyCheckin() {
       setReopenSubmitError(buildReadinessMessage(reopenAnswers, reopenPhotosRequired, reopenPhotosSatisfied));
       return;
     }
+    if (reopenSubmitInFlight.current) return;
+    reopenSubmitInFlight.current = true;
     setReopenSubmitting(true);
     setReopenSubmitError(null);
     try {
@@ -388,8 +431,17 @@ export default function WeeklyCheckin() {
       }).catch((err) => console.error("Coach check-in push failed:", err));
       if (answerTriggersBooking(reopenAnswers)) setSchedulerOpen(true);
     } catch (err) {
-      setReopenSubmitError(err.message ?? String(err));
+      // 23505 = the unique (client_id, week_start) row already exists, i.e.
+      // this week is already submitted. Nothing went wrong from the member's
+      // side, so say so rather than showing her a constraint violation.
+      if (err?.code === "23505") {
+        setReopenSubmitted(true);
+        setReopen(null);
+      } else {
+        setReopenSubmitError(err.message ?? String(err));
+      }
     } finally {
+      reopenSubmitInFlight.current = false;
       setReopenSubmitting(false);
     }
   };
@@ -399,6 +451,8 @@ export default function WeeklyCheckin() {
       setSubmitError(buildReadinessMessage(answers, photosRequired, photosSatisfied));
       return;
     }
+    if (submitInFlight.current) return;
+    submitInFlight.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -417,11 +471,61 @@ export default function WeeklyCheckin() {
       }).catch((err) => console.error("Coach check-in push failed:", err));
       if (answerTriggersBooking(answers)) setSchedulerOpen(true);
     } catch (err) {
-      setSubmitError(err.message ?? String(err));
+      if (err?.code === "23505") {
+        // Already on file for this week — adopt the existing row so the
+        // screen shows the submitted state instead of an error.
+        try {
+          setResponse(await getCheckinForWeek(profile.id, currentWeek.start));
+        } catch (reloadErr) {
+          setSubmitError(reloadErr.message ?? String(reloadErr));
+        }
+      } else {
+        setSubmitError(err.message ?? String(err));
+      }
     } finally {
+      submitInFlight.current = false;
       setSubmitting(false);
     }
   };
+
+  // Auto-submit. Deliberately an effect rather than a call inside each
+  // trigger: every trigger's own closure reads stale derived state (the
+  // upload handler wants to know whether the form is satisfied AFTER
+  // setPhotos lands), so the decision has to be made on a fresh render.
+  //
+  // A popup being open blocks it outright — that covers the member who
+  // finishes the form, closes it (arming), then reopens it to change an
+  // answer, and it means completeness reached mid-typing can never fire.
+  const anyLivePopupOpen = photoPopupOpen || formPopupOpen || skipModalOpen;
+  const liveShouldSend = shouldAutoSubmit({
+    armed: autoArmed,
+    popupOpen: anyLivePopupOpen,
+    alreadySubmitted: !!response,
+    taskTotal,
+    canSubmit: canFinalize,
+  });
+  useEffect(() => {
+    if (!liveShouldSend) return;
+    setAutoArmed(false);
+    handleSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveShouldSend]);
+
+  const anyReopenPopupOpen = reopenPhotoPopupOpen || reopenFormPopupOpen || reopenSkipModalOpen;
+  const reopenShouldSend = shouldAutoSubmit({
+    armed: reopenAutoArmed,
+    popupOpen: anyReopenPopupOpen,
+    // No open grant left is the same thing as sent, for this screen.
+    alreadySubmitted: !reopen || reopenSubmitted,
+    taskTotal: reopenTaskTotal,
+    canSubmit: reopenCanFinalize,
+  });
+  useEffect(() => {
+    if (!reopenShouldSend) return;
+    setReopenAutoArmed(false);
+    handleReopenSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reopenShouldSend]);
 
   if (access.status !== "active") {
     return <NutritionAccessMessage status={access.status} error={access.error} onRetry={access.refetch} />;
@@ -492,9 +596,13 @@ export default function WeeklyCheckin() {
         <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "rgba(247,243,238,0.72)", marginTop: 2 }}>
           {response
             ? "Submitted — your coach will review it."
-            : canFinalize
-              ? "Everything's in. Finalize when you're ready."
-              : "Finish both tasks below to finalize."}
+            : submitting
+              ? "Sending it to your coach…"
+              : canFinalize && taskTotal > 0
+                ? "Everything's in — send it below."
+                : taskTotal <= 1
+                  ? "Finish the task below and you're done — it sends itself."
+                  : "Finish both tasks below and you're done — it sends itself."}
         </Text>
       </View>
 
@@ -518,7 +626,7 @@ export default function WeeklyCheckin() {
             <TaskRow
               title="Check-in form"
               done={reopenFormSatisfied}
-              subtitle={reopenFormSatisfied ? "Ready to submit" : `${questions.length} question${questions.length === 1 ? "" : "s"}`}
+              subtitle={reopenFormSatisfied ? "All answered" : `${questions.length} question${questions.length === 1 ? "" : "s"}`}
               onPress={() => setReopenFormPopupOpen(true)}
             />
           ) : null}
@@ -529,19 +637,30 @@ export default function WeeklyCheckin() {
             </Text>
           ) : null}
 
-          <Pressable
-            onPress={handleReopenSubmit}
-            disabled={reopenSubmitting}
-            style={[
-              { opacity: reopenSubmitting ? 0.5 : 1, borderRadius: 15, backgroundColor: colors.primary },
-              !reopenCanFinalize ? { opacity: 0.6 } : undefined,
-            ]}
-            className="mt-1 items-center py-3.5"
-          >
-            <Text maxFontSizeMultiplier={1.2} className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-              {reopenSubmitting ? "Submitting…" : "Finalize missed check-in"}
+          {reopenSubmitting ? (
+            <View className="mt-1 flex-row items-center justify-center gap-2 py-3">
+              <Ionicons name="cloud-upload-outline" size={16} color={colors.primaryOnWhite} />
+              <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: colors.primaryOnWhite }}>
+                Sending it…
+              </Text>
+            </View>
+          ) : reopenSubmitError ? (
+            <Pressable onPress={handleReopenSubmit} style={{ borderRadius: 15, backgroundColor: colors.primary }} className="mt-1 items-center py-3.5">
+              <Text maxFontSizeMultiplier={1.2} className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                Try sending again
+              </Text>
+            </Pressable>
+          ) : reopenCanFinalize && reopenTaskTotal > 0 && !reopenShouldSend ? (
+            <Pressable onPress={handleReopenSubmit} style={{ borderRadius: 15, backgroundColor: colors.primary }} className="mt-1 items-center py-3.5">
+              <Text maxFontSizeMultiplier={1.2} className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                Send my missed check-in
+              </Text>
+            </Pressable>
+          ) : (
+            <Text maxFontSizeMultiplier={1.2} className="mt-0.5 text-center text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+              This sends as soon as {reopenTaskTotal <= 1 ? "it's" : "both are"} done.
             </Text>
-          </Pressable>
+          )}
         </View>
       ) : reopenSubmitted ? (
         <View className="mb-5 rounded-2xl border px-4 py-3.5" style={{ borderColor: "#4d6142", borderWidth: 2, backgroundColor: "#f3f6ef" }}>
@@ -625,7 +744,7 @@ export default function WeeklyCheckin() {
               done={formSatisfied}
               subtitle={
                 formSatisfied
-                  ? "Ready to finalize"
+                  ? "All answered"
                   : `${questions.length} question${questions.length === 1 ? "" : "s"} | ${answeredCount} answered`
               }
               onPress={() => setFormPopupOpen(true)}
@@ -638,32 +757,68 @@ export default function WeeklyCheckin() {
             </Text>
           ) : null}
 
-          {/* Deliberately not `disabled` while incomplete: tapping it is how a
-              member finds out what's still missing (buildReadinessMessage
-              above). 0.45 opacity while blocked, per the handoff. */}
-          {questions.length > 0 || photosRequired ? (
+          {/* No Finalize button on the happy path — finishing the last task
+              above submits the check-in (see the auto-submit effect). What's
+              left here is the in-flight line and, if the send actually
+              failed, a real way to try again: without it a network blip
+              would leave her with completed tasks and no way to send them. */}
+          {submitting ? (
+            <View className="mt-2 flex-row items-center justify-center gap-2 py-3.5">
+              <Ionicons name="cloud-upload-outline" size={17} color={colors.primaryOnWhite} />
+              <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: colors.primaryOnWhite }}>
+                Sending your check-in…
+              </Text>
+            </View>
+          ) : submitError ? (
             <Pressable
               onPress={handleSubmit}
-              disabled={submitting}
-              style={[
-                {
-                  opacity: submitting ? 0.5 : 1,
-                  borderRadius: 15,
-                  backgroundColor: colors.primary,
-                  shadowColor: colors.primary,
-                  shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 16,
-                  elevation: 3,
-                },
-                !canFinalize ? { opacity: 0.6 } : undefined,
-              ]}
+              style={{
+                borderRadius: 15,
+                backgroundColor: colors.primary,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.25,
+                shadowRadius: 16,
+                elevation: 3,
+              }}
               className="mt-2 items-center py-4"
             >
               <Text maxFontSizeMultiplier={1.2} className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                {submitting ? "Finalizing…" : "Finalize check-in"}
+                Try sending again
               </Text>
             </Pressable>
+          ) : canFinalize && taskTotal > 0 && !liveShouldSend ? (
+            // Everything was already satisfied before she got here — photos
+            // uploaded from the Photos tab, or a restored draft filling the
+            // form — so no interaction ever armed the auto-send. Without
+            // this she'd be looking at a finished task list and no way to
+            // send it. In the normal flow the effect has already fired by
+            // this point and this never renders.
+            <Pressable
+              onPress={handleSubmit}
+              style={{
+                borderRadius: 15,
+                backgroundColor: colors.primary,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.25,
+                shadowRadius: 16,
+                elevation: 3,
+              }}
+              className="mt-2 items-center py-4"
+            >
+              <Text maxFontSizeMultiplier={1.2} className="text-base text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                Send my check-in
+              </Text>
+            </Pressable>
+          ) : taskTotal > 0 ? (
+            <Text
+              maxFontSizeMultiplier={1.2}
+              className="mt-1 text-center text-xs text-stone-500"
+              style={{ fontFamily: fonts.sans }}
+            >
+              Your check-in sends to your coach as soon as {taskTotal <= 1 ? "this is" : "both are"} done.
+            </Text>
           ) : null}
         </View>
       )}
@@ -695,7 +850,7 @@ export default function WeeklyCheckin() {
       <PopupModal
         visible={formPopupOpen}
         title="Check-in form"
-        onClose={() => setFormPopupOpen(false)}
+        onClose={closeFormPopup}
         scrollViewRef={formScrollViewRef}
         scrollOffsetRef={formScrollOffsetRef}
       >
@@ -723,9 +878,12 @@ export default function WeeklyCheckin() {
             </View>
           )
         )}
-        <Pressable onPress={() => setFormPopupOpen(false)} className="items-center rounded-[14px] bg-primary py-3">
-          <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-            Done
+        {/* The label names what the tap will actually do. When this is the
+            last outstanding task, closing the sheet submits — so it says so
+            rather than saying "Done" and quietly sending the check-in. */}
+        <Pressable onPress={closeFormPopup} className="items-center rounded-[14px] bg-primary py-3">
+          <Text maxFontSizeMultiplier={1.2} className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+            {canFinalize ? "Submit check-in" : "Done"}
           </Text>
         </Pressable>
       </PopupModal>
@@ -737,6 +895,7 @@ export default function WeeklyCheckin() {
           setSkipReason(reason);
           setSkipModalOpen(false);
           setPhotoPopupOpen(false);
+          setAutoArmed(true);
         }}
       />
 
@@ -769,7 +928,7 @@ export default function WeeklyCheckin() {
           <PopupModal
             visible={reopenFormPopupOpen}
             title="Check-in form"
-            onClose={() => setReopenFormPopupOpen(false)}
+            onClose={closeReopenFormPopup}
             scrollViewRef={reopenFormScrollViewRef}
             scrollOffsetRef={reopenFormScrollOffsetRef}
           >
@@ -797,9 +956,9 @@ export default function WeeklyCheckin() {
                 </View>
               )
             )}
-            <Pressable onPress={() => setReopenFormPopupOpen(false)} className="items-center rounded-[14px] bg-primary py-3">
-              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                Done
+            <Pressable onPress={closeReopenFormPopup} className="items-center rounded-[14px] bg-primary py-3">
+              <Text maxFontSizeMultiplier={1.2} className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                {reopenCanFinalize ? "Submit check-in" : "Done"}
               </Text>
             </Pressable>
           </PopupModal>
@@ -811,6 +970,7 @@ export default function WeeklyCheckin() {
               setReopenSkipReason(reason);
               setReopenSkipModalOpen(false);
               setReopenPhotoPopupOpen(false);
+              setReopenAutoArmed(true);
             }}
           />
         </>
