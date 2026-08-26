@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { CoachShell } from "../../components/CoachShell";
 import { getMessagingSettings } from "../../lib/programming/messagingSettings";
+import { usePendingDocuments } from "../../lib/programming/usePendingDocuments";
 import { fonts, colors } from "../../lib/theme";
 
 export default function More() {
@@ -16,6 +17,7 @@ export default function More() {
   // default for why (a true default flashes the row in, then out, on
   // every load for anyone with messaging turned off).
   const [messagingEnabled, setMessagingEnabled] = useState(false);
+  const { count: pendingDocuments, refresh: refreshDocuments } = usePendingDocuments();
 
   // useFocusEffect, not a mount-only useEffect — this is a Tabs root that
   // stays mounted, so an admin flipping the messaging kill switch in
@@ -25,7 +27,10 @@ export default function More() {
       getMessagingSettings()
         .then((s) => setMessagingEnabled(s.enabled))
         .catch((err) => console.error("Failed to load messaging settings:", err));
-    }, [])
+      // This tab stays mounted, so signing something has to re-count on
+      // the way back here rather than on next launch.
+      refreshDocuments();
+    }, [refreshDocuments])
   );
 
   return (
@@ -88,6 +93,29 @@ export default function More() {
         <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
           Log hours, view your pay
         </Text>
+      </Pressable>
+
+      {/* No permission gate — what a coach sees here is decided entirely
+          by what an admin assigned them. */}
+      <Pressable
+        onPress={() => router.push("/(coach)/documents")}
+        className="mb-3 flex-row items-center gap-3 rounded-2xl border border-stone-200 px-5 py-4"
+      >
+        <View className="flex-1">
+          <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+            Documents
+          </Text>
+          <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+            SOPs and agreements to read &amp; sign
+          </Text>
+        </View>
+        {pendingDocuments > 0 ? (
+          <View style={{ minWidth: 22, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: colors.primary, alignItems: "center" }}>
+            <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, color: "white", fontSize: 11 }}>
+              {pendingDocuments > 99 ? "99+" : pendingDocuments}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
 
       {/* Every coach/admin account is also a real training client — jumps

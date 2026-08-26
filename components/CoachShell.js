@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../lib/auth/AuthProvider";
 import { getMessagingSettings } from "../lib/programming/messagingSettings";
+import { usePendingDocuments } from "../lib/programming/usePendingDocuments";
 import { colors, fonts } from "../lib/theme";
 
 // Sidebar structure (per Terra's grouping, 2026-08-24): two plain top-level
@@ -50,6 +51,10 @@ const NAV_SECTIONS = [
       // admin-only, deliberately absent there).
       { key: "my-training", label: "My Training", href: "/(coach)/my-training", icon: "fitness" },
       { key: "payroll", label: "Payroll", href: "/(coach)/payroll", icon: "cash" },
+      // Ungated like Payroll: what a coach sees here is decided entirely by
+      // what an admin assigned them, so there's nothing for a module toggle
+      // to add. `badge` names the count key this row reads from.
+      { key: "documents", label: "Documents", href: "/(coach)/documents", icon: "document-text", badge: "documents" },
       // Every coach/admin account is also a real training client — this
       // jumps into the same member tab experience any client uses. The
       // member layout's staff-only "Coaching" tab is the way back.
@@ -123,7 +128,21 @@ function isActive(pathname, href) {
   return pathname === target || pathname.startsWith(`${target}/`);
 }
 
-function NavRow({ active, icon, label, onPress, indent }) {
+// Count pill for a nav row (and, when a group is collapsed, its header).
+// maxFontSizeMultiplier is pinned tight: this is a fixed-width-ish pill in a
+// 232px column with no room to reflow at Dynamic Type's larger sizes.
+function NavBadge({ count }) {
+  if (!count) return null;
+  return (
+    <View style={{ minWidth: 20, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.primary, alignItems: "center" }}>
+      <Text numberOfLines={1} maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, color: "white", fontSize: 11 }}>
+        {count > 99 ? "99+" : count}
+      </Text>
+    </View>
+  );
+}
+
+function NavRow({ active, icon, label, onPress, indent, badge }) {
   return (
     <Pressable
       onPress={onPress}
@@ -131,14 +150,19 @@ function NavRow({ active, icon, label, onPress, indent }) {
       style={[indent ? { marginLeft: 12 } : null, active ? { backgroundColor: "#fdf6f2" } : null]}
     >
       <Ionicons name={active ? icon : `${icon}-outline`} size={18} color={active ? colors.primaryOnWhite : "#78716c"} />
-      <Text numberOfLines={1} style={{ fontFamily: active ? fonts.sansSemiBold : fonts.sansMedium, color: active ? colors.primaryOnWhite : "#44403c", fontSize: 14 }}>
+      <Text numberOfLines={1} style={{ flex: 1, fontFamily: active ? fonts.sansSemiBold : fonts.sansMedium, color: active ? colors.primaryOnWhite : "#44403c", fontSize: 14 }}>
         {label}
       </Text>
+      <NavBadge count={badge} />
     </Pressable>
   );
 }
 
-function GroupHeader({ label, expanded, onToggle }) {
+// The header carries its children's total ONLY while the group is
+// collapsed — that's the whole point of it (something is waiting inside a
+// group you can't see). Expanded, the row itself shows the same number a
+// few pixels below, and repeating it there reads as two separate things.
+function GroupHeader({ label, expanded, onToggle, badge }) {
   return (
     <Pressable
       onPress={onToggle}
@@ -148,7 +172,10 @@ function GroupHeader({ label, expanded, onToggle }) {
       <Text style={{ fontFamily: fonts.sansSemiBold, color: "#78716c", fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase" }}>
         {label}
       </Text>
-      <Ionicons name={expanded ? "chevron-down" : "chevron-forward"} size={14} color="#a8a29e" />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        {!expanded ? <NavBadge count={badge} /> : null}
+        <Ionicons name={expanded ? "chevron-down" : "chevron-forward"} size={14} color="#a8a29e" />
+      </View>
     </Pressable>
   );
 }
@@ -163,7 +190,7 @@ function GroupHeader({ label, expanded, onToggle }) {
 // open either way. A user's explicit toggle beats both.
 // Exported so a harness route can render it with fake data — CoachShell
 // itself needs a real signed-in profile.
-export function NavList({ profile, pathname, messagingEnabled, onNavigate, onSignOut, defaultExpanded = true }) {
+export function NavList({ profile, pathname, messagingEnabled, badges, onNavigate, onSignOut, defaultExpanded = true }) {
   const isAdmin = profile?.role === "admin";
   const [overrides, setOverrides] = useState(readStoredGroupOverrides);
 
@@ -204,10 +231,11 @@ export function NavList({ profile, pathname, messagingEnabled, onNavigate, onSig
           if (children.length === 0) return null;
           const containsActive = children.some((c) => !c.noActive && isActive(pathname, c.href));
           const expanded = overrides[section.key] ?? (defaultExpanded || containsActive);
+          const groupBadge = children.reduce((sum, c) => sum + (c.badge ? (badges?.[c.badge] ?? 0) : 0), 0);
 
           return (
             <View key={section.key}>
-              <GroupHeader label={section.label} expanded={expanded} onToggle={() => toggleGroup(section.key, expanded)} />
+              <GroupHeader label={section.label} expanded={expanded} badge={groupBadge} onToggle={() => toggleGroup(section.key, expanded)} />
               {expanded
                 ? children.map((c) => (
                     <NavRow
@@ -216,6 +244,7 @@ export function NavList({ profile, pathname, messagingEnabled, onNavigate, onSig
                       active={!c.noActive && isActive(pathname, c.href)}
                       icon={c.icon}
                       label={c.label}
+                      badge={c.badge ? badges?.[c.badge] ?? 0 : 0}
                       onPress={() => onNavigate(c.href)}
                     />
                   ))
@@ -271,6 +300,10 @@ export function CoachShell({ children }) {
   // with messaging turned off admin-side. Same "hidden until confirmed"
   // convention as FloatingMessageBubble/CoachMessageBubble.
   const [messagingEnabled, setMessagingEnabled] = useState(false);
+  // CoachShell remounts on every web navigation, so this re-counts on each
+  // page load with no focus wiring needed. Native gets its own count in
+  // app/(coach)/more.js, which is where its nav actually lives.
+  const { count: pendingDocuments } = usePendingDocuments();
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -306,7 +339,28 @@ export function CoachShell({ children }) {
           }}
         >
           <Pressable onPress={() => setDrawerOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="menu" size={24} color="#44403c" />
+            <View>
+              <Ionicons name="menu" size={24} color="#44403c" />
+              {/* At this width the entire nav is behind the hamburger, so
+                  the badge has to surface on the button itself or it's
+                  invisible until you open the drawer. A dot, not a count —
+                  there's no room for a number here. */}
+              {pendingDocuments > 0 ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -1,
+                    right: -2,
+                    width: 9,
+                    height: 9,
+                    borderRadius: 999,
+                    backgroundColor: colors.primary,
+                    borderWidth: 1.5,
+                    borderColor: "white",
+                  }}
+                />
+              ) : null}
+            </View>
           </Pressable>
           <Image source={require("../assets/kova-logo.jpg")} style={{ width: 26, height: 26, borderRadius: 13 }} />
           <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 16 }} numberOfLines={1}>
@@ -332,6 +386,7 @@ export function CoachShell({ children }) {
                 profile={profile}
                 pathname={pathname}
                 messagingEnabled={messagingEnabled}
+                badges={{ documents: pendingDocuments }}
                 defaultExpanded={false}
                 onNavigate={(href) => {
                   setDrawerOpen(false);
@@ -367,7 +422,14 @@ export function CoachShell({ children }) {
             Kova Strength
           </Text>
         </View>
-        <NavList profile={profile} pathname={pathname} messagingEnabled={messagingEnabled} onNavigate={(href) => router.push(href)} onSignOut={signOut} />
+        <NavList
+          profile={profile}
+          pathname={pathname}
+          messagingEnabled={messagingEnabled}
+          badges={{ documents: pendingDocuments }}
+          onNavigate={(href) => router.push(href)}
+          onSignOut={signOut}
+        />
       </View>
 
       <View style={{ flex: 1, minWidth: 0 }}>{children}</View>

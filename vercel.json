@@ -18,6 +18,8 @@
     { "source": "/blocks/:blockId", "destination": "/blocks/[blockId]" },
     { "source": "/builder/:workoutId", "destination": "/builder/[workoutId]" },
     { "source": "/clients/:userId", "destination": "/clients/[userId]" },
+    { "source": "/documents/manage/:documentId", "destination": "/documents/manage/[documentId]" },
+    { "source": "/documents/:documentId", "destination": "/documents/[documentId]" },
     { "source": "/events/:eventId/responses", "destination": "/events/[eventId]/responses" },
     { "source": "/events/:eventId", "destination": "/events/[eventId]" },
     { "source": "/history/:exerciseId", "destination": "/history/[exerciseId]" },
