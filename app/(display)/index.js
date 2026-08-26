@@ -6,6 +6,7 @@ import { HubLiveSession } from "../../components/hub/HubLiveSession";
 import { HubIdleScreen } from "../../components/hub/HubIdleScreen";
 import { HubStartModal, HubAddClientModal } from "../../components/hub/HubPickerModals";
 import { removeHubClient } from "../../lib/programming/hub";
+import { stagedCountForCoach } from "../../lib/programming/hubStaging";
 import { toastError } from "../../lib/toast";
 import { fonts, colors, type } from "../../lib/theme";
 
@@ -39,6 +40,10 @@ export default function DisplayBoard() {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  // Set the moment a session ends, when that coach has another group waiting.
+  // A count, not the groups themselves: starting still goes through the PIN,
+  // so the wall never lists a coach's staged clients before it's earned.
+  const [nextStaged, setNextStaged] = useState(null);
   const now = useNow();
 
   // The 3-second poll would pick these up on its own; refreshing immediately
@@ -55,8 +60,14 @@ export default function DisplayBoard() {
 
   const handleEnd = async () => {
     setConfirmEnd(false);
+    const endedCoachId = hubSession?.coach_id ?? null;
+    const endedCoachName = hubSession?.coach_name ?? null;
     try {
       await end();
+      // Best-effort: a failure here costs the prompt, not the end.
+      stagedCountForCoach(endedCoachId)
+        .then((n) => setNextStaged(n > 0 ? { count: n, coachName: endedCoachName } : null))
+        .catch(() => {});
     } catch (e) {
       toastError("Couldn't end the session.", e);
     }
@@ -101,7 +112,9 @@ export default function DisplayBoard() {
         {hubSession ? (
           confirmEnd ? (
             <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
-              <Text style={{ fontFamily: fonts.sansMedium, fontSize: type.caption, color: "#57534e", marginRight: 8 }}>End this session?</Text>
+              <Text style={{ fontFamily: fonts.sansMedium, fontSize: type.caption, color: "#57534e", marginRight: 8 }}>
+                {hubSession.coach_name ? `End ${hubSession.coach_name.split(" ")[0]}'s session?` : "End this session?"}
+              </Text>
               <PressFade onPress={handleEnd} style={{ backgroundColor: "#b23a22", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, marginRight: 6 }}>
                 <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "white" }}>End</Text>
               </PressFade>
@@ -122,7 +135,45 @@ export default function DisplayBoard() {
 
       {/* Body */}
       {hubSession === undefined ? null : !hubSession ? (
-        <HubIdleScreen now={now} onPressClock={() => setStartOpen(true)} />
+        <View style={{ flex: 1 }}>
+          <HubIdleScreen now={now} onPressClock={() => setStartOpen(true)} />
+          {nextStaged ? (
+            <View style={{ position: "absolute", left: 0, right: 0, bottom: 34, alignItems: "center" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 18,
+                  backgroundColor: "#fdf6f2",
+                  borderWidth: 1,
+                  borderColor: "#f0ddd2",
+                  borderRadius: 18,
+                  paddingLeft: 24,
+                  paddingRight: 14,
+                  paddingVertical: 14,
+                }}
+              >
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 18, color: "#7a5c49" }}>
+                  {`${nextStaged.coachName ? nextStaged.coachName.split(" ")[0] : "You"} still ${
+                    nextStaged.count === 1 ? "have a session" : `have ${nextStaged.count} sessions`
+                  } staged today`}
+                </Text>
+                <PressFade
+                  onPress={() => {
+                    setNextStaged(null);
+                    setStartOpen(true);
+                  }}
+                  style={{ borderRadius: 12, backgroundColor: colors.primary, paddingHorizontal: 22, paddingVertical: 11 }}
+                >
+                  <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "white" }}>Start the next one</Text>
+                </PressFade>
+                <PressFade onPress={() => setNextStaged(null)} hitSlop={10} style={{ paddingHorizontal: 6, paddingVertical: 8 }}>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: colors.muted }}>Not now</Text>
+                </PressFade>
+              </View>
+            </View>
+          ) : null}
+        </View>
       ) : !board ? null : (
         <View style={{ flex: 1, padding: 14 }}>
           <HubLiveSession

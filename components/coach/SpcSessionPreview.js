@@ -10,6 +10,8 @@ import { formatRest, schemeLabel } from "../../lib/programming/prescription";
 import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
 import { STATUS_LABELS, STATUS_TONES } from "../../lib/programming/spcStatus";
 import { formatDateShort } from "../../lib/formatDate";
+import { currentWeekNumber } from "../../lib/programming/schedule";
+import { formatTimeLabel } from "../../lib/dateTimeOptions";
 import { fonts, colors, statusColors, type } from "../../lib/theme";
 
 // The printed SPC sheet, on a phone (design_handoff_spc_roster_v1, screen 3).
@@ -37,6 +39,9 @@ const INK = "#2a211c";
 const LOGGED_GREEN = "#4d6142";
 const CHIP_SELECTED_BG = "#e3ead9";
 const CHIP_EMPTY_BORDER = "#d6d1ca";
+const STAGE_ESPRESSO = "#33251f";
+const STAGE_ESPRESSO_TEXT = "#f7f3ee";
+const STAGE_ESPRESSO_SUB = "#a89a92";
 
 function firstNameOf(name) {
   return (name ?? "").trim().split(/\s+/)[0] || "";
@@ -350,7 +355,124 @@ function LiftCard({ lift, weekNumbers, currentWeek, selectedWeek, onSelectWeek }
 
 /* ------------------------------------------------------------------ sheet */
 
-export function SpcSessionPreview({ client, visible, onClose }) {
+/* ------------------------------------------------------------ staging bar */
+
+// Docked, not a button in the footer row: the footer scrolls away on a long
+// session and this has to stay reachable wherever she has read to. Espresso
+// so it reads as the same object as the roster's tray, which it is.
+function StagingBar({ staging, sessionNumber, stagedSessionNumber, unpublishedWeek, onAdd, onRemove }) {
+  const insets = useSafeAreaInsets();
+  const count = staging?.clients?.length ?? 0;
+  const stagedHere = stagedSessionNumber === sessionNumber;
+  const stagedElsewhere = stagedSessionNumber != null && !stagedHere;
+  const full = count >= 4 && stagedSessionNumber == null;
+
+  const label = stagedHere
+    ? `Session ${sessionNumber} staged`
+    : stagedElsewhere
+    ? `Session ${stagedSessionNumber} staged`
+    : full
+    ? "That's four already"
+    : `${formatTimeLabel(staging?.scheduled_time)} · ${count} staged`;
+
+  return (
+    <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: insets.bottom + 12, backgroundColor: colors.canvas }}>
+      {/* Staging an unpublished week is allowed on purpose — a coach often
+          stages the night before and publishes on the way out — but it is
+          the single thing that makes the board refuse at 5am, so it is said
+          here, on the staged card, and again on the wall before Start. */}
+      {unpublishedWeek != null ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 7,
+            backgroundColor: "#fdf1e7",
+            borderWidth: 1,
+            borderColor: "#eed6bd",
+            borderRadius: 10,
+            paddingHorizontal: 11,
+            paddingVertical: 8,
+            marginBottom: 8,
+          }}
+        >
+          <Ionicons name="alert-circle-outline" size={14} color="#8a5a2e" />
+          <Text maxFontSizeMultiplier={1.15} style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 12, lineHeight: 16, color: "#8a5a2e" }}>
+            {`Week ${unpublishedWeek} is still a draft — publish it or the board can't start her.`}
+          </Text>
+        </View>
+      ) : null}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          backgroundColor: STAGE_ESPRESSO,
+          borderRadius: 14,
+          paddingVertical: 11,
+          paddingHorizontal: 14,
+        }}
+      >
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            maxFontSizeMultiplier={1.1}
+            style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.8, color: STAGE_ESPRESSO_SUB, textTransform: "uppercase" }}
+          >
+            {stagedHere ? "On this session" : "Adding to"}
+          </Text>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ marginTop: 1, fontFamily: fonts.sansBold, fontSize: 14, color: STAGE_ESPRESSO_TEXT }}>
+            {label}
+          </Text>
+        </View>
+
+        {stagedHere ? (
+          <PressFade
+            onPress={onRemove}
+            style={{ borderRadius: 999, borderWidth: 1, borderColor: "#5c4a41", paddingHorizontal: 16, paddingVertical: 9 }}
+          >
+            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: STAGE_ESPRESSO_TEXT }}>
+              Remove
+            </Text>
+          </PressFade>
+        ) : (
+          <PressFade
+            onPress={onAdd}
+            disabled={full}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 5,
+              borderRadius: 999,
+              backgroundColor: colors.primary,
+              paddingHorizontal: 15,
+              paddingVertical: 9,
+              opacity: full ? 0.45 : 1,
+            }}
+          >
+            <Ionicons name="add" size={15} color="#fff" />
+            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>
+              {stagedElsewhere ? `Switch to ${sessionNumber}` : `Session ${sessionNumber}`}
+            </Text>
+          </PressFade>
+        )}
+      </View>
+    </View>
+  );
+}
+
+export function SpcSessionPreview({
+  client,
+  visible,
+  onClose,
+  // Staging (0090). Null unless the coach is mid-build on the roster; when
+  // set, this sheet grows the one control that makes staging work — you pick
+  // WHICH session here, so this is the only screen that can honestly say what
+  // is being added.
+  staging = null,
+  stagedSessionNumber = null,
+  onStage,
+  onUnstage,
+}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   // `ready` is separate from `data` because getSpcSessionPreview returns
@@ -398,6 +520,22 @@ export function SpcSessionPreview({ client, visible, onClose }) {
     const logged = session.weekNumbers.filter((w) => session.lifts.some((l) => l.byWeek[w]?.logged));
     return logged.length ? Math.max(...logged) : (data?.currentWeek ?? session.weekNumbers[0]);
   }, [session, selectedWeek, data]);
+
+  // The week this will actually RUN in: the staged morning when staging,
+  // otherwise today. They differ across a Monday, which is exactly the case
+  // staging exists for.
+  const targetWeek = useMemo(() => {
+    if (!data?.block?.block_start_date) return null;
+    if (!staging?.scheduled_date) return data.currentWeek;
+    return currentWeekNumber(data.block.block_start_date, data.blockLengthWeeks, staging.scheduled_date);
+  }, [data, staging?.scheduled_date]);
+
+  // Null when it's published (or when there's nothing to say), otherwise the
+  // week number that isn't.
+  const unpublishedWeek = useMemo(() => {
+    if (!session || targetWeek == null) return null;
+    return session.statusByWeek?.[targetWeek] === "published" ? null : targetWeek;
+  }, [session, targetWeek]);
 
   const openPrint = () => {
     if (!data?.block || !session) return;
@@ -498,6 +636,34 @@ export function SpcSessionPreview({ client, visible, onClose }) {
               </Eyebrow>
             </View>
 
+            {/* A sheet full of lifts that nobody can see. The status is per
+                week, and this screen renders whichever week HAS lifts — so
+                without saying it, a block whose current week is still a draft
+                looks finished, and the first anyone hears of it is the wall
+                refusing to start the session. */}
+            {session.statusByWeek?.[data.currentWeek] && session.statusByWeek[data.currentWeek] !== "published" ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 8,
+                  backgroundColor: "#fdf1e7",
+                  borderWidth: 1,
+                  borderColor: "#eed6bd",
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                }}
+              >
+                <Ionicons name="eye-off-outline" size={14} color="#8a5a2e" />
+                <Text maxFontSizeMultiplier={1.15} style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17, color: "#8a5a2e" }}>
+                  <Text style={{ fontFamily: fonts.sansBold }}>Week {data.currentWeek} is a draft.</Text>
+                  {"  "}She can't see it and the board can't start it until it's published.
+                </Text>
+              </View>
+            ) : null}
+
             {session.lifts.length === 0 ? (
               <Text style={{ marginTop: 10, fontFamily: fonts.sans, fontSize: 13, color: colors.muted }}>
                 No lifts written for this session yet.
@@ -577,6 +743,17 @@ export function SpcSessionPreview({ client, visible, onClose }) {
             </View>
           </ScrollView>
         )}
+
+        {staging && session ? (
+          <StagingBar
+            staging={staging}
+            sessionNumber={session.sessionNumber}
+            stagedSessionNumber={stagedSessionNumber}
+            unpublishedWeek={unpublishedWeek}
+            onAdd={() => onStage?.(session.sessionNumber)}
+            onRemove={() => onUnstage?.()}
+          />
+        ) : null}
       </View>
     </Modal>
   );

@@ -8,9 +8,14 @@ import { HubLiveSession } from "../../../components/hub/HubLiveSession";
 import { HubSessionSetup } from "../../../components/hub/HubSessionSetup";
 import { HubPinCard } from "../../../components/hub/HubPinCard";
 import { HubAddClientModal } from "../../../components/hub/HubPickerModals";
+import { StagedSessionsCard } from "../../../components/hub/StagedSessionsCard";
 import { removeHubClient } from "../../../lib/programming/hub";
+import { listMyStagedSessions, startStagedSession } from "../../../lib/programming/hubStaging";
+import { describeWhen } from "../../../components/coach/StagingTray";
+import { confirmStartNextStaged } from "../../../lib/confirmDialog";
+import { todayInBoise } from "../../../lib/boiseDate";
 import { useAuth } from "../../../lib/auth/AuthProvider";
-import { toastError } from "../../../lib/toast";
+import { showToast, toastError } from "../../../lib/toast";
 import { fonts, colors, type } from "../../../lib/theme";
 
 // The coach's side of the SPC Live Session Hub: pick up to 4 clients + which
@@ -27,6 +32,7 @@ export default function SpcLiveSession() {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [ending, setEnding] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [stagedRefresh, setStagedRefresh] = useState(0);
 
   const handleStarted = async () => {
     await refreshSession();
@@ -41,12 +47,38 @@ export default function SpcLiveSession() {
     await handleStarted();
   };
 
+  // Back-to-back is the normal shape of a coach's morning, and walking back
+  // through the picker between a 5am and a 6am is exactly what staging
+  // exists to remove. Anything that goes wrong here is a missed convenience,
+  // not a failed end — the session is already ended by this point.
+  const offerNextStaged = async () => {
+    try {
+      const today = todayInBoise();
+      const next = (await listMyStagedSessions(profile?.id)).find(
+        (g) => g.finalized_at && g.scheduled_date === today
+      );
+      if (!next) return;
+      if (!(await confirmStartNextStaged(describeWhen(next), next.clients?.length ?? 0))) return;
+      const res = await startStagedSession(next.id);
+      const skipped = res?.skipped ?? [];
+      if (skipped.length > 0) {
+        showToast(`Started without ${skipped.map((x) => (x.name ?? "").split(" ")[0]).join(", ")}.`);
+      }
+      setStagedRefresh((n) => n + 1);
+      await handleStarted();
+    } catch {
+      // Silent: the staged card below still offers Start.
+    }
+  };
+
   const handleEnd = async () => {
     if (ending) return;
     setEnding(true);
     try {
       await end();
       setConfirmEnd(false);
+      setStagedRefresh((n) => n + 1);
+      await offerNextStaged();
     } catch (e) {
       toastError("Couldn't end the session.", e);
     } finally {
@@ -77,6 +109,13 @@ export default function SpcLiveSession() {
           {hubSession ? (
             confirmEnd ? (
               <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {/* Names whose session it is. On a shared board the coach
+                    tapping End is often not the coach running it. */}
+                {hubSession.coach_name && hubSession.coach_id !== profile?.id ? (
+                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: type.caption, color: "#57534e", marginRight: 8 }}>
+                    End {hubSession.coach_name.split(" ")[0]}'s session?
+                  </Text>
+                ) : null}
                 <PressFade
                   onPress={handleEnd}
                   disabled={ending}
@@ -102,6 +141,13 @@ export default function SpcLiveSession() {
         {pollError && hubSession ? (
           <Text style={{ fontFamily: fonts.sansMedium, fontSize: type.caption, color: "#8a5a2e", marginBottom: 8 }}>Reconnecting…</Text>
         ) : null}
+
+        <StagedSessionsCard
+          profile={profile}
+          openSession={hubSession}
+          refreshKey={stagedRefresh}
+          onStarted={handleStarted}
+        />
 
         {hubSession === undefined ? (
           <View style={{ paddingVertical: 40, alignItems: "center" }}>

@@ -6,6 +6,20 @@ import { getSpcRosterDetail } from "../../lib/programming/spcRoster";
 import { checkAndAutoDraft } from "../../lib/programming/spcDashboard";
 import { STATUS_LABELS, STATUS_TONES, STATUS_ORDER } from "../../lib/programming/spcStatus";
 import { SpcSessionPreview } from "./SpcSessionPreview";
+import { StageWhenSheet, StageTrayBar, StageTraySheet, describeWhen } from "./StagingTray";
+import {
+  getMyDraftStagedSession,
+  getStagedSession,
+  createStagedSession,
+  updateStagedSession,
+  deleteStagedSession,
+  finalizeStagedSession,
+  addStagedClient,
+  removeStagedClient,
+} from "../../lib/programming/hubStaging";
+import { confirmDiscardStaged } from "../../lib/confirmDialog";
+import { showToast, toastError } from "../../lib/toast";
+import { useAuth } from "../../lib/auth/AuthProvider";
 import { CoachShell } from "../CoachShell";
 import { PressFade } from "../PressFade";
 import { Eyebrow } from "../Eyebrow";
@@ -387,6 +401,30 @@ export function SpcRosterMobile() {
     setStatusFilter(raw || null);
   }, [params.status]);
 
+  // ------------------------------------------------------------- staging
+  // The group being built. A partial unique index (0090) guarantees at most
+  // one unfinalized group per coach, which is what makes "pick up where I
+  // left off" unambiguous when this screen reopens — and `?staging=` targets
+  // a specific one, so "Edit" from the live page lands here on the right one.
+  const { profile } = useAuth();
+  const [staged, setStaged] = useState(null);
+  const [whenOpen, setWhenOpen] = useState(false);
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [stagingBusy, setStagingBusy] = useState(false);
+  const stagingParam = typeof params.staging === "string" ? params.staging : "";
+
+  const refreshStaged = useCallback(async () => {
+    if (!profile?.id) return;
+    try {
+      // A failed staging read must never take the roster down with it —
+      // this is a side feature on somebody else's screen.
+      const next = stagingParam ? await getStagedSession(stagingParam) : await getMyDraftStagedSession(profile.id);
+      setStaged(next && next.coach_id === profile.id ? next : null);
+    } catch {
+      setStaged(null);
+    }
+  }, [profile?.id, stagingParam]);
+
   const load = useCallback(async () => {
     // Clear any previous failure first — without this a successful Retry
     // loaded the data but left the error screen up until the app restarted,
@@ -409,7 +447,8 @@ export function SpcRosterMobile() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      refreshStaged();
+    }, [load, refreshStaged])
   );
 
   // Search narrows first; both the count line and the sheet's counts are
@@ -462,6 +501,106 @@ export function SpcRosterMobile() {
     }
   };
 
+  const stagedNumbers = useMemo(() => {
+    const map = {};
+    for (const c of staged?.clients ?? []) map[c.user_id] = c.session_number;
+    return map;
+  }, [staged]);
+
+  const handleCreateStaged = async ({ scheduledDate, scheduledTime, title }) => {
+    if (stagingBusy) return;
+    setStagingBusy(true);
+    try {
+      const next = await createStagedSession({
+        coachId: profile.id,
+        coachName: profile.name ?? null,
+        scheduledDate,
+        scheduledTime,
+        title,
+      });
+      setStaged(next);
+      setWhenOpen(false);
+      showToast("Now pick who's in it — open a client and add the session.");
+    } catch (e) {
+      toastError("Couldn't start staging.", e);
+    } finally {
+      setStagingBusy(false);
+    }
+  };
+
+  // Add, or switch which session she's doing — staging the same client twice
+  // is meaningless, so a second add on a different session replaces the first
+  // rather than erroring on the unique constraint.
+  const handleStageClient = async (sessionNumber) => {
+    if (!staged || !preview) return;
+    try {
+      if (stagedNumbers[preview.userId] != null) {
+        await removeStagedClient(staged.id, preview.userId);
+      }
+      await addStagedClient(
+        staged.id,
+        { userId: preview.userId, name: preview.name, sessionNumber },
+        (staged.clients ?? []).filter((c) => c.user_id !== preview.userId)
+      );
+      await refreshStaged();
+      setPreview(null);
+      showToast(`${firstNameOf(preview.name)} added to ${describeWhen(staged)}.`);
+    } catch (e) {
+      toastError("Couldn't add her to the staged session.", e);
+    }
+  };
+
+  const handleUnstageClient = async (userId, { closePreview = false } = {}) => {
+    if (!staged) return;
+    try {
+      await removeStagedClient(staged.id, userId);
+      await refreshStaged();
+      if (closePreview) setPreview(null);
+    } catch (e) {
+      toastError("Couldn't remove her.", e);
+    }
+  };
+
+  const handleFinalizeStaged = async () => {
+    if (!staged || stagingBusy) return;
+    setStagingBusy(true);
+    try {
+      await finalizeStagedSession(staged.id);
+      const when = describeWhen(staged);
+      setTrayOpen(false);
+      setStaged(null);
+      if (stagingParam) router.replace("/(coach)/spc");
+      showToast(`Staged for ${when}. It's on the board that morning.`);
+    } catch (e) {
+      toastError("Couldn't finalize it.", e);
+    } finally {
+      setStagingBusy(false);
+    }
+  };
+
+  const handleDiscardStaged = async () => {
+    if (!staged) return;
+    if (!(await confirmDiscardStaged(describeWhen(staged)))) return;
+    try {
+      await deleteStagedSession(staged.id);
+      setTrayOpen(false);
+      setStaged(null);
+      if (stagingParam) router.replace("/(coach)/spc");
+    } catch (e) {
+      toastError("Couldn't discard it.", e);
+    }
+  };
+
+  const handleChangeWhen = async (fields) => {
+    if (!staged) return;
+    try {
+      await updateStagedSession(staged.id, fields);
+      await refreshStaged();
+    } catch (e) {
+      toastError("Couldn't change the time.", e);
+    }
+  };
+
   if (loadError) {
     return (
       <CoachShell>
@@ -489,7 +628,10 @@ export function SpcRosterMobile() {
 
   return (
     <CoachShell>
-      <ScrollView style={{ flex: 1, backgroundColor: CANVAS }} contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 20 }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: CANVAS }}
+        contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 20, paddingBottom: staged ? 108 : 20 }}
+      >
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 27, color: colors.primary }}>
             SPC
@@ -509,6 +651,36 @@ export function SpcRosterMobile() {
         <View style={{ marginTop: 14 }}>
           <StartLiveSessionButton onPress={() => router.push("/(coach)/spc/live")} />
         </View>
+
+        {/* Hidden while a group is being built — the docked tray is the
+            indicator then, and two entry points for one thing reads as two
+            things. */}
+        {staged ? null : (
+          <PressFade
+            onPress={() => setWhenOpen(true)}
+            accessibilityLabel="Stage a session for later"
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 9,
+              marginTop: 8,
+              backgroundColor: "#fff",
+              borderWidth: 1,
+              borderColor: CARD_BORDER,
+              borderRadius: 12,
+              paddingVertical: 11,
+              paddingHorizontal: 14,
+            }}
+          >
+            <Ionicons name="albums-outline" size={15} color={colors.primaryOnWhite} />
+            <Text maxFontSizeMultiplier={1.15} style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 13, color: INK }}>
+              Stage a session for later
+            </Text>
+            <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.muted }}>
+              ›
+            </Text>
+          </PressFade>
+        )}
 
         {roster.length === 0 ? (
           <Text style={{ marginTop: 20, fontFamily: fonts.sans, fontSize: 13.5, color: colors.muted }}>
@@ -621,7 +793,30 @@ export function SpcRosterMobile() {
         }}
       />
 
-      <SpcSessionPreview client={preview} visible={Boolean(preview)} onClose={() => setPreview(null)} />
+      <SpcSessionPreview
+        client={preview}
+        visible={Boolean(preview)}
+        onClose={() => setPreview(null)}
+        staging={staged}
+        stagedSessionNumber={preview ? stagedNumbers[preview.userId] ?? null : null}
+        onStage={handleStageClient}
+        onUnstage={() => preview && handleUnstageClient(preview.userId, { closePreview: true })}
+      />
+
+      {staged ? <StageTrayBar staged={staged} onPress={() => setTrayOpen(true)} /> : null}
+
+      <StageWhenSheet visible={whenOpen} onClose={() => setWhenOpen(false)} onCreate={handleCreateStaged} busy={stagingBusy} />
+
+      <StageTraySheet
+        visible={trayOpen && Boolean(staged)}
+        staged={staged}
+        busy={stagingBusy}
+        onClose={() => setTrayOpen(false)}
+        onRemove={(userId) => handleUnstageClient(userId)}
+        onFinalize={handleFinalizeStaged}
+        onDiscard={handleDiscardStaged}
+        onChangeWhen={handleChangeWhen}
+      />
     </CoachShell>
   );
 }
