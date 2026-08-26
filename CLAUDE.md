@@ -3695,6 +3695,8 @@ sections; next number after 0080 is 0081.)
 - `0079_session_education.sql` — **run**, verified live 2026-08-22 (10 columns, 3 FKs, RLS on, 1 policy, index, grants, PostgREST `200 []`, plus an impersonation test in a rolled-back transaction: coach reads and writes, member sees zero rows and is blocked from inserting). Adds `programming.session_education` — coach education per (block, session), staff-only. See the Coach Prep section.
 - `0085_warmup_and_template_supersets.sql` — **run**, verified live 2026-08-24 (all 8 columns confirmed by direct query, `NOTIFY pgrst` sent). `superset_group_id` on all four warm-up tables + `template_exercises`/`one_off_exercises`, `rep_scheme` on `one_off_exercises` (backfilled 0030-style). See "Builder tweak batch" above.
 - `0080_session_education_scope.sql` — **run**, verified live 2026-08-23 (column + default confirmed, a bad value rejected by the check, all existing rows defaulted to `'session'` with nothing to backfill). Adds `session_education.scope` (`session`/`warmup`/`exercises`) so "general" can mean the warm-up block as well as the whole day.
+- `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
+- `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.
 
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
@@ -5408,7 +5410,137 @@ chips, compact↔per-set, picker + New carrying the search text. **Not
 verified behind a real login** — standing limitation; worth a click-through
 of a real superset warm-up showing on a member's phone and the printed sheet.
 
+## Staff documents: SOPs and agreements, signed in-app (2026-08-25)
+
+Coaches read and sign SOPs and employment agreements in the app. Migrations
+`0092` (tables) and `0093` (rich text), both applied and verified live.
+
+**Assignment is MANUAL, not derived from a coach's permission flags.** The
+original ask was type-driven — "mark a coach as nutrition and the nutrition
+SOP pops up for them" — but the only staff-type concept this app has is the
+four `can_view_*` / `can_log_ops_hours` toggles (0015/0036), and those are
+capability switches, not job titles. Tying "who signs what" to "what screens
+you can see" would come apart the first time someone needs one without the
+other. Terra's call: one admin page that assigns each document to specific
+people. That also covers the individualized case (an agreement carrying one
+person's rate) for free, which a type rule never could.
+
+**Two version counters, and the difference between them is the whole design.**
+`version` bumps on EVERY save, so each snapshot in `document_versions` is
+distinct and a signature can point at the exact text agreed to.
+`signature_required_since` only moves when the admin ticks "ask everyone to
+sign again". A signature counts iff `signed_version >= signature_required_since`
+— so a typo fix leaves everyone signed, a policy change re-pends it, and
+neither writes over anyone's signature row. `isSignatureCurrent` /
+`isPendingFor` in `lib/programming/documents.js` are the single definition of
+both, and the badge count deliberately routes through the same
+`getMyDocuments()` the list uses rather than a leaner count query — two
+implementations of "pending" would eventually disagree and leave a badge
+pointing at an empty list.
+
+**Completed is built from SIGNATURES, never from assignments.** That asymmetry
+is what makes "it stays there even if that type is turned off" true:
+unassigning someone leaves their signature untouched, so the document keeps
+showing under Completed with no assignment behind it. Archiving works the same
+way — it pulls a retired SOP out of everyone's Pending without erasing it from
+the Completed list of anyone who signed. Deleting is only offered while nothing
+has been signed, since the FKs would happily cascade the record away.
+
+**Signing** is a typed name plus a ticked attestation (`ATTESTATION` is
+exported from `app/(coach)/documents/[documentId].js` so the wording can't
+drift from what gets quoted). `typed_name` is stored as free text rather than
+copied from `core.users.name` — the record should say what the person actually
+wrote, and a profile name can change afterwards. Admin can delete a signature;
+a coach has no update or delete policy on their own.
+
+**Nav**: Documents sits in `CoachShell`'s **Coach** group, ungated (what a
+coach sees is decided entirely by what's assigned to them). `NavRow` and
+`GroupHeader` gained badges — the group header carries its children's total
+**only while collapsed**, since expanded the row shows the same number a few
+pixels below and repeating it reads as two separate things. At phone width the
+whole nav is behind the hamburger, so that gets a dot instead.
+
+### Rich text — read formatting from the STYLE, not the tag name
+
+`lib/richText.js` is a pure-JS tokenizer (no DOM) shared by web and native, so
+the two can't drift on what a document says. Sanitized on the way in and again
+on the way out. It shipped broken twice before it was right, and each failure
+is worth knowing:
+
+- **Google Docs writes bold as `<span style="font-weight:700">`, never `<b>`**
+  — and underline as `text-decoration:underline`, italic as `font-style`. The
+  first version read formatting from tag names and stripped spans, so a Docs
+  paste lost essentially everything. Formatting is now read from the inline
+  style first and the tag name second.
+- **The style has to be able to say NO.** A Docs paste wraps its entire body in
+  `<b style="font-weight:normal">`. Trusting the tag there turns the whole
+  document bold.
+- **Docs nests a `<p>` inside every `<li>`.** That paragraph was starting its
+  own block in `parseRichBlocks` and stealing the bullet's text, leaving an
+  empty `<li>` that got filtered out — the bullets vanished entirely on native.
+  Same treatment as a table cell now: inside a list item or a cell, a block tag
+  is just line structure.
+- **A Google SHEETS copy is a `<table>`** (and Docs embeds them), so tables are
+  whitelisted, with `colspan`/`rowspan` the only attributes kept besides `href`
+  — dropping them silently reshapes the grid. Each table is wrapped in its own
+  `overflow-x` container on web so a wide sheet scrolls sideways on a phone
+  instead of stretching the page; native renders it in a horizontal ScrollView.
+- **`<meta>` in `DROP_CONTENT` ate an entire document.** The "skip ahead to the
+  closing tag" branch ran to the end of the string for a void element, and a
+  Google Docs paste opens with `<meta charset>`. Only tags that genuinely have
+  a closing partner belong in that set.
+- **A tag name must start with a letter**, or prose like `5 < 6 and a > b`
+  parses "6" as a tag and everything up to the next `>` disappears.
+
+**Two CSS facts, both found by measuring computed styles rather than reading
+the stylesheet**: this app's base reset sets `list-style-type: none`, so
+bullets need an explicit type or they render as bare indented text; and
+Montserrat is loaded as a separate font FILE per weight, so `font-weight: 700`
+alone renders at regular weight — bold needs the family naming the bold file.
+Both apply to any raw HTML rendered into this app, not just documents.
+
+**Editing is web-only.** `RichTextEditor.web.js` is a contenteditable div,
+deliberately UNCONTROLLED — writing sanitized HTML back on every keystroke
+sends the caret to the end of the document. `resetKey` re-seeds it (pass the
+document id and version, never the value). Toolbar buttons use `onMouseDown`
+with `preventDefault`, not `onPress`: a click steals focus from the editable
+area first and collapses the selection the command is meant to act on.
+`document.execCommand` is formally deprecated and still the only thing every
+browser implements for this; the alternative is a Selection/Range
+implementation of bold-a-partial-word. The native sibling is a **read-only
+preview on purpose** — a plain TextInput would silently flatten a formatted
+document's bullets the moment it saved, which is the bug the feature exists to
+fix. `manage/[documentId].js` also tracks `bodyFormat` in state rather than
+hardcoding `"html"` on save, so a title-only edit on native can't relabel an
+untouched plain-text body as HTML.
+
+**Not supported**: images.
+
+**Verification**: 50 sanitizer tests across Word, Google Docs, Google Sheets
+and hostile input (script tags, `onclick`, `javascript:` hrefs, malformed
+markup); the RLS impersonation test above; a real Docs-shaped clipboard payload
+driven in a browser through a throwaway `app/zz-harness.js` — paste, toolbar
+bold on a live selection, and typing mid-document to confirm the caret holds.
+**Not click-tested behind a real login** — standing limitation.
+
+**Worth remembering from this one: a test can encode the bug.** The first pass
+had a Google Docs case that PASSED while asserting the broken output — bold and
+underline stripped, the whole document wrapped in `<b>`. Every suite was green
+and the feature was visibly wrong. When a user says "still not right" and the
+tests are passing, suspect the expectation before suspecting the report.
+
 ## Working notes for future sessions
+
+- **Always update this file at the end of a session — it is not optional and
+  it does not need asking for.** Every feature here has its own section, and
+  the convention was obvious from the file's shape but never actually written
+  down, which is how a session finished without one (2026-08-25) and had to be
+  told. Add a section for what was built, add the migration to the ledger, and
+  record any lesson that cost real time — especially the ones a future session
+  would otherwise re-learn from scratch. If the work is a follow-up to an
+  existing section, amend that section rather than appending a near-duplicate,
+  and correct anything the session proved stale rather than leaving both
+  versions standing.
 
 - **No DB credentials available** in this environment — always ask the user to run new migration files in the Supabase SQL Editor, and proactively remind them about `NOTIFY pgrst, 'reload schema'` afterward rather than waiting for a confusing PGRST205 error to prompt the question. **Update 2026-08-04**: the Supabase CLI *was* authenticated in this particular session — `supabase functions deploy send-announcement` and `scan-announcements --no-verify-jwt` both succeeded directly, and `supabase secrets list` worked too (returns hashed values, not plaintext, so secrets still can't be read back). This is the same class of "don't assume the sandboxed limitation always holds — check first" exception as the physical-device session below. Still no direct Postgres access confirmed either way — migrations still went through the user's own SQL Editor this session, untested whether `supabase db push` or similar would also work.
 - **No device/simulator access, normally** — native-only features (push, native builder screen, deep links) can be code-reviewed and bundle-checked (Metro will still catch syntax errors) but not visually verified. Say so plainly rather than implying they've been tested. One session was an exception (real Bash access to Dustin's actual Mac) — see "Physical iOS device builds" above for what that involved and what's durable vs. not.
