@@ -1140,14 +1140,19 @@ export function ExerciseCard({
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  minHeight: 42,
+                  minHeight: 44,
                   borderWidth: 1,
                   borderColor: INPUT_BORDER,
                   borderRadius: 10,
                   paddingHorizontal: 12,
                   paddingVertical: 10,
                   fontFamily: fonts.sans,
-                  fontSize: 13,
+                  // 16 rather than the 13 this used to be: it read as too
+                  // small next to the 18-20pt set boxes, and on the PWA any
+                  // input under 16px makes iOS Safari auto-zoom on focus
+                  // (same reason the auth fields are 16).
+                  fontSize: 16,
+                  lineHeight: 21,
                   color: "#44403c",
                   backgroundColor: "#fff",
                 }}
