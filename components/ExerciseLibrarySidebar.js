@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { MUSCLE_GROUPS, MOVEMENT_PATTERNS, groupExercisesByParent, parentMuscleGroup, muscleGroupLabel } from "../lib/programming/exercises";
+import { MUSCLE_GROUPS, MOVEMENT_PATTERNS, groupLibraryByParent, parentMuscleGroup, muscleGroupLabel } from "../lib/programming/exercises";
+import { listExerciseParents } from "../lib/programming/exerciseParents";
 import { fonts } from "../lib/theme";
 
 // The left-hand library column shared by all three web builders (group,
@@ -18,10 +19,16 @@ import { fonts } from "../lib/theme";
 // from under the click. Fixed at the root by making the chevron a sibling
 // of the insert button, not nested inside it, and dropping the drag wiring
 // entirely — plain click-to-insert already covers the same functionality.
+//
+// Since 0095 a parent is its own record, not an exercise, so a parent row
+// here has exactly one behaviour: expand. There is no longer a small
+// chevron to aim for beside a large insert target, which is what made
+// "show me what's under this" so regularly insert the parent instead.
+// Everything you can click to insert is a leaf.
 
 const UNGROUPED_KEY = "__ungrouped__";
 
-function LibraryExercise({ exercise, onInsertClick, hasChildren, expanded, onToggleExpand, indented }) {
+function LibraryExercise({ exercise, onInsertClick, indented }) {
   return (
     <View
       className="mb-1.5 flex-row items-center rounded-lg border border-stone-200 px-3 py-2"
@@ -44,16 +51,31 @@ function LibraryExercise({ exercise, onInsertClick, hasChildren, expanded, onTog
           ) : null}
         </View>
       </Pressable>
-      {hasChildren ? (
-        <Pressable
-          onPress={onToggleExpand}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel={expanded ? `Collapse ${exercise.name} variations` : `Show ${exercise.name} variations`}
-        >
-          <Ionicons name={expanded ? "chevron-down" : "chevron-forward"} size={16} color="#78716c" />
-        </Pressable>
-      ) : null}
     </View>
+  );
+}
+
+// A parent. The whole row is one target and it only ever expands — a
+// parent has no row in programming.exercises, so there is nothing here
+// that could be inserted into a session even by accident. The chevron
+// leads rather than trails so the row reads as a container opening, not as
+// an item with an afterthought beside it.
+function LibraryParent({ parent, count, expanded, onToggle }) {
+  return (
+    <Pressable
+      onPress={onToggle}
+      className="mb-1.5 flex-row items-center gap-2 rounded-lg px-3 py-2"
+      style={{ borderWidth: 1, borderColor: "#e3d5c2", backgroundColor: expanded ? "#fdf6f2" : "#ffffff" }}
+      accessibilityLabel={expanded ? `Collapse ${parent.name}` : `Show exercises under ${parent.name}`}
+    >
+      <Ionicons name={expanded ? "chevron-down" : "chevron-forward"} size={16} color="#8a5140" />
+      <Text className="flex-1" style={{ fontFamily: fonts.sansSemiBold, color: "#8a5140" }}>
+        {parent.name}
+      </Text>
+      <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: "#a8a29e" }}>
+        {count}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -127,6 +149,24 @@ export function ExerciseLibrarySidebar({
   // and those keys change when the grouping toggle flips.)
   const [expandedSections, setExpandedSections] = useState(() => new Set());
   const [expandedParents, setExpandedParents] = useState(() => new Set());
+  // Fetched here rather than threaded through all three builders: it's 18
+  // name-only rows, and keying the effect on `library` means it re-reads
+  // whenever a builder appends a newly-created exercise — which is exactly
+  // when a "+ New parent" from the exercise form needs to show up. A failed
+  // load costs the grouping, not the sidebar: every exercise then renders
+  // at the top level, which is what the library looked like before 0095.
+  const [parents, setParents] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    listExerciseParents()
+      .then((rows) => {
+        if (!cancelled) setParents(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [library]);
 
   const toggleSection = (key) => {
     setExpandedSections((prev) => {
@@ -159,11 +199,13 @@ export function ExerciseLibrarySidebar({
   // ambiguous which exercises are meant for a session's warm-up slot.
   const warmupLibrary = useMemo(() => filteredLibrary.filter((e) => e.type === "warmup"), [filteredLibrary]);
 
-  // Only top-level (parent-less) exercises get bucketed — variations render
-  // nested under their parent instead. While actively searching, the flat
-  // filteredLibrary is used directly (see render), so a direct search for a
-  // variation's name always surfaces it without expanding its parent first.
-  const { childrenByParent } = useMemo(() => groupExercisesByParent(library), [library]);
+  // Parents and unparented lifts become one sorted list of entries;
+  // members render nested under their parent. Built from the unfiltered
+  // library on purpose — while actively searching the flat filteredLibrary
+  // is used directly (see render), so a search for a variation's name
+  // always surfaces it without expanding its parent first.
+  const liftLibrary = useMemo(() => library.filter((e) => e.type !== "warmup"), [library]);
+  const { entries } = useMemo(() => groupLibraryByParent(liftLibrary, parents), [liftLibrary, parents]);
 
   // One shape for both groupings: an ordered list of {key, title, items}.
   // Anything with no value for the active grouping falls into a trailing
@@ -176,8 +218,7 @@ export function ExerciseLibrarySidebar({
     const buckets = new Map(keys.map((k) => [k, []]));
     const ungrouped = [];
 
-    filteredLibrary.forEach((e) => {
-      if (e.type === "warmup" || e.parent_exercise_id) return;
+    entries.forEach((e) => {
       const values = e[field] ?? [];
       if (!values.length) {
         ungrouped.push(e);
@@ -208,7 +249,7 @@ export function ExerciseLibrarySidebar({
       out.push({ key: UNGROUPED_KEY, title: groupBy === "muscle" ? "no muscle group" : "no movement pattern", items: ungrouped });
     }
     return out;
-  }, [filteredLibrary, groupBy]);
+  }, [entries, groupBy]);
 
   return (
     <View
@@ -281,21 +322,22 @@ export function ExerciseLibrarySidebar({
                 collapsed={isCollapsed(section.key)}
                 onToggle={() => toggleSection(section.key)}
               >
-                {section.items.map((exercise) => {
-                  const children = childrenByParent.get(exercise.id) ?? [];
-                  const expanded = expandedParents.has(exercise.id);
+                {section.items.map((entry) => {
+                  if (entry.kind !== "parent") {
+                    return <LibraryExercise key={entry.id} exercise={entry.exercise} onInsertClick={onInsertLift} />;
+                  }
+                  const expanded = expandedParents.has(entry.id);
                   return (
-                    <View key={exercise.id}>
-                      <LibraryExercise
-                        exercise={exercise}
-                        onInsertClick={onInsertLift}
-                        hasChildren={children.length > 0}
+                    <View key={entry.id}>
+                      <LibraryParent
+                        parent={entry.parent}
+                        count={entry.members.length}
                         expanded={expanded}
-                        onToggleExpand={() => toggleParent(exercise.id)}
+                        onToggle={() => toggleParent(entry.id)}
                       />
                       {expanded
-                        ? children.map((child) => (
-                            <LibraryExercise key={child.id} exercise={child} onInsertClick={onInsertLift} indented />
+                        ? entry.members.map((member) => (
+                            <LibraryExercise key={member.id} exercise={member} onInsertClick={onInsertLift} indented />
                           ))
                         : null}
                     </View>

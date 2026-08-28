@@ -16,6 +16,7 @@ import {
   muscleGroupLabel,
 } from "../../../lib/programming/exercises";
 import { findDuplicateCandidates, listMergeDismissals, pairKey } from "../../../lib/programming/exerciseMerge";
+import { listExerciseParents } from "../../../lib/programming/exerciseParents";
 import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { PressFade } from "../../../components/PressFade";
@@ -129,7 +130,7 @@ function Row({ exercise, uses, duplicate, parentName, onEdit, onArchive, onUnarc
           ) : null}
         </View>
         {parentName ? (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 2 }}>Variation of {parentName}</Text>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 2 }}>↳ under {parentName}</Text>
         ) : exercise.cues ? (
           <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 2 }} numberOfLines={1}>
             {exercise.cues}
@@ -192,16 +193,19 @@ export default function ExercisesWeb() {
   const [editing, setEditing] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [archivingId, setArchivingId] = useState(null);
+  const [parents, setParents] = useState([]);
 
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [rows, counts] = await Promise.all([
+      const [rows, counts, parentRows] = await Promise.all([
         listExercises({ includeArchived: true }),
         listExerciseUsageCounts().catch(() => ({})),
+        listExerciseParents().catch(() => []),
       ]);
       setExercises(rows);
       setUsage(counts);
+      setParents(parentRows);
     } catch (err) {
       setLoadError(err.message ?? String(err));
       return;
@@ -219,11 +223,10 @@ export default function ExercisesWeb() {
     }, [load])
   );
 
-  const parentNameById = useMemo(() => {
-    const map = new Map();
-    (exercises ?? []).forEach((ex) => map.set(ex.id, ex.name));
-    return map;
-  }, [exercises]);
+  // Parent names come off the parent records (0095), not off other
+  // exercises — a parent is no longer an exercise, so this can't be
+  // resolved from the library list any more.
+  const parentNameById = useMemo(() => new Map(parents.map((p) => [p.id, p.name])), [parents]);
 
   const dismissedKeys = useMemo(
     () => new Set(dismissals.map((d) => pairKey(d.exercise_a_id, d.exercise_b_id))),
@@ -497,6 +500,37 @@ export default function ExercisesWeb() {
             </PressFade>
           ) : null}
 
+          {/* Always shown for a reviewer, unlike the two above — this one
+              isn't reporting a problem, it's the only way into renaming or
+              removing a parent. */}
+          {reviewer ? (
+            <PressFade
+              onPress={() => router.push("/(coach)/exercises/parents")}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 14,
+                marginTop: 18,
+                backgroundColor: "#fff",
+                borderWidth: 1,
+                borderColor: CARD_BORDER,
+                borderRadius: 12,
+                paddingVertical: 14,
+                paddingHorizontal: 18,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
+                  {parents.length} parent{parents.length === 1 ? "" : "s"}
+                </Text>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", marginTop: 2 }} numberOfLines={1}>
+                  The movements variations file under in the builder sidebar
+                </Text>
+              </View>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Manage parents →</Text>
+            </PressFade>
+          ) : null}
+
           <View style={{ marginTop: 18, backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, overflow: "hidden" }}>
             <HeaderRow />
             {filtered.length === 0 ? (
@@ -512,7 +546,7 @@ export default function ExercisesWeb() {
                   exercise={ex}
                   uses={usage[ex.id] ?? 0}
                   duplicate={duplicateIds.has(ex.id)}
-                  parentName={ex.parent_exercise_id ? parentNameById.get(ex.parent_exercise_id) : null}
+                  parentName={ex.parent_id ? parentNameById.get(ex.parent_id) : null}
                   onEdit={(e) => {
                     setEditing(e);
                     setModalVisible(true);
@@ -528,6 +562,10 @@ export default function ExercisesWeb() {
         </View>
 
         <ExerciseFormModal
+          // A "+ New parent" from inside the form has to reach the
+          // "↳ under X" line on this list, which reads off this screen's
+          // own parents state.
+          onParentsChanged={() => listExerciseParents().then(setParents).catch(() => {})}
           visible={modalVisible}
           initialExercise={editing}
           allExercises={exercises}

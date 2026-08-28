@@ -3696,6 +3696,7 @@ sections; next number after 0080 is 0081.)
 - `0085_warmup_and_template_supersets.sql` — **run**, verified live 2026-08-24 (all 8 columns confirmed by direct query, `NOTIFY pgrst` sent). `superset_group_id` on all four warm-up tables + `template_exercises`/`one_off_exercises`, `rep_scheme` on `one_off_exercises` (backfilled 0030-style). See "Builder tweak batch" above.
 - `0080_session_education_scope.sql` — **run**, verified live 2026-08-23 (column + default confirmed, a bad value rejected by the check, all existing rows defaulted to `'session'` with nothing to backfill). Adds `session_education.scope` (`session`/`warmup`/`exercises`) so "general" can mean the warm-up block as well as the whole day.
 - `0094_exercise_review.sql` — **run**, verified live 2026-08-27 (both columns, the partial index, both rewritten policies, and all 155 existing rows grandfathered to approved; plus a 9-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.exercises.approved_at`/`approved_by` and reopens creation to every staff member. See "Exercise library: everyone adds, reviewers approve" below.
+- `0095_exercise_parents.sql` — **run**, verified live 2026-08-27 (18 parent records, 66 exercises grouped, 0 variations lost, 0 duplicate names, plus an 11-assertion impersonation test in a rolled-back transaction as a reviewer, a non-reviewer coach and a member). Adds `programming.exercise_parents` and `exercises.parent_id`; `exercises.parent_exercise_id` is left populated but unread as the rollback path. See "A parent is its own record now" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
 - `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.
 
@@ -5657,6 +5658,112 @@ partial merge is impossible); queue cards, merge rows and all three
 sidebar states screenshotted through a throwaway `app/zz-harness.js`;
 clean `expo export` + `check:routes` + a Babel scope pass over all 20
 touched files. **Not verified behind a real login** — standing limitation.
+
+## A parent is its own record now (2026-08-27)
+
+Reported as three separate irritations, all one root cause: **"parent" was
+never a thing.** It was `exercises.parent_exercise_id` — any exercise that
+happened to have something pointing at it. So the "Variation of" picker had
+to offer all 135 parent-less exercises (any one of them *could* become a
+parent), and in the builder sidebar a parent row was a full-width
+click-to-insert target with a 16px chevron beside it, so aiming for "show me
+what's under this" regularly dropped the parent into the session instead.
+
+Migration `0095` gives parents their own table. **A parent has no row in
+`programming.exercises` at all**, so it cannot be programmed, logged,
+picked, merged or counted in a PR — structural, not a filter a future query
+can forget. That is the whole reason for a separate table rather than an
+`is_group` flag on `exercises`: with a flag, all ~15 consumers
+(`listExercises`, three builder sidebars, both pickers, merge, duplicate
+detection, PR stats, member history) would each have to remember to exclude
+it, and missing one puts a group in a member's history.
+
+**The data is what forced the migration's shape — check it before assuming
+a parent is just a header.** 15 of the 20 live parents are themselves
+programmed into real sessions: Landmine Press carries 551 logged sets, Lat
+Pulldown 164 across 30 sessions, RDL/OH Press/Bicep Curl/Bench Press are all
+in current programs. So every **lift** head is migrated INTO its own parent
+alongside its variations — the "Lat Pulldown" parent holds the Lat Pulldown
+lift plus its two variations. The exercise id never changes, so sessions,
+logs and PRs are untouched. Result: 18 parents, 66 exercises grouped, zero
+variations orphaned.
+
+Three real data problems the old model allowed, all resolved by the backfill
+(and none of them reachable again):
+- **A warm-up was parenting two lifts.** The warm-up "Glute Bridge" headed
+  two real lifts. The form's picker filtered warm-ups out, so this predates
+  that filter or came in via a merge. Only lift heads join a parent, so it
+  keeps its variations without being a member of the group itself.
+- **Two parents both named "Glute Bridge"** (the lift and that warm-up) —
+  folded into one record by a `unique (lower(btrim(name)))` index, which is
+  now what stops it recurring.
+- **`RDL `** had a trailing space; trimmed on the way in.
+
+Skipped deliberately: "Front Rack/Goblet Squat", whose only child is an
+archived duplicate Squat. It is itself a variation of Squat and belongs
+inside that parent, not heading one — so the backfill requires at least one
+**active** child before creating a parent record.
+
+**What changed in the app:**
+- `lib/programming/exerciseParents.js` (new) — CRUD plus `setExerciseParent`.
+  Deleting a parent is non-destructive by construction (`ON DELETE SET NULL`),
+  which is why it needs no usage check the way archiving an exercise does.
+- `groupExercisesByParent` → **`groupLibraryByParent(exercises, parents)`**,
+  which returns one sorted list of entries mixing parents and unparented
+  lifts. Each entry carries resolved tags, because bucketing a *parent*
+  needs an answer too: its own tags win, and an untagged parent falls back to
+  the union of its members' — so it can never drop out of every bucket. An
+  exercise whose `parent_id` isn't in the passed list renders at the top
+  level rather than vanishing.
+- **Sidebar**: a parent is a terracotta header row with a leading chevron
+  that *only* expands. There is no longer a small chevron to aim for beside a
+  large insert target; everything clickable-to-insert is a leaf.
+  `ExerciseLibrarySidebar` fetches parents itself, keyed on `library` — the
+  three builders already replace that array when a new exercise is created,
+  which is exactly when a "+ New parent" needs to appear, so no builder
+  needed touching.
+- **`ExerciseFormModal`**: "Variation of" → **"Parent"**, listing ~18 records
+  instead of 135 exercises, with **"+ New parent"** inline. Inline because
+  the moment you need one is the moment you're adding the variation —
+  sending someone to another screen is how a variation gets saved unparented
+  and never fixed. The modal self-fetches parents rather than being threaded
+  through all six call sites. **This is also what makes the short list
+  coherent**: filtering the old picker to "exercises that already have
+  variations" would have meant an existing plain exercise could never become
+  a parent without creating a duplicate of itself.
+- **`app/(coach)/exercises/parents.js`** (new) — a "Manage parents →"
+  doorway on the library page beside Merge, deliberately *not* a block on the
+  review queue: that queue is a list that empties out, and a permanent
+  management list under it stops "nothing waiting" being true at a glance.
+  Reviewer-only, matching the RLS split (any coach can add a parent, only a
+  reviewer renames or removes one). Inline rename guards the Enter-then-blur
+  double-fire with a ref, not state — both handlers run before a `setState`
+  applies.
+- **`mergeExercises`**: the "move the retired entry's children across" step
+  is gone (nothing hangs off an exercise now). Replaced with carrying the
+  retired entry's `parent_id` onto the survivor **only when the survivor has
+  none** — an existing grouping is a deliberate choice. Its `select` needed
+  `parent_id` adding; without that the new code would have silently never
+  fired, exactly the class this file already warns about.
+
+`exercises.parent_exercise_id` is left populated and unread as the rollback
+path, with a SQL `COMMENT` saying so. Nothing in the app reads it — verified
+by grep.
+
+**Verified**: migration dry-run in a rolled-back transaction before applying;
+11 RLS assertions as a reviewer, a non-reviewer coach and a member (all
+rolled back, confirmed no leftovers); `npm run build` + `check:routes` clean;
+a Babel parse **and unresolved-identifier** pass over every touched file; and
+the sidebar, the parent field and the manage card driven for real through a
+throwaway `app/zz-harness.js` — clicking a parent expands it and inserts
+**nothing**, a member still inserts, and a rename fires exactly once on
+Enter. **Not verified**: any of it behind a real login (standing limitation),
+or on native.
+
+**Open, worth Terra's eye**: there is still an active "Glute Bridge" lift
+with no variations sitting *outside* the "Glute Bridge" parent. Adopting it
+by name match would have been guessing, so it was left alone — one click on
+the manage screen or its own entry fixes it.
 
 ## Working notes for future sessions
 

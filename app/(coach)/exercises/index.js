@@ -13,6 +13,7 @@ import {
   parentMuscleGroup,
   muscleGroupLabel,
 } from "../../../lib/programming/exercises";
+import { listExerciseParents } from "../../../lib/programming/exerciseParents";
 import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
 import { CoachShell } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
@@ -33,6 +34,7 @@ export default function Exercises() {
   const [editing, setEditing] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [archivingId, setArchivingId] = useState(null);
+  const [parents, setParents] = useState([]);
 
   const load = useCallback(async () => {
     try {
@@ -41,6 +43,14 @@ export default function Exercises() {
       setExercises(data);
     } catch (err) {
       setLoadError(err.message ?? String(err));
+      return;
+    }
+    // Isolated: parents only supply the "↳ under X" line, so a failed
+    // load costs that line rather than the whole library.
+    try {
+      setParents(await listExerciseParents());
+    } catch {
+      setParents([]);
     }
   }, []);
 
@@ -53,11 +63,10 @@ export default function Exercises() {
     }, [load])
   );
 
-  const parentNameById = useMemo(() => {
-    const map = new Map();
-    (exercises ?? []).forEach((ex) => map.set(ex.id, ex.name));
-    return map;
-  }, [exercises]);
+  // Parent names come off the parent records (0095), not off other
+  // exercises — a parent is no longer an exercise, so this can't be
+  // resolved from the library list any more.
+  const parentNameById = useMemo(() => new Map(parents.map((p) => [p.id, p.name])), [parents]);
 
   const filtered = useMemo(() => {
     if (!exercises) return [];
@@ -280,9 +289,9 @@ export default function Exercises() {
                         </View>
                       ) : null}
                     </View>
-                    {item.type !== "warmup" && item.parent_exercise_id ? (
+                    {item.type !== "warmup" && item.parent_id ? (
                       <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-                        ↳ variation of {parentNameById.get(item.parent_exercise_id) ?? "…"}
+                        ↳ under {parentNameById.get(item.parent_id) ?? "…"}
                       </Text>
                     ) : null}
                     {item.cues ? (
@@ -342,6 +351,10 @@ export default function Exercises() {
         )}
 
         <ExerciseFormModal
+          // A "+ New parent" from inside the form has to reach the
+          // "↳ under X" line on this list, which reads off this screen's
+          // own parents state.
+          onParentsChanged={() => listExerciseParents().then(setParents).catch(() => {})}
           visible={modalVisible}
           initialExercise={editing}
           initialType={typeFilter}

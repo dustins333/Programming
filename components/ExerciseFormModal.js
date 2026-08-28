@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { MUSCLE_GROUPS, MUSCLE_SUB_GROUPS, MOVEMENT_PATTERNS, muscleGroupLabel, isLibraryReviewer } from "../lib/programming/exercises";
+import { listExerciseParents, createExerciseParent } from "../lib/programming/exerciseParents";
+import { toastError } from "../lib/toast";
 import { useAuth } from "../lib/auth/AuthProvider";
 import { REP_UNITS, DEFAULT_REP_UNIT } from "../lib/programming/repUnit";
 import { fonts, colors } from "../lib/theme";
@@ -13,40 +15,107 @@ import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../lib/
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
 
 function emptyForm(type) {
-  return { name: "", type, muscleGroups: [], movementPatterns: [], parentExerciseId: "", defaultSets: "", defaultReps: "", repUnit: DEFAULT_REP_UNIT, tracksWeight: true, cues: "", videoUrl: "" };
+  return { name: "", type, muscleGroups: [], movementPatterns: [], parentId: "", defaultSets: "", defaultReps: "", repUnit: DEFAULT_REP_UNIT, tracksWeight: true, cues: "", videoUrl: "" };
 }
 
-// Single-select against parent-less lift exercises — a variation can't
-// itself have variations (enforced here by only ever offering parent-less
-// options, not a DB constraint), can't be its own parent, and warm-ups
-// don't participate at all.
-function ParentExercisePicker({ value, options, onChange }) {
+// Single-select against the parent RECORDS (0095), not against other
+// exercises. That's what makes this list ~18 entries instead of the 135
+// parent-less lifts it used to have to offer, since before 0095 any
+// exercise could turn out to be a parent.
+//
+// "+ New parent" is inline rather than a trip to another screen: the
+// moment you need one is the moment you're adding the variation, and
+// sending someone away mid-form to create it is how you end up with the
+// variation saved unparented and never fixed.
+function ParentPicker({ value, options, onChange, onCreate, disabled }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [busy, setBusy] = useState(false);
   const selected = options.find((o) => o.id === value);
-  const label = selected ? selected.name : "None (top-level movement)";
+  const label = selected ? selected.name : "None (stands on its own)";
+
+  const submitNew = async () => {
+    const name = newName.trim();
+    if (!name || busy) return;
+    setBusy(true);
+    try {
+      const created = await onCreate(name);
+      // Selecting it is the point of creating it here — leaving the coach
+      // to then find their own new parent in the list is a step that
+      // exists only because the code didn't do it.
+      if (created) onChange(created.id);
+      setCreating(false);
+      setNewName("");
+      setPickerOpen(false);
+    } catch (e) {
+      toastError(e.message ?? "Couldn't add that parent.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const newParentRow = (
+    <View className="mt-2">
+      {creating ? (
+        <View className="flex-row items-center gap-2">
+          <TextInput
+            value={newName}
+            onChangeText={setNewName}
+            autoFocus
+            placeholder="New parent name…"
+            onSubmitEditing={submitNew}
+            className="flex-1 rounded-lg border px-3 py-2"
+            style={{ fontFamily: fonts.sans, borderColor: colors.primary }}
+          />
+          <Pressable onPress={submitNew} disabled={busy || !newName.trim()} style={{ opacity: busy || !newName.trim() ? 0.5 : 1 }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Add</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setCreating(false);
+              setNewName("");
+            }}
+          >
+            <Text style={{ fontFamily: fonts.sansMedium, color: "#a8a29e" }}>Cancel</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable onPress={() => setCreating(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} disabled={disabled}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite, opacity: disabled ? 0.5 : 1 }}>
+            + New parent
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
 
   if (Platform.OS === "web") {
     return (
-      <select
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ fontFamily: "Montserrat_400Regular", borderColor: "#d6d3d1", borderWidth: 1, borderRadius: 8, padding: 12, width: "100%" }}
-      >
-        <option value="">None (top-level movement)</option>
-        {options.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.name}
-          </option>
-        ))}
-      </select>
+      <View>
+        <select
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ fontFamily: "Montserrat_400Regular", borderColor: "#d6d3d1", borderWidth: 1, borderRadius: 8, padding: 12, width: "100%" }}
+        >
+          <option value="">None (stands on its own)</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+        {newParentRow}
+      </View>
     );
   }
 
   return (
-    <>
+    <View>
       <Pressable onPress={() => setPickerOpen(true)} className="rounded-lg border border-stone-300 px-4 py-3">
         <Text style={{ fontFamily: "Montserrat_400Regular", color: selected ? "#292524" : "#a8a29e" }}>{label}</Text>
       </Pressable>
+      {newParentRow}
       <Modal visible={pickerOpen} animationType="fade" transparent onRequestClose={() => setPickerOpen(false)}>
         <Pressable className="flex-1 items-center justify-center bg-black/40 px-6" onPress={() => setPickerOpen(false)}>
           <View className="max-h-[70%] w-full max-w-sm overflow-hidden rounded-2xl bg-white">
@@ -58,7 +127,7 @@ function ParentExercisePicker({ value, options, onChange }) {
                 }}
                 className="border-b border-stone-100 px-4 py-3.5"
               >
-                <Text style={{ fontFamily: "Montserrat_500Medium" }}>None (top-level movement)</Text>
+                <Text style={{ fontFamily: "Montserrat_500Medium" }}>None (stands on its own)</Text>
               </Pressable>
               {options.map((o) => (
                 <Pressable
@@ -76,7 +145,7 @@ function ParentExercisePicker({ value, options, onChange }) {
           </View>
         </Pressable>
       </Modal>
-    </>
+    </View>
   );
 }
 
@@ -167,8 +236,8 @@ function MuscleGroupPicker({ selected, onToggle }) {
 // initialType: which tab ("lift"/"warmup") the coach was on when they hit
 // "+ New Exercise" — only used for a brand-new exercise, an edit always
 // reflects the exercise's own stored type regardless of which tab it was
-// opened from. allExercises: the full current library, used to build the
-// "Variation of" picker's options.
+// opened from. allExercises: the full current library, used for the
+// duplicate-name check.
 // initialName: pre-fills the Name field for a brand-new exercise — the
 // picker's "+ New" hands over whatever the coach had already typed into its
 // search box. submitLabel: overrides the save button's text ("Save & insert"
@@ -184,9 +253,15 @@ export function ExerciseFormModal({
   onUseExisting,
   onClose,
   onSubmit,
+  onParentsChanged,
 }) {
   const [form, setForm] = useState(emptyForm(initialType));
   const [saving, setSaving] = useState(false);
+  // Parents are loaded here rather than threaded in from all six call
+  // sites — it's 18 name-only rows, and every one of those hosts would
+  // otherwise need its own fetch, its own state and its own refresh after
+  // "+ New parent" for a list none of them otherwise care about.
+  const [parents, setParents] = useState([]);
   // "Keep both" is a per-open decision, not stored — the pairs a coach
   // wants remembered forever are dismissed on the Merge page, which has a
   // real table behind it.
@@ -228,7 +303,7 @@ export function ExerciseFormModal({
               type: initialExercise.type ?? "lift",
               muscleGroups: initialExercise.muscle_group ?? [],
               movementPatterns: initialExercise.movement_pattern ?? [],
-              parentExerciseId: initialExercise.parent_exercise_id ?? "",
+              parentId: initialExercise.parent_id ?? "",
               defaultSets: initialExercise.default_sets != null ? String(initialExercise.default_sets) : "",
               defaultReps: initialExercise.default_reps || "",
               repUnit: initialExercise.rep_unit ?? DEFAULT_REP_UNIT,
@@ -240,6 +315,12 @@ export function ExerciseFormModal({
       );
       setDuplicateAccepted(false);
       setTaggedFromParent(false);
+      // Best-effort: a failed load costs the picker its options, not the
+      // ability to add the exercise. The field reads "None" and the
+      // exercise saves unparented, which is recoverable by editing it.
+      listExerciseParents()
+        .then(setParents)
+        .catch(() => setParents([]));
     }
   }, [visible, initialExercise, initialType, initialName]);
 
@@ -251,15 +332,17 @@ export function ExerciseFormModal({
     excludeId: initialExercise?.id,
   });
 
-  // Only parent-less lift exercises can be picked as a parent — caps
-  // nesting at one level — and an exercise can't be parented to itself.
-  // Archived exercises are excluded too: the Exercise Library page loads
-  // with includeArchived so its own "Show archived" toggle has something to
-  // show, and that same full list is what gets handed here, so without this
-  // filter every retired movement showed up as a pickable parent.
-  const parentOptions = allExercises.filter(
-    (ex) => ex.type !== "warmup" && !ex.parent_exercise_id && ex.is_active !== false && ex.id !== initialExercise?.id
-  );
+  // Every parent is offerable — a parent can't be a variation of another
+  // parent, so unlike the old exercise-to-exercise version there is no
+  // self-reference or nesting to filter out here.
+  const parentOptions = parents;
+
+  const handleCreateParent = async (name) => {
+    const created = await createExerciseParent({ name, createdBy: profile?.id });
+    setParents((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    onParentsChanged?.();
+    return created;
+  };
 
   const toggleInArray = (field, value) => {
     setTaggedFromParent(false);
@@ -276,13 +359,13 @@ export function ExerciseFormModal({
   // below, and anything the coach has already picked is left alone: we
   // only fill a field that's empty, or one we filled ourselves from a
   // previously-picked parent.
-  const handleParentChange = (parentExerciseId) => {
-    const parent = parentOptions.find((ex) => ex.id === parentExerciseId);
+  const handleParentChange = (parentId) => {
+    const parent = parentOptions.find((ex) => ex.id === parentId);
     if (!parent) {
       // Clearing the parent deliberately leaves the tags in place —
       // wiping a set of muscle groups as a side effect of unlinking would
       // be a surprise, and they're very likely still right.
-      setForm((f) => ({ ...f, parentExerciseId }));
+      setForm((f) => ({ ...f, parentId }));
       return;
     }
     const muscle = parent.muscle_group ?? [];
@@ -291,7 +374,7 @@ export function ExerciseFormModal({
     const takeMovement = taggedFromParent || form.movementPatterns.length === 0;
     setForm((f) => ({
       ...f,
-      parentExerciseId,
+      parentId,
       muscleGroups: takeMuscle ? [...muscle] : f.muscleGroups,
       movementPatterns: takeMovement ? [...movement] : f.movementPatterns,
     }));
@@ -430,19 +513,20 @@ export function ExerciseFormModal({
             {isWarmup ? null : (
               <>
                 <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-                  Variation of (optional — groups this under a parent movement in the builder sidebar)
+                  Parent (optional — files this under a movement in the builder sidebar)
                 </Text>
                 <View className="mb-4">
-                  <ParentExercisePicker
-                    value={form.parentExerciseId}
+                  <ParentPicker
+                    value={form.parentId}
                     options={parentOptions}
                     onChange={handleParentChange}
+                    onCreate={handleCreateParent}
                   />
                 </View>
                 {taggedFromParent ? (
                   <Text className="-mt-3 mb-4 text-xs" style={{ fontFamily: fonts.sans, color: "#a8907f" }}>
                     Muscle group and movement pattern pulled from{" "}
-                    {parentOptions.find((ex) => ex.id === form.parentExerciseId)?.name ?? "the parent"} — change either below if
+                    {parentOptions.find((ex) => ex.id === form.parentId)?.name ?? "the parent"} — change either below if
                     this variation differs.
                   </Text>
                 ) : null}
