@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../lib/auth/AuthProvider";
 import { getMessagingSettings } from "../lib/programming/messagingSettings";
 import { usePendingDocuments } from "../lib/programming/usePendingDocuments";
+import { usePendingExerciseReviews } from "../lib/programming/usePendingExerciseReviews";
 import { colors, fonts } from "../lib/theme";
 
 // Sidebar structure (per Terra's grouping, 2026-08-24): two plain top-level
@@ -19,9 +20,11 @@ import { colors, fonts } from "../lib/theme";
 // hides inside its group, and a group with zero visible children renders
 // nothing at all (header included):
 //  - Messages: admin messaging kill switch (messagingEnabled)
-//  - SPC / Nutrition / Exercise Library: per-coach can_view_* flags
+//  - SPC / Nutrition: per-coach can_view_* flags
+//  - Library Review: can_view_exercise_library (the library itself is open
+//    to every coach since 0094 — only the review queue is gated)
 //  - Admin group + Settings: admin role
-// Payroll/Coach Prep/CCrew stay ungated on purpose — every coach logs their
+// Payroll/Coach Prep/CCrew/Exercise Library stay ungated on purpose — every coach logs their
 // own hours, coach education is for every coach who runs the floor, and the
 // CCrew spec is explicit that every coach can view it (its upload screen is
 // admin-only via RLS, not via hiding the nav item).
@@ -39,7 +42,18 @@ const NAV_SECTIONS = [
       { key: "nutrition", label: "Nutrition", href: "/(coach)/nutrition", icon: "restaurant", permission: "can_view_nutrition" },
       { key: "prep", label: "Coach Prep", href: "/(coach)/prep", icon: "school" },
       { key: "ccrew", label: "CCrew", href: "/(coach)/ccrew", icon: "trophy" },
-      { key: "exercises", label: "Exercise Library", href: "/(coach)/exercises", icon: "library", permission: "can_view_exercise_library" },
+      // The library itself is open to every coach since 0094 — anyone can
+      // add an exercise and program it the same minute. What
+      // can_view_exercise_library gates now is the review queue below.
+      { key: "exercises", label: "Exercise Library", href: "/(coach)/exercises", icon: "library" },
+      {
+        key: "exercise-review",
+        label: "Library Review",
+        href: "/(coach)/exercises/review",
+        icon: "checkmark-done",
+        permission: "can_view_exercise_library",
+        badge: "exerciseReviews",
+      },
     ],
   },
   {
@@ -128,6 +142,21 @@ function isActive(pathname, href) {
   return pathname === target || pathname.startsWith(`${target}/`);
 }
 
+// Exactly one row lights up, and it's the most specific match — /exercises
+// is a prefix of /exercises/review, so a plain per-row isActive() check
+// highlights BOTH when you're in the review queue. Resolving the winner
+// once, across every visible row, also means a future nested route can't
+// reintroduce this by being added under an existing one.
+function activeKeyFor(pathname, items) {
+  let best = null;
+  for (const item of items) {
+    if (item.noActive || !isActive(pathname, item.href)) continue;
+    const length = stripGroups(item.href).length;
+    if (!best || length > best.length) best = { key: item.key, length };
+  }
+  return best?.key ?? null;
+}
+
 // Count pill for a nav row (and, when a group is collapsed, its header).
 // maxFontSizeMultiplier is pinned tight: this is a fixed-width-ish pill in a
 // 232px column with no room to reflow at Dynamic Type's larger sizes.
@@ -197,6 +226,16 @@ export function NavList({ profile, pathname, messagingEnabled, badges, onNavigat
   const childVisible = (item) =>
     (item.key !== "messages" || messagingEnabled) && (isAdmin || !item.permission || profile?.[item.permission]);
 
+  // Every row that could light up, flattened — the winner is decided across
+  // all of them at once rather than row by row (see activeKeyFor).
+  const activeKey = activeKeyFor(
+    pathname,
+    NAV_SECTIONS.flatMap((section) => {
+      if (section.adminOnly && !isAdmin) return [];
+      return section.type === "item" ? [section.item] : section.children.filter(childVisible);
+    })
+  );
+
   const toggleGroup = (key, expanded) => {
     setOverrides((prev) => {
       const next = { ...prev, [key]: !expanded };
@@ -223,13 +262,13 @@ export function NavList({ profile, pathname, messagingEnabled, badges, onNavigat
           if (section.type === "item") {
             const it = section.item;
             return (
-              <NavRow key={it.key} active={isActive(pathname, it.href)} icon={it.icon} label={it.label} onPress={() => onNavigate(it.href)} />
+              <NavRow key={it.key} active={activeKey === it.key} icon={it.icon} label={it.label} onPress={() => onNavigate(it.href)} />
             );
           }
 
           const children = section.children.filter(childVisible);
           if (children.length === 0) return null;
-          const containsActive = children.some((c) => !c.noActive && isActive(pathname, c.href));
+          const containsActive = children.some((c) => c.key === activeKey);
           const expanded = overrides[section.key] ?? (defaultExpanded || containsActive);
           const groupBadge = children.reduce((sum, c) => sum + (c.badge ? (badges?.[c.badge] ?? 0) : 0), 0);
 
@@ -241,7 +280,7 @@ export function NavList({ profile, pathname, messagingEnabled, badges, onNavigat
                     <NavRow
                       key={c.key}
                       indent
-                      active={!c.noActive && isActive(pathname, c.href)}
+                      active={activeKey === c.key}
                       icon={c.icon}
                       label={c.label}
                       badge={c.badge ? badges?.[c.badge] ?? 0 : 0}
@@ -304,6 +343,11 @@ export function CoachShell({ children }) {
   // page load with no focus wiring needed. Native gets its own count in
   // app/(coach)/more.js, which is where its nav actually lives.
   const { count: pendingDocuments } = usePendingDocuments();
+  // Returns 0 for anyone who isn't a library reviewer, so this can be read
+  // unconditionally — the row it feeds is hidden for them anyway.
+  const { count: pendingExerciseReviews } = usePendingExerciseReviews();
+  const navBadges = { documents: pendingDocuments, exerciseReviews: pendingExerciseReviews };
+  const anyBadge = pendingDocuments + pendingExerciseReviews > 0;
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -344,8 +388,9 @@ export function CoachShell({ children }) {
               {/* At this width the entire nav is behind the hamburger, so
                   the badge has to surface on the button itself or it's
                   invisible until you open the drawer. A dot, not a count —
-                  there's no room for a number here. */}
-              {pendingDocuments > 0 ? (
+                  there's no room for a number here, and with more than one
+                  badged row a single number would be ambiguous anyway. */}
+              {anyBadge ? (
                 <View
                   style={{
                     position: "absolute",
@@ -386,7 +431,7 @@ export function CoachShell({ children }) {
                 profile={profile}
                 pathname={pathname}
                 messagingEnabled={messagingEnabled}
-                badges={{ documents: pendingDocuments }}
+                badges={navBadges}
                 defaultExpanded={false}
                 onNavigate={(href) => {
                   setDrawerOpen(false);
@@ -426,7 +471,7 @@ export function CoachShell({ children }) {
           profile={profile}
           pathname={pathname}
           messagingEnabled={messagingEnabled}
-          badges={{ documents: pendingDocuments }}
+          badges={navBadges}
           onNavigate={(href) => router.push(href)}
           onSignOut={signOut}
         />

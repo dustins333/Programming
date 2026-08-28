@@ -257,7 +257,7 @@ export function AddStaffModal({ visible, initialRole, onClose, onSubmit }) {
                       Admins have every module
                     </Text>
                     <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-                      SPC, Nutrition, Exercise Library and Ops Hours are always on for an admin, plus Settings,
+                      SPC, Nutrition, Library Reviewer and Ops Hours are always on for an admin, plus Settings,
                       Announcements and payroll administration. There's nothing to choose here.
                     </Text>
                   </View>

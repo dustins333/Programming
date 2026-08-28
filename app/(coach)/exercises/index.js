@@ -5,6 +5,7 @@ import { useAuth } from "../../../lib/auth/AuthProvider";
 import {
   listExercises,
   createExercise,
+  isLibraryReviewer,
   updateExercise,
   setExerciseActive,
   getExerciseUsageCount,
@@ -82,7 +83,7 @@ export default function Exercises() {
       if (editing) {
         await updateExercise(editing.id, form);
       } else {
-        await createExercise({ ...form, createdBy: profile.id });
+        await createExercise({ ...form, createdBy: profile.id, approved: isLibraryReviewer(profile) });
       }
       await load();
     } catch (err) {
@@ -262,6 +263,14 @@ export default function Exercises() {
                             : ""}
                         </Text>
                       )}
+                      {/* Not a warning — a pending entry is fully usable in
+                          a program, it just hasn't been past a reviewer
+                          yet. Tan, matching the review queue's own tone. */}
+                      {!item.approved_at ? (
+                        <View className="rounded-full px-2.5 py-[3px]" style={{ backgroundColor: "#f5ede4" }}>
+                          <Text style={{ fontFamily: fonts.sansBold, color: "#8a5140", fontSize: 10.5 }}>needs review</Text>
+                        </View>
+                      ) : null}
                       {/* Nothing distinguishes a bodyweight lift from a
                           loaded one at a glance otherwise — a coach would
                           have to open each to find out. */}

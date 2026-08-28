@@ -423,6 +423,9 @@ export function CoachHomeDesktop() {
   );
 
   const isAdmin = profile?.role === "admin";
+  // Same inference as launchpad.js's programsSessions() — no
+  // can_view_programs flag exists, so "does no programming" is read off
+  // the two programming-side flags that do (SPC, and library reviewing).
   const nutritionOnly =
     !isAdmin && Boolean(profile?.can_view_nutrition) && !profile?.can_view_spc && !profile?.can_view_exercise_library;
 

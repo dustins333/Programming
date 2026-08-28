@@ -13,6 +13,7 @@ import {
 } from "../../../lib/programming/exerciseMerge";
 import { CoachShell } from "../../../components/CoachShell";
 import { PressFade } from "../../../components/PressFade";
+import { ExerciseTypePill } from "../../../components/ExerciseTypePill";
 import { confirmMergeExercises } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { formatDateMD } from "../../../lib/formatDate";
@@ -77,6 +78,7 @@ function ExercisePicker({ label, value, onChange, exercises, usage, exclude }) {
           <Text style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }} numberOfLines={1}>
             {value.name}
           </Text>
+          <ExerciseTypePill type={value.type} always />
           <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>{usage[value.id] ?? 0} uses</Text>
           <Pressable
             onPress={() => {
@@ -134,6 +136,7 @@ function ExercisePicker({ label, value, onChange, exercises, usage, exclude }) {
                   <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 13, color: "#2a211c" }} numberOfLines={1}>
                     {e.name}
                   </Text>
+                  <ExerciseTypePill type={e.type} always />
                   <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>{usage[e.id] ?? 0}</Text>
                 </Pressable>
               ))}
@@ -145,7 +148,8 @@ function ExercisePicker({ label, value, onChange, exercises, usage, exclude }) {
   );
 }
 
-function SuggestionRow({ pair, usage, onMerge, onDismiss, busy, first }) {
+// Exported for the same harness reason as review.js's PendingCard.
+export function SuggestionRow({ pair, usage, onMerge, onDismiss, busy, first }) {
   // Whichever entry carries more history survives — direction isn't a
   // choice a coach should have to think about when one has 156 uses and
   // the other has 3.
@@ -158,14 +162,20 @@ function SuggestionRow({ pair, usage, onMerge, onDismiss, busy, first }) {
     <View style={{ borderTopWidth: first ? 0 : 1, borderTopColor: "#f4f1ec", paddingVertical: 14, paddingHorizontal: 16 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <View style={{ flex: 1, minWidth: 180 }}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>{retire.name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>{retire.name}</Text>
+            <ExerciseTypePill type={retire.type} always />
+          </View>
           <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 2 }}>
             {describeExercise(retire, usage[retire.id] ?? 0)}
           </Text>
         </View>
         <Text style={{ color: "#c9c4bd", fontSize: 14 }}>→</Text>
         <View style={{ flex: 1, minWidth: 180 }}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>{keep.name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>{keep.name}</Text>
+            <ExerciseTypePill type={keep.type} always />
+          </View>
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: "#4d6142", marginTop: 2 }}>
             {describeExercise(keep, usage[keep.id] ?? 0)} · kept
           </Text>
@@ -236,6 +246,13 @@ export default function MergeExercises() {
   );
 
   const byId = useMemo(() => Object.fromEntries((exercises ?? []).map((e) => [e.id, e])), [exercises]);
+
+  // A warm-up and a lift are separate populations by design, so the "merge
+  // any two" picker has to say no before the button is pressed rather than
+  // only after (mergeExercises refuses it either way — that's the backstop,
+  // not the affordance).
+  const typeMismatch = Boolean(retire && keep && (retire.type ?? "lift") !== (keep.type ?? "lift"));
+  const canMergePicked = Boolean(retire && keep) && !typeMismatch;
 
   const runMerge = async (retireExercise, keepExercise) => {
     const proceed = await confirmMergeExercises(retireExercise.name, keepExercise.name, usage[retireExercise.id] ?? 0);
@@ -333,9 +350,9 @@ export default function MergeExercises() {
                 exclude={retire?.id}
               />
               <Pressable
-                onPress={retire && keep && !busy ? () => runMerge(retire, keep) : undefined}
+                onPress={canMergePicked && !busy ? () => runMerge(retire, keep) : undefined}
                 style={{
-                  backgroundColor: retire && keep ? colors.primary : "#d6d1ca",
+                  backgroundColor: canMergePicked ? colors.primary : "#d6d1ca",
                   borderRadius: 9,
                   paddingVertical: 12,
                   paddingHorizontal: 22,
@@ -345,7 +362,13 @@ export default function MergeExercises() {
                 <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>Merge</Text>
               </Pressable>
             </View>
-            {retire && keep && (usage[retire.id] ?? 0) > (usage[keep.id] ?? 0) ? (
+            {typeMismatch ? (
+              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#b23a22", marginTop: 10 }}>
+                One of these is a warm-up and the other is a lift — those can't be merged. They're separate entries on
+                purpose: the builders' warm-up and exercise pickers each show only their own kind.
+              </Text>
+            ) : null}
+            {!typeMismatch && retire && keep && (usage[retire.id] ?? 0) > (usage[keep.id] ?? 0) ? (
               <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#8a5a2e", marginTop: 10 }}>
                 Heads up — {retire.name} has more history than {keep.name}. Merging this way moves the bigger history onto
                 the smaller entry.

@@ -30,9 +30,9 @@ export default function CoachLayout() {
 
   // Admin always sees every module; a coach's account-level toggle
   // (Settings → Team) hides the Nutrition tab itself when off, matching
-  // the underlying RLS gating from migration 0015. SPC/Exercise Library
-  // aren't tabs on native (reached via Programs/More instead) — those are
-  // filtered in programs.js/more.js.
+  // the underlying RLS gating from migration 0015. SPC and the library
+  // review queue aren't tabs on native (reached via Programs/More instead)
+  // — those are filtered in programs.js/more.js.
   const canViewNutrition = profile.role === "admin" || profile.can_view_nutrition;
 
   return (

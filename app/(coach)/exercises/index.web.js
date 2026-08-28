@@ -6,6 +6,7 @@ import {
   listExercises,
   listExerciseUsageCounts,
   createExercise,
+  isLibraryReviewer,
   updateExercise,
   setExerciseActive,
   getExerciseUsageCount,
@@ -88,6 +89,9 @@ function Row({ exercise, uses, duplicate, parentName, onEdit, onArchive, onUnarc
   const muscles = exercise.muscle_group ?? [];
   const isWarmup = (exercise.type ?? "lift") === "warmup";
   const hasVideo = Boolean(exercise.video_url);
+  // Pending is not a warning — the entry is fully usable, it just hasn't
+  // been through a reviewer yet. Tan, not red.
+  const pending = !exercise.approved_at;
 
   return (
     <View
@@ -106,6 +110,11 @@ function Row({ exercise, uses, duplicate, parentName, onEdit, onArchive, onUnarc
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }} numberOfLines={1}>
             {exercise.name}
           </Text>
+          {pending ? (
+            <View style={{ backgroundColor: "#f5ede4", borderRadius: 5, paddingVertical: 2, paddingHorizontal: 6 }}>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 0.5, color: "#8a5140" }}>NEEDS REVIEW</Text>
+            </View>
+          ) : null}
           {duplicate ? (
             <View style={{ backgroundColor: "#fdece5", borderRadius: 5, paddingVertical: 2, paddingHorizontal: 6 }}>
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 0.5, color: "#b23a22" }}>DUPLICATE?</Text>
@@ -241,6 +250,8 @@ export default function ExercisesWeb() {
   const active = useMemo(() => (exercises ?? []).filter((e) => e.is_active !== false), [exercises]);
   const noVideoCount = useMemo(() => active.filter((e) => !e.video_url).length, [active]);
   const neverUsedCount = useMemo(() => active.filter((e) => (usage[e.id] ?? 0) === 0).length, [active, usage]);
+  const pendingCount = useMemo(() => active.filter((e) => !e.approved_at).length, [active]);
+  const reviewer = isLibraryReviewer(profile);
 
   const patternCounts = useMemo(() => {
     const counts = {};
@@ -281,6 +292,7 @@ export default function ExercisesWeb() {
       if (filter.kind === "warmup" && (ex.type ?? "lift") !== "warmup") return false;
       if (filter.kind === "novideo" && ex.video_url) return false;
       if (filter.kind === "neverused" && (usage[ex.id] ?? 0) > 0) return false;
+      if (filter.kind === "pending" && ex.approved_at) return false;
       if (filter.kind === "duplicates" && !duplicateIds.has(ex.id)) return false;
       if (search && !ex.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
@@ -290,7 +302,7 @@ export default function ExercisesWeb() {
   const handleSubmit = async (form) => {
     try {
       if (editing) await updateExercise(editing.id, form);
-      else await createExercise({ ...form, createdBy: profile.id });
+      else await createExercise({ ...form, createdBy: profile.id, approved: isLibraryReviewer(profile) });
       await load();
     } catch (err) {
       toastError("Failed to save exercise", err);
@@ -423,8 +435,39 @@ export default function ExercisesWeb() {
             <View style={{ width: 1, height: 24, backgroundColor: CARD_BORDER, marginHorizontal: 4 }} />
             <Chip label="No video" count={noVideoCount} active={is("novideo")} onPress={() => set("novideo")} tone="warn" />
             <Chip label="Never used" count={neverUsedCount} active={is("neverused")} onPress={() => set("neverused")} tone="warn" />
+            {pendingCount > 0 ? (
+              <Chip label="Needs review" count={pendingCount} active={is("pending")} onPress={() => set("pending")} tone="warn" />
+            ) : null}
             <Chip label="Archived" active={is("archived")} onPress={() => set("archived")} />
           </View>
+
+          {reviewer && pendingCount > 0 ? (
+            <PressFade
+              onPress={() => router.push("/(coach)/exercises/review")}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 14,
+                marginTop: 18,
+                backgroundColor: "#fdf6f2",
+                borderWidth: 1,
+                borderColor: "#eddcd2",
+                borderRadius: 12,
+                paddingVertical: 14,
+                paddingHorizontal: 18,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
+                  {pendingCount} exercise{pendingCount === 1 ? "" : "s"} waiting for review
+                </Text>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#8a5140", marginTop: 2 }}>
+                  Added by other coaches and already in use — tidy the naming and tagging, then approve.
+                </Text>
+              </View>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Open review queue →</Text>
+            </PressFade>
+          ) : null}
 
           {duplicatePairs.length > 0 ? (
             <PressFade

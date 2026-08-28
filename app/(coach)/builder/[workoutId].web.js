@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { DndContext, PointerSensor, useSensor, useSensors, pointerWithin } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useAuth } from "../../../lib/auth/AuthProvider";
-import { listExercises, createExercise } from "../../../lib/programming/exercises";
+import { listExercises, createExercise, isLibraryReviewer } from "../../../lib/programming/exercises";
 import {
   getWorkout,
   listWarmups,
@@ -268,7 +268,7 @@ export default function WorkoutBuilderWeb() {
 
   const handleNewExerciseCreated = async (form) => {
     try {
-      const created = await createExercise({ ...form, createdBy: profile.id });
+      const created = await createExercise({ ...form, createdBy: profile.id, approved: isLibraryReviewer(profile) });
       setLibrary((prev) => [...prev, created]);
       // Came through a picker's "+ New": drop it straight into the session.
       // Where it lands follows the TYPE the coach actually saved, not which
@@ -286,7 +286,6 @@ export default function WorkoutBuilderWeb() {
     }
   };
 
-  const canManageLibrary = profile?.role === "admin" || profile?.can_view_exercise_library;
 
   const openCreateAndInsert = (target) => (searchText) => {
     setExercisePickerVisible(false);
@@ -719,14 +718,14 @@ export default function WorkoutBuilderWeb() {
         library={library.filter((e) => e.type === "warmup")}
         onClose={() => setWarmupPickerVisible(false)}
         onPick={handleAddWarmup}
-        onCreateNew={canManageLibrary ? openCreateAndInsert("warmup") : undefined}
+        onCreateNew={openCreateAndInsert("warmup")}
       />
       <ExercisePickerModal
         visible={exercisePickerVisible}
         library={library.filter((e) => e.type !== "warmup")}
         onClose={() => setExercisePickerVisible(false)}
         onPick={handleInsertExercise}
-        onCreateNew={canManageLibrary ? openCreateAndInsert("lift") : undefined}
+        onCreateNew={openCreateAndInsert("lift")}
       />
       <SessionPreviewModal
         visible={previewOpen}

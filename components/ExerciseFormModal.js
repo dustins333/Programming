@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { MUSCLE_GROUPS, MUSCLE_SUB_GROUPS, MOVEMENT_PATTERNS, muscleGroupLabel } from "../lib/programming/exercises";
+import { MUSCLE_GROUPS, MUSCLE_SUB_GROUPS, MOVEMENT_PATTERNS, muscleGroupLabel, isLibraryReviewer } from "../lib/programming/exercises";
+import { useAuth } from "../lib/auth/AuthProvider";
 import { REP_UNITS, DEFAULT_REP_UNIT } from "../lib/programming/repUnit";
 import { fonts, colors } from "../lib/theme";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
@@ -190,6 +191,11 @@ export function ExerciseFormModal({
   // wants remembered forever are dismissed on the Merge page, which has a
   // real table behind it.
   const [duplicateAccepted, setDuplicateAccepted] = useState(false);
+  // Whether this coach's new entry lands in the review queue. Read here
+  // rather than passed in, because all six call sites would otherwise have
+  // to thread the same value through for a single line of copy.
+  const { profile } = useAuth();
+  const goesToReview = !initialExercise && !isLibraryReviewer(profile);
   // True while the muscle group / movement pattern below were filled in
   // from the picked parent rather than typed by the coach. It's what lets
   // switching from one parent to another re-pull the new parent's tags,
@@ -627,6 +633,18 @@ export function ExerciseFormModal({
             ) : (
               <View className="mb-4" />
             )}
+
+            {/* Said up front, not after the fact: a coach who doesn't know
+                the entry gets reviewed can't tell whether "needs review" on
+                it later means they did something wrong. */}
+            {goesToReview ? (
+              <View className="mb-4 rounded-lg px-4 py-3" style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#f0ddd2" }}>
+                <Text className="text-xs" style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140", lineHeight: 17 }}>
+                  This goes into the library straight away — use it in a program right now. A library reviewer will tidy
+                  up the naming and tagging afterwards.
+                </Text>
+              </View>
+            ) : null}
 
             <View className="flex-row justify-end gap-3">
               <Pressable onPress={onClose} className="rounded-lg border border-stone-300 px-4 py-3">

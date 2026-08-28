@@ -5,6 +5,7 @@ import { useAuth } from "../../lib/auth/AuthProvider";
 import { CoachShell } from "../../components/CoachShell";
 import { getMessagingSettings } from "../../lib/programming/messagingSettings";
 import { usePendingDocuments } from "../../lib/programming/usePendingDocuments";
+import { usePendingExerciseReviews } from "../../lib/programming/usePendingExerciseReviews";
 import { fonts, colors } from "../../lib/theme";
 
 export default function More() {
@@ -18,6 +19,9 @@ export default function More() {
   // every load for anyone with messaging turned off).
   const [messagingEnabled, setMessagingEnabled] = useState(false);
   const { count: pendingDocuments, refresh: refreshDocuments } = usePendingDocuments();
+  // 0 for anyone who isn't a library reviewer — the row below is hidden
+  // for them too, so this never lights up something they can't open.
+  const { count: pendingReviews, refresh: refreshReviews } = usePendingExerciseReviews();
 
   // useFocusEffect, not a mount-only useEffect — this is a Tabs root that
   // stays mounted, so an admin flipping the messaging kill switch in
@@ -30,7 +34,8 @@ export default function More() {
       // This tab stays mounted, so signing something has to re-count on
       // the way back here rather than on next launch.
       refreshDocuments();
-    }, [refreshDocuments])
+      refreshReviews();
+    }, [refreshDocuments, refreshReviews])
   );
 
   return (
@@ -40,17 +45,41 @@ export default function More() {
         More
       </Text>
 
+      {/* No permission gate since 0094 — every coach can add an exercise
+          and program it right away. The flag now gates the review row
+          below, not the library itself. */}
+      <Pressable
+        onPress={() => router.push("/(coach)/exercises")}
+        className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+      >
+        <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+          Exercise Library
+        </Text>
+        <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Text + cues
+        </Text>
+      </Pressable>
+
       {isAdmin || profile?.can_view_exercise_library ? (
         <Pressable
-          onPress={() => router.push("/(coach)/exercises")}
-          className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+          onPress={() => router.push("/(coach)/exercises/review")}
+          className="mb-3 flex-row items-center gap-3 rounded-2xl border border-stone-200 px-5 py-4"
         >
-          <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
-            Exercise Library
-          </Text>
-          <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-            Text + cues
-          </Text>
+          <View className="flex-1">
+            <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+              Library Review
+            </Text>
+            <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+              Tidy up and approve what other coaches added
+            </Text>
+          </View>
+          {pendingReviews > 0 ? (
+            <View style={{ minWidth: 22, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: colors.primary, alignItems: "center" }}>
+              <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, color: "white", fontSize: 11 }}>
+                {pendingReviews > 99 ? "99+" : pendingReviews}
+              </Text>
+            </View>
+          ) : null}
         </Pressable>
       ) : null}
 

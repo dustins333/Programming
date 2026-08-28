@@ -27,10 +27,14 @@ export const PERMISSION_COLUMNS = [
     description: "Coach nutrition clients — check-ins, targets, photos.",
   },
   {
+    // Renamed in 0094, same column: every coach can add and edit exercises
+    // now, so this stopped meaning "may touch the library" and started
+    // meaning "reviews what everyone else added" — the label had to follow
+    // or the checkbox reads as gating something it no longer gates.
     field: "can_view_exercise_library",
-    label: "Exercise Library",
+    label: "Library Reviewer",
     defaultValue: true,
-    description: "Add and edit exercises for the whole gym.",
+    description: "Review, tidy up and approve exercises other coaches add to the library.",
   },
   {
     field: "can_log_ops_hours",
