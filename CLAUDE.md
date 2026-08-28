@@ -5243,6 +5243,43 @@ a wall in a shared room): build it, default **off**, admin toggle at
 **Settings → Equipment → Gym display**. The gate is in the SQL, not the
 client — see 0076.
 
+**Regression this pass caused, found and fixed 2026-08-27.** Deleting
+`HubEntryPad.js` dropped the one thing that rendered the coach's
+per-exercise **note to member** (`spc_workout_exercises.notes`, written in
+the builder's NOTE TO MEMBER field) — the old pad had it at line 245 and
+nothing in the new components read it, so it was silently absent from the
+board for five days. The data never stopped flowing: `hub.js` has always
+put `notes` on every item, and its own comment says the shape exists so
+`coachNoteFor` works unmodified. Nothing underneath needed fixing; it just
+had no renderer.
+
+Restored as a **read-only instruction**, never an editable field — that is
+the whole distinction from the note TextInput near the bottom of the card,
+which is the shared scratch note anyone can type at the rack. `HubLiftCard`
+exports `coachInstruction(item)` as the single definition, and renders it
+above the set rows on a clay left rule with **no fill**: on this board a
+peach fill already means pressable (the history strip, the collapse
+circle), so a tinted callout would read as a control. It sits above the
+boxes because it is setup information — which attachment, which cue — and
+is worth nothing once the first set has already been done wrong.
+
+`HubClientColumn`'s **RestingRow** appends it to the prescription line in
+clay (`3 × 8-12 | Rest 90s | V-Handle`) rather than giving it a line of its
+own: those rows are fixed-height so the same lift lands at the same y in
+every column, and a fourth line would break that for all four clients at
+once. It truncates on a long note; the full text is one tap away on the
+card. `CollapsedRow` (34px) deliberately gets nothing.
+
+**The general shape worth remembering: a redesign that deletes a component
+can silently drop a renderer while every query behind it keeps working.**
+Nothing fails, nothing logs, and the bundle stays clean — the only symptom
+is a coach saying "I thought that used to show up." When a surface is
+rebuilt, diff what the deleted file rendered against what the new one does,
+not just what data each one receives. The member logging screen was
+unaffected throughout ([ExerciseCard.js:887](components/ExerciseCard.js:887)
+renders the same value as `Coach note:`), which is exactly why the gap was
+easy to miss.
+
 **Deviations from the mock, deliberate:**
 - The note field and the `+ Add set` / `Same as last` buttons stay on the
   **phone** card. The README says the phone should hold "sets + the history

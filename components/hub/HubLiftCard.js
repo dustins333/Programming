@@ -25,6 +25,21 @@ const KEYED_TEXT = "#3f4a36";
 const PEACH_BG = "#fdf6f2";
 const PEACH_BORDER = "#f0ddd2";
 
+// The coach's note-to-member, written per exercise in the builder
+// (spc_workout_exercises.notes). It is an INSTRUCTION delivered to the
+// client — "V-Handle", "pause 2s at the bottom" — and is never editable
+// from here, which is exactly what separates it from the note field near
+// the bottom of the card: that one is the shared scratch note anyone can
+// type at the rack, this one is what the program says.
+//
+// Same value ExerciseCard renders as "Coach note:" on the member's own
+// phone, and worded identically on purpose, so the wall and the phone in
+// her hand cannot say the same thing two different ways.
+export function coachInstruction(item) {
+  const text = (item?.notes ?? "").trim();
+  return text || null;
+}
+
 function prescriptionLine(item, letter) {
   return [
     schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }, item.exercise),
@@ -227,6 +242,24 @@ export function HubLiftCard({
           <Ionicons name="chevron-up" size={20} color={colors.primaryOnWhite} />
         </PressFade>
       </View>
+
+      {/* Read-only, and a left rule rather than a tinted box: on this board a
+          peach fill already means "pressable" (the history strip, the
+          collapse circle), so a filled callout would read as a control. It
+          sits above the set rows because it is setup information — which
+          attachment, which tempo cue — and is worth nothing after the first
+          set has already been done wrong. */}
+      {coachInstruction(item) ? (
+        <View style={{ marginTop: 10, borderLeftWidth: 3, borderLeftColor: colors.primary, paddingLeft: 10 }}>
+          <Text
+            numberOfLines={3}
+            style={{ fontFamily: fonts.sans, fontSize: compact ? 13 : 14, lineHeight: compact ? 18 : 19.5, color: "#3f3833" }}
+          >
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Coach note: </Text>
+            {coachInstruction(item)}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Superset pair — switching A1 ↔ A2 does not close the card. */}
       {siblings.length > 1 ? (

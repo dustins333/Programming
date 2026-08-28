@@ -5,7 +5,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { PressFade } from "../PressFade";
 import { ClientGoalLine } from "../ClientGoalCard";
 import { SetBubbleRow, hubBubbleSize } from "./HubSetBubbles";
-import { HubLiftCard } from "./HubLiftCard";
+import { HubLiftCard, coachInstruction } from "./HubLiftCard";
 import { HubDock, DockPill } from "./HubDock";
 import { HubNumberPad } from "./HubNumberPad";
 import { HubPlateCalcStrip, HubPlateCalcGrid, useHubPlateCalc } from "./HubPlateCalc";
@@ -176,9 +176,19 @@ function RestingRow({ item, letter, logs, completed, hasNote, editOrder, isFirst
         {editOrder ? <ReorderArrows isFirst={isFirst} isLast={isLast} onMove={onMove} /> : <CompletionTick completed={completed} onPress={onToggleComplete} />}
       </View>
       <View style={{ height: ROW_SCHEME_H, justifyContent: "center", marginLeft: indent }}>
+        {/* The coach's note rides the prescription line rather than earning a
+            row of its own: these rows are fixed-height so the same lift lands
+            at the same y in every column, and a fourth line would break that
+            for all four clients. Clay against the muted prescription, so
+            "V-Handle" reads as an instruction and not as more of the
+            programming. Truncates on a long one — the whole note is one tap
+            away on the card. */}
         <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted }}>
           {schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }, item.exercise)}
           {item.rest ? ` | Rest ${item.rest}` : ""}
+          {coachInstruction(item) ? (
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>{` | ${coachInstruction(item)}`}</Text>
+          ) : null}
         </Text>
       </View>
       <View style={{ height: ROW_BUBBLES_H, justifyContent: "center", overflow: "hidden", marginLeft: indent }}>
