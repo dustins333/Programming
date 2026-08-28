@@ -39,6 +39,10 @@ Deno.serve(async (req) => {
     // invisible to members, so pushing it would notify people about
     // something they then can't open.
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+    // In-app-only announcements (migration 0097) must never be fetched here.
+    // They keep pushed_at null forever by design, so without this filter
+    // they would be re-scanned on every run for the rest of their life.
+    .eq("send_push", true)
     .is("pushed_at", null);
   if (fetchError) {
     return new Response(JSON.stringify({ error: fetchError.message }), { status: 500 });

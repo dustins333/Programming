@@ -17,6 +17,7 @@ import {
   createAnnouncement,
   pushAnnouncementNow,
   deletePendingAnnouncementsForEvent,
+  countAnnouncementsForEvent,
 } from "../../../lib/programming/announcements";
 import {
   getEvent,
@@ -114,6 +115,25 @@ function Select({ options, value, onChange, placeholder, maxWidth = 260 }) {
     );
   }
   return <NativePickerField options={options} value={value} onChange={onChange} placeholder={placeholder} />;
+}
+
+function CheckRow({ checked, onToggle, label, hint }) {
+  return (
+    <PressFade
+      onPress={onToggle}
+      style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 10, maxWidth: 520 }}
+    >
+      <Ionicons name={checked ? "checkbox" : "checkbox-outline"} size={20} color={checked ? colors.primary : "#a8a29e"} />
+      <View style={{ flex: 1 }}>
+        <Text className="text-sm" style={{ fontFamily: fonts.sansMedium, color: "#57534e" }}>
+          {label}
+        </Text>
+        <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
+          {hint}
+        </Text>
+      </View>
+    </PressFade>
+  );
 }
 
 function Field({ label, hint, children }) {
@@ -246,10 +266,18 @@ export default function EventComposer() {
   const [askGuestCount, setAskGuestCount] = useState(false);
   const [ctaLabel, setCtaLabel] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
-  // Publishing alone only makes the tab appear. This is what actively tells
-  // people — it writes a normal announcement pointing back at this event, so
-  // the popup and the push both come free from the existing pipeline.
-  const [alsoAnnounce, setAlsoAnnounce] = useState(true);
+  // Publishing alone only makes the tab appear. These are what actively tell
+  // people — together they write a normal announcement pointing back at this
+  // event, so both channels come free from the existing pipeline. They are
+  // independent (migration 0097): a quiet note in the app, a text-only nudge,
+  // both, or neither.
+  const [announceInApp, setAnnounceInApp] = useState(true);
+  const [announcePush, setAnnouncePush] = useState(true);
+  // How many announcements this event has already had, in any channel — what
+  // decides whether the two boxes default off. Counted rather than read off
+  // events.pushed_at, which only records a real push and would miss an
+  // in-app-only or still-scheduled one.
+  const [announcementCount, setAnnouncementCount] = useState(0);
   // When members start seeing it. "later" writes events.publish_at, which
   // member-facing RLS gates on (0096), and schedules the announcement for
   // the same instant — so the tab, the popup and the push all arrive
@@ -264,12 +292,13 @@ export default function EventComposer() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [row, itemRows, questionRows, programs, counts] = await Promise.all([
+      const [row, itemRows, questionRows, programs, counts, announced] = await Promise.all([
         getEvent(eventId),
         listEventItems(eventId),
         listEventQuestions(eventId),
         listGroupPrograms(),
         countResponsesByEvent(),
+        countAnnouncementsForEvent(eventId),
       ]);
       if (!row) throw new Error("That event no longer exists.");
       setEvent(row);
@@ -294,7 +323,10 @@ export default function EventComposer() {
       setCtaLabel(row.cta_label ?? "");
       // Off by default once this event has already been announced, so
       // taking it down and re-publishing doesn't notify everyone twice.
-      setAlsoAnnounce(!row.pushed_at);
+      const alreadyAnnounced = announced > 0;
+      setAnnouncementCount(announced);
+      setAnnounceInApp(!alreadyAnnounced);
+      setAnnouncePush(!alreadyAnnounced);
       // Only a publish_at still in the future is a real schedule; one that
       // has already passed just means "live", so the picker resets rather
       // than offering to re-schedule into the past.
@@ -415,7 +447,9 @@ export default function EventComposer() {
       return;
     }
 
-    if (!alsoAnnounce) {
+    // Both channels off means no announcement row at all — publishing on its
+    // own still makes the event appear, it just doesn't announce itself.
+    if (!announceInApp && !announcePush) {
       toastSuccess(
         goLiveAt
           ? `Scheduled. It shows up on their Events tab ${formatDateTimeInBoise(goLiveAt)}.`
@@ -441,19 +475,29 @@ export default function EventComposer() {
           targetGroupProgramId,
           imagePath,
           eventId,
+          showInApp: announceInApp,
+          sendPush: announcePush,
         },
         profile.id
       );
       if (goLiveAt) {
-        // Left for scan-announcements' cron scan to send once send_at
-        // passes — the same path any scheduled announcement takes. pushed_at
-        // stays null deliberately: nothing has gone out yet, and it's what
-        // lets a cancelled schedule clean the queued announcement up.
+        // Left for scan-announcements' cron scan once send_at passes — the
+        // same path any scheduled announcement takes, and it honours
+        // send_push itself. events.pushed_at stays null because nothing has
+        // gone out yet; it's only ever a record of a real push.
         toastSuccess(`Scheduled for ${formatDateTimeInBoise(goLiveAt)}.`);
       } else {
-        await pushAnnouncementNow(announcement.id);
-        await updateEvent(eventId, { pushed_at: new Date().toISOString() });
-        toastSuccess("Published and announced.");
+        if (announcePush) {
+          await pushAnnouncementNow(announcement.id);
+          await updateEvent(eventId, { pushed_at: new Date().toISOString() });
+        }
+        toastSuccess(
+          announcePush && announceInApp
+            ? "Published and announced."
+            : announcePush
+            ? "Published and notified."
+            : "Published. It pops up next time they open the app."
+        );
       }
     } catch (err) {
       toastError("Published, but the announcement didn't go out", err);
@@ -843,26 +887,28 @@ export default function EventComposer() {
         ) : null}
 
         {phase === "draft" ? (
-          <PressFade
-            onPress={() => setAlsoAnnounce((v) => !v)}
-            style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 16, maxWidth: 520 }}
-          >
-            <Ionicons
-              name={alsoAnnounce ? "checkbox" : "checkbox-outline"}
-              size={20}
-              color={alsoAnnounce ? colors.primary : "#a8a29e"}
+          <View className="mb-4 max-w-xl">
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Tell them about it
+            </Text>
+            <Text className="mb-2 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+              {announcementCount > 0
+                ? "Already announced once — leave these off unless you want to tell everyone again."
+                : "Pick either, both, or neither. With neither, the event just appears on their Events tab."}
+            </Text>
+            <CheckRow
+              checked={announceInApp}
+              onToggle={() => setAnnounceInApp((v) => !v)}
+              label="Pop up in the app"
+              hint="They see it, with this graphic, next time they open the app."
             />
-            <View style={{ flex: 1 }}>
-              <Text className="text-sm" style={{ fontFamily: fonts.sansMedium, color: "#57534e" }}>
-                Also announce this
-              </Text>
-              <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
-                {event.pushed_at
-                  ? "Already announced once — leave this off unless you want to tell everyone again."
-                  : "Sends a notification and pops up in the app, with this graphic. Without it the event just appears on their Events tab."}
-              </Text>
-            </View>
-          </PressFade>
+            <CheckRow
+              checked={announcePush}
+              onToggle={() => setAnnouncePush((v) => !v)}
+              label="Send a notification"
+              hint="Buzzes their phone even with the app closed. Tapping it opens the event."
+            />
+          </View>
         ) : null}
 
         <View className="max-w-xl flex-row flex-wrap items-center gap-4">

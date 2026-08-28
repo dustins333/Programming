@@ -20,6 +20,9 @@ export interface Announcement {
   // Set when this announcement is the megaphone for a published event
   // (migration 0061) — makes the push deep-link to the event itself.
   event_id?: string | null;
+  // Migration 0097. Optional so a caller reading a narrower column set still
+  // type-checks; undefined is treated as "push", matching the DB default.
+  send_push?: boolean;
 }
 
 export async function resolveAudienceUserIds(admin: SupabaseClient, announcement: Announcement): Promise<string[]> {
@@ -67,6 +70,15 @@ export async function resolveAudienceUserIds(admin: SupabaseClient, announcement
 }
 
 export async function sendAnnouncementPush(admin: SupabaseClient, announcement: Announcement) {
+  // Belt and braces alongside scan-announcements' own filter: this is the
+  // single function every push path goes through, so an in-app-only
+  // announcement can't be pushed by any caller. Returns without stamping
+  // pushed_at — nothing went out, and claiming otherwise would make the
+  // coach's history lie.
+  if (announcement.send_push === false) {
+    return { audience: 0, pushed: 0, skipped: true };
+  }
+
   const userIds = await resolveAudienceUserIds(admin, announcement);
 
   let pushed = 0;

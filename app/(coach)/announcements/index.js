@@ -87,6 +87,11 @@ export default function Announcements() {
   const [audience, setAudience] = useState("all");
   const [targetGroupProgramId, setTargetGroupProgramId] = useState(null);
   const [requiresReload, setRequiresReload] = useState(false);
+  // The two delivery channels, independent (migration 0097) — a quiet note
+  // in the app, a text-only nudge, or both. Both on is the behaviour every
+  // announcement had before there was a choice.
+  const [showInApp, setShowInApp] = useState(true);
+  const [sendPush, setSendPush] = useState(true);
   const [expiryDays, setExpiryDays] = useState(DEFAULT_EXPIRY_DAYS);
   const [timing, setTiming] = useState("now");
   const [scheduleDate, setScheduleDate] = useState(() => toDateValue(roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000))));
@@ -131,6 +136,8 @@ export default function Announcements() {
     setAudience("all");
     setTargetGroupProgramId(null);
     setRequiresReload(false);
+    setShowInApp(true);
+    setSendPush(true);
     setTiming("now");
     setExpiryDays(DEFAULT_EXPIRY_DAYS);
     const nextDefault = roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000));
@@ -162,6 +169,10 @@ export default function Announcements() {
       toastError("Pick a group program to target");
       return;
     }
+    if (!showInApp && !sendPush) {
+      toastError("Pick at least one way to deliver it — a popup, a notification, or both.");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -176,10 +187,12 @@ export default function Announcements() {
           requiresReload,
           imagePath,
           expiresAt: resolveExpiresAt(sendAt),
+          showInApp,
+          sendPush,
         },
         profile.id
       );
-      if (timing === "now") {
+      if (timing === "now" && sendPush) {
         // Fire-and-report, not fire-and-forget — a coach hitting "Send now"
         // should know if push delivery itself failed, even though the
         // announcement row (and in-app popup) is already created either
@@ -199,6 +212,10 @@ export default function Announcements() {
           console.error("Push send failed (announcement was still created):", pushErr);
           toastError("Announcement created, but push failed", pushErr);
         }
+      } else if (timing === "now") {
+        // Immediate, but in-app only — there is no push to report on, and
+        // saying "scheduled" would be wrong: it's live right now.
+        toastSuccess("Announcement posted. It pops up next time they open the app.");
       } else {
         toastSuccess("Announcement scheduled.");
       }
@@ -267,6 +284,22 @@ export default function Announcements() {
             className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
             style={{ fontFamily: fonts.sans, minHeight: 90, textAlignVertical: "top" }}
           />
+
+          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+            How it reaches them
+          </Text>
+          <Pressable onPress={() => setShowInApp((v) => !v)} className="mb-2 flex-row items-center gap-2">
+            <Ionicons name={showInApp ? "checkbox" : "checkbox-outline"} size={20} color={showInApp ? colors.primary : "#a8a29e"} />
+            <Text className="flex-1 text-sm" style={{ fontFamily: fonts.sans, color: "#57534e" }}>
+              Pop up in the app — they see it next time they open it
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => setSendPush((v) => !v)} className="mb-4 flex-row items-center gap-2">
+            <Ionicons name={sendPush ? "checkbox" : "checkbox-outline"} size={20} color={sendPush ? colors.primary : "#a8a29e"} />
+            <Text className="flex-1 text-sm" style={{ fontFamily: fonts.sans, color: "#57534e" }}>
+              Send a notification — buzzes their phone even with the app closed
+            </Text>
+          </Pressable>
 
           <Pressable onPress={() => setRequiresReload((v) => !v)} className="mb-4 flex-row items-center gap-2">
             <Ionicons

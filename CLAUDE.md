@@ -2615,6 +2615,100 @@ confirmed clean). **Not verified behind a real login** — standing
 limitation. Worth Terra's click-through: schedule one a quarter-hour out and
 confirm the tab, the popup and the push all land together.
 
+## Popup and push become separate choices — and the announcement cron had been 401ing all along (2026-08-27)
+
+One checkbox used to do both: creating an announcement row made it pop up
+next time the member opened the app AND buzzed their phone. So "just leave
+them a note" and "just text them" were both unreachable. Migration `0097` —
+applied and verified live.
+
+`programming.announcements.show_in_app` and `send_push`, both default true,
+so every existing row and every caller keeps behaving exactly as before and
+there is nothing to backfill. **`show_in_app` is enforced in RLS**, not just
+filtered client-side — a push-only announcement must genuinely not be
+readable as a popup, or the member app shows it anyway the first time a query
+forgets the filter. `send_push` has no RLS equivalent (nothing about it is
+member-readable) and is honoured in two places: `scan-announcements`' query,
+and `sendAnnouncementPush` in `_shared/announcementAudience.ts`, which is the
+single choke point every push path goes through.
+
+**The scan needs the query filter, not just the guard.** An in-app-only row
+keeps `pushed_at` null forever by design, so without `.eq("send_push", true)`
+it would be re-fetched on every run for the rest of its life. The guard
+inside `sendAnnouncementPush` returns WITHOUT stamping `pushed_at` — nothing
+went out, and stamping it would make the coach's history lie.
+
+Both surfaces get the split: the event editor's "Also announce this" is now
+two rows under "Tell them about it", and the Announcements compose page gets
+the same pair. Both channels off on an event means no announcement row at all
+(publishing still makes it appear); on the Announcements page it's rejected,
+since an announcement with no delivery channel is nothing.
+
+**`events.pushed_at` is no longer what decides the re-publish default** — it
+only ever records a real push, so it missed an in-app-only or still-scheduled
+announcement and would have offered to announce a second time. New
+`countAnnouncementsForEvent(eventId)` counts rows in any channel instead.
+`events.pushed_at` is still written on a real immediate push, as a record.
+
+### The cron bug this uncovered
+
+Test-firing `announcement-scan` after redeploying returned **401
+Unauthorized** — and `net._http_response` showed it had returned 401 on
+**every run, every 15 minutes, since it was registered.** Scheduled
+announcements had never once been pushed by the cron. Nobody noticed because
+"Send now" pushes through `send-announcement` directly, which works, and a
+`pg_net` call's failure is invisible from `cron.job_run_details` (the job
+succeeds the moment the request is queued, whatever comes back).
+
+Root cause is exactly the trap this file already warns about under the
+payroll cron: **`supabase secrets list` prints a SHA-256 digest, never the
+plaintext.** Two jobs — `announcement-scan` and `nutrition-reminders-scan` —
+carry a 64-hex-char value where the working three carry the real 8-char
+secret. Someone pasted the digest.
+
+Diagnose it without ever printing a secret:
+
+```sql
+select jobname,
+       md5((regexp_match(command, 'x-cron-secret["'']*\s*,?\s*["'']([^"'']+)'))[1]) as secret_md5,
+       length((regexp_match(command, 'x-cron-secret["'']*\s*,?\s*["'']([^"'']+)'))[1]) as len
+from cron.job order by jobname;
+```
+
+Jobs that disagree on that hash disagree on the secret; a length of 64 is the
+digest, not the key. Repair by copying from a known-good job entirely in SQL
+(`cron.alter_job(jobid, command => replace(command, bad, good))`) so the
+plaintext never passes through a tool call or a file.
+
+`announcement-scan` is **fixed and verified** — it now returns
+`{"scanned":0,"pushed":0,"errors":[]}`, which doubles as proof the redeployed
+v15 function runs clean against the new schema.
+
+**`nutrition-reminders-scan` is still broken, deliberately.** Fixing it turns
+on a client-facing messaging stream (evening daily-log reminders, the Monday
+check-in nag) that has been silently off for months — flipping that on
+without asking would text real clients on a schedule Terra has never seen
+working. It needs her say-so. The old commands for both jobs are captured at
+`~/kova-cron-fix-2026-08-27/rollback-commands.json` (kept out of the repo —
+it holds the real secrets).
+
+**Worth generalising: a pg_net cron job can fail forever in total silence.**
+`cron.job_run_details` says "succeeded" because queueing the request is all
+the job does. The only place the truth lives is `net._http_response`. Worth a
+periodic glance at `select status_code, count(*) from net._http_response
+group by 1` — anything non-200 there is a scheduled job that isn't running.
+
+**Verified**: migration dry-run then a 3-row impersonation test (a push-only
+announcement is unreadable by a real member, an in-app-only one is readable),
+both rolled back, before applying; existing 5 rows confirmed unchanged
+afterwards. Both Edge Functions redeployed, versions bumped and `verify_jwt`
+flags confirmed preserved (`send-announcement` true, `scan-announcements`
+false — redeploying without the flag preserves it, but check, don't assume).
+The two checkboxes were driven for real and toggle independently. **Not
+click-tested behind a real login** — standing limitation. Worth Terra's pass:
+send an in-app-only announcement and confirm no push, then a push-only one
+and confirm no popup.
+
 ## House rule: every disabled button must dim (2026-08-13)
 
 **`disabled:opacity-50` does nothing. Never use it.** NativeWind sets
@@ -3798,6 +3892,7 @@ sections; next number after 0080 is 0081.)
 - `0085_warmup_and_template_supersets.sql` — **run**, verified live 2026-08-24 (all 8 columns confirmed by direct query, `NOTIFY pgrst` sent). `superset_group_id` on all four warm-up tables + `template_exercises`/`one_off_exercises`, `rep_scheme` on `one_off_exercises` (backfilled 0030-style). See "Builder tweak batch" above.
 - `0080_session_education_scope.sql` — **run**, verified live 2026-08-23 (column + default confirmed, a bad value rejected by the check, all existing rows defaulted to `'session'` with nothing to backfill). Adds `session_education.scope` (`session`/`warmup`/`exercises`) so "general" can mean the warm-up block as well as the whole day.
 - `0094_exercise_review.sql` — **run**, verified live 2026-08-27 (both columns, the partial index, both rewritten policies, and all 155 existing rows grandfathered to approved; plus a 9-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.exercises.approved_at`/`approved_by` and reopens creation to every staff member. See "Exercise library: everyone adds, reviewers approve" below.
+- `0097_announcement_channels.sql` — **run**, verified live 2026-08-27 (both columns, the member read policy carrying `show_in_app`, all 5 existing rows unchanged; plus a 3-row impersonation test in a rolled-back transaction before applying). Adds `programming.announcements.show_in_app` and `send_push`, both `not null default true`, splitting the in-app popup from the push notification. `show_in_app` is enforced in the member read policy; `send_push` is honoured by `scan-announcements`' query and by `sendAnnouncementPush`. Requires redeploying `scan-announcements` and `send-announcement` (both done, v15). See "Popup and push become separate choices" above.
 - `0096_event_publish_at.sql` — **run**, verified live 2026-08-27 (column, index, all six member-facing policies carrying the new gate, and zero existing rows affected; plus a 6-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.events.publish_at` so an event can be scheduled to go live at a set day and time. Nullable, null = live as soon as it's published, so nothing existing changes. **Do not reorder the policy block** — the gate is intentionally inline in all six policies rather than in a helper, since a function reading `programming.events` would recurse inside that table's own policy. See "Events: one event opens straight in" above.
 - `0095_exercise_parents.sql` — **run**, verified live 2026-08-27 (18 parent records, 66 exercises grouped, 0 variations lost, 0 duplicate names, plus an 11-assertion impersonation test in a rolled-back transaction as a reviewer, a non-reviewer coach and a member). Adds `programming.exercise_parents` and `exercises.parent_id`; `exercises.parent_exercise_id` is left populated but unread as the rollback path. See "A parent is its own record now" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
