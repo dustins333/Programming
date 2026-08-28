@@ -39,16 +39,23 @@ const AUTOSAVE_DELAY_MS = 900;
 // never which reference it drew from — it was that anything sitting inside an
 // empty input reads as already-entered.
 //
-// So an empty box now holds the one thing that is unambiguously NOT hers: the
-// coach's prescription, explicitly tagged. Everything historical moved one tap
-// away, into the sheet behind the lift name.
-//  - Unkeyed reps box: dashed, tinted, "TARGET 8–10" in near-white clay.
-//  - Unkeyed weight box: an en dash. Weight is never prescribed in this gym,
-//    so there is no target to state and nothing to borrow from history.
-//  - Keyed box: solid olive-tinted, her number at full size and weight.
-// The dashed/solid split is v5 house rule "dashed = not logged, solid =
-// logged", and it carries the state on its own — the tint and the TARGET tag
-// are what make it unmistakable rather than merely different.
+// That pass put the prescription inside the empty box instead, tagged
+// "TARGET 8-10" — unambiguous while the box was empty, but it was painted
+// over by the first number she typed, so a finished lift carried no record of
+// what had been asked and "did I hit it?" was unanswerable on the card. So the
+// prescription now has its own narrow column between the set label and the
+// boxes, one dashed peach pill per set, at half the type size of the number
+// she logs. It never moves and it never disappears.
+//  - The pill is peach because peach means reference everywhere in the member
+//    app (the last-time note above it, My Week's session banner) and olive
+//    means done. A set she added past the programmed count has no target, so
+//    it gets an en dash; a lift with no prescription at all renders no column,
+//    rather than a column of en dashes eating width from the boxes.
+//  - Reps and weight boxes are both flex:1, so whatever the target column
+//    costs comes off them equally and they stay the same size as each other.
+//  - Unkeyed box: dashed, tinted, an en dash. Keyed box: solid olive-tinted,
+//    her number at full size and weight. The dashed/solid split is v5 house
+//    rule "dashed = not logged, solid = logged".
 //  - The rest timer no longer lives here at all. Tapping the stopwatch hands
 //    off to the app-level rest timer (lib/restTimer.js) so it survives
 //    leaving this card, this session, and this tab — the old local-state
@@ -62,6 +69,16 @@ const LOGGED_BORDER = "#dbe8cf";
 const MUTED = colors.muted;
 const SOFT = "#fdfbf8";
 // The unkeyed box: dashed border, barely-there ground, near-white clay value.
+// The prescription block behind SET n + the target: a warm stone ground,
+// deliberately neither the peach the last-time note uses (reference from the
+// coach) nor the olive a logged box uses (her own work). It only has to say
+// "this side of the row is the ask, not a field", so it stays neutral.
+const PRESCRIPTION_BG = "#f4f1ec";
+const PRESCRIPTION_BORDER = "#e2dbd1";
+// The target reads the way the Notes placeholder does — lighter than the SET
+// label beside it and unbolded, so the two halves of the block can't be
+// mistaken for each other. The label is the small bold uppercase one.
+const PRESCRIPTION_TEXT = colors.hint;
 const TARGET_BORDER = "#ddd6cd";
 const TARGET_BG = "#fdfbf8";
 const TARGET_TEXT = colors.hint;
@@ -478,43 +495,6 @@ function CalculatorMark() {
   );
 }
 
-// What an empty reps box says: "TARGET 8–10", label first (a trailing tag read
-// as a unit). It has to be an overlay rather than the TextInput's own
-// placeholder because a placeholder is one string in one style, and the tag
-// and the number are deliberately different sizes — the tag has to stay small
-// enough that the number is still the thing you read.
-//
-// Position is written out longhand rather than via StyleSheet.absoluteFillObject:
-// inside a style array that helper renders the view completely invisible on
-// this app's Fabric build (see the member v5 notes — it cost a whole debugging
-// session once already). pointerEvents lives in the style object, not as a
-// prop, so the tap still reaches the input underneath it.
-function TargetHint({ label, compact }) {
-  return (
-    <View
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 4,
-        pointerEvents: "none",
-      }}
-    >
-      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.8, color: TARGET_TEXT }}>
-        TARGET
-      </Text>
-      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.display, fontSize: compact ? 15.5 : 17, color: TARGET_TEXT }}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 export function ExerciseCard({
   userId,
   datePerformed,
@@ -552,6 +532,16 @@ export function ExerciseCard({
   const tracksWeight = item.exercise?.tracks_weight !== false;
   const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
   const [notes, setNotes] = useState("");
+  // The note field grows to fit what's in it rather than scrolling inside a
+  // fixed 44pt box — vertical growth is always preferable to a scroller
+  // inside a card that can already scroll. Web reports scrollHeight, which
+  // already includes the field's own padding, so only the borders are left to
+  // add; native reports the content alone, so its padding has to be added.
+  const [noteHeight, setNoteHeight] = useState(0);
+  // Two lines before anything is typed — one line read as an afterthought
+  // next to the set boxes, and most notes run past one line anyway.
+  const NOTE_MIN_HEIGHT = 64;
+  const noteChrome = Platform.OS === "web" ? 2 : 22;
   // True while the member is mid-edit, so an incoming refetch can't pull the
   // saved text back over what she's currently typing.
   const noteDirtyRef = useRef(false);
@@ -769,6 +759,22 @@ export function ExerciseCard({
   const trailingWidth = compact ? 30 : 33;
   const rowGap = compact ? 8 : 9;
 
+  // The coach's prescription for each set, resolved once so the header can
+  // ask whether this lift has any targets at all. repScheme carries a per-set
+  // scheme (10/8/8 asks different things of set 1 and set 3), targetReps is
+  // the flat fallback, and a set the member added herself past the programmed
+  // count has no target. A lift with none of the above renders no TARGET
+  // column at all rather than a column of en dashes eating box width.
+  const rowTargets = rows.map((_, i) => {
+    const t = item.repScheme?.[i] ?? item.targetReps ?? null;
+    return t === null || t === "" ? null : String(t);
+  });
+  const hasTargets = rowTargets.some(Boolean);
+  const targetWidth = compact ? 45 : 48;
+  // The SET label keeps the left-aligned position it had before the block
+  // existed, so it needs the block's own left inset.
+  const BLOCK_INSET = 8;
+
   return (
     <View
       ref={cardRef}
@@ -917,7 +923,22 @@ export function ExerciseCard({
               every set, so a Farmer Carry reads "TIME | LB" over "60 | 62"
               and nothing repeats. The boxes themselves are untouched. */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: rowGap, marginBottom: 5 }}>
-            <View style={{ width: setLabelWidth }} />
+            {hasTargets ? (
+              /* Mirrors the tinted block's own two halves — one child of the
+                 header row, laid out internally with no gap, so TARGET lands
+                 over the prescription and not over the set number. Reading
+                 the row gap into this alignment is what put it 9px out. */
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={{ width: setLabelWidth + BLOCK_INSET + 1 }} />
+                {/* Tighter than its siblings because the word is twice as
+                    long and the column it labels holds "10-12" at most. */}
+                <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ width: targetWidth + 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.3, color: MUTED }}>
+                  TARGET
+                </Text>
+              </View>
+            ) : (
+              <View style={{ width: setLabelWidth }} />
+            )}
             <Text maxFontSizeMultiplier={1} style={{ flex: 1, textAlign: "center", fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1, color: MUTED }}>
               {repUnitHeader(item.exercise)}
             </Text>
@@ -932,14 +953,7 @@ export function ExerciseCard({
           {rows.map((row, i) => {
             const isCurrent = i === currentIndex;
             const isLast = i === rows.length - 1;
-            // The coach's prescription for THIS set. repScheme carries a
-            // per-set scheme (3x10/3x8/3x8 asks different things of set 1 and
-            // set 3), targetReps is the flat fallback — which is exactly why
-            // the target belongs in the boxes and not in one summary line.
-            // A set the member added herself past the programmed count has no
-            // target at all, so it gets the same en dash weight always gets.
-            const targetReps = item.repScheme?.[i] ?? item.targetReps ?? null;
-            const targetLabel = targetReps === null || targetReps === "" ? null : String(targetReps);
+            const targetLabel = rowTargets[i];
 
             // Keyed or not is per BOX, not per row: typing reps without a
             // weight yet should settle the reps box and leave the weight box
@@ -963,12 +977,51 @@ export function ExerciseCard({
 
             return (
               <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: rowGap, marginBottom: 7 }}>
-                <Text
-                  maxFontSizeMultiplier={1}
-                  style={{ width: setLabelWidth, fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: isCurrent ? "#8a5140" : MUTED }}
-                >
-                  SET {i + 1}
-                </Text>
+                {hasTargets ? (
+                  /* The set number and its prescription are one tinted block,
+                     the full height of the boxes beside it: peach means "what
+                     was asked", white/olive means "what she did". Without the
+                     ground behind it the two halves of the row read as one
+                     flat table and the target looks like another field. */
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      height: boxHeight,
+                      borderRadius: boxRadius,
+                      backgroundColor: PRESCRIPTION_BG,
+                      borderWidth: 1,
+                      borderColor: PRESCRIPTION_BORDER,
+                    }}
+                  >
+                    {/* Every SET label is the same clay as the lift name
+                        above it — this used to be the "current set" highlight
+                        applied to one row only, which made set 1 read as a
+                        different kind of label than sets 2 and 3. The current
+                        set is still marked by the clay border on its boxes,
+                        which is the more visible of the two signals. */}
+                    <Text
+                      maxFontSizeMultiplier={1}
+                      style={{ width: setLabelWidth, marginLeft: BLOCK_INSET, fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: colors.primary }}
+                    >
+                      SET {i + 1}
+                    </Text>
+                    <Text
+                      maxFontSizeMultiplier={1}
+                      numberOfLines={1}
+                      style={{ width: targetWidth, textAlign: "center", fontFamily: fonts.sans, fontSize: compact ? 13.5 : 14, color: PRESCRIPTION_TEXT }}
+                    >
+                      {targetLabel ?? "–"}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text
+                    maxFontSizeMultiplier={1}
+                    style={{ width: setLabelWidth, fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: colors.primary }}
+                  >
+                    SET {i + 1}
+                  </Text>
+                )}
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <TextInput
                     ref={autofillSuppressedRef}
@@ -981,17 +1034,14 @@ export function ExerciseCard({
                     selectTextOnFocus
                     keyboardType="decimal-pad"
                     inputAccessoryViewID={NUMERIC_DONE_ID}
-                    // The target is drawn over the box, not put in the
-                    // placeholder — see TargetHint. An empty set with no
-                    // prescription falls back to the plain en dash, which a
-                    // placeholder handles fine on its own.
-                    placeholder={targetLabel ? "" : "–"}
+                    // Nothing but her own number ever goes in this box now —
+                    // the prescription sits in its own column to the left.
+                    placeholder="–"
                     placeholderTextColor={TARGET_TEXT}
                     maxFontSizeMultiplier={1}
                     accessibilityLabel={targetLabel ? `Set ${i + 1} reps, target ${targetLabel}` : `Set ${i + 1} reps`}
                     style={{ ...boxStyle(row.reps !== ""), flex: undefined, width: "100%" }}
                   />
-                  {row.reps === "" && targetLabel ? <TargetHint label={targetLabel} compact={compact} /> : null}
                 </View>
                 {tracksWeight ? (
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -1133,6 +1183,7 @@ export function ExerciseCard({
                 }}
                 onFocus={() => scrollFieldIntoView(cardRef.current)}
                 multiline
+                onContentSizeChange={(e) => setNoteHeight(e.nativeEvent.contentSize.height)}
                 placeholder="Notes"
                 placeholderTextColor={colors.hint}
                 inputAccessoryViewID={NUMERIC_DONE_ID}
@@ -1140,7 +1191,12 @@ export function ExerciseCard({
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  minHeight: 44,
+                  minHeight: NOTE_MIN_HEIGHT,
+                  height: noteHeight ? Math.max(NOTE_MIN_HEIGHT, noteHeight + noteChrome) : undefined,
+                  // The box always grows to fit its text, so there is never
+                  // anything to scroll to — and without this the web build
+                  // renders a scroller inside it regardless.
+                  overflow: "hidden",
                   borderWidth: 1,
                   borderColor: INPUT_BORDER,
                   borderRadius: 10,
