@@ -2513,6 +2513,108 @@ several of them outside this handoff's own scope:**
   member folder for the same shape: this was the only one.
 
 
+## Events: one event opens straight in, a nagging tab badge, scheduled go-live (2026-08-27)
+
+Three asks in one session. Migration `0096` — applied and verified live.
+
+**With exactly one live event the tab opens the event, not a list.** A card
+you tap to reach the only thing behind it is a step with nothing on either
+side of it. `app/(member)/events/index.js` renders the detail inline when
+`events.length === 1`; 2+ keeps the cards. To stop the two paths drifting,
+the loading, the submit/cancel calls and the error+retry state moved into
+new `components/events/EventDetailScreen.js`, which both the inline case and
+the pushed `events/[eventId]` route render — the host owns only its own
+ScrollView, header and back affordance.
+
+In single-event mode the tab's own name drops to an `Eyebrow`. "Events" at
+30pt display directly above the event title at 28pt display read as two
+headings competing, and this is the one member screen whose content supplies
+its own title. Deliberately not solved by hoisting the title into the header
+row: with a graphic the order becomes header / poster / meta, which detaches
+the meta line from the title it belongs to.
+
+**The tab badge is a deliberate nag** — `tabBarBadge` on the Events
+`Tabs.Screen`, counting live events this member hasn't opened, cleared only
+by opening the tab. Two details worth keeping:
+- `undefined` when the count is 0, never `0`. react-navigation renders the
+  badge on `badge != null`, so a literal 0 would sit there forever.
+- `tabBarBadgeStyle={{ backgroundColor: "#b23a22" }}` — `Badge` derives its
+  text colour from the background, so white text comes free. The badge
+  measures 19×19 at `top: -3` inside the 24pt icon wrapper `TAB_ICON_STYLE`
+  sets, which lands 2px INSIDE the tab bar's top edge (measured, not
+  eyeballed) — worth re-measuring if that icon height ever changes.
+
+Seen-state is `lib/programming/eventSeen.js` — AsyncStorage, same pub-sub
+shape as `messageBubblePref.js`, because the tab bar and the Events screen
+are mounted separately and the badge has to clear the instant she opens the
+tab. Deliberately NOT a table alongside `announcement_acknowledgments`: it's
+a nudge, not a record, nothing reads it coach-side, and the worst case of a
+cleared browser store is one extra badge. **`useSeenEventIds()` returns null
+while storage is still being read, distinct from an empty set** — counting
+against an empty set in the meantime would flash a badge on every cold start.
+`markAllEventsSeen(liveIds)` REPLACES the set (the list screen always passes
+the complete live list, so this prunes closed events for free);
+`markEventSeen(id)` adds one, and `EventDetailScreen` calls it on every load
+so a push deep link — which never touches the list — still clears the badge.
+
+**Scheduling: `events.publish_at`, and the push needs no new infrastructure.**
+An event's announcement is already a normal `programming.announcements` row,
+and those already carry `send_at` and are already sent by the
+`scan-announcements` pg_cron job (0025). So scheduling an event is just
+`publish_at` on the event plus `sendAt = publishAt` on its announcement —
+no new Edge Function, no new cron. That cron polls every 15 minutes, which
+is why the picker only offers quarter-hour slots (`lib/dateTimeOptions.js`,
+already shared with announcements).
+
+`publish_at` is nullable and null means "live as soon as it's published" —
+exactly the previous behaviour, so no backfill and no existing row changed.
+**The gate is repeated inline in all six member-facing policies** (events,
+items, questions, and the response insert/update/delete) rather than
+extracted into a helper: a function reading `programming.events` can't be
+used inside `programming.events`' own policy without recursing, so a helper
+would cover five of six and leave the important one written differently from
+its siblings. The `auth.uid() is not null` guard from the 2026-08-21 audit is
+preserved on each.
+
+Ordering is deliberate: RLS compares against `now()` so the tab appears at
+the exact instant, while the push can land up to 15 minutes later. Never the
+other way round — nobody is pushed at something they can't open yet.
+
+`eventPhase()` gained a fourth state, `scheduled`, and every consumer needed
+it: without a Scheduled section the coach's list would have dropped those
+events entirely (they're in neither Live, Drafts nor Closed). **A scheduled
+event must be cancellable** — take-down now covers `scheduled` as well as
+`live`, and both take-down paths call the new
+`deletePendingAnnouncementsForEvent(eventId)`, or `scan-announcements` would
+still push people at an event that no longer exists. Scoped to
+`pushed_at is null`: one that already went out is history, not something to
+erase. `events.pushed_at` stays null for a scheduled announcement — nothing
+has gone out yet, and it's what lets the cancel path find the queued row.
+
+Changing a schedule is cancel-then-republish, not an edit. Two ways to reach
+the same state is where half-states come from, and the loop is short.
+
+**Known and unchanged**: `useEventsAccess` re-checks on mount and on
+AppState foreground, not on a timer — so a member with the app already open
+in the foreground when an event goes live sees the tab on their next
+foreground cycle. Same shape as `AnnouncementChecker`, deliberately, and the
+realistic path (push arrives → app foregrounded) is covered.
+
+**Verified**: migration dry-run in a rolled-back transaction, then a
+6-assertion impersonation test as a real member (sees 1 of 2 events, 0 items
+of the scheduled one, insert refused; then 2 of 2 and 1 item once
+`publish_at` passes) — also rolled back — before applying for real; column,
+index, all six policies carrying the gate and zero affected rows confirmed
+by query afterwards. The `.or("publish_at.is.null,publish_at.lte.<iso>")`
+filter was curled against live PostgREST to prove the ISO string's dots
+don't collide with its `column.operator.value` separator (200 `[]`, not a
+400). The badge geometry, the eyebrow header, the go-live picker, the
+scheduled banner and `eventPhase()`'s four states were all driven and
+measured in a throwaway `app/zz-ev/` route folder (deleted; `git status`
+confirmed clean). **Not verified behind a real login** — standing
+limitation. Worth Terra's click-through: schedule one a quarter-hour out and
+confirm the tab, the popup and the push all land together.
+
 ## House rule: every disabled button must dim (2026-08-13)
 
 **`disabled:opacity-50` does nothing. Never use it.** NativeWind sets
@@ -3696,6 +3798,7 @@ sections; next number after 0080 is 0081.)
 - `0085_warmup_and_template_supersets.sql` — **run**, verified live 2026-08-24 (all 8 columns confirmed by direct query, `NOTIFY pgrst` sent). `superset_group_id` on all four warm-up tables + `template_exercises`/`one_off_exercises`, `rep_scheme` on `one_off_exercises` (backfilled 0030-style). See "Builder tweak batch" above.
 - `0080_session_education_scope.sql` — **run**, verified live 2026-08-23 (column + default confirmed, a bad value rejected by the check, all existing rows defaulted to `'session'` with nothing to backfill). Adds `session_education.scope` (`session`/`warmup`/`exercises`) so "general" can mean the warm-up block as well as the whole day.
 - `0094_exercise_review.sql` — **run**, verified live 2026-08-27 (both columns, the partial index, both rewritten policies, and all 155 existing rows grandfathered to approved; plus a 9-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.exercises.approved_at`/`approved_by` and reopens creation to every staff member. See "Exercise library: everyone adds, reviewers approve" below.
+- `0096_event_publish_at.sql` — **run**, verified live 2026-08-27 (column, index, all six member-facing policies carrying the new gate, and zero existing rows affected; plus a 6-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.events.publish_at` so an event can be scheduled to go live at a set day and time. Nullable, null = live as soon as it's published, so nothing existing changes. **Do not reorder the policy block** — the gate is intentionally inline in all six policies rather than in a helper, since a function reading `programming.events` would recurse inside that table's own policy. See "Events: one event opens straight in" above.
 - `0095_exercise_parents.sql` — **run**, verified live 2026-08-27 (18 parent records, 66 exercises grouped, 0 variations lost, 0 duplicate names, plus an 11-assertion impersonation test in a rolled-back transaction as a reviewer, a non-reviewer coach and a member). Adds `programming.exercise_parents` and `exercises.parent_id`; `exercises.parent_exercise_id` is left populated but unread as the rollback path. See "A parent is its own record now" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
 - `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.

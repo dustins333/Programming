@@ -13,7 +13,11 @@ import { EventCard } from "../../../components/events/EventCard";
 import { EventDetailView } from "../../../components/events/EventDetailView";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
 import { listGroupPrograms } from "../../../lib/programming/blocks";
-import { createAnnouncement, pushAnnouncementNow } from "../../../lib/programming/announcements";
+import {
+  createAnnouncement,
+  pushAnnouncementNow,
+  deletePendingAnnouncementsForEvent,
+} from "../../../lib/programming/announcements";
 import {
   getEvent,
   updateEvent,
@@ -38,11 +42,28 @@ import {
   confirmRemoveEventItem,
 } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
-import { boiseInstantFrom } from "../../../lib/boiseDate";
-import { buildDateOptions, TIME_OPTIONS, toDateValue, toTimeValue } from "../../../lib/dateTimeOptions";
+import { boiseInstantFrom, formatDateTimeInBoise } from "../../../lib/boiseDate";
+import {
+  buildDateOptions,
+  TIME_OPTIONS,
+  toDateValue,
+  toTimeValue,
+  roundUpToQuarterHour,
+} from "../../../lib/dateTimeOptions";
 import { fonts, colors, statusColors } from "../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
+
+const GO_LIVE_OPTIONS = [
+  { key: "now", label: "As soon as I publish" },
+  { key: "later", label: "Schedule it" },
+];
+
+// An hour out, rounded up to the next quarter — scan-announcements only
+// polls every 15 minutes, so finer granularity would be a false promise.
+function defaultGoLive() {
+  return roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000));
+}
 
 const AUDIENCE_OPTIONS = [
   { key: "all", label: "Everyone" },
@@ -229,6 +250,13 @@ export default function EventComposer() {
   // people — it writes a normal announcement pointing back at this event, so
   // the popup and the push both come free from the existing pipeline.
   const [alsoAnnounce, setAlsoAnnounce] = useState(true);
+  // When members start seeing it. "later" writes events.publish_at, which
+  // member-facing RLS gates on (0096), and schedules the announcement for
+  // the same instant — so the tab, the popup and the push all arrive
+  // together without anyone being at a keyboard.
+  const [goLiveTiming, setGoLiveTiming] = useState("now");
+  const [goLiveDate, setGoLiveDate] = useState(() => toDateValue(defaultGoLive()));
+  const [goLiveTime, setGoLiveTime] = useState(() => toTimeValue(defaultGoLive()));
 
   const dateOptions = useMemo(() => buildDateOptions(120), []);
   const optionalDateOptions = useMemo(() => buildDateOptions(120, { includeNone: true, noneLabel: "No specific date" }), []);
@@ -267,6 +295,17 @@ export default function EventComposer() {
       // Off by default once this event has already been announced, so
       // taking it down and re-publishing doesn't notify everyone twice.
       setAlsoAnnounce(!row.pushed_at);
+      // Only a publish_at still in the future is a real schedule; one that
+      // has already passed just means "live", so the picker resets rather
+      // than offering to re-schedule into the past.
+      const scheduledFor = row.publish_at ? new Date(row.publish_at) : null;
+      if (scheduledFor && scheduledFor > new Date()) {
+        setGoLiveTiming("later");
+        setGoLiveDate(toDateValue(scheduledFor));
+        setGoLiveTime(toTimeValue(scheduledFor));
+      } else {
+        setGoLiveTiming("now");
+      }
     } catch (err) {
       setLoadError(err.message ?? String(err));
     } finally {
@@ -341,21 +380,47 @@ export default function EventComposer() {
     if (await saveDetails()) toastSuccess("Saved.");
   };
 
+  // null = live immediately. A schedule that has already slipped past is
+  // treated as "now" rather than rejected — the coach's intent was clearly
+  // "go", and holding it back would be the surprising answer.
+  const resolveGoLiveAt = () => {
+    if (goLiveTiming === "now") return null;
+    if (!goLiveDate || !goLiveTime) throw new Error("Pick the day and time it should go live");
+    const at = boiseInstantFrom(goLiveDate, goLiveTime);
+    if (closesDate && closesTime && new Date(at) >= new Date(boiseInstantFrom(closesDate, closesTime))) {
+      throw new Error("It would go live after it closes — pick an earlier time, or push the closing date out.");
+    }
+    return new Date(at) > new Date() ? at : null;
+  };
+
   const handlePublish = async () => {
     // Save first, so what goes live is what's on screen rather than
     // whatever was last persisted.
     if (!(await saveDetails())) return;
-    const confirmed = await confirmPublishEvent(title.trim(), audienceLabel());
+
+    let goLiveAt;
+    try {
+      goLiveAt = resolveGoLiveAt();
+    } catch (err) {
+      toastError(err.message);
+      return;
+    }
+
+    const confirmed = await confirmPublishEvent(title.trim(), audienceLabel(), goLiveAt);
     if (!confirmed) return;
     try {
-      await publishEvent(eventId);
+      await publishEvent(eventId, goLiveAt);
     } catch (err) {
       toastError("Couldn't publish", err);
       return;
     }
 
     if (!alsoAnnounce) {
-      toastSuccess("Published. It's on their Events tab now.");
+      toastSuccess(
+        goLiveAt
+          ? `Scheduled. It shows up on their Events tab ${formatDateTimeInBoise(goLiveAt)}.`
+          : "Published. It's on their Events tab now."
+      );
       await load();
       return;
     }
@@ -369,7 +434,9 @@ export default function EventComposer() {
         {
           title: title.trim(),
           message: body.trim() || `Tap to see the details.`,
-          sendAt: new Date().toISOString(),
+          // The same instant the event itself becomes visible, so nobody is
+          // ever pushed at something they can't open yet.
+          sendAt: goLiveAt ?? new Date().toISOString(),
           targetType: audience,
           targetGroupProgramId,
           imagePath,
@@ -377,9 +444,17 @@ export default function EventComposer() {
         },
         profile.id
       );
-      await pushAnnouncementNow(announcement.id);
-      await updateEvent(eventId, { pushed_at: new Date().toISOString() });
-      toastSuccess("Published and announced.");
+      if (goLiveAt) {
+        // Left for scan-announcements' cron scan to send once send_at
+        // passes — the same path any scheduled announcement takes. pushed_at
+        // stays null deliberately: nothing has gone out yet, and it's what
+        // lets a cancelled schedule clean the queued announcement up.
+        toastSuccess(`Scheduled for ${formatDateTimeInBoise(goLiveAt)}.`);
+      } else {
+        await pushAnnouncementNow(announcement.id);
+        await updateEvent(eventId, { pushed_at: new Date().toISOString() });
+        toastSuccess("Published and announced.");
+      }
     } catch (err) {
       toastError("Published, but the announcement didn't go out", err);
     }
@@ -387,11 +462,16 @@ export default function EventComposer() {
   };
 
   const handleTakeDown = async () => {
-    const confirmed = await confirmUnpublishEvent(event.title);
+    const scheduled = eventPhase(event) === "scheduled";
+    const confirmed = await confirmUnpublishEvent(event.title, scheduled);
     if (!confirmed) return;
     try {
       await unpublishEvent(eventId);
-      toastSuccess("Taken down.");
+      // An announcement queued to go out with this event has to come down
+      // with it, or people get pushed at something they can't open. Only
+      // ever removes one that hasn't sent yet.
+      await deletePendingAnnouncementsForEvent(eventId);
+      toastSuccess(scheduled ? "Schedule cancelled — it's a draft again." : "Taken down.");
       await load();
     } catch (err) {
       toastError("Couldn't take it down", err);
@@ -728,6 +808,41 @@ export default function EventComposer() {
         ) : null}
 
         {phase === "draft" ? (
+          <View className="mb-4 max-w-xl">
+            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+              Goes live
+            </Text>
+            <SegmentedControl segments={GO_LIVE_OPTIONS} activeKey={goLiveTiming} onSelect={setGoLiveTiming} />
+            {goLiveTiming === "later" ? (
+              <View className="mt-2">
+                <View className="flex-row gap-2" style={{ maxWidth: 420 }}>
+                  <Select options={dateOptions} value={goLiveDate} onChange={(v) => setGoLiveDate(v ?? "")} maxWidth={200} />
+                  <Select options={TIME_OPTIONS} value={goLiveTime} onChange={(v) => setGoLiveTime(v ?? "")} maxWidth={140} />
+                </View>
+                <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                  Nobody sees it until then — the tab, the popup and the notification all land together. Times are
+                  Boise, to the nearest quarter hour.
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {phase === "scheduled" ? (
+          <View
+            className="mb-4 max-w-xl rounded-2xl p-4"
+            style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#f0ddd2" }}
+          >
+            <Text className="text-sm" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
+              Scheduled for {formatDateTimeInBoise(event.publish_at)}
+            </Text>
+            <Text className="mt-1 text-xs" style={{ fontFamily: fonts.sans, color: "#57534e" }}>
+              Nobody can see it yet. To change the time, cancel the schedule and publish it again.
+            </Text>
+          </View>
+        ) : null}
+
+        {phase === "draft" ? (
           <PressFade
             onPress={() => setAlsoAnnounce((v) => !v)}
             style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 16, maxWidth: 520 }}
@@ -764,14 +879,16 @@ export default function EventComposer() {
               }}
             >
               <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                Publish
+                {goLiveTiming === "later" ? "Schedule" : "Publish"}
               </Text>
             </PressFade>
           ) : null}
 
-          {phase === "live" ? (
+          {phase === "live" || phase === "scheduled" ? (
             <PressFade onPress={handleTakeDown} style={{ borderRadius: 8, paddingVertical: 12, paddingHorizontal: 20, borderWidth: 1, borderColor: "#b23a22" }}>
-              <Text style={{ fontFamily: fonts.sansSemiBold, color: "#b23a22" }}>Take down</Text>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: "#b23a22" }}>
+                {phase === "scheduled" ? "Cancel schedule" : "Take down"}
+              </Text>
             </PressFade>
           ) : null}
 

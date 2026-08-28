@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { useNutritionAccess } from "../../lib/nutrition/useNutritionAccess";
 import { useHasFitness } from "../../lib/programming/useFitnessAccess";
-import { useHasEvents } from "../../lib/programming/useEventsAccess";
+import { useEventsAccess } from "../../lib/programming/useEventsAccess";
 import { AnnouncementChecker } from "../../lib/notifications/AnnouncementChecker";
 import { FloatingMessageBubble } from "../../components/FloatingMessageBubble";
 import { RestTimerBar } from "../../components/RestTimerBar";
@@ -56,6 +56,11 @@ function TabLabel(title) {
 
 const TAB_ICON_STYLE = { height: 24 };
 
+// The app's own destructive/urgent red rather than react-navigation's theme
+// notification colour. Badge derives its text colour from this background,
+// so white text comes for free.
+const EVENT_BADGE_STYLE = { backgroundColor: "#b23a22" };
+
 export default function MemberLayout() {
   const { session, profile, ready } = useAuth();
   // Called unconditionally (Rules of Hooks) even before we know whether
@@ -79,7 +84,7 @@ export default function MemberLayout() {
   // a live event is targeted at this member, and hides itself again when the
   // last one closes. Defaults hidden (see useEventsAccess.js for why that's
   // the opposite default from My Fitness).
-  const showEventsTab = useHasEvents(session?.user?.id);
+  const { showTab: showEventsTab, unseenCount: unseenEvents } = useEventsAccess(session?.user?.id);
 
   if (!ready) {
     return (
@@ -109,6 +114,7 @@ export default function MemberLayout() {
         showFitnessTab={showFitnessTab}
         showNutritionTab={showNutritionTab}
         showEventsTab={showEventsTab}
+        unseenEvents={unseenEvents}
         isStaff={isStaff}
       />
     </RestTimerProvider>
@@ -123,7 +129,7 @@ export default function MemberLayout() {
 // second time or they'd all sit under ~60px of dead space. Overriding
 // SafeAreaInsetsContext for the tab subtree is the one place that can be
 // said once instead of in every member screen.
-function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, isStaff }) {
+function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, unseenEvents, isStaff }) {
   const { timer } = useRestTimer();
   const insets = useSafeAreaInsets();
   const barVisible = !!timer;
@@ -168,6 +174,11 @@ function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, isStaff }
       />
       <Tabs.Screen name="history" options={{ title: "My History", tabBarIcon: TabIcon("time"), tabBarLabel: TabLabel("My History") }} />
 
+      {/* The badge is a deliberate nag: it counts live events this member
+          hasn't opened yet and only clears once she does (device-local, see
+          lib/programming/eventSeen.js). Undefined rather than 0 when there's
+          nothing unseen — the Badge renders on `!= null`, so a 0 would sit
+          there permanently. */}
       <Tabs.Screen
         name="events"
         options={{
@@ -175,6 +186,8 @@ function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, isStaff }
           tabBarIcon: TabIcon("calendar"),
           tabBarLabel: TabLabel("Events"),
           href: showEventsTab ? undefined : null,
+          tabBarBadge: unseenEvents > 0 ? unseenEvents : undefined,
+          tabBarBadgeStyle: EVENT_BADGE_STYLE,
         }}
       />
 

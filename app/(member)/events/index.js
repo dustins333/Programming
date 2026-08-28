@@ -4,8 +4,11 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { PressFade } from "../../../components/PressFade";
+import { Eyebrow } from "../../../components/Eyebrow";
 import { EventCard, CARD_BORDER } from "../../../components/events/EventCard";
+import { EventDetailScreen } from "../../../components/events/EventDetailScreen";
 import { listLiveEventsForUser, listMyResponses } from "../../../lib/programming/events";
+import { markAllEventsSeen } from "../../../lib/programming/eventSeen";
 import { fonts, colors } from "../../../lib/theme";
 
 export default function MemberEvents() {
@@ -25,7 +28,12 @@ export default function MemberEvents() {
     try {
       const live = await listLiveEventsForUser(userId);
       setEvents(live);
-      setResponses(await listMyResponses(userId, live.map((e) => e.id)));
+      // Opening the tab is what clears its badge — she's now looked at
+      // whatever is live. Only on a successful load: marking after a failed
+      // fetch would silently clear the badge for events she never saw.
+      // Fire-and-forget; a storage failure must not break the screen.
+      markAllEventsSeen(live.map((e) => e.id)).catch(() => {});
+      if (live.length > 1) setResponses(await listMyResponses(userId, live.map((e) => e.id)));
     } catch (err) {
       setLoadError(err.message ?? String(err));
     } finally {
@@ -41,13 +49,30 @@ export default function MemberEvents() {
     }, [load])
   );
 
+  // With one live event there is nothing to choose between, so the tab opens
+  // straight into it rather than making her tap a card to reach the only
+  // thing behind it. Same component the pushed route renders, so the two
+  // can't drift.
+  const onlyEvent = !loading && !loadError && events.length === 1 ? events[0] : null;
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.canvas }}
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 18, paddingBottom: 40 }}
+      keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-5 flex-row items-center justify-between">
-        <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primary }}>Events</Text>
+      {/* With one event its own title is the page heading, so the tab's
+          name drops to an eyebrow rather than sitting above it as a second
+          near-identical display heading. */}
+      <View
+        className="flex-row items-center justify-between"
+        style={{ marginBottom: onlyEvent ? 10 : 20 }}
+      >
+        {onlyEvent ? (
+          <Eyebrow>Events</Eyebrow>
+        ) : (
+          <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primary }}>Events</Text>
+        )}
         <Image source={require("../../../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
       </View>
 
@@ -62,6 +87,8 @@ export default function MemberEvents() {
             <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
           </PressFade>
         </View>
+      ) : onlyEvent ? (
+        <EventDetailScreen eventId={onlyEvent.id} userId={userId} />
       ) : events.length === 0 ? (
         // Reachable only in the gap between the last event closing and this
         // screen's own tab disappearing — deliberately says nothing about

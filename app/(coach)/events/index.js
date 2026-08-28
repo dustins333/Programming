@@ -14,6 +14,7 @@ import {
   unpublishEvent,
   eventPhase,
 } from "../../../lib/programming/events";
+import { deletePendingAnnouncementsForEvent } from "../../../lib/programming/announcements";
 import { confirmUnpublishEvent } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { formatDateMDY } from "../../../lib/formatDate";
@@ -56,7 +57,16 @@ function Section({ title, hint, children }) {
 }
 
 function EventRow({ event, groupPrograms, responseCount, phase, onOpen, onTakeDown }) {
-  const tone = phase === "live" ? statusColors.onTrack : phase === "draft" ? statusColors.needsAction : statusColors.paused;
+  const tone =
+    phase === "live"
+      ? statusColors.onTrack
+      : phase === "scheduled"
+      ? statusColors.urgent
+      : phase === "draft"
+      ? statusColors.needsAction
+      : statusColors.paused;
+  const phaseLabel =
+    phase === "live" ? "Live" : phase === "scheduled" ? "Scheduled" : phase === "draft" ? "Draft" : "Closed";
   return (
     <View className="mb-2 max-w-2xl flex-row items-start rounded-xl border border-stone-200 p-4">
       {event.image_path ? (
@@ -70,7 +80,7 @@ function EventRow({ event, groupPrograms, responseCount, phase, onOpen, onTakeDo
           <Text style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>{event.title}</Text>
           <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: tone.bg }}>
             <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11, color: tone.text }}>
-              {phase === "live" ? "Live" : phase === "draft" ? "Draft" : "Closed"}
+              {phaseLabel}
             </Text>
           </View>
         </View>
@@ -80,15 +90,17 @@ function EventRow({ event, groupPrograms, responseCount, phase, onOpen, onTakeDo
           {event.event_date ? ` · ${formatDateMDY(event.event_date)}` : ""}
         </Text>
         <Text className="mt-0.5 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-          {phase === "past" ? "Closed " : "Closes "}
-          {formatDateTimeInBoise(event.closes_at)}
+          {phase === "scheduled" ? "Goes live " : phase === "past" ? "Closed " : "Closes "}
+          {formatDateTimeInBoise(phase === "scheduled" ? event.publish_at : event.closes_at)}
           {responseCount > 0 ? ` · ${responseCount} ${responseCount === 1 ? "response" : "responses"}` : ""}
         </Text>
       </PressFade>
 
-      {phase === "live" ? (
+      {phase === "live" || phase === "scheduled" ? (
         <PressFade onPress={onTakeDown} style={{ paddingHorizontal: 4, paddingVertical: 2 }}>
-          <Text style={{ fontFamily: fonts.sansMedium, color: "#b23a22", fontSize: 12 }}>Take down</Text>
+          <Text style={{ fontFamily: fonts.sansMedium, color: "#b23a22", fontSize: 12 }}>
+            {phase === "scheduled" ? "Cancel" : "Take down"}
+          </Text>
         </PressFade>
       ) : null}
     </View>
@@ -157,11 +169,15 @@ export default function EventsIndex() {
   };
 
   const handleTakeDown = async (event) => {
-    const confirmed = await confirmUnpublishEvent(event.title);
+    const wasScheduled = eventPhase(event) === "scheduled";
+    const confirmed = await confirmUnpublishEvent(event.title, wasScheduled);
     if (!confirmed) return;
     try {
       await unpublishEvent(event.id);
-      toastSuccess("Taken down. It's back in Drafts.");
+      // Same reason as the editor's own take-down: an announcement queued to
+      // go out with this event has to come down with it.
+      await deletePendingAnnouncementsForEvent(event.id);
+      toastSuccess(wasScheduled ? "Schedule cancelled. It's back in Drafts." : "Taken down. It's back in Drafts.");
       await load();
     } catch (err) {
       toastError("Couldn't take it down", err);
@@ -170,6 +186,10 @@ export default function EventsIndex() {
 
   const now = new Date();
   const live = events.filter((e) => eventPhase(e, now) === "live");
+  // Published but held back until its publish_at. Its own section rather
+  // than folded into Live or Drafts — it is neither, and it's the one state
+  // where "did I actually set this up right?" is worth being able to check.
+  const scheduled = events.filter((e) => eventPhase(e, now) === "scheduled");
   const drafts = events.filter((e) => eventPhase(e, now) === "draft");
   const past = events.filter((e) => eventPhase(e, now) === "past");
 
@@ -240,6 +260,12 @@ export default function EventsIndex() {
             <Section title="Live" hint={live.length === 0 ? "Nothing is live — members have no Events tab right now." : undefined}>
               {live.map((e) => renderRow(e, "live"))}
             </Section>
+
+            {scheduled.length > 0 ? (
+              <Section title="Scheduled" hint="Published, but nobody sees these until the time you set.">
+                {scheduled.map((e) => renderRow(e, "scheduled"))}
+              </Section>
+            ) : null}
 
             {drafts.length > 0 ? <Section title="Drafts">{drafts.map((e) => renderRow(e, "draft"))}</Section> : null}
 
