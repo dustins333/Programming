@@ -3695,6 +3695,7 @@ sections; next number after 0080 is 0081.)
 - `0079_session_education.sql` — **run**, verified live 2026-08-22 (10 columns, 3 FKs, RLS on, 1 policy, index, grants, PostgREST `200 []`, plus an impersonation test in a rolled-back transaction: coach reads and writes, member sees zero rows and is blocked from inserting). Adds `programming.session_education` — coach education per (block, session), staff-only. See the Coach Prep section.
 - `0085_warmup_and_template_supersets.sql` — **run**, verified live 2026-08-24 (all 8 columns confirmed by direct query, `NOTIFY pgrst` sent). `superset_group_id` on all four warm-up tables + `template_exercises`/`one_off_exercises`, `rep_scheme` on `one_off_exercises` (backfilled 0030-style). See "Builder tweak batch" above.
 - `0080_session_education_scope.sql` — **run**, verified live 2026-08-23 (column + default confirmed, a bad value rejected by the check, all existing rows defaulted to `'session'` with nothing to backfill). Adds `session_education.scope` (`session`/`warmup`/`exercises`) so "general" can mean the warm-up block as well as the whole day.
+- `0094_exercise_review.sql` — **run**, verified live 2026-08-27 (both columns, the partial index, both rewritten policies, and all 155 existing rows grandfathered to approved; plus a 9-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.exercises.approved_at`/`approved_by` and reopens creation to every staff member. See "Exercise library: everyone adds, reviewers approve" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
 - `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.
 
@@ -5528,6 +5529,97 @@ had a Google Docs case that PASSED while asserting the broken output — bold an
 underline stripped, the whole document wrapped in `<b>`. Every suite was green
 and the feature was visibly wrong. When a user says "still not right" and the
 tests are passing, suspect the expectation before suspecting the report.
+
+## Exercise library: everyone adds, reviewers approve (2026-08-27)
+
+Gating creation on `can_view_exercise_library` (0015) meant a coach without
+it had to interrupt a reviewer mid-session just to program a lift that
+wasn't listed yet. **The flag stops meaning "may touch the library" and
+starts meaning "reviews what everyone else added."** Creation is open to
+all staff; the new entry is usable the same minute.
+
+**Nothing about a member's view changes**, and that's the load-bearing
+point: member RLS on every exercise embed keys on `is_active`, not on
+review state, so a pending entry is already live in whatever session it
+was built into. Approving is about the library's own consistency, not
+about releasing anything.
+
+**Migration `0094` — run.** `approved_at`/`approved_by` on
+`programming.exercises`; null = waiting. A timestamp rather than a status
+enum (two states, and "when was this signed off" is worth keeping either
+way). All 155 existing rows are backfilled to their `created_at` so the
+queue opens **empty** rather than with the entire library in it —
+`approved_by` is deliberately left null on those, since writing a name
+there would claim a review that never happened. A reviewer's own create
+skips the queue (`approved: isLibraryReviewer(profile)`, passed at all
+five `createExercise` call sites).
+
+**The rules live in RLS, not the UI**, and both had to be expressed as
+conditions on the *resulting row* — RLS cannot restrict which columns a
+write touches, which is the same constraint behind
+`core.update_own_notification_prefs` and `finalize_own_period`:
+- insert = any staff, **but** `approved_at is null or can_access_exercise_library()`,
+  or a non-reviewer could insert a pre-approved row and never appear in the queue;
+- update = a reviewer for anything, **or** your own entry while it is still
+  pending. The `approved_at is null` in the WITH CHECK is what stops that
+  edit from being the thing that approves it.
+
+Worth knowing about the two failure modes, they differ: a WITH CHECK
+violation raises `42501`, while a USING-clause miss silently affects **0
+rows**. Both were asserted.
+
+**Editing in the queue does NOT approve.** Tidying and signing off are two
+decisions, so the card stays put with its new values showing. Archiving is
+the reject path and warns when the entry is already programmed somewhere
+(archiving blanks its name out of a live session — the existing
+`confirmArchiveExercise` note).
+
+Surfaces: `app/(coach)/exercises/review.js` (universal file — cards, no
+wide table, so no `.web.js` split needed), a `Library Review` sidebar row
++ native More row with a count badge, a `Needs review` chip and pill on
+both library screens, a banner into the queue, and a line in
+`ExerciseFormModal` telling a non-reviewer up front that their entry gets
+reviewed — otherwise "needs review" appearing on it later reads as having
+done something wrong. Team settings relabels the checkbox to **Library
+Reviewer**; the column name is unchanged.
+
+**Left alone deliberately**: `launchpad.js`'s `programsSessions()` and
+`CoachHomeDesktop`'s `nutritionOnly` still infer "does programming" from
+`can_view_spc || can_view_exercise_library`. There is still no
+`can_view_programs` flag, and a reviewer is by definition deep enough in
+the programming to be trusted curating it — so the inference survives the
+rename. Comments updated at both sites.
+
+### A warm-up and a lift can never merge
+
+Both suggestions the detector produced against the real 155-entry library
+were exactly this — `"Glute Bridge"` the warm-up vs the lift, and a
+Lat Pulldown pair. Merging either folds one's history into the wrong half
+of every builder's picker, which filters strictly on type. Now refused in
+three places: `findDuplicateCandidates` skips cross-type pairs (2
+suggestions before, **0** after), the manual "merge any two" typeahead
+disables its button with an explanation, and `mergeExercises` reads both
+types **back from the database** and throws — that last one matters
+because the typeahead can name any two entries, so the suggestion list was
+never the only way in. Every row that can show both kinds now carries a
+`components/ExerciseTypePill.js` label.
+
+### Sidebar active-row resolution is longest-match now
+
+`/exercises` is a prefix of `/exercises/review`, so a per-row
+`isActive()` check lit up **both**. `CoachShell`'s `NavList` now resolves
+one winner across every visible row (`activeKeyFor`, longest stripped href
+wins) instead of asking each row independently — fixed centrally so the
+next route nested under an existing one can't reintroduce it.
+
+**Verified**: migration dry-run then applied; 9 RLS assertions as a real
+non-reviewer and a real reviewer in a rolled-back transaction; the
+detector re-run against real library data; `mergeExercises` driven against
+a stub client (cross-type refused with **zero** writes attempted, so a
+partial merge is impossible); queue cards, merge rows and all three
+sidebar states screenshotted through a throwaway `app/zz-harness.js`;
+clean `expo export` + `check:routes` + a Babel scope pass over all 20
+touched files. **Not verified behind a real login** — standing limitation.
 
 ## Working notes for future sessions
 
