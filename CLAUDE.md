@@ -2650,6 +2650,36 @@ announcement and would have offered to announce a second time. New
 `countAnnouncementsForEvent(eventId)` counts rows in any channel instead.
 `events.pushed_at` is still written on a real immediate push, as a record.
 
+### Three follow-ups from Terra's first real schedule
+
+She scheduled one and reported the push box appearing to tick itself, no way
+to check afterwards, and confirm copy left over from before the split. The
+data was right — `send_push: false` was stored exactly as she picked — but
+all three reports were real:
+
+- **`saveDetails()` ends with `load()`, and `load()` was re-seeding both
+  checkboxes on every call.** Pressing Schedule therefore visibly re-ticked
+  the boxes mid-action. The write was still correct (the handler's closure
+  held her real values), which is the only reason this was cosmetic rather
+  than a wrong send — but a plain **Save** would silently restore both, and
+  the next publish would have used them. Seeded once per event via a ref now.
+  **Worth generalising: a `load()` that re-seeds form state is safe only if
+  nothing calls it mid-edit — and here `saveDetails()` did.**
+- **Nothing said which channels were queued** once the event left draft,
+  because the checkboxes are gated on `phase === "draft"`. The scheduled
+  banner and a new line on live events now state it, read off the real
+  announcement row — `getLatestAnnouncementForEvent` replaced the earlier
+  count for exactly this reason.
+- **The confirm dialog still claimed both channels went out.** True when they
+  were one checkbox, a lie the moment they weren't. `describeChannels` is now
+  the single phrasing, passed into `confirmPublishEvent` and reused by the
+  banner and the live line, so the thing she agrees to and the thing she
+  reads back can't disagree. It returns **null** when neither channel is on
+  and each site frames it, rather than forcing "no announcement at all" into
+  a sentence that reads as though something is being sent. All twelve
+  variants (4 channel combinations × dialog/banner/live-line) were printed
+  and read before shipping.
+
 ### The cron bug this uncovered
 
 Test-firing `announcement-scan` after redeploying returned **401

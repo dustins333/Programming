@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { View, Text, TextInput, ScrollView, ActivityIndicator, Platform, Modal } from "react-native";
 import { Redirect, useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,7 +17,7 @@ import {
   createAnnouncement,
   pushAnnouncementNow,
   deletePendingAnnouncementsForEvent,
-  countAnnouncementsForEvent,
+  getLatestAnnouncementForEvent,
 } from "../../../lib/programming/announcements";
 import {
   getEvent,
@@ -64,6 +64,19 @@ const GO_LIVE_OPTIONS = [
 // polls every 15 minutes, so finer granularity would be a false promise.
 function defaultGoLive() {
   return roundUpToQuarterHour(new Date(Date.now() + 60 * 60 * 1000));
+}
+
+// The one phrasing of "which channels", shared by the confirm dialog and the
+// banner, so the thing she agrees to and the thing she reads back afterwards
+// can never describe the same choice differently.
+// Returns a noun phrase, or null when neither channel is on — each caller
+// frames it, so "with no announcement at all" can never be forced into a
+// sentence that reads as though something is being sent.
+export function describeChannels({ inApp, push }) {
+  if (inApp && push) return "a popup in the app and a notification";
+  if (push) return "a notification only, with no in-app popup";
+  if (inApp) return "an in-app popup only, with no notification";
+  return null;
 }
 
 const AUDIENCE_OPTIONS = [
@@ -273,11 +286,14 @@ export default function EventComposer() {
   // both, or neither.
   const [announceInApp, setAnnounceInApp] = useState(true);
   const [announcePush, setAnnouncePush] = useState(true);
-  // How many announcements this event has already had, in any channel — what
-  // decides whether the two boxes default off. Counted rather than read off
-  // events.pushed_at, which only records a real push and would miss an
-  // in-app-only or still-scheduled one.
-  const [announcementCount, setAnnouncementCount] = useState(0);
+  // The announcement already made for this event, if any. Decides whether
+  // the two boxes default off, and — once they're gone, because the event is
+  // no longer a draft — is the only way to see which channels are queued.
+  const [eventAnnouncement, setEventAnnouncement] = useState(null);
+  // load() runs after every save, and re-seeding the checkboxes each time
+  // would silently undo the coach's choice the moment she pressed Save or
+  // Schedule. Seeded once per event instead.
+  const channelsSeededFor = useRef(null);
   // When members start seeing it. "later" writes events.publish_at, which
   // member-facing RLS gates on (0096), and schedules the announcement for
   // the same instant — so the tab, the popup and the push all arrive
@@ -298,7 +314,7 @@ export default function EventComposer() {
         listEventQuestions(eventId),
         listGroupPrograms(),
         countResponsesByEvent(),
-        countAnnouncementsForEvent(eventId),
+        getLatestAnnouncementForEvent(eventId),
       ]);
       if (!row) throw new Error("That event no longer exists.");
       setEvent(row);
@@ -321,12 +337,15 @@ export default function EventComposer() {
       setLinkUrl(row.link_url ?? "");
       setAskGuestCount(Boolean(row.ask_guest_count));
       setCtaLabel(row.cta_label ?? "");
-      // Off by default once this event has already been announced, so
-      // taking it down and re-publishing doesn't notify everyone twice.
-      const alreadyAnnounced = announced > 0;
-      setAnnouncementCount(announced);
-      setAnnounceInApp(!alreadyAnnounced);
-      setAnnouncePush(!alreadyAnnounced);
+      setEventAnnouncement(announced);
+      // Off by default once this event has already been announced, so taking
+      // it down and re-publishing doesn't notify everyone twice. Seeded only
+      // on the first load for this event — see channelsSeededFor.
+      if (channelsSeededFor.current !== eventId) {
+        channelsSeededFor.current = eventId;
+        setAnnounceInApp(!announced);
+        setAnnouncePush(!announced);
+      }
       // Only a publish_at still in the future is a real schedule; one that
       // has already passed just means "live", so the picker resets rather
       // than offering to re-schedule into the past.
@@ -438,7 +457,13 @@ export default function EventComposer() {
       return;
     }
 
-    const confirmed = await confirmPublishEvent(title.trim(), audienceLabel(), goLiveAt);
+    const confirmed = await confirmPublishEvent(
+      title.trim(),
+      audienceLabel(),
+      goLiveAt,
+      { inApp: announceInApp, push: announcePush },
+      describeChannels
+    );
     if (!confirmed) return;
     try {
       await publishEvent(eventId, goLiveAt);
@@ -881,7 +906,13 @@ export default function EventComposer() {
               Scheduled for {formatDateTimeInBoise(event.publish_at)}
             </Text>
             <Text className="mt-1 text-xs" style={{ fontFamily: fonts.sans, color: "#57534e" }}>
-              Nobody can see it yet. To change the time, cancel the schedule and publish it again.
+              {eventAnnouncement
+                ? `Nobody can see it yet. Then they get ${describeChannels({
+                    inApp: eventAnnouncement.show_in_app,
+                    push: eventAnnouncement.send_push,
+                  })}.`
+                : "Nobody can see it yet, and nobody will be notified — it just appears on their Events tab."}{" "}
+              To change any of this, cancel the schedule and publish it again.
             </Text>
           </View>
         ) : null}
@@ -892,7 +923,7 @@ export default function EventComposer() {
               Tell them about it
             </Text>
             <Text className="mb-2 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-              {announcementCount > 0
+              {eventAnnouncement
                 ? "Already announced once — leave these off unless you want to tell everyone again."
                 : "Pick either, both, or neither. With neither, the event just appears on their Events tab."}
             </Text>
@@ -909,6 +940,17 @@ export default function EventComposer() {
               hint="Buzzes their phone even with the app closed. Tapping it opens the event."
             />
           </View>
+        ) : null}
+
+        {phase === "live" ? (
+          <Text className="mb-3 max-w-xl text-xs" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
+            {eventAnnouncement
+              ? `Live on their Events tab, announced with ${describeChannels({
+                  inApp: eventAnnouncement.show_in_app,
+                  push: eventAnnouncement.send_push,
+                })}.`
+              : "Live on their Events tab. Never announced — nobody was told about it."}
+          </Text>
         ) : null}
 
         <View className="max-w-xl flex-row flex-wrap items-center gap-4">
