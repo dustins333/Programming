@@ -46,7 +46,7 @@ import { getExerciseStats } from "../../../lib/programming/exerciseStats";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { toastError } from "../../../lib/toast";
 import { confirmRemoveOneOff, confirmArchiveNutritionClient, confirmDelete, confirmRemoveGroupMembership } from "../../../lib/confirmDialog";
-import { STATUS_LABELS, STATUS_TONES } from "../../../lib/programming/spcStatus";
+import { SPC_ENROLLMENT_LABELS, SPC_ENROLLMENT_TONES } from "../../../lib/programming/spcState";
 import { todayInBoise, addDays, dayOfWeekInBoise } from "../../../lib/boiseDate";
 import { fonts, colors } from "../../../lib/theme";
 
@@ -505,7 +505,7 @@ export default function ClientProfile() {
       if (!enrolled) {
         await setSpcStatus(userId, "paused");
       } else if (spcClient) {
-        await setSpcStatus(userId, "needs_printed");
+        await setSpcStatus(userId, "active");
       } else {
         await assignSpcClient(userId, profile.id);
       }
@@ -951,7 +951,7 @@ export default function ClientProfile() {
             <SettingsCard
               icon="clipboard-outline"
               title="SPC"
-              headerRight={spcClient ? <StatusBadge tone={STATUS_TONES[spcClient.status]} label={STATUS_LABELS[spcClient.status]} /> : null}
+              headerRight={spcClient ? <StatusBadge tone={SPC_ENROLLMENT_TONES[spcClient.status]} label={SPC_ENROLLMENT_LABELS[spcClient.status]} /> : null}
             >
               {spcError ? (
                 <Text className="text-red-600" style={{ fontFamily: fonts.sans }}>

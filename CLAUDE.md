@@ -4233,6 +4233,142 @@ files backed up first and restored **byte-identical** afterwards (md5 checked)
 (standing limitation). Worth Terra's pass on a real archive, a real "+ New
 parent", and the three builders' "+ New" now opening as a drawer.
 
+## SPC statuses go derived — phase 1 of the SPC calendar rework (2026-08-29)
+
+First of four passes off a spec written the same day:
+https://claude.ai/code/artifact/c8b94401-77a4-4783-a3f8-9b8d700cc9ad — read it
+before starting phase 2. **Scope is SPC only**; group programs are untouched.
+
+**The framing that produced it, worth not relitigating.** Two ideas were
+proposed and rejected by Terra before the real design landed, and both are
+tempting enough to come back: (1) treating a block as an undated **queue** the
+client works through at her own pace — wrong, because SPC sessions are reserved
+slots and a no-show burns one, so a week is a real business boundary, not an
+artifact of date math; (2) modelling **credits/rollover/no-shows** in Kova at
+all — wrong, because Kilo owns reservations and billing and Terra explicitly
+does not want that tracked here. Weeks stay rigid. What changes is that a coach
+can *nudge* a session between weeks, and that the roster stops lying.
+
+**`programming.spc_clients.status` collapsed from five values to two**
+(migration `0099`). The old set was the printed method verbatim —
+`printed_ready` / `needs_printed` / `new_program_asap` / `coming_up_next_week` /
+`paused`. Four of the five described things the data already knew; only
+`paused` is real-world knowledge the app cannot infer. `isSpcActive()` reads
+`status !== 'paused'` and needed no change, which is why the column was narrowed
+rather than dropped.
+
+**New `lib/programming/spcState.js` is the single definition** —
+`deriveSpcState()`, `SPC_STATES`, `SPC_STATE_ORDER`, `NEXT_STEP`,
+`SPC_ENROLLMENT_LABELS/TONES`. `lib/programming/spcStatus.js` is **deleted**.
+Most of the logic already existed as `describeCoverage()` inside
+`spcRoster.js`; it moved out whole (every reason string preserved verbatim) and
+now returns a `state` key alongside the reason and next step, so the two roster
+screens' chips, filters and sort all read one taxonomy.
+
+**The finding that changed the design, and the reason to distrust the old
+statuses generally.** Run against all 76 real SPC clients: the stored status
+said **44 were "Printed & Ready"**, while **51 have never had a single block
+written for them, ever**. An `spc_clients` row is created by the enrolment
+toggle whether or not anyone ever programmed for that person (migration
+`0084`'s header found the same thing from the other end and excluded them from
+the hub picker for it). Bucketing those 51 as urgent would have shipped a
+roster worse than the one it replaced — 51 red rows burying the 12 that matter.
+So there is a seventh state, **`neverStarted`** ("Not started", quiet tone,
+`NEXT_STEP.start`), gated on a new `everScheduled` input meaning "this client
+has had at least one real non-draft block, ever". It defaults **true** so a
+caller that doesn't know keeps the older, louder behaviour rather than silently
+going quiet. Live roster now: 1 draft to send, 11 unfinished, 10 on track, 51
+not started, 3 paused — **12 actionable, not 62.**
+
+**Same fix applied to `coachDashboard.js`'s `spcIssues`**, which renders on
+Coach Home as "N need attention" and would have counted all 51 (a pre-existing
+bug, not one this pass introduced — `currentBlock` was already null for them).
+Now gated on `everScheduled` too.
+
+**Two genuinely dead things deleted**, both computed and exported and read by
+nothing: `coachDashboard.js`'s `spcByStatus`, and `dashboardStatusTiles.js`'s
+`spcRosterRoute()`. Worth grepping for consumers before preserving behaviour in
+a refactor — half the "status" surface turned out to be unreachable.
+
+**Traps hit, all of them worth remembering:**
+- **A CHECK narrowing needs drop → update → add, in that order**, and a dry run
+  is what proved it. Updating first fails (the new value is illegal under the
+  old constraint); adding first fails (the old values are illegal under the new
+  one). The `UPDATE` has to run with no check attached at all.
+- **`supabase/functions/scan-spc-alerts` wrote `status: 'new_program_asap'`**
+  and would have thrown on every nightly run the moment the constraint narrowed.
+  **Deploy order matters**: the function went out *first* (it just stops writing
+  a status), then the migration — so there was never a window where the
+  deployed code violated the live constraint. Redeploying without
+  `--no-verify-jwt` preserved `verify_jwt: false`; verified in
+  `supabase functions list` afterwards rather than assumed.
+- `coachDashboard.js`'s attention-item `signature: "new_program_asap"` is an
+  **opaque key for `programming.dashboard_dismissals`** and deliberately keeps
+  the old name — renaming it would silently un-dismiss every row a coach has
+  already cleared.
+- A `create table as` backup lands in an **exposed schema** with no RLS. The
+  rollback table (`programming.zz_spc_status_backup_0099`, 76 rows, still
+  present) had RLS enabled and grants revoked afterwards.
+
+**Verification was unusually complete for this repo**: migration dry-run in a
+rolled-back transaction; all 11 derivation branches exercised as unit cases;
+`npm run build` + `check:routes` clean; a Babel parse **and**
+unresolved-identifier pass over all 13 touched files; and — the one that found
+the 51 — the shipped `deriveSpcState()` run against real live roster data
+before *and* after applying, with matching results. **Still not click-tested
+behind a real login** (standing limitation): worth Terra's pass on the two
+roster screens' chips/filters/sort, the client-detail page's Enrolment control
+(now a two-option select where five statuses used to be), and confirming Coach
+Home's SPC attention card no longer counts the never-programmed.
+
+**Phase 2 — dates stop being a trap — shipped the same day.** Two of the four
+things it was specced to do turned out to be **already built**, found by reading
+rather than trusting the spec: `scan-spc-alerts` has created drafts since 0089
+(only the client-side twin hadn't), and every place a block's dates render was
+already a range (`Aug 24 → Sep 20`), never a bare start date. What was real:
+
+- **`checkAndAutoDraft()` is deleted, not fixed.** It was a client-side stand-in
+  for a block-ending scan written when this app had no server cron. It has one
+  now — `scan-spc-alerts`, nightly, job `spc-alert-scan`, verified firing and
+  returning 200. Keeping both meant two implementations of one job and they had
+  **already drifted**: the server one creates a draft, this one still created a
+  live, dated block whose week 1 ran down while the coach wrote it. It also ran
+  on every SPC-dashboard and coach-Home load, so a training block could be
+  created as a side effect of somebody opening a page. Removed from three call
+  sites.
+- **New `moveSpcBlock(blockId, requestedStart)`** (`spcBlocks.js`) — slides a
+  live block to a different Monday: snap, recompute `block_end_date` from the
+  length, `assertNoOverlap(…, exceptBlockId)`, one update. Everything follows
+  because a block's calendar is arithmetic off `block_start_date`, not stored
+  per week. **Locked once she has trained in it**, and the check reads logged
+  SETS (`countLoggedSetsForBlock`, one indexed count over
+  `logs.spc_workout_id`) rather than finished sessions — logging autosaves per
+  set, so a session she is part-way through counts and her calendar can't slide
+  underneath her because nobody pressed Finalize.
+- **New `components/MoveSpcBlockModal.js`**, reached from a "Move dates" link
+  beside the date range on the SPC client page's block band. **The lock is
+  checked on open, not on submit** — picking a date and only then being told you
+  can't is a dead end. A failed count renders as locked, never as movable.
+- **New `lib/programming/useBlockMondays.js`** — the taken/blocked-Monday
+  arithmetic extracted out of `SendSpcBlockModal` so both dialogs share it.
+  Two copies of "which Mondays would collide" is how a dialog ends up offering a
+  date the write then refuses. `excludeBlockId` is what stops a block being
+  treated as colliding with itself when it's the one being moved.
+
+**Verified**: `npm run build` + route check clean, Babel parse and
+unresolved-identifier pass over every touched file, and the dialog driven for
+real through a throwaway `app/zz-harness.js` at both states — opens on the
+block's current start and dims Move ("That's where it already starts"), a free
+Monday enables it with the right new range, a Monday inside the neighbouring
+block is genuinely **inert** rather than merely warned about, and the locked
+state drops the calendar and the Move button entirely. The DB call was stubbed
+for that via a temporary edit to `spcBlocks.js`, restored afterwards and
+**md5-verified byte-identical**. Harness deleted; `git status` confirmed clean.
+
+**Phases 3-4 are unbuilt** and specced in the artifact above: the calendar view
+(weeks down the side, stacked bars, today line, four states), then
+`spc_workouts.scheduled_week` plus the six read sites and the member mirror.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -4306,6 +4442,7 @@ sections; next number after 0080 is 0081.)
 - `0097_announcement_channels.sql` — **run**, verified live 2026-08-27 (both columns, the member read policy carrying `show_in_app`, all 5 existing rows unchanged; plus a 3-row impersonation test in a rolled-back transaction before applying). Adds `programming.announcements.show_in_app` and `send_push`, both `not null default true`, splitting the in-app popup from the push notification. `show_in_app` is enforced in the member read policy; `send_push` is honoured by `scan-announcements`' query and by `sendAnnouncementPush`. Requires redeploying `scan-announcements` and `send-announcement` (both done, v15). See "Popup and push become separate choices" above.
 - `0098_hub_startable_session_counts.sql` — **run**, verified live 2026-08-28 (dry-run in a rolled-back transaction first, then applied + `NOTIFY pgrst`, with the output read back as a real coach). Adds `loggedCount` to each session object `programming.hub_startable_clients()` returns: how many weeks of the current block that session number has a completion. Purely additive — every existing caller is unaffected, and a caller that doesn't read it is untouched. Backs the count circle on the hub pickers' session rows.
 - `0096_event_publish_at.sql` — **run**, verified live 2026-08-27 (column, index, all six member-facing policies carrying the new gate, and zero existing rows affected; plus a 6-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.events.publish_at` so an event can be scheduled to go live at a set day and time. Nullable, null = live as soon as it's published, so nothing existing changes. **Do not reorder the policy block** — the gate is intentionally inline in all six policies rather than in a helper, since a function reading `programming.events` would recurse inside that table's own policy. See "Events: one event opens straight in" above.
+- `0099_spc_status_derived.sql` — **run**, verified live 2026-08-29 (73 active / 3 paused, CHECK narrowed, default `'active'`, and the shipped `deriveSpcState()` re-run against real data with matching results). Collapses `programming.spc_clients.status` from the five printed-method values to `('active','paused')`; everything else about a client's state is computed by `lib/programming/spcState.js`. **Order is load-bearing — drop the constraint, then update, then re-add**: the new value is illegal under the old CHECK and the old values are illegal under the new one, so either other order fails (a dry run caught this). Requires redeploying `scan-spc-alerts` FIRST, which used to write `'new_program_asap'`. Rollback data is in `programming.zz_spc_status_backup_0099`.
 - `0095_exercise_parents.sql` — **run**, verified live 2026-08-27 (18 parent records, 66 exercises grouped, 0 variations lost, 0 duplicate names, plus an 11-assertion impersonation test in a rolled-back transaction as a reviewer, a non-reviewer coach and a member). Adds `programming.exercise_parents` and `exercises.parent_id`; `exercises.parent_exercise_id` is left populated but unread as the rollback path. See "A parent is its own record now" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
 - `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.

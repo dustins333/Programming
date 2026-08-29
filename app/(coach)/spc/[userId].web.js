@@ -10,6 +10,7 @@ import {
   labelBlocks,
   createSpcBlock,
   publishSpcBlock,
+  moveSpcBlock,
   deleteSpcBlock,
   addDays,
   listSpcWorkoutsForBlock,
@@ -30,10 +31,11 @@ import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CommentThread } from "../../../components/CommentThread";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { CoachSpcOverview } from "../../../components/coach/CoachSpcOverview";
+import { MoveSpcBlockModal } from "../../../components/MoveSpcBlockModal";
 import { PressFade } from "../../../components/PressFade";
 import { ClientGoalCard } from "../../../components/ClientGoalCard";
 import { SegmentedControl } from "../../../components/SegmentedControl";
-import { STATUS_LABELS, STATUS_ORDER } from "../../../lib/programming/spcStatus";
+import { SPC_ENROLLMENT_LABELS } from "../../../lib/programming/spcState";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD } from "../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../lib/toast";
@@ -94,7 +96,7 @@ function initials(name) {
 
 /* ------------------------------------------------------------ block band */
 
-function BlockBand({ block, label, summary, weekNumber, nextQueued, onBuildNext, clientName, onSend, onDeleteDraft }) {
+function BlockBand({ block, label, summary, weekNumber, nextQueued, onBuildNext, clientName, onSend, onDeleteDraft, onMove }) {
   // A draft (0089) has no dates, so none of the band's usual arithmetic —
   // week N of M, days left, adherence — has an answer yet. What matters
   // about it instead is how much of it is written and whether it's been
@@ -163,9 +165,18 @@ function BlockBand({ block, label, summary, weekNumber, nextQueued, onBuildNext,
           <Text style={{ fontFamily: fonts.display, fontSize: 25, color: "#f7f3ee", marginTop: 4 }}>
             {label} · Week {weekNumber} of {block.block_length_weeks}
           </Text>
-          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a89a92", marginTop: 3 }}>
-            {formatDateMD(block.block_start_date)} → {formatDateMD(block.block_end_date)}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 9, marginTop: 3, flexWrap: "wrap" }}>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a89a92" }}>
+              {formatDateMD(block.block_start_date)} → {formatDateMD(block.block_end_date)}
+            </Text>
+            {/* Until moveSpcBlock() existed the dates were written once, at
+                send, and a coach who set one up wrong had to ask an admin. */}
+            <PressFade onPress={onMove} hitSlop={6}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: "#e9b8a4", textDecorationLine: "underline" }}>
+                Move dates
+              </Text>
+            </PressFade>
+          </View>
         </View>
 
         <View style={{ flex: 1, minWidth: 260 }}>
@@ -419,6 +430,7 @@ function SpcClientDesktop() {
   const [readoutSession, setReadoutSession] = useState(null);
   const [newBlockOpen, setNewBlockOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   // "Print block" asks which block (newest first), then which session —
   // spc/print/[blockId] renders exactly one session per printed page.
   const [printPickerOpen, setPrintPickerOpen] = useState(false);
@@ -615,6 +627,17 @@ function SpcClientDesktop() {
     } catch (err) {
       toastError("Couldn't start the draft", err);
     }
+  };
+
+  const handleMove = async (startDate) => {
+    const result = await moveSpcBlock(detail.block.id, startDate);
+    setMoveOpen(false);
+    await load();
+    toastSuccess(
+      result.moved
+        ? `Moved — now runs from ${formatDateMD(result.startDate)}.`
+        : "That's already where it starts."
+    );
   };
 
   const handleSend = async (startDate) => {
@@ -960,6 +983,7 @@ function SpcClientDesktop() {
                 onBuildNext={() => setNewBlockOpen(true)}
                 clientName={member?.name?.split(" ")[0]}
                 onSend={() => setSendOpen(true)}
+                onMove={() => setMoveOpen(true)}
                 onDeleteDraft={() => handleDeleteDraft(detail.block)}
               />
 
@@ -1135,7 +1159,10 @@ function SpcClientDesktop() {
                   <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 12, padding: 15 }}>
                     <Eyebrow style={{ marginBottom: 10 }}>CLIENT SETTINGS</Eyebrow>
 
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginBottom: 5 }}>Status</Text>
+                    {/* Enrolment, not a lifecycle. The four other statuses this
+                        used to offer are derived now (migration 0099) and appear
+                        on the roster without anyone setting them. */}
+                    <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginBottom: 5 }}>Enrolment</Text>
                     <select
                       value={spcClient?.status ?? ""}
                       onChange={async (e) => {
@@ -1149,9 +1176,9 @@ function SpcClientDesktop() {
                       }}
                       style={{ width: "100%", fontFamily: fonts.sans, fontSize: 13, padding: "8px 10px", borderRadius: 8, border: "1px solid #d9d4cd", background: "#fff", marginBottom: 12 }}
                     >
-                      {STATUS_ORDER.map((s) => (
-                        <option key={s} value={s}>
-                          {STATUS_LABELS[s]}
+                      {Object.entries(SPC_ENROLLMENT_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
                         </option>
                       ))}
                     </select>
@@ -1265,6 +1292,18 @@ function SpcClientDesktop() {
           existingBlocks={blocks}
           onClose={() => setSendOpen(false)}
           onSubmit={handleSend}
+        />
+      ) : null}
+
+      {detail?.block && detail.block.status !== "draft" ? (
+        <MoveSpcBlockModal
+          visible={moveOpen}
+          block={detail.block}
+          blockLabel={blocks.find((b) => b.id === detail.block.id)?.label ?? "This block"}
+          clientName={member?.name?.split(" ")[0]}
+          existingBlocks={blocks}
+          onClose={() => setMoveOpen(false)}
+          onSubmit={handleMove}
         />
       ) : null}
 

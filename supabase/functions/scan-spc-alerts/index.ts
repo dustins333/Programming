@@ -175,12 +175,10 @@ Deno.serve(async (req) => {
       const { error: workoutsError } = await programming.from("spc_workouts").insert(workoutRows);
       if (workoutsError) throw workoutsError;
 
-      const { error: statusError } = await programming
-        .from("spc_clients")
-        .update({ status: "new_program_asap" })
-        .eq("user_id", client.user_id);
-      if (statusError) throw statusError;
-
+      // No status stamp. spc_clients.status is 'active' | 'paused' only
+      // (migration 0099) — writing 'new_program_asap' here would violate the
+      // CHECK and fail this scan every night. The block this just created is
+      // itself the signal, and deriveSpcState() reads it back out.
       results.drafted += 1;
 
       if (coachId && pushEnabled) {

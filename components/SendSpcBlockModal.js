@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { Modal, View, Text, Pressable, ScrollView } from "react-native";
 import { fonts, colors } from "../lib/theme";
-import { todayInBoise, mondayOnOrBefore, addDays } from "../lib/boiseDate";
-import { rangesOverlap } from "../lib/dateRange";
 import { formatDateRange } from "../lib/formatDate";
+import { useBlockMondays } from "../lib/programming/useBlockMondays";
 import { MondayPicker } from "./MondayPicker";
 
 // Sending a draft SPC block to the client (0089). This is the one moment a
@@ -15,17 +14,6 @@ import { MondayPicker } from "./MondayPicker";
 // the date knowing the block is finished. Before this, the date was decided
 // the instant she clicked "Build next block" and the clock started on week 1
 // while she was still writing it.
-
-// How far ahead the calendar has an answer for. Every Monday past this is
-// pickable, which is fine — publishSpcBlock still refuses a real overlap, and
-// nobody schedules a training block three years out.
-const WINDOW_WEEKS = 160;
-
-function mondayWindow(blocks) {
-  const thisMonday = mondayOnOrBefore(todayInBoise());
-  const earliest = blocks.reduce((min, b) => (b.block_start_date < min ? b.block_start_date : min), thisMonday);
-  return Array.from({ length: WINDOW_WEEKS }, (_, i) => addDays(mondayOnOrBefore(earliest), i * 7));
-}
 
 export function SendSpcBlockModal({
   visible,
@@ -40,41 +28,18 @@ export function SendSpcBlockModal({
   onClose,
   onSubmit,
 }) {
-  const [startDate, setStartDate] = useState(mondayOnOrBefore(todayInBoise()));
   const [saving, setSaving] = useState(false);
-
-  const scheduled = useMemo(() => existingBlocks.filter((b) => b.block_start_date), [existingBlocks]);
-  const mondays = useMemo(() => mondayWindow(scheduled), [scheduled]);
-
-  // Mondays sitting inside a block that already exists — marked rather than
-  // just refused, so an occupied stretch reads as a solid run.
-  const takenMondays = useMemo(
-    () => mondays.filter((m) => scheduled.some((b) => b.block_start_date <= m && m <= b.block_end_date)),
-    [mondays, scheduled]
-  );
-
-  // A superset of the taken ones: starting in a free week is still no good if
-  // this block's full length would run into the next one.
-  const blockedMondays = useMemo(() => {
-    if (!(lengthWeeks >= 1)) return takenMondays;
-    return mondays.filter((m) =>
-      scheduled.some((b) => rangesOverlap(m, addDays(m, lengthWeeks * 7 - 1), b.block_start_date, b.block_end_date))
-    );
-  }, [mondays, scheduled, lengthWeeks, takenMondays]);
 
   // Opens on the first Monday from this week on that the block actually fits
   // — for a client mid-block that's the Monday after hers ends. A starting
-  // point, not a rail: every other free Monday is one tap away, including
-  // ones further out, which is the whole reason a new client's first block
-  // no longer has to start the day the coach happened to create it.
-  useEffect(() => {
-    if (!visible) return;
-    const thisMonday = mondayOnOrBefore(todayInBoise());
-    setStartDate(mondays.find((m) => m >= thisMonday && !blockedMondays.includes(m)) ?? thisMonday);
-    // Deliberately not keyed on the memos' identity — this is the OPENING
-    // default, and re-running it would stomp a date the coach had picked.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  // point, not a rail: every other free Monday is one tap away, which is the
+  // whole reason a new client's first block no longer has to start the day the
+  // coach happened to create it.
+  const { startDate, setStartDate, takenMondays, blockedMondays, overlaps, endDate } = useBlockMondays({
+    visible,
+    lengthWeeks,
+    existingBlocks,
+  });
 
   const withLifts = sessions.filter((s) => (s.lifts?.length ?? 0) > 0);
   const empty = sessions.length - withLifts.length;
@@ -82,7 +47,6 @@ export function SendSpcBlockModal({
     .filter((s) => s.week_number === 1)
     .sort((a, b) => a.session_number - b.session_number);
 
-  const overlaps = blockedMondays.includes(startDate);
   const nothingToSend = withLifts.length === 0;
 
   const handleSubmit = async () => {
@@ -167,7 +131,7 @@ export function SendSpcBlockModal({
             >
               {overlaps
                 ? "That would run into a block she already has — pick a later Monday."
-                : `Runs ${formatDateRange(startDate, addDays(startDate, lengthWeeks * 7 - 1))}`}
+                : `Runs ${formatDateRange(startDate, endDate)}`}
             </Text>
           </ScrollView>
 

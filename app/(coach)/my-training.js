@@ -11,7 +11,7 @@ import { SegmentedControl } from "../../components/SegmentedControl";
 import { CoachShell } from "../../components/CoachShell";
 import { toastError } from "../../lib/toast";
 import { confirmRemoveGroupMembership } from "../../lib/confirmDialog";
-import { STATUS_LABELS, STATUS_TONES } from "../../lib/programming/spcStatus";
+import { SPC_ENROLLMENT_LABELS, SPC_ENROLLMENT_TONES } from "../../lib/programming/spcState";
 import { fonts, colors } from "../../lib/theme";
 
 // A coach's own training — the group and SPC memberships on their OWN
@@ -109,7 +109,7 @@ export default function MyTrainingScreen() {
   const handleSpcToggle = async (enrolled) => {
     try {
       if (!enrolled) await setSpcStatus(userId, "paused");
-      else if (spcClient) await setSpcStatus(userId, "needs_printed");
+      else if (spcClient) await setSpcStatus(userId, "active");
       // A coach enrolling themself is also, by default, their own SPC
       // coach — reassignable from the SPC page like anyone else's.
       else await assignSpcClient(userId, userId);
@@ -211,7 +211,7 @@ export default function MyTrainingScreen() {
             <SettingsCard
               icon="clipboard-outline"
               title="SPC"
-              headerRight={spcClient ? <StatusBadge tone={STATUS_TONES[spcClient.status]} label={STATUS_LABELS[spcClient.status]} /> : null}
+              headerRight={spcClient ? <StatusBadge tone={SPC_ENROLLMENT_TONES[spcClient.status]} label={SPC_ENROLLMENT_LABELS[spcClient.status]} /> : null}
             >
               <View className="flex-row items-center gap-3">
                 <Switch value={spcActive} onValueChange={handleSpcToggle} trackColor={{ false: "#e7e5e4", true: "#4d6142" }} thumbColor="#ffffff" />

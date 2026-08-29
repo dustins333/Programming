@@ -3,8 +3,7 @@ import { View, Text, ScrollView, TextInput, ActivityIndicator, Modal, Animated, 
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { getSpcRosterDetail } from "../../lib/programming/spcRoster";
-import { checkAndAutoDraft } from "../../lib/programming/spcDashboard";
-import { STATUS_LABELS, STATUS_TONES, STATUS_ORDER } from "../../lib/programming/spcStatus";
+import { SPC_STATES, SPC_STATE_ORDER } from "../../lib/programming/spcState";
 import { SpcSessionPreview } from "./SpcSessionPreview";
 import { CoachShell } from "../CoachShell";
 import { PressFade } from "../PressFade";
@@ -46,14 +45,6 @@ const RUN_OUT_DAYS = 7;
 // The full labels stay in the filter sheet, where there's a whole row to
 // read them on. A roster row has one column shared with a dot and a
 // days-left line, so they shorten.
-const SHORT_LABELS = {
-  new_program_asap: "Program ASAP",
-  needs_printed: "Needs printed",
-  coming_up_next_week: "Up next week",
-  printed_ready: "Ready",
-  paused: "Paused",
-};
-
 function initials(name) {
   return (
     (name ?? "")
@@ -69,8 +60,8 @@ function firstNameOf(name) {
   return (name ?? "").trim().split(/\s+/)[0] || "";
 }
 
-function toneOf(status) {
-  return statusColors[STATUS_TONES[status]] ?? statusColors.paused;
+function toneOf(state) {
+  return statusColors[SPC_STATES[state]?.tone] ?? statusColors.paused;
 }
 
 // "3d left" / "ends today" / "ended 2d ago". A paused client has no clock
@@ -192,7 +183,7 @@ function FilterSheet({ visible, onClose, searched, statusFilter, coachFilter, on
   // shows one client.
   const statusCounts = useMemo(() => {
     const counts = {};
-    for (const row of searched) counts[row.status] = (counts[row.status] ?? 0) + 1;
+    for (const row of searched) counts[row.state] = (counts[row.state] ?? 0) + 1;
     return counts;
   }, [searched]);
 
@@ -248,14 +239,14 @@ function FilterSheet({ visible, onClose, searched, statusFilter, coachFilter, on
               tone="#d6d1ca"
               onPress={() => onStatus(null)}
             />
-            {STATUS_ORDER.map((status) => (
+            {SPC_STATE_ORDER.map((state) => (
               <FilterOption
-                key={status}
-                label={STATUS_LABELS[status]}
-                count={statusCounts[status] ?? 0}
-                selected={statusFilter === status}
-                tone={toneOf(status).text}
-                onPress={() => onStatus(status)}
+                key={state}
+                label={SPC_STATES[state].label}
+                count={statusCounts[state] ?? 0}
+                selected={statusFilter === state}
+                tone={toneOf(state).text}
+                onPress={() => onStatus(state)}
               />
             ))}
 
@@ -291,7 +282,7 @@ function FilterSheet({ visible, onClose, searched, statusFilter, coachFilter, on
 /* -------------------------------------------------------------------- row */
 
 function ClientRow({ row, first, onPress }) {
-  const tone = toneOf(row.status);
+  const tone = toneOf(row.state);
   const left = describeDaysLeft(row);
   const sub = [firstNameOf(row.coachName) || row.coachName, `${row.sessionsPerWeek}×/wk`, describeBlock(row)]
     .filter(Boolean)
@@ -300,7 +291,7 @@ function ClientRow({ row, first, onPress }) {
   return (
     <PressFade
       onPress={onPress}
-      accessibilityLabel={`${row.name}, ${STATUS_LABELS[row.status] ?? row.status}`}
+      accessibilityLabel={`${row.name}, ${SPC_STATES[row.state]?.label ?? row.state}`}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -343,7 +334,7 @@ function ClientRow({ row, first, onPress }) {
             maxFontSizeMultiplier={1.1}
             style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: tone.text }}
           >
-            {SHORT_LABELS[row.status] ?? row.status}
+            {SPC_STATES[row.state]?.short ?? row.state}
           </Text>
         </View>
         {left ? (
@@ -393,10 +384,6 @@ export function SpcRosterMobile() {
     // since the render branches on loadError alone.
     setLoadError(null);
     try {
-      // .catch, matching the web sibling: auto-drafting is a background
-      // convenience and a failed write (RLS, an unrun migration) must not
-      // take the whole roster down with it.
-      await checkAndAutoDraft().catch(() => {});
       setRoster(await getSpcRosterDetail());
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -424,14 +411,14 @@ export function SpcRosterMobile() {
 
   const filtered = useMemo(() => {
     const rows = searched.filter((r) => {
-      if (statusFilter && r.status !== statusFilter) return false;
+      if (statusFilter && r.state !== statusFilter) return false;
       if (coachFilter && (r.coachId ?? "__unassigned") !== coachFilter) return false;
       return true;
     });
     const byName = (a, b) => (a.name ?? "").localeCompare(b.name ?? "");
     const sorted = [...rows].sort((a, b) => {
       if (sort === "name") return byName(a, b);
-      const rank = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
+      const rank = SPC_STATE_ORDER.indexOf(a.state) - SPC_STATE_ORDER.indexOf(b.state);
       if (rank !== 0) return rank;
       // Whoever runs out first inside a status. A row with no clock sorts
       // after the ones that have one rather than ahead of everything.
@@ -581,7 +568,7 @@ export function SpcRosterMobile() {
             {activeFilterCount > 0 ? (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
                 {statusFilter ? (
-                  <FilterToken label={STATUS_LABELS[statusFilter] ?? statusFilter} onClear={() => setStatusFilter(null)} />
+                  <FilterToken label={SPC_STATES[statusFilter]?.label ?? statusFilter} onClear={() => setStatusFilter(null)} />
                 ) : null}
                 {coachFilter ? <FilterToken label={coachFilterName} onClear={() => setCoachFilter(null)} /> : null}
               </View>

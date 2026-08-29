@@ -2,12 +2,11 @@ import { useCallback, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { getSpcRosterDetail, describeLastSession } from "../../../lib/programming/spcRoster";
-import { checkAndAutoDraft } from "../../../lib/programming/spcDashboard";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { SpcRosterMobile } from "../../../components/coach/SpcRosterMobile";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors } from "../../../lib/theme";
-import { STATUS_LABELS, STATUS_TONES, STATUS_ORDER } from "../../../lib/programming/spcStatus";
+import { SPC_STATES, SPC_STATE_ORDER } from "../../../lib/programming/spcState";
 import { formatDateMD } from "../../../lib/formatDate";
 
 // SPC roster, coach web (design_handoff_coach_web_v2, screen 14).
@@ -113,7 +112,7 @@ function HeaderCell({ children, width, flex, align = "left" }) {
 }
 
 function ClientRow({ row, onOpen, onNextStep, last }) {
-  const tone = STATUS_TONES[row.status] ?? "paused";
+  const tone = row.tone ?? "paused";
   const toneStyle = TONE_STYLES[tone];
   const step = row.nextStep;
 
@@ -176,7 +175,7 @@ function ClientRow({ row, onOpen, onNextStep, last }) {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
           <View style={{ backgroundColor: toneStyle.bg, borderRadius: 99, paddingVertical: 3, paddingHorizontal: 9 }}>
             <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.6, color: toneStyle.text }}>
-              {(STATUS_LABELS[row.status] ?? row.status).toUpperCase()}
+              {(row.label ?? row.state).toUpperCase()}
             </Text>
           </View>
           <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", minWidth: 0 }} numberOfLines={1}>
@@ -237,9 +236,6 @@ function SpcRosterDesktop() {
   const load = useCallback(async () => {
     try {
       setLoadError(null);
-      // Same client-side stand-in for the nightly scan as before — harmless
-      // if it fails, so it must not take the roster down with it.
-      await checkAndAutoDraft().catch(() => {});
       setRows(await getSpcRosterDetail());
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -269,12 +265,12 @@ function SpcRosterDesktop() {
   // you're actually looking at rather than the whole gym.
   const counts = useMemo(() => {
     const c = {};
-    for (const r of byCoach) c[r.status] = (c[r.status] ?? 0) + 1;
+    for (const r of byCoach) c[r.state] = (c[r.state] ?? 0) + 1;
     return c;
   }, [byCoach]);
 
   const visible = useMemo(
-    () => (statusFilter ? byCoach.filter((r) => r.status === statusFilter) : byCoach),
+    () => (statusFilter ? byCoach.filter((r) => r.state === statusFilter) : byCoach),
     [byCoach, statusFilter]
   );
 
@@ -342,8 +338,10 @@ function SpcRosterDesktop() {
           </View>
         </View>
 
-        {/* Status chips — All first, then the five real statuses in urgency
-            order. Clicking the active one clears the filter. */}
+        {/* State chips — All first, then the derived states in urgency
+            order. Nothing here is stored: every count is computed from the
+            client's own blocks (lib/programming/spcState.js). Clicking the
+            active one clears the filter. */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
           <StatusChip
             label="All"
@@ -352,14 +350,14 @@ function SpcRosterDesktop() {
             tone="paused"
             onPress={() => setStatusFilter(null)}
           />
-          {STATUS_ORDER.map((status) => (
+          {SPC_STATE_ORDER.map((state) => (
             <StatusChip
-              key={status}
-              label={STATUS_LABELS[status]}
-              count={counts[status] ?? 0}
-              active={statusFilter === status}
-              tone={STATUS_TONES[status]}
-              onPress={() => setStatusFilter(statusFilter === status ? null : status)}
+              key={state}
+              label={SPC_STATES[state].label}
+              count={counts[state] ?? 0}
+              active={statusFilter === state}
+              tone={SPC_STATES[state].tone}
+              onPress={() => setStatusFilter(statusFilter === state ? null : state)}
             />
           ))}
 

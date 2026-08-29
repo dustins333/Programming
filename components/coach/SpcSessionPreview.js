@@ -8,7 +8,6 @@ import { Eyebrow } from "../Eyebrow";
 import { getSpcSessionPreview } from "../../lib/programming/spcSessionPreview";
 import { formatRest, schemeLabel } from "../../lib/programming/prescription";
 import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
-import { STATUS_LABELS, STATUS_TONES } from "../../lib/programming/spcStatus";
 import { formatDateShort } from "../../lib/formatDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
 import { fonts, colors, statusColors, type } from "../../lib/theme";
@@ -48,8 +47,10 @@ function firstNameOf(name) {
 
 /* ------------------------------------------------------------ header bits */
 
-function StatusPill({ status }) {
-  const tone = statusColors[STATUS_TONES[status]] ?? statusColors.paused;
+// `client` is a getSpcRosterDetail row, so its derived state/label/tone are
+// already computed — no lookup table needed here.
+function StatusPill({ label, tone: toneKey }) {
+  const tone = statusColors[toneKey] ?? statusColors.paused;
   return (
     <View style={{ backgroundColor: tone.bg, borderRadius: 99, paddingHorizontal: 9, paddingVertical: 4 }}>
       <Text
@@ -57,7 +58,7 @@ function StatusPill({ status }) {
         maxFontSizeMultiplier={1.1}
         style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.5, color: tone.text, textTransform: "uppercase" }}
       >
-        {STATUS_LABELS[status] ?? status}
+        {label}
       </Text>
     </View>
   );
@@ -475,7 +476,7 @@ function SpcSessionPreviewPage({
             ) : (
               <View />
             )}
-            {client?.status ? <StatusPill status={client.status} /> : null}
+            {client?.label ? <StatusPill label={client.label} tone={client.tone} /> : null}
           </View>
 
           <Text numberOfLines={2} maxFontSizeMultiplier={1.1} style={{ marginTop: 6, fontFamily: fonts.display, fontSize: 24, color: INK }}>
