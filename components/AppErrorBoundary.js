@@ -2,6 +2,7 @@ import { Component } from "react";
 import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, fonts, type } from "../lib/theme";
+import { reportClientError } from "../lib/programming/clientErrors";
 
 // Before this existed, ANY uncaught render error anywhere in the app painted a
 // silent white screen — no message, nothing logged, nothing a member could
@@ -153,6 +154,10 @@ export class AppErrorBoundary extends Component {
     // Kept so the real stack is still there if anyone ever does get a console
     // attached to the device (Chrome remote debugging, Safari web inspector).
     console.error("Uncaught render error:", error, errorInfo?.componentStack);
+    // Deliberately not awaited: rendering the fallback must not wait on a
+    // network call, and reportClientError swallows its own failures so a
+    // reporting problem can never compound the crash the member is looking at.
+    reportClientError({ error, componentStack: errorInfo?.componentStack });
   }
 
   handleRetry = () => {
