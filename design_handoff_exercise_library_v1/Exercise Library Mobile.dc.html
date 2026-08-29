@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#eceae6;font-family:'Montserrat',sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#8a5140;text-decoration:none}a:hover{color:#a46a57}
+  *{box-sizing:border-box}
+  input,textarea{outline:none}
+  input::placeholder,textarea::placeholder{color:#9a9187}
+  ::-webkit-scrollbar{width:0;height:0}
+</style>
+</helmet>
+<div data-screen-label="Exercise library (mobile)" style="width:390px;height:844px;margin:0 auto;background:#faf8f6;position:relative;overflow:hidden;display:flex;flex-direction:column">
+
+  <div style="padding:20px 18px 0px 18px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:'Protest Strike';font-size:24px;color:#a46a57;line-height:1;white-space:nowrap">Exercise Library</div>
+      <div onClick="{{ openNew }}" style="background:#a46a57;border-radius:99px;padding:8px 15px;cursor:pointer;box-shadow:0 6px 16px rgba(164,106,87,0.25);flex-shrink:0">
+        <span style="font-weight:700;font-size:12.5px;color:#ffffff;white-space:nowrap">+ New</span>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#6f6862;margin-top:4px">{{ countLine }}</div>
+
+    <div style="display:flex;background:#efe9e2;border-radius:10px;padding:3px;margin-top:14px">
+      <sc-for list="{{ segTabs }}" as="t" hint-placeholder-count="2">
+        <div onClick="{{ t.onPick }}" style="flex:1;text-align:center;padding:8px 0px;border-radius:8px;background:{{ t.bg }};box-shadow:{{ t.shadow }};cursor:pointer">
+          <span style="font-weight:700;font-size:12.5px;color:{{ t.fg }}">{{ t.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search exercises" style="flex:1;height:40px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:0px 13px;font-family:'Montserrat';font-size:13px;color:#2a211c">
+      <div onClick="{{ openSheet }}" style="height:40px;padding:0px 13px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;display:flex;align-items:center;gap:7px;cursor:pointer">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M1 2h12L8.5 7.5V12l-3-1.6V7.5L1 2z" stroke="#57534e" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+        <span style="font-weight:600;font-size:12.5px;color:#44403c">Filter</span>
+        <sc-if value="{{ filterCount }}" hint-placeholder-val="{{ false }}">
+          <span style="min-width:17px;height:17px;border-radius:99px;background:#a46a57;color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0px 4px">{{ filterCount }}</span>
+        </sc-if>
+      </div>
+    </div>
+
+    <sc-if value="{{ hasTokens }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+        <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="1">
+          <div onClick="{{ t.onClear }}" style="display:flex;align-items:center;gap:6px;background:#33251f;border-radius:99px;padding:5px 11px;cursor:pointer">
+            <span style="font-size:11.5px;font-weight:600;color:#f7f3ee">{{ t.label }}</span>
+            <span style="font-size:12px;color:#a89a92">×</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="flex:1;overflow-y:auto;padding:12px 18px 30px 18px">
+    <div style="background:#fff;border:1px solid #ece7e1;border-radius:14px;overflow:hidden">
+      <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:30px 20px;text-align:center;font-size:13px;color:#a8a29e">{{ emptyText }}</div>
+      </sc-if>
+      <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+        <sc-if value="{{ r.isHeader }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:9px 14px 5px 14px;background:#faf8f6;border-bottom:1px solid #f4f1ec">
+            <span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">{{ r.letter }}</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ r.isRow }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ r.onOpen }}" style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+                <span style="font-weight:700;font-size:14px;color:#2a211c">{{ r.name }}</span>
+                <sc-for list="{{ r.pills }}" as="p" hint-placeholder-count="0">
+                  <span style="background:{{ p.bg }};color:{{ p.fg }};font-weight:700;font-size:9px;letter-spacing:0.4px;border-radius:99px;padding:3px 8px;text-transform:uppercase;white-space:nowrap">{{ p.t }}</span>
+                </sc-for>
+              </div>
+              <sc-if value="{{ r.sub }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:11.5px;color:#6f6862;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.sub }}</div>
+              </sc-if>
+              <sc-if value="{{ r.parentLine }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:11px;color:#a8a29e;margin-top:2px">{{ r.parentLine }}</div>
+              </sc-if>
+              <sc-if value="{{ r.cues }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:11.5px;color:#a8a29e;font-style:italic;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">“{{ r.cues }}”</div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ r.video }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ r.onVideo }}" style="width:28px;height:28px;border:1.5px solid #e8ded7;border-radius:99px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#fdf6f2">
+                <svg width="9" height="10" viewBox="0 0 9 10"><path d="M1.5 1.2l6 3.8-6 3.8V1.2z" fill="#8a5140"></path></svg>
+              </div>
+            </sc-if>
+            <sc-if value="{{ r.unarch }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ r.onUnarchive }}" style="border:1px solid #d9d4cd;border-radius:99px;padding:6px 12px;flex-shrink:0;cursor:pointer;background:#fff">
+                <span style="font-weight:600;font-size:11.5px;color:#44403c">Un-archive</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ r.chev }}" hint-placeholder-val="{{ true }}">
+              <span style="font-size:16px;color:#d6d1ca;flex-shrink:0">›</span>
+            </sc-if>
+          </div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </div>
+
+  <sc-if value="{{ formOpen }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Exercise form" style="position:absolute;inset:0;background:#faf8f6;display:flex;flex-direction:column;z-index:20">
+      <div style="padding:16px 18px 12px 18px;border-bottom:1px solid #ece7e1">
+        <div onClick="{{ f.onCancel }}" style="font-weight:600;font-size:12.5px;color:#8a5140;cursor:pointer;padding:2px 0px">‹ Library</div>
+        <div style="font-family:'Protest Strike';font-size:24px;color:#2a211c;margin-top:5px">{{ f.title }}</div>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:14px 18px 20px 18px">
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:14px 15px;margin-bottom:12px">
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:8px">TYPE</div>
+          <div style="display:flex;background:#efe9e2;border-radius:10px;padding:3px">
+            <sc-for list="{{ f.typeTabs }}" as="t" hint-placeholder-count="2">
+              <div onClick="{{ t.onPick }}" style="flex:1;text-align:center;padding:8px 0px;border-radius:8px;background:{{ t.bg }};box-shadow:{{ t.shadow }};cursor:pointer">
+                <span style="font-weight:700;font-size:12.5px;color:{{ t.fg }}">{{ t.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin:14px 0px 6px 0px">NAME</div>
+          <input value="{{ f.name }}" onInput="{{ f.onName }}" placeholder="e.g. Goblet Squat" style="width:100%;height:42px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:0px 13px;font-family:'Montserrat';font-size:14px;font-weight:600;color:#2a211c">
+          <sc-if value="{{ f.dup }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:9px;background:#fdf6f2;border:1px solid #eddcd2;border-radius:10px;padding:11px 13px">
+              <div style="font-size:12px;color:#8a5140">Close to <span style="font-weight:700">“{{ f.dupName }}”</span></div>
+              <div style="font-size:11px;color:#a8907f;margin-top:2px">{{ f.dupMeta }}</div>
+              <div style="display:flex;gap:16px;margin-top:8px">
+                <span onClick="{{ f.onUseDup }}" style="font-weight:700;font-size:12px;color:#8a5140;cursor:pointer;white-space:nowrap">Use that one</span>
+                <span onClick="{{ f.onKeepBoth }}" style="font-weight:600;font-size:12px;color:#78716c;cursor:pointer;white-space:nowrap">Keep both</span>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ f.isLift }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:14px 15px;margin-bottom:12px">
+            <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:6px">PARENT MOVEMENT</div>
+            <div onClick="{{ f.openParent }}" style="display:flex;align-items:center;gap:8px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:11px 13px;cursor:pointer">
+              <span style="flex:1;font-size:13px;font-weight:600;color:{{ f.parentFg }}">{{ f.parentLabel }}</span>
+              <span style="font-size:14px;color:#a8a29e">›</span>
+            </div>
+            <sc-if value="{{ f.fromParentNote }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11.5px;color:#a8907f;margin-top:7px">{{ f.fromParentNote }}</div>
+            </sc-if>
+
+            <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin:14px 0px 6px 0px">MUSCLE GROUP · ALL THAT APPLY</div>
+            <div style="border:1px solid #e8e3dc;border-radius:10px;overflow:hidden">
+              <sc-for list="{{ f.mgSections }}" as="sec" hint-placeholder-count="8">
+                <div style="border-top:1px solid {{ sec.bt }}">
+                  <div onClick="{{ sec.onToggle }}" style="display:flex;align-items:center;gap:8px;padding:10px 13px;cursor:pointer">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-weight:700;font-size:10.5px;letter-spacing:0.8px;color:{{ sec.fg }};text-transform:uppercase">{{ sec.label }}</div>
+                      <sc-if value="{{ sec.picked }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size:11px;color:#6f6862;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sec.picked }}</div>
+                      </sc-if>
+                    </div>
+                    <span style="font-size:11px;color:#a8a29e">{{ sec.chev }}</span>
+                  </div>
+                  <sc-if value="{{ sec.open }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-wrap:wrap;gap:7px;padding:0px 13px 12px 13px">
+                      <sc-for list="{{ sec.chips }}" as="ch" hint-placeholder-count="3">
+                        <div onClick="{{ ch.onToggle }}" style="border:1px solid {{ ch.bd }};background:{{ ch.bg }};border-radius:99px;padding:7px 12px;cursor:pointer">
+                          <span style="font-size:12px;font-weight:600;color:{{ ch.fg }}">{{ ch.label }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ f.mgError }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11.5px;color:#b23a22;margin-top:6px">Pick at least one muscle group.</div>
+            </sc-if>
+
+            <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin:14px 0px 8px 0px">MOVEMENT PATTERN · FOR THE BALANCE TALLY, OPTIONAL</div>
+            <div style="display:flex;flex-wrap:wrap;gap:7px">
+              <sc-for list="{{ f.mpChips }}" as="ch" hint-placeholder-count="9">
+                <div onClick="{{ ch.onToggle }}" style="border:1px solid {{ ch.bd }};background:{{ ch.bg }};border-radius:99px;padding:7px 12px;cursor:pointer">
+                  <span style="font-size:12px;font-weight:600;color:{{ ch.fg }}">{{ ch.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:14px 15px;margin-bottom:12px">
+          <sc-if value="{{ f.isLift }}" hint-placeholder-val="{{ true }}">
+            <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:8px">MEASURED IN</div>
+            <div style="display:flex;gap:8px;margin-bottom:14px">
+              <sc-for list="{{ f.unitTabs }}" as="t" hint-placeholder-count="3">
+                <div onClick="{{ t.onPick }}" style="flex:1;text-align:center;border:1px solid {{ t.bd }};background:{{ t.bg }};border-radius:10px;padding:9px 0px;cursor:pointer">
+                  <span style="font-weight:{{ t.fw }};font-size:12.5px;color:{{ t.fg }}">{{ t.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:8px">WEIGHT</div>
+            <div style="display:flex;gap:8px;margin-bottom:14px">
+              <sc-for list="{{ f.twTabs }}" as="t" hint-placeholder-count="2">
+                <div onClick="{{ t.onPick }}" style="flex:1;text-align:center;border:1px solid {{ t.bd }};background:{{ t.bg }};border-radius:10px;padding:9px 0px;cursor:pointer">
+                  <span style="font-weight:{{ t.fw }};font-size:12.5px;color:{{ t.fg }}">{{ t.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:8px">DEFAULT PRESCRIPTION</div>
+          <div style="display:flex;gap:9px">
+            <div style="flex:1">
+              <div style="font-size:10px;font-weight:600;letter-spacing:0.5px;color:#a8a29e;margin-bottom:4px">SETS</div>
+              <input value="{{ f.sets }}" onInput="{{ f.onSets }}" style="width:100%;height:40px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:0px 12px;font-family:'Montserrat';font-size:13px;color:#2a211c">
+            </div>
+            <div style="flex:1">
+              <div style="font-size:10px;font-weight:600;letter-spacing:0.5px;color:#a8a29e;margin-bottom:4px">{{ f.repsHeader }}</div>
+              <input value="{{ f.reps }}" onInput="{{ f.onReps }}" style="width:100%;height:40px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:0px 12px;font-family:'Montserrat';font-size:13px;color:#2a211c">
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:14px 15px;margin-bottom:12px">
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:6px">CUES</div>
+          <textarea value="{{ f.cues }}" onInput="{{ f.onCues }}" placeholder="Short coaching cues, as they'd go on the printed sheet" rows="3" style="width:100%;border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:10px 12px;font-family:'Montserrat';font-size:13px;color:#2a211c;resize:none;line-height:1.45"></textarea>
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin:12px 0px 6px 0px">VIDEO LINK · YOUTUBE / VIMEO / INSTAGRAM</div>
+          <input value="{{ f.video }}" onInput="{{ f.onVideo }}" placeholder="https://" style="width:100%;height:40px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:0px 12px;font-family:'Montserrat';font-size:12.5px;color:#2a211c">
+          <sc-if value="{{ f.videoOff }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:11px;color:#78716c;margin-top:5px">Doesn't look like a YouTube/Vimeo/Instagram link — that's fine if it's intentional.</div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ f.isEdit }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ f.onArchiveOpen }}" style="text-align:center;padding:12px 0px 4px 0px;cursor:pointer">
+            <span style="font-weight:600;font-size:12.5px;color:#b23a22">Archive this exercise</span>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="padding:12px 18px 20px 18px;border-top:1px solid #ece7e1;background:#faf8f6;display:flex;gap:9px">
+        <div onClick="{{ f.onCancel }}" style="flex:1;text-align:center;border:1px solid #d9d4cd;border-radius:10px;background:#fff;padding:12px 0px;cursor:pointer">
+          <span style="font-weight:600;font-size:13px;color:#44403c">Cancel</span>
+        </div>
+        <div onClick="{{ f.onSave }}" style="flex:2;text-align:center;border-radius:10px;background:#a46a57;padding:12px 0px;cursor:pointer;opacity:{{ f.saveOp }}">
+          <span style="font-weight:700;font-size:13px;color:#fff">{{ f.saveLabel }}</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;justify-content:flex-end">
+      <div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(42,33,28,0.4)"></div>
+      <div data-screen-label="Filter sheet" style="position:relative;background:#fff;border-radius:18px 18px 0px 0px;padding:10px 20px 26px 20px;max-height:75%;overflow-y:auto">
+        <div style="width:36px;height:4px;border-radius:99px;background:#e0dbd4;margin:4px auto 14px auto"></div>
+        <sc-if value="{{ sheetHasMuscle }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">MUSCLE GROUP</div>
+            <div onClick="{{ clearFilters }}" style="font-weight:600;font-size:12px;color:#8a5140;cursor:pointer">Clear all</div>
+          </div>
+          <sc-for list="{{ muscleOptions }}" as="o" hint-placeholder-count="9">
+            <div onClick="{{ o.onPick }}" style="display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+              <span style="flex:1;font-weight:{{ o.fw }};font-size:13.5px;color:#2a211c">{{ o.label }}</span>
+              <span style="font-size:12px;color:#a8a29e">{{ o.count }}</span>
+              <span style="width:16px;font-weight:700;font-size:13px;color:#8a5140">{{ o.check }}</span>
+            </div>
+          </sc-for>
+        </sc-if>
+        <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin:16px 0px 6px 0px">LIBRARY</div>
+        <div onClick="{{ toggleArchived }}" style="display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+          <span style="flex:1;font-weight:{{ archFw }};font-size:13.5px;color:#2a211c">Show archived instead</span>
+          <span style="font-size:12px;color:#a8a29e">{{ archCount }}</span>
+          <span style="width:16px;font-weight:700;font-size:13px;color:#8a5140">{{ archCheck }}</span>
+        </div>
+        <div onClick="{{ closeSheet }}" style="margin-top:16px;text-align:center;border-radius:10px;background:#33251f;padding:12px 0px;cursor:pointer">
+          <span style="font-weight:700;font-size:13px;color:#f7f3ee">{{ doneLabel }}</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ psheetOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;justify-content:flex-end">
+      <div onClick="{{ closePsheet }}" style="position:absolute;inset:0;background:rgba(42,33,28,0.4)"></div>
+      <div data-screen-label="Parent picker" style="position:relative;background:#fff;border-radius:18px 18px 0px 0px;padding:10px 20px 26px 20px;max-height:75%;overflow-y:auto">
+        <div style="width:36px;height:4px;border-radius:99px;background:#e0dbd4;margin:4px auto 14px auto"></div>
+        <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:6px">PARENT MOVEMENT</div>
+        <sc-for list="{{ parentOptions }}" as="o" hint-placeholder-count="8">
+          <div onClick="{{ o.onPick }}" style="display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+            <span style="flex:1;font-weight:{{ o.fw }};font-size:13.5px;color:{{ o.fg }}">{{ o.label }}</span>
+            <span style="width:16px;font-weight:700;font-size:13px;color:#8a5140">{{ o.check }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ pnew }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <input value="{{ pname }}" onInput="{{ onPname }}" placeholder="New parent name…" style="flex:1;height:42px;border:1px solid #a46a57;border-radius:10px;background:#fff;padding:0px 13px;font-family:'Montserrat';font-size:13px;color:#2a211c">
+            <div onClick="{{ onAddParent }}" style="border-radius:10px;background:#a46a57;padding:0px 16px;display:flex;align-items:center;cursor:pointer;opacity:{{ pAddOp }}">
+              <span style="font-weight:700;font-size:13px;color:#fff">Add</span>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ pnewClosed }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ onStartNewParent }}" style="margin-top:14px;text-align:center;border:1px solid #e0d5cd;border-radius:10px;padding:11px 0px;cursor:pointer">
+            <span style="font-weight:700;font-size:12.5px;color:#8a5140">+ New parent</span>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:0px 28px">
+      <div onClick="{{ closeConfirm }}" style="position:absolute;inset:0;background:rgba(42,33,28,0.45)"></div>
+      <div data-screen-label="Archive confirm" style="position:relative;background:#fff;border-radius:16px;padding:20px 20px 16px 20px;width:100%">
+        <div style="font-family:'Protest Strike';font-size:19px;color:#2a211c">Archive {{ confirmName }}?</div>
+        <div style="font-size:12.5px;color:#57534e;line-height:1.55;margin-top:8px">{{ confirmNote }}</div>
+        <div style="display:flex;gap:9px;margin-top:16px">
+          <div onClick="{{ closeConfirm }}" style="flex:1;text-align:center;border:1px solid #d9d4cd;border-radius:10px;background:#fff;padding:11px 0px;cursor:pointer">
+            <span style="font-weight:600;font-size:13px;color:#44403c">Keep it</span>
+          </div>
+          <div onClick="{{ onConfirmArchive }}" style="flex:1;text-align:center;border-radius:10px;background:#33251f;padding:11px 0px;cursor:pointer">
+            <span style="font-weight:700;font-size:13px;color:#f7f3ee">Archive</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;coachIsReviewer&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Coach&quot;},&quot;listGrouping&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;A–Z headers&quot;,&quot;options&quot;:[&quot;A–Z headers&quot;,&quot;Flat list&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Library list&quot;}}">
+class Component extends DCLogic {
+  MUSCLE_GROUPS = ["chest", "back", "shoulders", "arms", "legs", "glutes", "core", "full_body"];
+  MUSCLE_SUB_GROUPS = {
+    chest: ["upper_chest", "lower_chest"], back: ["lats", "upper_back", "lower_back"],
+    shoulders: ["front_delt", "side_delt", "rear_delt"], arms: ["biceps", "triceps", "forearms"],
+    legs: ["quads", "hamstrings", "calves"], glutes: [], core: ["abs", "obliques"], full_body: [],
+  };
+  MOVEMENT_PATTERNS = ["squat", "lunge", "hinge", "core", "row", "horizontal_push", "vertical_pull", "vertical_push"];
+  REP_UNITS = [
+    { key: "reps", label: "Reps", header: "REPS" },
+    { key: "time", label: "Time", header: "TIME (SEC)" },
+    { key: "distance", label: "Distance", header: "DISTANCE (FT)" },
+  ];
+  LABEL_OVERRIDES = { full_body: "Full body", front_delt: "Front delt", side_delt: "Side delt", rear_delt: "Rear delt" };
+
+  PARENTS = [
+    { id: "p3", name: "Bench Press", mg: ["chest", "triceps"], mp: ["horizontal_push"] },
+    { id: "p7", name: "Carry", mg: ["full_body", "forearms"], mp: ["core"] },
+    { id: "p2", name: "Deadlift", mg: ["hamstrings", "glutes", "lower_back"], mp: ["hinge"] },
+    { id: "p6", name: "Lunge", mg: ["quads", "glutes"], mp: ["lunge"] },
+    { id: "p5", name: "Overhead Press", mg: ["shoulders", "triceps"], mp: ["vertical_push"] },
+    { id: "p4", name: "Row", mg: ["lats", "upper_back"], mp: ["row"] },
+    { id: "p1", name: "Squat", mg: ["quads", "glutes"], mp: ["squat"] },
+  ];
+
+  SEED = [
+    { id: "e1", name: "Back Squat", type: "lift", mg: ["quads", "glutes"], mp: ["squat"], parentId: "p1", sets: "4", reps: "5", unit: "reps", tw: true, cues: "Brace hard before you sit — chest proud out of the hole.", video: "https://youtu.be/bs", approved: true, active: true, uses: 42 },
+    { id: "e2", name: "Barbell Deadlift", type: "lift", mg: ["hamstrings", "glutes", "lower_back"], mp: ["hinge"], parentId: "p2", sets: "3", reps: "5", unit: "reps", tw: true, cues: "Push the floor away, bar stays on the legs.", video: "https://youtu.be/dl", approved: true, active: true, uses: 38 },
+    { id: "e3", name: "Bench Press", type: "lift", mg: ["chest", "triceps"], mp: ["horizontal_push"], parentId: "p3", sets: "4", reps: "6", unit: "reps", tw: true, cues: "", video: "https://youtu.be/bp", approved: true, active: true, uses: 35 },
+    { id: "e4", name: "Box Squat", type: "lift", mg: ["quads", "glutes"], mp: ["squat"], parentId: "p1", sets: "", reps: "", unit: "reps", tw: true, cues: "", video: "", approved: false, active: true, uses: 0 },
+    { id: "e5", name: "Farmer Carry", type: "lift", mg: ["full_body", "forearms"], mp: ["core"], parentId: "p7", sets: "3", reps: "50", unit: "distance", tw: true, cues: "Tall posture, crush the handles.", video: "", approved: true, active: true, uses: 14 },
+    { id: "e6", name: "Goblet Squat", type: "lift", mg: ["quads", "core"], mp: ["squat"], parentId: "p1", sets: "3", reps: "10", unit: "reps", tw: true, cues: "", video: "https://youtu.be/gs", approved: true, active: true, uses: 31 },
+    { id: "e7", name: "Hanging Knee Raise", type: "lift", mg: ["abs"], mp: ["core"], parentId: "", sets: "3", reps: "12", unit: "reps", tw: false, cues: "", video: "", approved: true, active: true, uses: 11 },
+    { id: "e8", name: "Incline DB Press", type: "lift", mg: ["upper_chest", "front_delt"], mp: ["horizontal_push"], parentId: "p3", sets: "3", reps: "10", unit: "reps", tw: true, cues: "", video: "", approved: true, active: true, uses: 18 },
+    { id: "e9", name: "Lat Pulldown", type: "lift", mg: ["lats"], mp: ["vertical_pull"], parentId: "", sets: "3", reps: "12", unit: "reps", tw: true, cues: "", video: "https://youtu.be/lp", approved: true, active: true, uses: 22 },
+    { id: "e10", name: "One-arm DB Row", type: "lift", mg: ["lats", "upper_back"], mp: ["row"], parentId: "p4", sets: "3", reps: "10", unit: "reps", tw: true, cues: "Pull to the hip, not the armpit.", video: "https://youtu.be/dbrow", approved: true, active: true, uses: 26 },
+    { id: "e11", name: "Plank", type: "lift", mg: ["abs"], mp: ["core"], parentId: "", sets: "3", reps: "45", unit: "time", tw: false, cues: "", video: "", approved: true, active: true, uses: 12 },
+    { id: "e12", name: "Push-up", type: "lift", mg: ["chest", "triceps"], mp: ["horizontal_push"], parentId: "", sets: "3", reps: "12", unit: "reps", tw: false, cues: "", video: "https://youtu.be/pu", approved: true, active: true, uses: 17 },
+    { id: "e13", name: "Romanian Deadlift", type: "lift", mg: ["hamstrings", "glutes"], mp: ["hinge"], parentId: "p2", sets: "3", reps: "8", unit: "reps", tw: true, cues: "Soft knees, hips back until the hamstrings ask you to stop.", video: "https://youtu.be/rdl", approved: true, active: true, uses: 29 },
+    { id: "e14", name: "Seal Row", type: "lift", mg: ["upper_back", "lats"], mp: ["row"], parentId: "p4", sets: "", reps: "", unit: "reps", tw: true, cues: "", video: "", approved: false, active: true, uses: 2 },
+    { id: "e15", name: "Seated DB Press", type: "lift", mg: ["shoulders", "triceps"], mp: ["vertical_push"], parentId: "p5", sets: "3", reps: "10", unit: "reps", tw: true, cues: "", video: "", approved: true, active: true, uses: 19 },
+    { id: "e16", name: "Sled Push", type: "lift", mg: ["full_body", "quads"], mp: [], parentId: "", sets: "4", reps: "40", unit: "distance", tw: true, cues: "", video: "", approved: true, active: true, uses: 9 },
+    { id: "e17", name: "Walking Lunge", type: "lift", mg: ["quads", "glutes"], mp: ["lunge"], parentId: "p6", sets: "3", reps: "10", unit: "reps", tw: true, cues: "", video: "", approved: true, active: true, uses: 21 },
+    { id: "e18", name: "Battle Rope Slam", type: "lift", mg: ["full_body"], mp: [], parentId: "", sets: "", reps: "30", unit: "time", tw: false, cues: "", video: "", approved: true, active: false, uses: 3 },
+    { id: "e19", name: "Smith Machine Squat", type: "lift", mg: ["quads"], mp: ["squat"], parentId: "p1", sets: "", reps: "", unit: "reps", tw: true, cues: "", video: "", approved: true, active: false, uses: 0 },
+    { id: "w1", name: "Band Pull-apart", type: "warmup", mg: [], mp: [], parentId: "", sets: "2", reps: "15", unit: "reps", tw: true, cues: "", video: "https://youtu.be/bpa", approved: true, active: true, uses: 24 },
+    { id: "w2", name: "Bike or Row", type: "warmup", mg: [], mp: [], parentId: "", sets: "1", reps: "5 min", unit: "reps", tw: true, cues: "Easy pace — conversation speed.", video: "", approved: true, active: true, uses: 40 },
+    { id: "w3", name: "Cat-cow", type: "warmup", mg: [], mp: [], parentId: "", sets: "1", reps: "10", unit: "reps", tw: true, cues: "", video: "", approved: false, active: true, uses: 6 },
+    { id: "w4", name: "Dead Bug", type: "warmup", mg: [], mp: [], parentId: "", sets: "2", reps: "10", unit: "reps", tw: true, cues: "Low back glued to the floor.", video: "", approved: true, active: true, uses: 15 },
+    { id: "w5", name: "Glute Bridge", type: "warmup", mg: [], mp: [], parentId: "", sets: "2", reps: "12", unit: "reps", tw: true, cues: "", video: "", approved: true, active: true, uses: 18 },
+    { id: "w6", name: "Half-kneeling Press", type: "warmup", mg: [], mp: [], parentId: "", sets: "2", reps: "8/side", unit: "reps", tw: true, cues: "", video: "", approved: true, active: true, uses: 12 },
+    { id: "w7", name: "Scap Push-up", type: "warmup", mg: [], mp: [], parentId: "", sets: "2", reps: "10", unit: "reps", tw: true, cues: "", video: "", approved: true, active: true, uses: 16 },
+    { id: "w8", name: "World's Greatest Stretch", type: "warmup", mg: [], mp: [], parentId: "", sets: "2", reps: "5/side", unit: "reps", tw: true, cues: "", video: "https://youtu.be/wgs", approved: true, active: true, uses: 27 },
+  ];
+
+  state = {
+    ex: this.SEED, parents: this.PARENTS,
+    seg: "lift", search: "", muscle: null, archived: false,
+    sheet: false, form: null, expandedMg: [], psheet: false, pnew: false, pname: "", confirm: false,
+  };
+
+  label(v) {
+    if (this.LABEL_OVERRIDES[v]) return this.LABEL_OVERRIDES[v];
+    const w = v.replace(/_/g, " ");
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }
+  pmg(v) {
+    if (this.MUSCLE_GROUPS.includes(v)) return v;
+    for (const g of this.MUSCLE_GROUPS) if (this.MUSCLE_SUB_GROUPS[g].includes(v)) return g;
+    return null;
+  }
+  norm(n) { return n.toLowerCase().replace(/[^a-z0-9]/g, ""); }
+  findDup(fo) {
+    const a = this.norm(fo.name);
+    if (a.length < 3) return null;
+    return this.state.ex.find((e) => {
+      if (!e.active || e.type !== fo.type || e.id === fo.id) return false;
+      const b = this.norm(e.name);
+      return a === b || (a.length >= 4 && b.includes(a)) || (b.length >= 4 && a.includes(b));
+    }) ?? null;
+  }
+  formFrom(e) {
+    return { mode: "edit", id: e.id, name: e.name, type: e.type, mg: [...(e.mg ?? [])], mp: [...(e.mp ?? [])], parentId: e.parentId ?? "", sets: e.sets ?? "", reps: e.reps ?? "", unit: e.unit ?? "reps", tw: e.tw !== false, cues: e.cues ?? "", video: e.video ?? "", dupOk: true, fromParent: false };
+  }
+  newForm() {
+    return { mode: "new", id: null, name: "", type: this.state.seg, mg: [], mp: [], parentId: "", sets: "", reps: "", unit: "reps", tw: true, cues: "", video: "", dupOk: false, fromParent: false };
+  }
+  uf(patch) { this.setState((s) => ({ form: { ...s.form, ...patch } })); }
+  pickParent(pid) {
+    const fo = this.state.form;
+    const p = this.state.parents.find((x) => x.id === pid);
+    let form;
+    if (!p) form = { ...fo, parentId: "" };
+    else {
+      const takeMg = fo.fromParent || fo.mg.length === 0;
+      const takeMp = fo.fromParent || fo.mp.length === 0;
+      form = {
+        ...fo, parentId: pid,
+        mg: takeMg ? [...(p.mg ?? [])] : fo.mg,
+        mp: takeMp ? [...(p.mp ?? [])] : fo.mp,
+        fromParent: ((takeMg && (p.mg ?? []).length > 0) || (takeMp && (p.mp ?? []).length > 0)) ? true : fo.fromParent,
+      };
+    }
+    this.setState({ form, psheet: false, pnew: false, pname: "" });
+  }
+  saveForm() {
+    const fo = this.state.form;
+    const isLift = fo.type === "lift";
+    if (!fo.name.trim() || (isLift && fo.mg.length === 0)) return;
+    const reviewer = this.props.coachIsReviewer ?? false;
+    const rec = {
+      name: fo.name.trim(), type: fo.type,
+      mg: isLift ? fo.mg : [], mp: isLift ? fo.mp : [], parentId: isLift ? fo.parentId : "",
+      sets: fo.sets, reps: fo.reps, unit: isLift ? fo.unit : "reps", tw: isLift ? fo.tw : true,
+      cues: fo.cues, video: fo.video,
+    };
+    this.setState((s) => ({
+      form: null,
+      ex: fo.id
+        ? s.ex.map((e) => (e.id === fo.id ? { ...e, ...rec } : e))
+        : [...s.ex, { ...rec, id: "e" + Date.now(), approved: reviewer, active: true, uses: 0 }],
+    }));
+  }
+
+  renderVals() {
+    const s = this.state;
+    const reviewer = this.props.coachIsReviewer ?? false;
+    const letterHeaders = (this.props.listGrouping ?? "A–Z headers") === "A–Z headers";
+    const q = s.search.trim().toLowerCase();
+
+    const lifts = s.ex.filter((e) => e.type === "lift");
+    const warmups = s.ex.filter((e) => e.type === "warmup");
+    const activeCount = (list) => list.filter((e) => e.active).length;
+
+    const inSeg = s.ex.filter((e) => e.type === s.seg && (s.archived ? !e.active : e.active));
+    const searched = inSeg.filter((e) => !q || e.name.toLowerCase().includes(q));
+    const visible = searched
+      .filter((e) => s.seg !== "lift" || !s.muscle || (e.mg ?? []).some((m) => this.pmg(m) === s.muscle))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const parentName = (pid) => s.parents.find((p) => p.id === pid)?.name;
+    const rows = [];
+    let lastLetter = null;
+    for (const e of visible) {
+      const L = e.name.charAt(0).toUpperCase();
+      if (letterHeaders && !s.archived && L !== lastLetter) {
+        rows.push({ isHeader: true, isRow: false, letter: L });
+        lastLetter = L;
+      }
+      const pills = [];
+      if (!e.approved) pills.push({ t: "needs review", bg: "#f5ede4", fg: "#8a5140" });
+      if (e.type === "lift" && e.tw === false) pills.push({ t: "reps only", bg: "#eef1e7", fg: "#4d6142" });
+      const subParts = [];
+      if (e.type === "lift") {
+        subParts.push((e.mg ?? []).map((m) => this.label(m)).join(", "));
+        if ((e.mp ?? []).length) subParts.push(e.mp.map((m) => m.replace(/_/g, " ")).join(", "));
+      } else if (e.sets || e.reps) {
+        subParts.push(`${e.sets || "—"} × ${e.reps || "—"}`);
+      }
+      rows.push({
+        isHeader: false, isRow: true,
+        name: e.name, pills,
+        sub: subParts.filter(Boolean).join(" · ") || false,
+        parentLine: e.parentId && parentName(e.parentId) ? `↳ under ${parentName(e.parentId)}` : false,
+        cues: e.cues || false,
+        video: Boolean(e.video),
+        onVideo: (ev) => { ev.stopPropagation(); },
+        unarch: s.archived,
+        chev: !s.archived,
+        onUnarchive: (ev) => {
+          ev.stopPropagation();
+          this.setState((st) => ({ ex: st.ex.map((x) => (x.id === e.id ? { ...x, active: true } : x)) }));
+        },
+        onOpen: s.archived ? () => {} : () => this.setState({ form: this.formFrom(e), expandedMg: [], confirm: false }),
+      });
+    }
+
+    const muscleCounts = {};
+    for (const g of this.MUSCLE_GROUPS) {
+      muscleCounts[g] = searched.filter((e) => (e.mg ?? []).some((m) => this.pmg(m) === g)).length;
+    }
+    const muscleOptions = [{ key: null, label: "All muscle groups", count: String(searched.length) }]
+      .concat(this.MUSCLE_GROUPS.map((g) => ({ key: g, label: this.label(g), count: String(muscleCounts[g]) })))
+      .map((o) => ({
+        label: o.label, count: o.count,
+        fw: s.muscle === o.key ? "700" : "500",
+        check: s.muscle === o.key ? "✓" : "",
+        onPick: () => this.setState({ muscle: o.key }),
+      }));
+
+    const tokens = [];
+    if (s.muscle) tokens.push({ label: this.label(s.muscle), onClear: () => this.setState({ muscle: null }) });
+    if (s.archived) tokens.push({ label: "Archived", onClear: () => this.setState({ archived: false }) });
+
+    const archInSeg = s.ex.filter((e) => e.type === s.seg && !e.active).length;
+
+    let f = {};
+    const fo = s.form;
+    if (fo) {
+      const isLift = fo.type === "lift";
+      const dupMatch = fo.dupOk ? null : this.findDup(fo);
+      const parent = s.parents.find((p) => p.id === fo.parentId);
+      const canSave = fo.name.trim() && (!isLift || fo.mg.length > 0);
+      const unit = this.REP_UNITS.find((u) => u.key === fo.unit) ?? this.REP_UNITS[0];
+      const orig = fo.id ? s.ex.find((e) => e.id === fo.id) : null;
+
+      const mgSections = this.MUSCLE_GROUPS.map((g, i) => {
+        const subs = this.MUSCLE_SUB_GROUPS[g];
+        const opts = [g, ...subs];
+        const picked = opts.filter((o) => fo.mg.includes(o));
+        const open = s.expandedMg.includes(g);
+        return {
+          label: this.label(g),
+          fg: picked.length ? "#8a5140" : "#78716c",
+          bt: i === 0 ? "transparent" : "#f0ece6",
+          picked: picked.length ? picked.map((p) => this.label(p)).join(", ") : false,
+          chev: open ? "▾" : "▸",
+          open,
+          onToggle: () => this.setState((st) => ({
+            expandedMg: st.expandedMg.includes(g) ? st.expandedMg.filter((x) => x !== g) : [...st.expandedMg, g],
+          })),
+          chips: opts.map((o) => {
+            const active = fo.mg.includes(o);
+            return {
+              label: o === g && subs.length > 0 ? `${this.label(g)} (general)` : this.label(o),
+              bg: active ? "#a46a57" : "#fff", bd: active ? "#a46a57" : "#d9d4cd", fg: active ? "#fff" : "#57534e",
+              onToggle: () => this.uf({ mg: active ? fo.mg.filter((x) => x !== o) : [...fo.mg, o], fromParent: false }),
+            };
+          }),
+        };
+      });
+
+      const mpChips = [{ key: null, label: "none" }].concat(this.MOVEMENT_PATTERNS.map((m) => ({ key: m, label: m.replace(/_/g, " ") }))).map((o) => {
+        const active = o.key === null ? fo.mp.length === 0 : fo.mp.includes(o.key);
+        return {
+          label: o.label,
+          bg: active ? "#a46a57" : "#fff", bd: active ? "#a46a57" : "#d9d4cd", fg: active ? "#fff" : "#57534e",
+          onToggle: () => this.uf(o.key === null
+            ? { mp: [], fromParent: false }
+            : { mp: active ? fo.mp.filter((x) => x !== o.key) : [...fo.mp, o.key], fromParent: false }),
+        };
+      });
+
+      const seg3 = (opts, cur, onPick) => opts.map((o) => {
+        const active = cur === o.key;
+        return {
+          label: o.label,
+          bg: active ? "#fdf6f2" : "#fff", bd: active ? "#a46a57" : "#e2ddd6",
+          fg: active ? "#8a5140" : "#57534e", fw: active ? "700" : "600",
+          onPick: () => onPick(o.key),
+        };
+      });
+
+      f = {
+        title: fo.mode === "edit" ? "Edit exercise" : "New exercise",
+        isEdit: fo.mode === "edit",
+        isLift,
+        onCancel: () => this.setState({ form: null, confirm: false }),
+        typeTabs: [{ key: "lift", label: "Lift" }, { key: "warmup", label: "Warm-up" }].map((o) => {
+          const active = fo.type === o.key;
+          return {
+            label: o.label,
+            bg: active ? "#fff" : "transparent", fg: active ? "#2a211c" : "#78716c",
+            shadow: active ? "0 1px 3px rgba(42,33,28,0.12)" : "none",
+            onPick: () => this.uf({ type: o.key }),
+          };
+        }),
+        name: fo.name,
+        onName: (e) => this.uf({ name: e.target.value, dupOk: false }),
+        dup: Boolean(dupMatch),
+        dupName: dupMatch?.name ?? "",
+        dupMeta: dupMatch ? [dupMatch.uses === 0 ? "never used" : `${dupMatch.uses} use${dupMatch.uses === 1 ? "" : "s"}`, dupMatch.video ? "video linked" : "no video"].join(" · ") : "",
+        onUseDup: () => this.setState({ form: this.formFrom(dupMatch), expandedMg: [] }),
+        onKeepBoth: () => this.uf({ dupOk: true }),
+        parentLabel: parent ? parent.name : "None (stands on its own)",
+        parentFg: parent ? "#2a211c" : "#9a9187",
+        openParent: () => this.setState({ psheet: true }),
+        fromParentNote: fo.fromParent && parent ? `Muscle group and movement pattern pulled from ${parent.name} — change either below if this variation differs.` : false,
+        mgSections,
+        mgError: isLift && fo.mg.length === 0 && fo.name.trim().length > 0,
+        mpChips,
+        unitTabs: seg3(this.REP_UNITS.map((u) => ({ key: u.key, label: u.label })), fo.unit, (k) => this.uf({ unit: k })),
+        twTabs: seg3([{ key: true, label: "Track weight" }, { key: false, label: "Reps only" }], fo.tw, (k) => this.uf({ tw: k })),
+        sets: fo.sets, onSets: (e) => this.uf({ sets: e.target.value }),
+        reps: fo.reps, onReps: (e) => this.uf({ reps: e.target.value }),
+        repsHeader: isLift ? unit.header : "REPS",
+        prefillNote: `Pre-fills when this ${isLift ? "lift is inserted into a session" : "warm-up is inserted into a warm-up block"} — still editable per session.`,
+        cues: fo.cues, onCues: (e) => this.uf({ cues: e.target.value }),
+        video: fo.video, onVideo: (e) => this.uf({ video: e.target.value }),
+        videoOff: Boolean(fo.video) && !/^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i.test(fo.video),
+        reviewNote: fo.mode === "new" && !reviewer,
+        saveOp: canSave ? "1" : "0.45",
+        saveLabel: fo.mode === "edit" ? "Save changes" : "Save exercise",
+        onSave: () => this.saveForm(),
+        onArchiveOpen: () => this.setState({ confirm: true }),
+        archiveUses: orig?.uses ?? 0,
+      };
+    }
+
+    const confirmTarget = fo?.id ? s.ex.find((e) => e.id === fo.id) : null;
+
+    return {
+      countLine: `${activeCount(lifts)} lifts · ${activeCount(warmups)} warm-ups`,
+      segTabs: [
+        { key: "lift", label: `Lifts · ${activeCount(lifts)}` },
+        { key: "warmup", label: `Warm-ups · ${activeCount(warmups)}` },
+      ].map((o) => {
+        const active = s.seg === o.key;
+        return {
+          label: o.label,
+          bg: active ? "#fff" : "transparent", fg: active ? "#2a211c" : "#78716c",
+          shadow: active ? "0 1px 3px rgba(42,33,28,0.12)" : "none",
+          onPick: () => this.setState({ seg: o.key, muscle: o.key === "lift" ? s.muscle : null }),
+        };
+      }),
+      search: s.search,
+      onSearch: (e) => this.setState({ search: e.target.value }),
+      openSheet: () => this.setState({ sheet: true }),
+      closeSheet: () => this.setState({ sheet: false }),
+      sheetOpen: s.sheet,
+      sheetHasMuscle: s.seg === "lift",
+      muscleOptions,
+      clearFilters: () => this.setState({ muscle: null, archived: false }),
+      toggleArchived: () => this.setState({ archived: !s.archived }),
+      archFw: s.archived ? "700" : "500",
+      archCheck: s.archived ? "✓" : "",
+      archCount: String(archInSeg),
+      doneLabel: `Show ${visible.length} exercise${visible.length === 1 ? "" : "s"}`,
+      filterCount: tokens.length > 0 ? String(tokens.length) : false,
+      tokens, hasTokens: tokens.length > 0,
+      rows,
+      empty: visible.length === 0,
+      emptyText: s.archived
+        ? `No archived ${s.seg === "lift" ? "lifts" : "warm-ups"}.`
+        : `No ${s.seg === "lift" ? "lifts" : "warm-ups"} match.`,
+      openNew: () => this.setState({ form: this.newForm(), expandedMg: [], confirm: false }),
+      formOpen: Boolean(fo), f,
+      psheetOpen: s.psheet && Boolean(fo),
+      closePsheet: () => this.setState({ psheet: false, pnew: false, pname: "" }),
+      parentOptions: [{ id: "", name: "None (stands on its own)" }].concat(s.parents).map((p) => ({
+        label: p.name,
+        fg: p.id === "" ? "#78716c" : "#2a211c",
+        fw: (fo?.parentId ?? "") === p.id ? "700" : "500",
+        check: (fo?.parentId ?? "") === p.id ? "✓" : "",
+        onPick: () => this.pickParent(p.id),
+      })),
+      pnew: s.pnew, pnewClosed: !s.pnew,
+      onStartNewParent: () => this.setState({ pnew: true }),
+      pname: s.pname,
+      onPname: (e) => this.setState({ pname: e.target.value }),
+      pAddOp: s.pname.trim() ? "1" : "0.45",
+      onAddParent: () => {
+        const name = s.pname.trim();
+        if (!name) return;
+        const created = { id: "p" + Date.now(), name, mg: [], mp: [] };
+        this.setState((st) => ({ parents: [...st.parents, created].sort((a, b) => a.name.localeCompare(b.name)) }), () => this.pickParent(created.id));
+      },
+      confirmOpen: s.confirm && Boolean(confirmTarget),
+      confirmName: confirmTarget?.name ?? "",
+      confirmNote: confirmTarget
+        ? (confirmTarget.uses > 0
+          ? `It's currently used in ${confirmTarget.uses} place${confirmTarget.uses === 1 ? "" : "s"} across your programming (sessions, warm-ups, and/or templates) — archiving will blank its name out of any live session that still references it.`
+          : "It isn't used anywhere right now. You can un-archive it later from the filter sheet.")
+        : "",
+      closeConfirm: () => this.setState({ confirm: false }),
+      onConfirmArchive: () => this.setState((st) => ({
+        confirm: false, form: null,
+        ex: st.ex.map((x) => (x.id === fo.id ? { ...x, active: false } : x)),
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

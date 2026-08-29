@@ -1,247 +1,242 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform } from "react-native";
+import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { MUSCLE_GROUPS, MUSCLE_SUB_GROUPS, MOVEMENT_PATTERNS, muscleGroupLabel, isLibraryReviewer } from "../lib/programming/exercises";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MOVEMENT_PATTERNS, isLibraryReviewer } from "../lib/programming/exercises";
 import { listExerciseParents, createExerciseParent } from "../lib/programming/exerciseParents";
-import { toastError } from "../lib/toast";
 import { useAuth } from "../lib/auth/AuthProvider";
-import { REP_UNITS, DEFAULT_REP_UNIT } from "../lib/programming/repUnit";
+import { REP_UNITS, DEFAULT_REP_UNIT, repUnitHeader } from "../lib/programming/repUnit";
 import { fonts, colors } from "../lib/theme";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { KeyboardDoneButton } from "./KeyboardDoneButton";
+import { PressFade } from "./PressFade";
+import { MOBILE_BREAKPOINT } from "./CoachShell";
+import { Eyebrow } from "./Eyebrow";
 import { findLikelyDuplicates } from "../lib/stringSimilarity";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../lib/scrollToKeyboard";
+import { MuscleGroupPicker } from "./exercise/MuscleGroupPicker";
+import { ParentPicker } from "./exercise/ParentPicker";
+import {
+  CARD_BORDER,
+  INPUT_BORDER,
+  CHIP_BORDER,
+  SEGMENT_TRACK,
+  INK,
+  DANGER,
+  TAN_BG,
+  TAN_BORDER,
+  TAN_BORDER_SOFT,
+  TAN_TEXT,
+} from "./exercise/tokens";
+
+// The exercise form (design_handoff_exercise_library_v1, §3).
+//
+// Same ten fields it has always had, grouped into four cards in the order a
+// coach actually answers them — Identity, Classification, How it's logged,
+// Teaching. Before this they ran in one flat vertical list where related
+// things sat far apart: Default sets/reps was ABOVE "Measured in", which is
+// the field that decides what the reps number even means.
+//
+// Presentation is chosen by WIDTH, not by platform. Wide gets a 460px right
+// drawer so the library stays visible behind it — a coach is usually adding
+// an exercise *because* of something they just saw in the table, and the
+// same is true of the builders, which open this over a session they're
+// mid-way through building. Narrow gets a full-screen page, because 390px
+// has no room for ten fields and this used to scroll inside its own 85vh
+// box. Width rather than platform because the installed PWA is a phone
+// running the web build: keying this to Platform.OS would hand a coach on
+// their phone the mobile library and then a desktop drawer to edit from.
+//
+// Six call sites (both library screens, the review queue, and the three web
+// builders) share this, and none of them had to change: every new prop is
+// optional.
 
 const LOOKS_LIKE_VIDEO_LINK = /^https?:\/\/.*(youtube\.|youtu\.be|vimeo\.|instagram\.)/i;
 
 function emptyForm(type) {
-  return { name: "", type, muscleGroups: [], movementPatterns: [], parentId: "", defaultSets: "", defaultReps: "", repUnit: DEFAULT_REP_UNIT, tracksWeight: true, cues: "", videoUrl: "" };
+  return {
+    name: "",
+    type,
+    muscleGroups: [],
+    movementPatterns: [],
+    parentId: "",
+    defaultSets: "",
+    defaultReps: "",
+    repUnit: DEFAULT_REP_UNIT,
+    tracksWeight: true,
+    cues: "",
+    videoUrl: "",
+  };
 }
 
-// Single-select against the parent RECORDS (0095), not against other
-// exercises. That's what makes this list ~18 entries instead of the 135
-// parent-less lifts it used to have to offer, since before 0095 any
-// exercise could turn out to be a parent.
-//
-// "+ New parent" is inline rather than a trip to another screen: the
-// moment you need one is the moment you're adding the variation, and
-// sending someone away mid-form to create it is how you end up with the
-// variation saved unparented and never fixed.
-function ParentPicker({ value, options, onChange, onCreate, disabled }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const selected = options.find((o) => o.id === value);
-  const label = selected ? selected.name : "None (stands on its own)";
+/* ------------------------------------------------------------- form pieces */
 
-  const submitNew = async () => {
-    const name = newName.trim();
-    if (!name || busy) return;
-    setBusy(true);
-    try {
-      const created = await onCreate(name);
-      // Selecting it is the point of creating it here — leaving the coach
-      // to then find their own new parent in the list is a step that
-      // exists only because the code didn't do it.
-      if (created) onChange(created.id);
-      setCreating(false);
-      setNewName("");
-      setPickerOpen(false);
-    } catch (e) {
-      toastError(e.message ?? "Couldn't add that parent.");
-    } finally {
-      setBusy(false);
-    }
-  };
+function FieldLabel({ children, style }) {
+  return <Eyebrow size={10} letterSpacing={1.1} color="#a8a29e" style={style}>{children}</Eyebrow>;
+}
 
-  const newParentRow = (
-    <View className="mt-2">
-      {creating ? (
-        <View className="flex-row items-center gap-2">
-          <TextInput
-            value={newName}
-            onChangeText={setNewName}
-            autoFocus
-            placeholder="New parent name…"
-            onSubmitEditing={submitNew}
-            className="flex-1 rounded-lg border px-3 py-2"
-            style={{ fontFamily: fonts.sans, borderColor: colors.primary }}
-          />
-          <Pressable onPress={submitNew} disabled={busy || !newName.trim()} style={{ opacity: busy || !newName.trim() ? 0.5 : 1 }}>
-            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Add</Text>
-          </Pressable>
+// A card is only a card on a narrow screen, where each group is a real white
+// panel on the canvas. Inside the 460px drawer the groups read as one
+// continuous column, so they're just spacing — a stack of bordered boxes in
+// a column that narrow reads as clutter.
+function Card({ children, style, wide }) {
+  if (wide) return <View style={[{ marginTop: 16 }, style]}>{children}</View>;
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: "#fff",
+          borderWidth: 1,
+          borderColor: CARD_BORDER,
+          borderRadius: 12,
+          paddingVertical: 14,
+          paddingHorizontal: 15,
+          marginBottom: 12,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+// The pill-on-a-track control, matching the library's own segmented nav.
+function SegmentTabs({ options, value, onChange }) {
+  return (
+    <View style={{ flexDirection: "row", backgroundColor: SEGMENT_TRACK, borderRadius: 10, padding: 3 }}>
+      {options.map((opt) => {
+        const active = value === opt.key;
+        return (
           <Pressable
-            onPress={() => {
-              setCreating(false);
-              setNewName("");
+            key={String(opt.key)}
+            onPress={() => onChange(opt.key)}
+            style={{
+              flex: 1,
+              alignItems: "center",
+              paddingVertical: 8,
+              borderRadius: 8,
+              backgroundColor: active ? "#fff" : "transparent",
+              ...(active
+                ? { shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3 }
+                : null),
             }}
           >
-            <Text style={{ fontFamily: fonts.sansMedium, color: "#a8a29e" }}>Cancel</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <Pressable onPress={() => setCreating(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} disabled={disabled}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite, opacity: disabled ? 0.5 : 1 }}>
-            + New parent
-          </Text>
-        </Pressable>
-      )}
-    </View>
-  );
-
-  if (Platform.OS === "web") {
-    return (
-      <View>
-        <select
-          value={value || ""}
-          onChange={(e) => onChange(e.target.value)}
-          style={{ fontFamily: "Montserrat_400Regular", borderColor: "#d6d3d1", borderWidth: 1, borderRadius: 8, padding: 12, width: "100%" }}
-        >
-          <option value="">None (stands on its own)</option>
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.name}
-            </option>
-          ))}
-        </select>
-        {newParentRow}
-      </View>
-    );
-  }
-
-  return (
-    <View>
-      <Pressable onPress={() => setPickerOpen(true)} className="rounded-lg border border-stone-300 px-4 py-3">
-        <Text style={{ fontFamily: "Montserrat_400Regular", color: selected ? "#292524" : "#a8a29e" }}>{label}</Text>
-      </Pressable>
-      {newParentRow}
-      <Modal visible={pickerOpen} animationType="fade" transparent onRequestClose={() => setPickerOpen(false)}>
-        <Pressable className="flex-1 items-center justify-center bg-black/40 px-6" onPress={() => setPickerOpen(false)}>
-          <View className="max-h-[70%] w-full max-w-sm overflow-hidden rounded-2xl bg-white">
-            <ScrollView>
-              <Pressable
-                onPress={() => {
-                  onChange("");
-                  setPickerOpen(false);
-                }}
-                className="border-b border-stone-100 px-4 py-3.5"
-              >
-                <Text style={{ fontFamily: "Montserrat_500Medium" }}>None (stands on its own)</Text>
-              </Pressable>
-              {options.map((o) => (
-                <Pressable
-                  key={o.id}
-                  onPress={() => {
-                    onChange(o.id);
-                    setPickerOpen(false);
-                  }}
-                  className="border-b border-stone-100 px-4 py-3.5"
-                >
-                  <Text style={{ fontFamily: o.id === value ? "Montserrat_600SemiBold" : "Montserrat_400Regular" }}>{o.name}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-    </View>
-  );
-}
-
-// One collapsed row per top-level group, opening to that group's own
-// options. A flat wall of every muscle value would be ~23 chips with no
-// structure; this keeps the closed state to eight scannable rows while
-// still showing, on each row, what's already picked underneath it.
-//
-// The first chip in a section is always the top-level group itself, so
-// "just chest" stays a valid answer — that's what everything tagged before
-// sub-groups existed holds, and it's a legitimate choice for an exercise
-// that genuinely doesn't split.
-function MuscleGroupPicker({ selected, onToggle }) {
-  const [expanded, setExpanded] = useState(() => new Set());
-
-  const toggleSection = (key) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-
-  return (
-    <View className="overflow-hidden rounded-xl border" style={{ borderColor: "#e0dcd6" }}>
-      {MUSCLE_GROUPS.map((section, i) => {
-        const subs = MUSCLE_SUB_GROUPS[section];
-        const options = [section, ...subs];
-        const picked = options.filter((o) => selected.includes(o));
-        const isOpen = expanded.has(section);
-        return (
-          <View key={section} style={i > 0 ? { borderTopWidth: 1, borderTopColor: "#f0ece6" } : undefined}>
-            <Pressable
-              onPress={() => toggleSection(section)}
-              className="flex-row items-center justify-between px-3 py-2.5"
-              accessibilityLabel={`${muscleGroupLabel(section)} options`}
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.15}
+              style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: active ? INK : "#78716c" }}
             >
-              <View className="flex-1 pr-2">
-                <Text
-                  className="text-xs uppercase"
-                  style={{
-                    fontFamily: fonts.sansBold,
-                    letterSpacing: 0.4,
-                    color: picked.length ? colors.primaryOnWhite : "#78716c",
-                  }}
-                >
-                  {muscleGroupLabel(section)}
-                </Text>
-                {picked.length ? (
-                  <Text numberOfLines={1} className="text-xs" style={{ fontFamily: fonts.sans, color: "#78716c" }}>
-                    {picked.map(muscleGroupLabel).join(", ")}
-                  </Text>
-                ) : null}
-              </View>
-              <Ionicons name={isOpen ? "chevron-down" : "chevron-forward"} size={16} color="#a8a29e" />
-            </Pressable>
-            {isOpen ? (
-              <View className="flex-row flex-wrap gap-2 px-3 pb-3">
-                {options.map((o) => {
-                  const active = selected.includes(o);
-                  const isSectionItself = o === section;
-                  return (
-                    <Pressable
-                      key={o}
-                      onPress={() => onToggle(o)}
-                      className={`rounded-full border px-3 py-2 ${active ? "border-primary bg-primary" : "border-stone-300"}`}
-                    >
-                      <Text
-                        className={active ? "text-white" : "text-stone-700"}
-                        style={{ fontFamily: fonts.sans, fontSize: 13 }}
-                      >
-                        {isSectionItself && subs.length > 0
-                          ? `${muscleGroupLabel(section)} (general)`
-                          : muscleGroupLabel(o)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
-          </View>
+              {opt.label}
+            </Text>
+          </Pressable>
         );
       })}
     </View>
   );
 }
 
+// Equal bordered tabs — Measured in, Weight. Distinct from SegmentTabs on
+// purpose: those switch what the form IS (a lift or a warm-up), these are
+// two ordinary fields whose answer happens to be one of three.
+// Measured in (3 options) and Weight (2) sit side by side inside a 460px
+// drawer, so the longest label in each — "Distance" and "Track weight" —
+// is what sizes them. Measured in the browser rather than guessed: at
+// 11px/700 those are 51px and 76px, and the geometry below clears both.
+function OptionTabs({ options, value, onChange, wide }) {
+  return (
+    <View style={{ flexDirection: "row", gap: wide ? 6 : 7 }}>
+      {options.map((opt) => {
+        const active = value === opt.key;
+        return (
+          <Pressable
+            key={String(opt.key)}
+            onPress={() => onChange(opt.key)}
+            style={{
+              flex: 1,
+              alignItems: "center",
+              borderWidth: 1,
+              borderColor: active ? colors.primary : CHIP_BORDER,
+              backgroundColor: active ? TAN_BG : "#fff",
+              borderRadius: 9,
+              paddingVertical: wide ? 8 : 9,
+              paddingHorizontal: wide ? 3 : 4,
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.1}
+              style={{
+                fontFamily: active ? fonts.sansBold : fonts.sansSemiBold,
+                fontSize: wide ? 11 : 12.5,
+                color: active ? colors.primaryOnWhite : "#57534e",
+              }}
+            >
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function Chip({ label, active, onPress, wide }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        borderWidth: 1,
+        borderColor: active ? colors.primary : CHIP_BORDER,
+        backgroundColor: active ? colors.primary : "#fff",
+        borderRadius: 99,
+        paddingVertical: wide ? 6 : 7,
+        paddingHorizontal: wide ? 11 : 12,
+      }}
+    >
+      <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: active ? "#fff" : INK }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function TextField({ inputRef, style, ...rest }) {
+  return (
+    <TextInput
+      ref={inputRef}
+      placeholderTextColor={colors.hint}
+      style={[
+        {
+          borderWidth: 1,
+          borderColor: INPUT_BORDER,
+          borderRadius: 10,
+          backgroundColor: "#fff",
+          paddingHorizontal: 12,
+          fontFamily: fonts.sans,
+          fontSize: 13,
+          color: INK,
+        },
+        style,
+      ]}
+      {...rest}
+    />
+  );
+}
+
+/* -------------------------------------------------------------------- form */
+
 // initialType: which tab ("lift"/"warmup") the coach was on when they hit
-// "+ New Exercise" — only used for a brand-new exercise, an edit always
-// reflects the exercise's own stored type regardless of which tab it was
-// opened from. allExercises: the full current library, used for the
-// duplicate-name check.
-// initialName: pre-fills the Name field for a brand-new exercise — the
-// picker's "+ New" hands over whatever the coach had already typed into its
-// search box. submitLabel: overrides the save button's text ("Save & insert"
-// when the created exercise is going straight into a session).
+// "+ New" — only used for a brand-new exercise; an edit always reflects the
+// exercise's own stored type regardless of which tab it was opened from.
+// allExercises: the full current library, for the duplicate-name check.
+// initialName: pre-fills Name for a brand-new exercise — the builder
+// picker's "+ New" hands over whatever was already typed into its search.
+// submitLabel: overrides the save button ("Save & insert" when the created
+// exercise is going straight into a session).
+// onArchive: renders the archive action at the foot of an EDIT. Optional —
+// the builders and the review queue don't pass it, so they don't show it.
+// backLabel: what native's back link says, e.g. "Library".
 export function ExerciseFormModal({
   visible,
   initialExercise,
@@ -251,6 +246,8 @@ export function ExerciseFormModal({
   allExercises = [],
   usage,
   onUseExisting,
+  onArchive,
+  backLabel = "Back",
   onClose,
   onSubmit,
   onParentsChanged,
@@ -258,7 +255,7 @@ export function ExerciseFormModal({
   const [form, setForm] = useState(emptyForm(initialType));
   const [saving, setSaving] = useState(false);
   // Parents are loaded here rather than threaded in from all six call
-  // sites — it's 18 name-only rows, and every one of those hosts would
+  // sites — it's ~18 name-only rows, and every one of those hosts would
   // otherwise need its own fetch, its own state and its own refresh after
   // "+ New parent" for a list none of them otherwise care about.
   const [parents, setParents] = useState([]);
@@ -276,13 +273,18 @@ export function ExerciseFormModal({
   // switching from one parent to another re-pull the new parent's tags,
   // while never clobbering a set the coach has since edited by hand.
   const [taggedFromParent, setTaggedFromParent] = useState(false);
+  const insets = useSafeAreaInsets();
+  // Width, not Platform.OS: the installed PWA is a phone running the web
+  // build, so a coach there gets the mobile library and must get the mobile
+  // form to match. A tablet gets the drawer, which is what it has room for.
+  const { width } = useWindowDimensions();
+  const wide = width >= MOBILE_BREAKPOINT;
 
-  // Real risk here: Cues and Video link sit near the bottom of a dense
-  // form inside a fixed max-h-[85vh] Modal — no automatic keyboard
-  // avoidance in this app (see lib/scrollToKeyboard.js), so without this
-  // there's not always enough scrollable room below them to clear the
+  // Cues and Video sit near the bottom of a dense form and this app has no
+  // automatic keyboard avoidance (see lib/scrollToKeyboard.js), so without
+  // this there isn't always scrollable room below them to clear the
   // keyboard. A Modal presents above the tab bar entirely, so no
-  // tabBarHeight subtraction is needed here (unlike a Tabs.Screen).
+  // tabBarHeight subtraction is needed (unlike a Tabs.Screen).
   const scrollViewRef = useRef(null);
   const scrollOffsetRef = useRef(0);
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
@@ -331,6 +333,8 @@ export function ExerciseFormModal({
     type: form.type,
     excludeId: initialExercise?.id,
   });
+  const duplicate = !duplicateAccepted && likelyDuplicates.length > 0 ? likelyDuplicates[0].exercise : null;
+  const canSave = Boolean(form.name.trim()) && !noMuscleGroupSelected;
 
   // Every parent is offerable — a parent can't be a variation of another
   // parent, so unlike the old exercise-to-exercise version there is no
@@ -352,19 +356,18 @@ export function ExerciseFormModal({
     }));
   };
 
-  // Picking a parent pulls its muscle group and movement pattern down, so
-  // a variation doesn't have to be re-tagged by hand — a Goblet Squat is
-  // a squat hitting the same muscles as the Squat it hangs under, and
-  // that's true of nearly every variation. Both stay fully editable
-  // below, and anything the coach has already picked is left alone: we
-  // only fill a field that's empty, or one we filled ourselves from a
-  // previously-picked parent.
+  // Picking a parent pulls its muscle group and movement pattern down, so a
+  // variation doesn't have to be re-tagged by hand — a Goblet Squat is a
+  // squat hitting the same muscles as the Squat it hangs under, and that's
+  // true of nearly every variation. Both stay fully editable below, and
+  // anything the coach has already picked is left alone: we only fill a
+  // field that's empty, or one we filled ourselves from a previous parent.
   const handleParentChange = (parentId) => {
     const parent = parentOptions.find((ex) => ex.id === parentId);
     if (!parent) {
-      // Clearing the parent deliberately leaves the tags in place —
-      // wiping a set of muscle groups as a side effect of unlinking would
-      // be a surprise, and they're very likely still right.
+      // Clearing the parent deliberately leaves the tags in place — wiping
+      // a set of muscle groups as a side effect of unlinking would be a
+      // surprise, and they're very likely still right.
       setForm((f) => ({ ...f, parentId }));
       return;
     }
@@ -393,361 +396,424 @@ export function ExerciseFormModal({
     }
   };
 
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 items-center justify-center bg-black/40 px-4">
-        <View className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6">
-          {/* Sibling of the ScrollView, not inside it, so it stays pinned to
-              the card corner instead of scrolling away with the form. The
-              Cancel button at the bottom does the same thing — this is the
-              close affordance you expect to find without scrolling. */}
+  const handleArchive = async () => {
+    // The host owns the confirm and the usage-count sentence — it's the one
+    // that already knows how to count references and how to reload after.
+    const archived = await onArchive(initialExercise);
+    if (archived) onClose();
+  };
+
+  const title = initialExercise ? "Edit exercise" : "New exercise";
+  const subtitle = initialExercise
+    ? "Changes show everywhere this exercise is used."
+    : "Adding to the shared library — every program pulls from it.";
+  const saveLabel = saving ? "Saving…" : submitLabel ?? (initialExercise ? "Save changes" : "Add exercise");
+
+  /* ------------------------------------------------------------- the body */
+
+  const body = (
+    <>
+      {/* 1 — Identity. Type first because it decides which of the cards
+          below even exist, then the name, then the live duplicate check
+          right underneath the field that triggers it. */}
+      <Card wide={wide} style={wide ? { marginTop: 0 } : null}>
+        <FieldLabel style={{ marginBottom: 8 }}>Type</FieldLabel>
+        <SegmentTabs
+          options={[
+            { key: "lift", label: "Lift" },
+            { key: "warmup", label: "Warm-up" },
+          ]}
+          value={form.type}
+          onChange={(type) => setForm((f) => ({ ...f, type }))}
+        />
+
+        <FieldLabel style={{ marginTop: 14, marginBottom: 6 }}>Name</FieldLabel>
+        <TextField
+          inputRef={nameRef}
+          value={form.name}
+          onChangeText={(name) => setForm((f) => ({ ...f, name }))}
+          onFocus={() => scrollFieldIntoView(nameRef.current)}
+          placeholder="e.g. Goblet Squat"
+          style={{ height: 42, fontFamily: fonts.sansSemiBold, fontSize: 14 }}
+        />
+        {duplicate ? (
+          <View style={{ marginTop: 9, backgroundColor: TAN_BG, borderWidth: 1, borderColor: TAN_BORDER, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 13 }}>
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.primaryOnWhite }}>
+              Close to <Text style={{ fontFamily: fonts.sansBold }}>&ldquo;{duplicate.name}&rdquo;</Text>
+            </Text>
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11, color: TAN_TEXT, marginTop: 2 }}>
+              {(() => {
+                const uses = usage?.[duplicate.id];
+                const usePart = uses == null ? null : uses === 0 ? "never used" : `${uses} use${uses === 1 ? "" : "s"}`;
+                return [usePart, duplicate.video_url ? "video linked" : "no video"].filter(Boolean).join(" · ");
+              })()}
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 8 }}>
+              {onUseExisting ? (
+                <PressFade onPress={() => onUseExisting(duplicate)} hitSlop={6}>
+                  <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 12, color: colors.primaryOnWhite }}>
+                    Use that one
+                  </Text>
+                </PressFade>
+              ) : null}
+              <PressFade onPress={() => setDuplicateAccepted(true)} hitSlop={6}>
+                <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.muted }}>
+                  Keep both
+                </Text>
+              </PressFade>
+            </View>
+          </View>
+        ) : null}
+      </Card>
+
+      {/* 2 — Classification. Parent leads because picking one fills in the
+          two fields under it. */}
+      {isWarmup ? null : (
+        <Card wide={wide}>
+          <FieldLabel style={{ marginBottom: 6 }}>Parent movement · optional</FieldLabel>
+          <ParentPicker
+            wide={wide}
+            value={form.parentId}
+            options={parentOptions}
+            onChange={handleParentChange}
+            onCreate={handleCreateParent}
+          />
+          {/* Web keeps the hint; the native form drops it (and two other
+              explanatory sub-lines) as filler on a small screen. */}
+          {wide ? (
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 5 }}>
+              Files this under a movement in the builder sidebar.
+            </Text>
+          ) : null}
+          {taggedFromParent ? (
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: TAN_TEXT, marginTop: 7 }}>
+              Pulled from {parentOptions.find((ex) => ex.id === form.parentId)?.name ?? "the parent"} — change either below
+              if this variation differs.
+            </Text>
+          ) : null}
+
+          <FieldLabel style={{ marginTop: 16, marginBottom: 6 }}>Muscle group · all that apply</FieldLabel>
+          <MuscleGroupPicker selected={form.muscleGroups} onToggle={(value) => toggleInArray("muscleGroups", value)} />
+          {/* Only once there's a name to save — an empty form shouldn't
+              open with an error on it. */}
+          {noMuscleGroupSelected && form.name.trim() ? (
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: DANGER, marginTop: 6 }}>
+              Pick at least one muscle group.
+            </Text>
+          ) : null}
+
+          <FieldLabel style={{ marginTop: 16, marginBottom: 8 }}>Movement pattern · for the balance tally, optional</FieldLabel>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
+            <Chip
+              wide={wide}
+              label="none"
+              active={form.movementPatterns.length === 0}
+              onPress={() => {
+                setTaggedFromParent(false);
+                setForm((f) => ({ ...f, movementPatterns: [] }));
+              }}
+            />
+            {MOVEMENT_PATTERNS.map((mp) => (
+              <Chip
+                key={mp}
+                wide={wide}
+                label={mp.replace(/_/g, " ")}
+                active={form.movementPatterns.includes(mp)}
+                onPress={() => toggleInArray("movementPatterns", mp)}
+              />
+            ))}
+          </View>
+        </Card>
+      )}
+
+      {/* 3 — How it's logged. "Measured in" sits directly above the
+          prescription and renames the reps input, so you say what the
+          number is before you type it. */}
+      <Card wide={wide}>
+        {isWarmup ? null : (
+          // Side by side on web, where 460px fits both; stacked on a phone,
+          // where three "Measured in" tabs already fill the row.
+          <View style={wide ? { flexDirection: "row", gap: 14 } : null}>
+            <View style={wide ? { flex: 1 } : { marginBottom: 14 }}>
+              <FieldLabel style={{ marginBottom: 8 }}>Measured in</FieldLabel>
+              <OptionTabs
+                wide={wide}
+                options={REP_UNITS.map((u) => ({ key: u.key, label: u.label }))}
+                value={form.repUnit ?? DEFAULT_REP_UNIT}
+                onChange={(repUnit) => setForm((f) => ({ ...f, repUnit }))}
+              />
+            </View>
+            <View style={wide ? { flex: 1 } : { marginBottom: 14 }}>
+              <FieldLabel style={{ marginBottom: 8 }}>Weight</FieldLabel>
+              <OptionTabs
+                wide={wide}
+                options={[
+                  { key: true, label: "Track weight" },
+                  { key: false, label: "Reps only" },
+                ]}
+                value={form.tracksWeight}
+                onChange={(tracksWeight) => setForm((f) => ({ ...f, tracksWeight }))}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Native's Weight block already carries its own bottom margin. */}
+        <FieldLabel style={{ marginTop: isWarmup || !wide ? 0 : 16, marginBottom: 8 }}>Default prescription</FieldLabel>
+        <View style={{ flexDirection: "row", gap: 9 }}>
+          <View style={{ flex: 1 }}>
+            <Text
+              maxFontSizeMultiplier={1.1}
+              style={{ fontFamily: fonts.sansSemiBold, fontSize: 10, letterSpacing: 0.5, color: "#a8a29e", marginBottom: 4 }}
+            >
+              SETS
+            </Text>
+            <TextField
+              inputRef={defaultSetsRef}
+              value={form.defaultSets}
+              onChangeText={(defaultSets) => setForm((f) => ({ ...f, defaultSets }))}
+              onFocus={() => scrollFieldIntoView(defaultSetsRef.current)}
+              keyboardType="numeric"
+              inputAccessoryViewID={NUMERIC_DONE_ID}
+              style={{ height: wide ? 38 : 40, borderRadius: 9 }}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            {/* The reps label follows "Measured in" — REPS / TIME (SEC) /
+                DISTANCE (FT). A warm-up has no unit field, so it's reps. */}
+            <Text
+              maxFontSizeMultiplier={1.1}
+              numberOfLines={1}
+              style={{ fontFamily: fonts.sansSemiBold, fontSize: 10, letterSpacing: 0.5, color: "#a8a29e", marginBottom: 4 }}
+            >
+              {isWarmup ? "REPS" : repUnitHeader(form.repUnit ?? DEFAULT_REP_UNIT)}
+            </Text>
+            <TextField
+              inputRef={defaultRepsRef}
+              value={form.defaultReps}
+              onChangeText={(defaultReps) => setForm((f) => ({ ...f, defaultReps }))}
+              onFocus={() => scrollFieldIntoView(defaultRepsRef.current)}
+              style={{ height: wide ? 38 : 40, borderRadius: 9 }}
+            />
+          </View>
+        </View>
+        {wide ? (
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11, color: TAN_TEXT, marginTop: 6 }}>
+            Pre-fills when inserted into a {isWarmup ? "warm-up" : "session"} — still editable per session.
+          </Text>
+        ) : null}
+      </Card>
+
+      {/* 4 — Teaching. */}
+      <Card wide={wide}>
+        <FieldLabel style={{ marginBottom: 6 }}>Cues</FieldLabel>
+        <TextField
+          inputRef={cuesRef}
+          value={form.cues}
+          onChangeText={(cues) => setForm((f) => ({ ...f, cues }))}
+          onFocus={() => scrollFieldIntoView(cuesRef.current)}
+          multiline
+          numberOfLines={3}
+          inputAccessoryViewID={NUMERIC_DONE_ID}
+          placeholder="Short coaching cues, as they'd go on the printed sheet"
+          style={{ minHeight: 74, paddingTop: 10, paddingBottom: 10, textAlignVertical: "top", lineHeight: 19 }}
+        />
+
+        <FieldLabel style={{ marginTop: 14, marginBottom: 6 }}>Video link · YouTube / Vimeo / Instagram</FieldLabel>
+        <TextField
+          inputRef={videoUrlRef}
+          value={form.videoUrl}
+          onChangeText={(videoUrl) => setForm((f) => ({ ...f, videoUrl }))}
+          onFocus={() => scrollFieldIntoView(videoUrlRef.current)}
+          autoCapitalize="none"
+          keyboardType="url"
+          placeholder="https://"
+          style={{ height: wide ? 38 : 40, fontSize: 12.5, borderRadius: 9 }}
+        />
+        {videoUrlLooksOff ? (
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.muted, marginTop: 5 }}>
+            Doesn't look like a YouTube/Vimeo/Instagram link — that's fine if it's intentional.
+          </Text>
+        ) : null}
+      </Card>
+
+      {/* Said up front, not after the fact: a coach who doesn't know the
+          entry gets reviewed can't tell whether "needs review" on it later
+          means they did something wrong. */}
+      {goesToReview ? (
+        <View
+          style={{
+            backgroundColor: TAN_BG,
+            borderWidth: 1,
+            borderColor: TAN_BORDER_SOFT,
+            borderRadius: 10,
+            paddingVertical: 11,
+            paddingHorizontal: 13,
+            marginTop: wide ? 16 : 2,
+            marginBottom: wide ? 0 : 12,
+          }}
+        >
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: colors.primaryOnWhite, lineHeight: 18 }}>
+            This goes into the library straight away — use it in a program right now. A library reviewer will tidy up the
+            naming and tagging afterwards.
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Archive lives with the thing being archived, rather than as a link
+          in a list row next to Edit. Quiet, red, and last. */}
+      {initialExercise && onArchive ? (
+        <PressFade onPress={handleArchive} style={{ alignItems: "center", paddingTop: 14, paddingBottom: 2 }}>
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: DANGER }}>
+            Archive this exercise
+          </Text>
+        </PressFade>
+      ) : null}
+    </>
+  );
+
+  const footer = (
+    <View style={{ flexDirection: "row", gap: 9 }}>
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          alignItems: "center",
+          borderWidth: 1,
+          borderColor: CHIP_BORDER,
+          borderRadius: 10,
+          backgroundColor: "#fff",
+          paddingVertical: wide ? 11 : 12,
+        }}
+      >
+        <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>
+          Cancel
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={handleSubmit}
+        disabled={saving || !canSave}
+        style={{
+          flex: 2,
+          alignItems: "center",
+          borderRadius: 10,
+          backgroundColor: colors.primary,
+          paddingVertical: wide ? 11 : 12,
+          opacity: saving || !canSave ? 0.45 : 1,
+        }}
+      >
+        <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>
+          {saveLabel}
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  const scroller = (
+    <ScrollView
+      ref={scrollViewRef}
+      style={{ flex: 1 }}
+      contentContainerStyle={{
+        paddingHorizontal: wide ? 22 : 18,
+        paddingTop: wide ? 16 : 14,
+        paddingBottom: (wide ? 22 : 20) + occludedHeight,
+      }}
+      keyboardShouldPersistTaps="handled"
+      onScroll={(e) => {
+        scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+      }}
+      scrollEventThrottle={16}
+    >
+      {body}
+    </ScrollView>
+  );
+
+  /* ------------------------------------------------------------- the shell */
+
+  if (wide) {
+    return (
+      <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+        <View style={{ flex: 1, flexDirection: "row", justifyContent: "flex-end" }}>
           <Pressable
             onPress={onClose}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel="Close"
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(42,33,28,0.35)" }}
+          />
+          <View
             style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              zIndex: 10,
-              padding: 4,
-              // Opaque backdrop so it never reads as sitting on top of the
-              // form's own scrollbar/content behind it.
-              backgroundColor: "white",
-              borderRadius: 999,
+              width: 460,
+              maxWidth: "100%",
+              backgroundColor: colors.canvas,
+              borderLeftWidth: 1,
+              borderLeftColor: CARD_BORDER,
+              shadowColor: "#2a211c",
+              shadowOffset: { width: -16, height: 0 },
+              shadowOpacity: 0.18,
+              shadowRadius: 40,
             }}
           >
-            <Ionicons name="close" size={22} color="#a8a29e" />
-          </Pressable>
-          <ScrollView
-            ref={scrollViewRef}
-            contentContainerStyle={{ paddingBottom: occludedHeight }}
-            keyboardShouldPersistTaps="handled"
-            onScroll={(e) => {
-              scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
-            }}
-            scrollEventThrottle={16}
-          >
-            <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 19 }} className="mb-4">
-              {initialExercise ? "Edit exercise" : "New exercise"}
-            </Text>
-
-            <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-              Type
-            </Text>
-            <View className="mb-[18px] flex-row gap-2">
-              {[
-                { key: "lift", label: "Lift" },
-                { key: "warmup", label: "Warm-up" },
-              ].map((opt) => {
-                const active = form.type === opt.key;
-                return (
-                  <Pressable
-                    key={opt.key}
-                    onPress={() => setForm((f) => ({ ...f, type: opt.key }))}
-                    className="flex-1 items-center rounded-lg py-2.5"
-                    style={{ backgroundColor: active ? colors.primary : "white", borderWidth: active ? 0 : 1, borderColor: "#d9d4cd" }}
-                  >
-                    <Text style={{ fontFamily: active ? fonts.sansBold : fonts.sansSemiBold, color: active ? "white" : "#57534e", fontSize: 13 }}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-              Name
-            </Text>
-            <TextInput
-              ref={nameRef}
-              value={form.name}
-              onChangeText={(name) => setForm((f) => ({ ...f, name }))}
-              onFocus={() => scrollFieldIntoView(nameRef.current)}
-              className="rounded-lg border border-stone-300 px-4 py-3"
-              style={{ fontFamily: "Montserrat_400Regular" }}
-            />
-            {/* Live duplicate check, right under the name field rather
-                than after you submit (design_handoff_coach_web_v2, 1p).
-                It's actionable now: the old version listed the near-match
-                as grey text, which told you about the problem without
-                giving you either way out of it. */}
-            {likelyDuplicates.length > 0 && !duplicateAccepted ? (
-              <View
-                className="mb-4 mt-1 rounded-xl p-3.5"
-                style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#eddcd2" }}
-              >
-                <Text className="text-xs" style={{ fontFamily: fonts.sans, color: "#8a5140" }}>
-                  Close to{" "}
-                  <Text style={{ fontFamily: fonts.sansBold }}>&ldquo;{likelyDuplicates[0].exercise.name}&rdquo;</Text>
-                </Text>
-                <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
-                  {(() => {
-                    const match = likelyDuplicates[0].exercise;
-                    const uses = usage?.[match.id];
-                    const usePart = uses == null ? null : uses === 0 ? "never used" : `${uses} use${uses === 1 ? "" : "s"}`;
-                    return [usePart, match.video_url ? "video linked" : "no video"].filter(Boolean).join(" · ");
-                  })()}
-                </Text>
-                <View className="mt-2.5 flex-row items-center gap-4">
-                  {onUseExisting ? (
-                    <Pressable
-                      onPress={() => onUseExisting(likelyDuplicates[0].exercise)}
-                    >
-                      <Text className="text-xs" style={{ fontFamily: fonts.sansBold, color: colors.primaryOnWhite }}>
-                        Use that one
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                  <Pressable onPress={() => setDuplicateAccepted(true)}>
-                    <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: "#78716c" }}>
-                      Keep both
-                    </Text>
-                  </Pressable>
-                </View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 12,
+                paddingTop: 18,
+                paddingBottom: 14,
+                paddingHorizontal: 22,
+                borderBottomWidth: 1,
+                borderBottomColor: CARD_BORDER,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: fonts.display, fontSize: 21, color: colors.primary }}>{title}</Text>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: colors.muted, marginTop: 4 }}>{subtitle}</Text>
               </View>
-            ) : (
-              <View className="mb-4" />
-            )}
-
-            {isWarmup ? null : (
-              <>
-                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-                  Parent (optional — files this under a movement in the builder sidebar)
-                </Text>
-                <View className="mb-4">
-                  <ParentPicker
-                    value={form.parentId}
-                    options={parentOptions}
-                    onChange={handleParentChange}
-                    onCreate={handleCreateParent}
-                  />
-                </View>
-                {taggedFromParent ? (
-                  <Text className="-mt-3 mb-4 text-xs" style={{ fontFamily: fonts.sans, color: "#a8907f" }}>
-                    Muscle group and movement pattern pulled from{" "}
-                    {parentOptions.find((ex) => ex.id === form.parentId)?.name ?? "the parent"} — change either below if
-                    this variation differs.
-                  </Text>
-                ) : null}
-              </>
-            )}
-
-            <View className="mb-4 rounded-lg p-3.5" style={{ backgroundColor: "#faf8f6", borderWidth: 1, borderColor: "#ece7e1" }}>
-              <Text className="mb-2.5 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-                Default sets/reps
-              </Text>
-              <View className="flex-row gap-2.5">
-                <View className="flex-1">
-                  <Text className="mb-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                    Sets
-                  </Text>
-                  <TextInput
-                    ref={defaultSetsRef}
-                    value={form.defaultSets}
-                    onChangeText={(defaultSets) => setForm((f) => ({ ...f, defaultSets }))}
-                    onFocus={() => scrollFieldIntoView(defaultSetsRef.current)}
-                    keyboardType="numeric"
-                    inputAccessoryViewID={NUMERIC_DONE_ID}
-                    className="rounded-lg border border-stone-300 bg-white px-3 py-2.5"
-                    style={{ fontFamily: fonts.sans }}
-                  />
-                </View>
-                <View className="flex-1">
-                  <Text className="mb-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-                    Reps
-                  </Text>
-                  <TextInput
-                    ref={defaultRepsRef}
-                    value={form.defaultReps}
-                    onChangeText={(defaultReps) => setForm((f) => ({ ...f, defaultReps }))}
-                    onFocus={() => scrollFieldIntoView(defaultRepsRef.current)}
-                    className="rounded-lg border border-stone-300 bg-white px-3 py-2.5"
-                    style={{ fontFamily: fonts.sans }}
-                  />
-                </View>
-              </View>
-              <Text className="mt-2 text-xs" style={{ fontFamily: fonts.sans, color: "#a8907f" }}>
-                Pre-fills when inserted into a {isWarmup ? "warm-up" : "session"} — coach can still edit per session.
-              </Text>
-            </View>
-
-            {isWarmup ? null : (
-              <>
-                {/* What the count column actually holds. The member's logging
-                    card prints this once above the boxes, so a carry reads
-                    "TIME | LB" and needs no other explaining. Anything but Reps
-                    is left out of the gym's volume total — reps x weight is
-                    only arithmetic when the reps are reps. */}
-                <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-                  Measured in
-                </Text>
-                <View className="mb-4 flex-row gap-2">
-                  {REP_UNITS.map((opt) => {
-                    const active = (form.repUnit ?? DEFAULT_REP_UNIT) === opt.key;
-                    return (
-                      <Pressable
-                        key={opt.key}
-                        onPress={() => setForm((f) => ({ ...f, repUnit: opt.key }))}
-                        className="flex-1 items-center rounded-lg py-2.5"
-                        style={{ backgroundColor: active ? colors.primary : "white", borderWidth: active ? 0 : 1, borderColor: "#d9d4cd" }}
-                      >
-                        <Text
-                          numberOfLines={1}
-                          maxFontSizeMultiplier={1.1}
-                          style={{ fontFamily: active ? fonts.sansBold : fonts.sansSemiBold, color: active ? "white" : "#57534e", fontSize: 13 }}
-                        >
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
-                  Weight
-                </Text>
-                <View className="mb-4 flex-row gap-2">
-                  {[
-                    { key: true, label: "Track weight" },
-                    { key: false, label: "Reps only" },
-                  ].map((opt) => {
-                    const active = form.tracksWeight === opt.key;
-                    return (
-                      <Pressable
-                        key={String(opt.key)}
-                        onPress={() => setForm((f) => ({ ...f, tracksWeight: opt.key }))}
-                        className="flex-1 items-center rounded-lg py-2.5"
-                        style={{ backgroundColor: active ? colors.primary : "white", borderWidth: active ? 0 : 1, borderColor: "#d9d4cd" }}
-                      >
-                        <Text style={{ fontFamily: active ? fonts.sansBold : fonts.sansSemiBold, color: active ? "white" : "#57534e", fontSize: 13 }}>
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-                  Muscle group (select all that apply)
-                </Text>
-                <View className="mb-1">
-                  <MuscleGroupPicker
-                    selected={form.muscleGroups}
-                    onToggle={(value) => toggleInArray("muscleGroups", value)}
-                  />
-                </View>
-                {noMuscleGroupSelected ? (
-                  <Text className="mb-4 text-xs" style={{ fontFamily: fonts.sans, color: "#b23a22" }}>
-                    Pick at least one muscle group.
-                  </Text>
-                ) : (
-                  <View className="mb-4" />
-                )}
-
-                <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-                  Movement pattern (for the balance tally — optional, select all that apply)
-                </Text>
-                <View className="mb-4 flex-row flex-wrap gap-2">
-                  <Pressable
-                    onPress={() => {
-                      setTaggedFromParent(false);
-                      setForm((f) => ({ ...f, movementPatterns: [] }));
-                    }}
-                    className={`rounded-full border px-3.5 py-2.5 ${
-                      form.movementPatterns.length === 0 ? "border-primary bg-primary" : "border-stone-300"
-                    }`}
-                  >
-                    <Text
-                      className={form.movementPatterns.length === 0 ? "text-white" : "text-stone-700"}
-                      style={{ fontFamily: "Montserrat_400Regular" }}
-                    >
-                      none
-                    </Text>
-                  </Pressable>
-                  {MOVEMENT_PATTERNS.map((mp) => {
-                    const active = form.movementPatterns.includes(mp);
-                    return (
-                      <Pressable
-                        key={mp}
-                        onPress={() => toggleInArray("movementPatterns", mp)}
-                        className={`rounded-full border px-3.5 py-2.5 ${active ? "border-primary bg-primary" : "border-stone-300"}`}
-                      >
-                        <Text className={active ? "text-white" : "text-stone-700"} style={{ fontFamily: "Montserrat_400Regular" }}>
-                          {mp.replace("_", " ")}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-
-            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-              Cues
-            </Text>
-            <TextInput
-              ref={cuesRef}
-              value={form.cues}
-              onChangeText={(cues) => setForm((f) => ({ ...f, cues }))}
-              onFocus={() => scrollFieldIntoView(cuesRef.current)}
-              multiline
-              inputAccessoryViewID={NUMERIC_DONE_ID}
-              numberOfLines={3}
-              className="mb-4 rounded-lg border border-stone-300 px-4 py-3"
-              style={{ fontFamily: "Montserrat_400Regular", textAlignVertical: "top" }}
-            />
-
-            <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
-              Video link (YouTube / Vimeo / Instagram)
-            </Text>
-            <TextInput
-              ref={videoUrlRef}
-              value={form.videoUrl}
-              onChangeText={(videoUrl) => setForm((f) => ({ ...f, videoUrl }))}
-              onFocus={() => scrollFieldIntoView(videoUrlRef.current)}
-              autoCapitalize="none"
-              keyboardType="url"
-              className="mb-1 rounded-lg border border-stone-300 px-4 py-3"
-              style={{ fontFamily: "Montserrat_400Regular" }}
-            />
-            {videoUrlLooksOff ? (
-              <Text className="mb-4 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
-                Doesn't look like a YouTube/Vimeo/Instagram link — that's fine if it's intentional.
-              </Text>
-            ) : (
-              <View className="mb-4" />
-            )}
-
-            {/* Said up front, not after the fact: a coach who doesn't know
-                the entry gets reviewed can't tell whether "needs review" on
-                it later means they did something wrong. */}
-            {goesToReview ? (
-              <View className="mb-4 rounded-lg px-4 py-3" style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#f0ddd2" }}>
-                <Text className="text-xs" style={{ fontFamily: "Montserrat_400Regular", color: "#8a5140", lineHeight: 17 }}>
-                  This goes into the library straight away — use it in a program right now. A library reviewer will tidy
-                  up the naming and tagging afterwards.
-                </Text>
-              </View>
-            ) : null}
-
-            <View className="flex-row justify-end gap-3">
-              <Pressable onPress={onClose} className="rounded-lg border border-stone-300 px-4 py-3">
-                <Text style={{ fontFamily: "Montserrat_500Medium" }}>Cancel</Text>
-              </Pressable>
               <Pressable
-                onPress={handleSubmit}
-                disabled={saving || !form.name || noMuscleGroupSelected} style={{ opacity: saving || !form.name || noMuscleGroupSelected ? 0.5 : 1 }}
-                className="rounded-lg bg-primary px-4 py-3"
+                onPress={onClose}
+                accessibilityLabel="Close"
+                hitSlop={8}
+                style={{ width: 26, height: 26, borderRadius: 99, backgroundColor: SEGMENT_TRACK, alignItems: "center", justifyContent: "center" }}
               >
-                <Text className="text-white" style={{ fontFamily: "Montserrat_600SemiBold" }}>
-                  {saving ? "Saving…" : submitLabel ?? "Save"}
-                </Text>
+                <Ionicons name="close" size={14} color="#78716c" />
               </Pressable>
             </View>
-          </ScrollView>
+            {scroller}
+            <View style={{ paddingTop: 12, paddingBottom: 16, paddingHorizontal: 22, borderTopWidth: 1, borderTopColor: CARD_BORDER }}>
+              {footer}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.canvas, paddingTop: insets.top }}>
+        <View style={{ paddingTop: 16, paddingBottom: 12, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: CARD_BORDER }}>
+          <PressFade onPress={onClose} hitSlop={10} style={{ alignSelf: "flex-start", paddingVertical: 2 }}>
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+              ‹ {backLabel}
+            </Text>
+          </PressFade>
+          <Text style={{ fontFamily: fonts.display, fontSize: 24, color: INK, marginTop: 5 }}>{title}</Text>
+        </View>
+        {scroller}
+        <View
+          style={{
+            paddingTop: 12,
+            paddingBottom: 12 + insets.bottom,
+            paddingHorizontal: 18,
+            borderTopWidth: 1,
+            borderTopColor: CARD_BORDER,
+            backgroundColor: colors.canvas,
+          }}
+        >
+          {footer}
         </View>
       </View>
-      <KeyboardDoneButton />
+      {Platform.OS === "web" ? null : <KeyboardDoneButton />}
     </Modal>
   );
 }

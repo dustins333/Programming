@@ -4129,6 +4129,110 @@ limitation. Worth Terra's pass: stage a group end to end, reopen it with
 Edit, and confirm the review deck's pages carry real blocks.
 
 
+## Exercise Library redesign — filters out of the way, form into four cards (2026-08-28)
+
+A handoff (`design_handoff_exercise_library_v1/` — README + two `.dc.html`
+prototypes + 8 screenshots) redesigns both library screens and the exercise
+form. Same "the HTML is a reference, never copied in" rule as every prior
+handoff. **No schema change, no migration, no new data call** — every value
+already had a helper behind it.
+
+**Where the handoff was**: inside `SPC Coach Overview Redesign.zip` at the repo
+root, which is misnamed — it contains `design_handoff_exercise_library_v1/`,
+nothing SPC. Worth checking a zip's contents rather than its name.
+
+**Both screens opened with their filters instead of their content.** Mobile
+stacked a segment, an archived toggle and eight muscle pills — three rows of
+chrome before the first name. Web was worse: one flex-wrap row of ~20 chips
+(All + 8 patterns + Warm-up + 8 muscle groups + 3 flags + Archived) that
+wrapped to three lines, then three stacked full-width banners, so the table
+started below the fold.
+
+- **Web** now has three controls with three different jobs: a **segmented
+  control** (Lifts / Warm-ups / Archived — the view you're in, not a filter),
+  **two counted dropdowns** rendered only on the Lifts segment because neither
+  applies to warm-ups, and three right-aligned **NEEDS ATTENTION** toggles.
+  Attention is single-select (tapping the active one clears it), matching the
+  prototype's own `flag: null` — a combinable set can't be read back off the
+  screen. Three doorway banners became one row of three equal cards. Table
+  columns and USED/VIDEO semantics are untouched.
+- **Mobile** (`components/coach/ExerciseLibraryMobile.js`, new) is title +
+  `+ New` → count line → segmented control → search + Filter → A–Z card list.
+  Muscle groups and "Show archived" moved into a **filter bottom sheet** with
+  live counts, and applied filters echo back as dismissable espresso tokens —
+  the same pattern `SpcRosterMobile` already uses. Sheet counts are computed
+  against the SEARCHED set, or it offers "Chest 5" and then shows one row.
+
+**`index.web.js` had no mobile branch, and that was the real gap the handoff
+exposed.** In practice everyone is on the installed PWA ([[project_everyone_is_on_the_pwa]]),
+so a coach at phone width was getting the desktop table, and the new mobile
+design would have been unreachable in production. It branches at
+`MOBILE_BREAKPOINT` now onto the shared component, two components with a
+branch between them — never importing the native sibling from the web file,
+which self-resolves and crash-loops (the documented SPC-roster trap).
+
+### The form: four cards, and the shell picks by WIDTH not platform
+
+`components/ExerciseFormModal.js` keeps its name and API — all six call sites
+(both library screens, the review queue, three web builders) needed **zero**
+changes, because every new prop is optional. Inside, the ten fields are
+grouped in the order a coach answers them: Identity (Type → Name → live
+duplicate check) · Classification (Parent → Muscle → Pattern) · How it's
+logged (Measured in → Weight → Default prescription) · Teaching (Cues →
+Video). **"Measured in" now sits directly above the prescription and renames
+the reps input** (REPS / TIME / DISTANCE) — previously you set the number
+before saying what the number was. Archive moved off the list row to the foot
+of the form as a quiet red action, via a new optional `onArchive` that returns
+whether it archived so the form knows to close.
+
+Extracted to `components/exercise/`: `tokens.js` (the handoff's surface greys,
+which were repeated as literals across three files), `MuscleGroupPicker.js`,
+and `ParentPicker.js` — the last replaces the raw web `<select>`, which
+couldn't carry "+ New parent" inside the list it belongs to, so that action sat
+underneath reading as unrelated to the field.
+
+**The shell branches on width, not `Platform.OS`, and that distinction is the
+one worth remembering.** The handoff says "mobile full-screen, web drawer",
+which is true of the design and wrong as an implementation axis: the installed
+PWA is a phone running the *web* build, so keying it to platform handed a coach
+the new mobile library and then a 460px desktop drawer to edit from — caught by
+actually loading the page at 390px, not by reading the code. `wide = width >=
+MOBILE_BREAKPOINT` now drives the shell, the card-vs-continuous-column
+grouping, and the parent picker's panel-vs-sheet. A tablet gets the drawer,
+which is what it has room for.
+
+**One measured fix**: "Track weight" clipped to "Track wei…" in the drawer's
+Measured in / Weight row. The mock's 1 : 0.8 split was never going to hold —
+measured in the browser, the two groups need near-identical width ("Distance"
+51px × 3, "Track weight" 76px × 2). Equal flex plus a slightly tighter gap and
+11px labels clears both, confirmed by reading `scrollWidth` vs the rendered box
+for all five labels rather than eyeballing a screenshot.
+
+**Deliberately not done**: the EQUIPMENT column the mock draws — there is no
+equipment field on `programming.exercises`, and rendering an empty column for
+every entry is worse than omitting it (same call as the previous pass). The
+mobile filter sheet lists all eight muscle groups including zero counts, per
+the handoff, where the web dropdown omits empties — the sheet's count is
+information on a fixed list, the dropdown's absence is a filter that can only
+ever show an empty table.
+
+**Verification**: `npm run build` (export + route check) clean, a Babel parse +
+unresolved-identifier + unused-import pass over all seven touched files, and
+both screens driven for real in a browser at 1360px and 390px through a
+throwaway `app/zz-exharness.js` route. Exercised: every segment, both
+dropdowns (Legs → exactly the 5 legs lifts), the attention toggles, the filter
+sheet end to end (footer "Show 5 exercises" then the list matching), the
+duplicate banner with its usage meta, save gating and its 45% dim, the parent
+panel and the parent bottom sheet, parent-pull leaving a hand-picked muscle
+group alone, type-switching hiding what doesn't apply, and the reps label
+following the unit (REPS → DISTANCE). Fixture data was supplied by temporarily
+stubbing `listExercises`/`listExerciseUsageCounts`/`listExerciseParents`, both
+files backed up first and restored **byte-identical** afterwards (md5 checked)
+— worth reusing, it verifies the real screens rather than isolated copies.
+**Not verified**: anything behind a real login, and none of it on native
+(standing limitation). Worth Terra's pass on a real archive, a real "+ New
+parent", and the three builders' "+ New" now opening as a drawer.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
