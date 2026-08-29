@@ -11,6 +11,7 @@
 //   supabase functions deploy request-registration-code --no-verify-jwt
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { findContactIdByEmail, ghlHeaders, resolveMemberByEmail } from "../_shared/ghlContacts.ts";
 
 const CODE_TTL_MINUTES = 10;
 const RESEND_COOLDOWN_SECONDS = 45;
@@ -29,14 +30,6 @@ function generateCode() {
 
 const GHL_BASE = "https://services.leadconnectorhq.com";
 
-function ghlHeaders() {
-  return {
-    Authorization: `Bearer ${Deno.env.get("GHL_API_KEY")}`,
-    Version: "2021-07-28",
-    "Content-Type": "application/json",
-  };
-}
-
 function sendCodeSms(contactId: string, code: string) {
   return fetch(`${GHL_BASE}/conversations/messages`, {
     method: "POST",
@@ -48,33 +41,6 @@ function sendCodeSms(contactId: string, code: string) {
       message: `Your Kova Strength verification code is ${code}. It expires in ${CODE_TTL_MINUTES} minutes.`,
     }),
   });
-}
-
-// Merging two GHL contacts deletes the losing one, but Kova keeps the id it
-// imported — so the send fails with "contact not found" and the member just
-// never gets a text (they only find out by telling a coach). Look the
-// survivor up by email so the stored id can repair itself.
-async function findContactIdByEmail(email: string): Promise<string | null> {
-  const url = `${GHL_BASE}/contacts/?locationId=${Deno.env.get("GHL_LOCATION_ID")}&query=${encodeURIComponent(email)}`;
-  const res = await fetch(url, { headers: ghlHeaders() });
-  if (!res.ok) {
-    console.error("GHL contact lookup failed:", res.status, await res.text());
-    return null;
-  }
-  const contacts = (await res.json())?.contacts ?? [];
-  // `query` is a fuzzy search, so a partial hit can be a different person
-  // entirely — require an exact email match before trusting anything.
-  const exact = contacts.filter(
-    (c: Record<string, unknown>) =>
-      typeof c?.email === "string" && c.email.toLowerCase() === email.toLowerCase(),
-  );
-  // Never guess between two contacts sharing an email: the wrong pick texts
-  // a verification code to the wrong phone. Leave it for a human instead.
-  if (exact.length !== 1) {
-    console.error(`GHL contact heal: ${exact.length} exact matches for the email, not healing`);
-    return null;
-  }
-  return typeof exact[0].id === "string" ? exact[0].id : null;
 }
 
 Deno.serve(async (req) => {
@@ -102,12 +68,7 @@ Deno.serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data: user } = await adminClient
-    .schema("core")
-    .from("users")
-    .select("id, email, ghl_contact_id")
-    .ilike("email", email)
-    .maybeSingle();
+  const user = await resolveMemberByEmail(adminClient, email);
 
   // Diagnostic only — never logs the code itself, just enough to tell
   // "wrong email typed" apart from "right email, GHL send failed" without

@@ -7,6 +7,7 @@
 //   supabase functions deploy verify-registration-code --no-verify-jwt
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveMemberByEmail } from "../_shared/ghlContacts.ts";
 
 const MAX_ATTEMPTS = 5;
 
@@ -48,7 +49,9 @@ Deno.serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data: user } = await adminClient.schema("core").from("users").select("id").ilike("email", email).maybeSingle();
+  // Same resolver request-registration-code uses, so an address that could
+  // request a code can always verify it too.
+  const user = await resolveMemberByEmail(adminClient, email);
   if (!user) return invalidResponse;
 
   const { data: pending } = await adminClient
