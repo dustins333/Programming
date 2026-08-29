@@ -23,6 +23,7 @@ import { KeyboardDebugOverlay } from "../components/KeyboardDebugOverlay";
 import { ToastHost } from "../components/ToastHost";
 import { AppUpdateChecker } from "../components/AppUpdateChecker";
 import { WebPushBanner } from "../components/WebPushBanner";
+import { AppErrorBoundary } from "../components/AppErrorBoundary";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -53,17 +54,19 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
-        <AuthProvider>
-          <PushRegistrar />
-          <PushDeepLink />
-          <WebPushBanner />
-          <WebKeyboardViewport />
-          <KeyboardDebugOverlay />
-          <AppUpdateChecker />
-          <Slot />
-          <KeyboardDoneButton />
-          <ToastHost />
-        </AuthProvider>
+        <AppErrorBoundary>
+          <AuthProvider>
+            <PushRegistrar />
+            <PushDeepLink />
+            <WebPushBanner />
+            <WebKeyboardViewport />
+            <KeyboardDebugOverlay />
+            <AppUpdateChecker />
+            <Slot />
+            <KeyboardDoneButton />
+            <ToastHost />
+          </AuthProvider>
+        </AppErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
