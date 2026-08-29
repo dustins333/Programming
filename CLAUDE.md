@@ -4369,6 +4369,100 @@ for that via a temporary edit to `spcBlocks.js`, restored afterwards and
 (weeks down the side, stacked bars, today line, four states), then
 `spc_workouts.scheduled_week` plus the six read sites and the member mirror.
 
+## A blank screen can be diagnosed now, and the first one it caught (2026-08-29)
+
+A client's SPC session went blank on her phone and stayed blank. Every
+server-side layer checked out — one row everywhere (no duplicates left by a
+GHL repair the day before), a well-formed block, live schema matching the
+deployed bundle, all six member SPC embeds returning 200, and RLS as her
+showing all 6 exercises and 6 warm-ups. No member file differed from HEAD,
+so she was running the same code as clients who were fine. **That
+investigation cost most of a morning and could not have concluded anything,
+because the app had no error boundary at all: an uncaught render error
+painted a silent white screen with no message and nothing logged.**
+
+**`components/AppErrorBoundary.js`** now sits inside `SafeAreaProvider` (so
+the fallback still has the contexts it needs) but around `AuthProvider` (so
+an auth-layer crash is caught too). It shows the screen path, the error, and
+the innermost few component-stack frames with their bundler URLs stripped,
+plus a reload button — something a member can screenshot. **The path is
+there because the production bundle minifies most route components away**
+(`MyFitness` and `MyWeek` both become single letters, checked against the
+real production bundle), so the stack alone can't say which screen she was
+on.
+
+**`programming.client_errors`** (0100) is the same thing for the coach, who
+is rarely standing next to whoever is stuck. Deliberately no in-app view —
+Terra asks directly. Three of its columns were chosen from what that
+morning's investigation actually needed: `user_agent` ("is it her phone?" is
+the first question about any single-client report), `app_build` (a stale
+cached bundle is a real recurring cause of a blank screen), and `platform`.
+Reporting is best-effort and never awaited, so a reporting failure can't
+compound the crash.
+
+**It caught a real bug the same day, from a different client.** Ania
+Krzywicki, Chrome 152 / Android 10, React error #185 ("Maximum update depth
+exceeded") with `textarea` innermost, four times in a minute.
+
+**The bug: `ExerciseCard`'s lift-notes field auto-grew by measuring itself.**
+`onContentSizeChange` set `noteHeight`, and `noteHeight` set the box's
+height. On web that can feed back, because the box is `overflow: hidden`
+with an explicit height, so the measured content size is the height just set
+rather than the text's own. **This is the third time this codebase has met
+this hazard** — `CommentThread`'s `NoteField` says it outright ("an
+auto-growing version was tried and feeds back on itself"), and `GamePlan`
+was switched to native-only after watching a box walk 659 → 642 → 516.
+`ExerciseCard` was the last member-facing field still doing it, on the
+screen members are in every day. **The rule, now settled three times over:
+auto-grow a multiline TextInput on native only; on web give it a fixed
+height and let it scroll.** Never derive an element's height from a
+measurement of that same element on web.
+
+**Honest limit on the mechanism**: the first explanation written for this —
+a 2px-per-pass runaway — was tested and is WRONG. Reproducing the pre-fix
+field in isolation, react-native-web fires `onContentSizeChange` only on
+mount and on typing (not continuously; there is no ResizeObserver in
+`TextInput/index.js`), and it converged every time: 62 → height 64, stop;
+nudged taller, 66 → height 68, stop, including through six keystrokes. **The
+loop could not be reproduced here at all.** RNW re-fires only when the
+measured value *differs* from the last (`newHeight !== dimensions.current
+.height`), so something about her rendering — Android font scaling, device
+pixel ratio, or how Chrome 152 rounds `scrollHeight` — makes each
+measurement come back different and it never settles. That is inference, not
+proof. The fix does not depend on it: on web the measurement no longer feeds
+the height at all, so no variant of the loop can exist.
+
+**Whether it was ALSO the original client's bug is unresolved, and an earlier
+version of this note wrongly claimed it was.** Only Ania confirmed a fix. The
+first client resumed logging at 08:43 Boise — twelve minutes after her coach
+reported the blank screen, and well before any member-code fix existed (the
+only deploy by then changed no member code at all) — then logged 15 sets
+steadily through 09:24. So her screen cleared on its own, and **the most
+likely explanation is the boring one: a new bundle hash replaced the stale
+cached copy her home-screen PWA was holding.** She has zero crash reports,
+though she was on an older bundle with no reporting for part of it.
+
+The notes loop remains a plausible candidate for her too — on My Fitness
+every lift starts expanded (`SessionLogger` seeds `expandedIds` with every
+exercise in "session" layout), so a 6-lift SPC session paints six of these
+notes boxes the instant it opens, six chances to trip with no interaction,
+which matches "opens her session and it goes blank" exactly. But the timing
+argues against it and nothing confirms it. **Two clients, two blank screens,
+and only one of them has an established cause.**
+
+**Deliberately left alone**: `HubClientColumn` writes to a ref off a
+ScrollView, whose content size is genuinely independent of its own height;
+`MilestoneFormModal` (coach) has a similar auto-grow but no `overflow:
+hidden`, so it lacks what drives the loop, and nothing has been reported.
+Worth fixing if either ever misbehaves.
+
+**Worth remembering about the reporting itself**: a crash logged `screen: /`
+while the member's screenshot said `/plan` — not a contradiction. Tabs keep
+screens mounted, so a still-mounted My Fitness card kept re-measuring while
+the URL read My Week. And a *missing* row is information too: if a bundle
+fails to load at all, nothing in JS can catch it, so "reports blank, no row"
+points at the device or a stale cached copy rather than the code.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -4443,6 +4537,7 @@ sections; next number after 0080 is 0081.)
 - `0098_hub_startable_session_counts.sql` — **run**, verified live 2026-08-28 (dry-run in a rolled-back transaction first, then applied + `NOTIFY pgrst`, with the output read back as a real coach). Adds `loggedCount` to each session object `programming.hub_startable_clients()` returns: how many weeks of the current block that session number has a completion. Purely additive — every existing caller is unaffected, and a caller that doesn't read it is untouched. Backs the count circle on the hub pickers' session rows.
 - `0096_event_publish_at.sql` — **run**, verified live 2026-08-27 (column, index, all six member-facing policies carrying the new gate, and zero existing rows affected; plus a 6-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.events.publish_at` so an event can be scheduled to go live at a set day and time. Nullable, null = live as soon as it's published, so nothing existing changes. **Do not reorder the policy block** — the gate is intentionally inline in all six policies rather than in a helper, since a function reading `programming.events` would recurse inside that table's own policy. See "Events: one event opens straight in" above.
 - `0099_spc_status_derived.sql` — **run**, verified live 2026-08-29 (73 active / 3 paused, CHECK narrowed, default `'active'`, and the shipped `deriveSpcState()` re-run against real data with matching results). Collapses `programming.spc_clients.status` from the five printed-method values to `('active','paused')`; everything else about a client's state is computed by `lib/programming/spcState.js`. **Order is load-bearing — drop the constraint, then update, then re-add**: the new value is illegal under the old CHECK and the old values are illegal under the new one, so either other order fails (a dry run caught this). Requires redeploying `scan-spc-alerts` FIRST, which used to write `'new_program_asap'`. Rollback data is in `programming.zz_spc_status_backup_0099`.
+- `0100_client_errors.sql` — **run**, verified live 2026-08-29 (9 columns, 3 policies, RLS on, 3 indexes, PostgREST 200; plus five RLS assertions in a rolled-back transaction, then the same re-run against the live table and rolled back, leaving no rows). Adds `programming.client_errors` — crash reports from the app. `user_id` references **auth.users, NOT core.users**, on purpose: a member can have an auth row with no profile row (a failed GHL import leaves exactly that state) and that broken account is precisely the one whose crash is worth having. It defaults to `auth.uid()` so the client never supplies it and can't file under someone else's name. Insert is granted to `authenticated` only, never `anon` — an unauthenticated write is a public endpoint anyone can fill; the cost is that a crash before a session exists goes unrecorded. No member SELECT policy at all, and no update policy for anyone.
 - `0095_exercise_parents.sql` — **run**, verified live 2026-08-27 (18 parent records, 66 exercises grouped, 0 variations lost, 0 duplicate names, plus an 11-assertion impersonation test in a rolled-back transaction as a reviewer, a non-reviewer coach and a member). Adds `programming.exercise_parents` and `exercises.parent_id`; `exercises.parent_exercise_id` is left populated but unread as the rollback path. See "A parent is its own record now" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
 - `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.
