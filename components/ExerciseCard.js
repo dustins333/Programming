@@ -541,7 +541,12 @@ export function ExerciseCard({
   // Two lines before anything is typed — one line read as an afterthought
   // next to the set boxes, and most notes run past one line anyway.
   const NOTE_MIN_HEIGHT = 64;
+  // Web can't auto-grow (see the note on onContentSizeChange below), so it
+  // opens taller: nothing is going to grow it, and a two-line box you can't
+  // expand reads as broken the moment a note runs past it.
+  const NOTE_WEB_HEIGHT = 92;
   const noteChrome = Platform.OS === "web" ? 2 : 22;
+  const noteIsWeb = Platform.OS === "web";
   // True while the member is mid-edit, so an incoming refetch can't pull the
   // saved text back over what she's currently typing.
   const noteDirtyRef = useRef(false);
@@ -1183,7 +1188,23 @@ export function ExerciseCard({
                 }}
                 onFocus={() => scrollFieldIntoView(cardRef.current)}
                 multiline
-                onContentSizeChange={(e) => setNoteHeight(e.nativeEvent.contentSize.height)}
+                // NATIVE ONLY, and this is the third time this codebase has
+                // had to learn it — see CommentThread's NoteField and
+                // GamePlan, which both auto-grow on native and stay fixed on
+                // web for exactly this reason. onContentSizeChange measures
+                // the element whose height it just set, so on web it feeds
+                // back on itself: the box is `overflow: hidden` with an
+                // explicit height, which makes the measured size the height
+                // we set rather than the text's own, and each pass adds
+                // noteChrome again. Most browsers happen to fire it once and
+                // stop; a member on Chrome 152 / Android 10 hit one that
+                // re-fires, so it climbed 2px a pass until React gave up with
+                // "Maximum update depth exceeded" (#185) and the whole screen
+                // went blank. Native reports the text's own size and cannot
+                // feed back, so it keeps growing there.
+                onContentSizeChange={
+                  noteIsWeb ? undefined : (e) => setNoteHeight(e.nativeEvent.contentSize.height)
+                }
                 placeholder="Notes"
                 placeholderTextColor={colors.hint}
                 inputAccessoryViewID={NUMERIC_DONE_ID}
@@ -1191,12 +1212,17 @@ export function ExerciseCard({
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  minHeight: NOTE_MIN_HEIGHT,
-                  height: noteHeight ? Math.max(NOTE_MIN_HEIGHT, noteHeight + noteChrome) : undefined,
-                  // The box always grows to fit its text, so there is never
-                  // anything to scroll to — and without this the web build
-                  // renders a scroller inside it regardless.
-                  overflow: "hidden",
+                  minHeight: noteIsWeb ? NOTE_WEB_HEIGHT : NOTE_MIN_HEIGHT,
+                  height:
+                    !noteIsWeb && noteHeight
+                      ? Math.max(NOTE_MIN_HEIGHT, noteHeight + noteChrome)
+                      : undefined,
+                  // Native grows to fit its text, so there is never anything
+                  // to scroll to and a scroller would only get in the way.
+                  // Web no longer grows, so it needs the scrollbar back —
+                  // hiding it there would clip a long note with no way to
+                  // reach the rest of it.
+                  overflow: noteIsWeb ? undefined : "hidden",
                   borderWidth: 1,
                   borderColor: INPUT_BORDER,
                   borderRadius: 10,
