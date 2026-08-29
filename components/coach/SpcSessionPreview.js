@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, Platform, Modal } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, ScrollView, ActivityIndicator, Platform, Modal, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -11,7 +11,6 @@ import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
 import { STATUS_LABELS, STATUS_TONES } from "../../lib/programming/spcStatus";
 import { formatDateShort } from "../../lib/formatDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
-import { formatTimeLabel } from "../../lib/dateTimeOptions";
 import { fonts, colors, statusColors, type } from "../../lib/theme";
 
 // The printed SPC sheet, on a phone (design_handoff_spc_roster_v1, screen 3).
@@ -355,125 +354,26 @@ function LiftCard({ lift, weekNumbers, currentWeek, selectedWeek, onSelectWeek }
 
 /* ------------------------------------------------------------------ sheet */
 
-/* ------------------------------------------------------------ staging bar */
-
-// Docked, not a button in the footer row: the footer scrolls away on a long
-// session and this has to stay reachable wherever she has read to. Espresso
-// so it reads as the same object as the roster's tray, which it is.
-function StagingBar({ staging, sessionNumber, stagedSessionNumber, unpublishedWeek, onAdd, onRemove }) {
-  const insets = useSafeAreaInsets();
-  const count = staging?.clients?.length ?? 0;
-  const stagedHere = stagedSessionNumber === sessionNumber;
-  const stagedElsewhere = stagedSessionNumber != null && !stagedHere;
-  const full = count >= 4 && stagedSessionNumber == null;
-
-  const label = stagedHere
-    ? `Session ${sessionNumber} staged`
-    : stagedElsewhere
-    ? `Session ${stagedSessionNumber} staged`
-    : full
-    ? "That's four already"
-    : `${formatTimeLabel(staging?.scheduled_time)} · ${count} staged`;
-
-  return (
-    <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: insets.bottom + 12, backgroundColor: colors.canvas }}>
-      {/* Staging an unpublished week is allowed on purpose — a coach often
-          stages the night before and publishes on the way out — but it is
-          the single thing that makes the board refuse at 5am, so it is said
-          here, on the staged card, and again on the wall before Start. */}
-      {unpublishedWeek != null ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 7,
-            backgroundColor: "#fdf1e7",
-            borderWidth: 1,
-            borderColor: "#eed6bd",
-            borderRadius: 10,
-            paddingHorizontal: 11,
-            paddingVertical: 8,
-            marginBottom: 8,
-          }}
-        >
-          <Ionicons name="alert-circle-outline" size={14} color="#8a5a2e" />
-          <Text maxFontSizeMultiplier={1.15} style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 12, lineHeight: 16, color: "#8a5a2e" }}>
-            {`Week ${unpublishedWeek} is still a draft — publish it or the board can't start her.`}
-          </Text>
-        </View>
-      ) : null}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          backgroundColor: STAGE_ESPRESSO,
-          borderRadius: 14,
-          paddingVertical: 11,
-          paddingHorizontal: 14,
-        }}
-      >
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
-            maxFontSizeMultiplier={1.1}
-            style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.8, color: STAGE_ESPRESSO_SUB, textTransform: "uppercase" }}
-          >
-            {stagedHere ? "On this session" : "Adding to"}
-          </Text>
-          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ marginTop: 1, fontFamily: fonts.sansBold, fontSize: 14, color: STAGE_ESPRESSO_TEXT }}>
-            {label}
-          </Text>
-        </View>
-
-        {stagedHere ? (
-          <PressFade
-            onPress={onRemove}
-            style={{ borderRadius: 999, borderWidth: 1, borderColor: "#5c4a41", paddingHorizontal: 16, paddingVertical: 9 }}
-          >
-            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: STAGE_ESPRESSO_TEXT }}>
-              Remove
-            </Text>
-          </PressFade>
-        ) : (
-          <PressFade
-            onPress={onAdd}
-            disabled={full}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 5,
-              borderRadius: 999,
-              backgroundColor: colors.primary,
-              paddingHorizontal: 15,
-              paddingVertical: 9,
-              opacity: full ? 0.45 : 1,
-            }}
-          >
-            <Ionicons name="add" size={15} color="#fff" />
-            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>
-              {stagedElsewhere ? `Switch to ${sessionNumber}` : `Session ${sessionNumber}`}
-            </Text>
-          </PressFade>
-        )}
-      </View>
-    </View>
-  );
-}
-
-export function SpcSessionPreview({
+// ONE client's block, as its own screen-filling column. Extracted from the
+// modal so the review deck below can lay several of them side by side and let
+// a coach swipe between clients — reviewing a staged group is four of these,
+// not four separate openings.
+function SpcSessionPreviewPage({
   client,
-  visible,
   onClose,
-  // Staging (0090). Null unless the coach is mid-build on the roster; when
-  // set, this sheet grows the one control that makes staging work — you pick
-  // WHICH session here, so this is the only screen that can honestly say what
-  // is being added.
-  staging = null,
-  stagedSessionNumber = null,
-  onStage,
-  onUnstage,
+  // Off in the deck, where one shared bar closes the whole thing rather than
+  // every page carrying its own.
+  showClose = true,
+  // Pin the page to ONE session and drop the session tabs with it. The deck
+  // passes the session she is actually staged for: a staged group has already
+  // decided what she is doing, so offering the week's other sessions there is
+  // showing a choice that was made last night. The roster passes nothing and
+  // keeps the tabs, because browsing IS what that screen is for.
+  onlySessionNumber = null,
+  // The date this will actually run, when that isn't today — a group staged
+  // for tomorrow can sit the other side of a block week boundary.
+  targetDate = null,
 }) {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   // `ready` is separate from `data` because getSpcSessionPreview returns
   // null for a client with no block at all — testing `!data` alone spins
@@ -500,16 +400,19 @@ export function SpcSessionPreview({
   }, [userId]);
 
   useEffect(() => {
-    if (!visible) return;
     setSessionNumber(null);
     setSelectedWeek(null);
     load();
-  }, [visible, load]);
+  }, [load]);
 
   const session = useMemo(() => {
     if (!data?.sessions?.length) return null;
+    // No fallback when pinned. Falling through to the first session would
+    // quietly show a different workout than the one the card promised, which
+    // is worse than saying it isn't there.
+    if (onlySessionNumber != null) return data.sessions.find((s) => s.sessionNumber === onlySessionNumber) ?? null;
     return data.sessions.find((s) => s.sessionNumber === sessionNumber) ?? data.sessions[0];
-  }, [data, sessionNumber]);
+  }, [data, sessionNumber, onlySessionNumber]);
 
   // Opens on the most recent week that actually has numbers in it — the
   // one a coach is about to program against. Resolved once, from whichever
@@ -521,14 +424,14 @@ export function SpcSessionPreview({
     return logged.length ? Math.max(...logged) : (data?.currentWeek ?? session.weekNumbers[0]);
   }, [session, selectedWeek, data]);
 
-  // The week this will actually RUN in: the staged morning when staging,
-  // otherwise today. They differ across a Monday, which is exactly the case
-  // staging exists for.
+  // The week this will actually RUN in: the staged morning when reviewing a
+  // staged group, otherwise today. They differ across a Monday, which is
+  // exactly the case staging exists for.
   const targetWeek = useMemo(() => {
     if (!data?.block?.block_start_date) return null;
-    if (!staging?.scheduled_date) return data.currentWeek;
-    return currentWeekNumber(data.block.block_start_date, data.blockLengthWeeks, staging.scheduled_date);
-  }, [data, staging?.scheduled_date]);
+    if (!targetDate) return data.currentWeek;
+    return currentWeekNumber(data.block.block_start_date, data.blockLengthWeeks, targetDate);
+  }, [data, targetDate]);
 
   // Null when it's published (or when there's nothing to say), otherwise the
   // week number that isn't.
@@ -559,16 +462,19 @@ export function SpcSessionPreview({
     : null;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: colors.canvas, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: colors.canvas }}>
         {/* Header */}
         <View style={{ paddingHorizontal: 18, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: CARD_BORDER }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <PressFade onPress={onClose} hitSlop={10} style={{ paddingVertical: 2 }}>
-              <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
-                ‹ SPC
-              </Text>
-            </PressFade>
+            {showClose ? (
+              <PressFade onPress={onClose} hitSlop={10} style={{ paddingVertical: 2 }}>
+                <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+                  ‹ SPC
+                </Text>
+              </PressFade>
+            ) : (
+              <View />
+            )}
             {client?.status ? <StatusPill status={client.status} /> : null}
           </View>
 
@@ -588,7 +494,20 @@ export function SpcSessionPreview({
             </View>
           ) : null}
 
-          {data?.sessions?.length > 1 ? (
+          {onlySessionNumber != null ? (
+            <View style={{ marginTop: 10 }}>
+              <Text
+                numberOfLines={2}
+                maxFontSizeMultiplier={1.15}
+                style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: colors.primaryOnWhite }}
+              >
+                {`Session ${onlySessionNumber}`}
+                {session?.title ? (
+                  <Text style={{ fontFamily: fonts.sans, color: colors.muted }}>{`  ${session.title}`}</Text>
+                ) : null}
+              </Text>
+            </View>
+          ) : data?.sessions?.length > 1 ? (
             <View style={{ marginTop: 12 }}>
               <SessionTabs sessions={data.sessions} value={session?.sessionNumber} onChange={setSessionNumber} />
             </View>
@@ -612,7 +531,11 @@ export function SpcSessionPreview({
         ) : !session ? (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
             <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: colors.muted, textAlign: "center" }}>
-              {data ? "This block has no sessions written yet." : "No block yet — start one from the client page."}
+              {!data
+                ? "No block yet — start one from the client page."
+                : onlySessionNumber != null && data.sessions?.length
+                  ? `Session ${onlySessionNumber} isn't published in this block's current week.`
+                  : "This block has no sessions written yet."}
             </Text>
             <PressFade
               onPress={openClientPage}
@@ -641,7 +564,7 @@ export function SpcSessionPreview({
                 without saying it, a block whose current week is still a draft
                 looks finished, and the first anyone hears of it is the wall
                 refusing to start the session. */}
-            {session.statusByWeek?.[data.currentWeek] && session.statusByWeek[data.currentWeek] !== "published" ? (
+            {unpublishedWeek != null ? (
               <View
                 style={{
                   flexDirection: "row",
@@ -658,7 +581,7 @@ export function SpcSessionPreview({
               >
                 <Ionicons name="eye-off-outline" size={14} color="#8a5a2e" />
                 <Text maxFontSizeMultiplier={1.15} style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17, color: "#8a5a2e" }}>
-                  <Text style={{ fontFamily: fonts.sansBold }}>Week {data.currentWeek} is a draft.</Text>
+                  <Text style={{ fontFamily: fonts.sansBold }}>Week {unpublishedWeek} is a draft.</Text>
                   {"  "}She can't see it and the board can't start it until it's published.
                 </Text>
               </View>
@@ -744,15 +667,186 @@ export function SpcSessionPreview({
           </ScrollView>
         )}
 
-        {staging && session ? (
-          <StagingBar
-            staging={staging}
-            sessionNumber={session.sessionNumber}
-            stagedSessionNumber={stagedSessionNumber}
-            unpublishedWeek={unpublishedWeek}
-            onAdd={() => onStage?.(session.sessionNumber)}
-            onRemove={() => onUnstage?.()}
-          />
+    </View>
+  );
+}
+
+/* --------------------------------------------------------- modal wrappers */
+
+// One client, from the roster. Unchanged behaviour — the page above is
+// exactly what this used to render inline.
+export function SpcSessionPreview({ client, visible, onClose }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.canvas, paddingTop: insets.top }}>
+        {/* Keyed on the client so reopening on someone else re-reads rather
+            than showing the last person's block for a beat. */}
+        {visible ? <SpcSessionPreviewPage key={client?.userId ?? "none"} client={client} onClose={onClose} /> : null}
+      </View>
+    </Modal>
+  );
+}
+
+// A staged or running group, one client per screen, swipe between them.
+//
+// This is the review Terra asked for and the thing a coach will open most:
+// four blocks to read through before a 5am, in the order they'll be standing
+// in the room. A vertical list of four of these would be a very long scroll
+// with no sense of "next"; paging says how many are left without saying it.
+//
+// Each page loads its own client, so four opens four reads. That is the cost
+// of showing real week-by-week history and it is bounded at four.
+export function SpcSessionDeck({ visible, onClose, clients = [], initialIndex = 0, targetDate = null, label = "Reviewing" }) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const scroller = useRef(null);
+  const [index, setIndex] = useState(initialIndex);
+
+  // Re-seeded on open rather than in useState, which only runs once — the
+  // deck stays mounted between openings and would otherwise reopen on
+  // whichever client was last viewed.
+  useEffect(() => {
+    if (visible) setIndex(initialIndex);
+  }, [visible, initialIndex]);
+
+  // onScroll, NOT onMomentumScrollEnd: react-native-web never invokes the
+  // latter — it is passed down as a prop that nothing on web emits — so a
+  // real swipe moved the pages and left the header reading the client you had
+  // just swiped away from. Rounding means the label flips at the halfway
+  // point, which is where a pager should change over.
+  const onScroll = (e) => {
+    const next = Math.round(e.nativeEvent.contentOffset.x / Math.max(width, 1));
+    if (next !== index) setIndex(next);
+  };
+
+  const go = (delta) => {
+    const next = Math.min(Math.max(index + delta, 0), clients.length - 1);
+    if (next === index) return;
+    setIndex(next);
+    // NOT animated on web. `pagingEnabled` compiles to `scroll-snap-type: x
+    // mandatory`, and a smooth programmatic scroll inside a snapping
+    // container is silently cancelled — measured here: behavior:"smooth"
+    // lands back at 0 while behavior:"auto" lands exactly on the page. The
+    // arrows did nothing at all until this. Native has no snap CSS and
+    // animates properly.
+    scroller.current?.scrollTo({ x: next * width, animated: Platform.OS !== "web" });
+  };
+
+  const current = clients[index];
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.canvas, paddingTop: insets.top }}>
+        {/* One shared bar: close, where you are, and arrows. The arrows earn
+            their place next to the swipe — a coach holding a clipboard in the
+            other hand is tapping, not swiping. */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            paddingHorizontal: 16,
+            paddingVertical: 11,
+            borderBottomWidth: 1,
+            borderBottomColor: CARD_BORDER,
+            backgroundColor: "#fff",
+          }}
+        >
+          <PressFade onPress={onClose} hitSlop={10}>
+            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+              ‹ Done
+            </Text>
+          </PressFade>
+          <View style={{ flex: 1, minWidth: 0, alignItems: "center" }}>
+            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.8, color: colors.muted, textTransform: "uppercase" }}>
+              {label}
+            </Text>
+            <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: INK, marginTop: 1 }}>
+              {clients.length > 0 ? `${index + 1} of ${clients.length}` : "Nobody staged"}
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 4 }}>
+            <PressFade onPress={() => go(-1)} disabled={index === 0} hitSlop={6} style={{ padding: 4, opacity: index === 0 ? 0.3 : 1 }}>
+              <Ionicons name="chevron-back" size={20} color={colors.primaryOnWhite} />
+            </PressFade>
+            <PressFade
+              onPress={() => go(1)}
+              disabled={index >= clients.length - 1}
+              hitSlop={6}
+              style={{ padding: 4, opacity: index >= clients.length - 1 ? 0.3 : 1 }}
+            >
+              <Ionicons name="chevron-forward" size={20} color={colors.primaryOnWhite} />
+            </PressFade>
+          </View>
+        </View>
+
+        {clients.length === 0 ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: colors.muted, textAlign: "center" }}>
+              Nobody on this session yet.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            ref={scroller}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            style={{ flex: 1 }}
+            // Both height rules are load-bearing. Without them a page sizes
+            // to its own CONTENT inside the row, so the page's vertical
+            // ScrollView ends up as tall as everything in it (measured:
+            // clientHeight === scrollHeight === 1460) and can never scroll —
+            // while the horizontal scroller's own overflow-y:hidden clips
+            // whatever fell past the fold. Bounding the page is what gives
+            // the inner scroller something to scroll inside.
+            contentContainerStyle={{ height: "100%" }}
+          >
+            {clients.map((c) => (
+              // Each page is exactly one viewport wide, which is what makes
+              // pagingEnabled land on a client instead of between two.
+              <View key={c.userId} style={{ width, height: "100%" }}>
+                <SpcSessionPreviewPage
+                  client={c}
+                  onClose={onClose}
+                  showClose={false}
+                  onlySessionNumber={c.sessionNumber ?? null}
+                  targetDate={targetDate}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Dots, so "three more to go" is legible without reading a number. */}
+        {clients.length > 1 ? (
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              gap: 6,
+              paddingTop: 10,
+              paddingBottom: insets.bottom + 10,
+              backgroundColor: "#fff",
+              borderTopWidth: 1,
+              borderTopColor: CARD_BORDER,
+            }}
+          >
+            {clients.map((c, i) => (
+              <View
+                key={c.userId}
+                style={{
+                  width: i === index ? 20 : 7,
+                  height: 7,
+                  borderRadius: 4,
+                  backgroundColor: i === index ? colors.primary : "#ddd6cd",
+                }}
+              />
+            ))}
+          </View>
         ) : null}
       </View>
     </Modal>

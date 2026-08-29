@@ -331,7 +331,7 @@ function SpcRosterDesktop() {
               onPress={() => router.push("/(coach)/spc/live")}
               style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 16, backgroundColor: "#fff" }}
             >
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Live session</Text>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Live sessions</Text>
             </PressFade>
             <PressFade
               onPress={() => router.push("/(coach)/spc/templates")}

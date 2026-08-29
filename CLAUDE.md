@@ -3922,6 +3922,213 @@ question is "did the text actually go out?"
 at a client to test. Terra's rule is Dustin's or her own account only, and
 even then the code row is the evidence, not the text.
 
+## SPC Live Sessions: one screen, expand-then-pick, and a swipeable review deck (2026-08-28)
+
+The hub had a real gap: after staging a session there was no way to *read*
+what you'd staged, and the print-sheet block overview was wired into the
+wrong step — it opened while PICKING clients, where it is far too heavy, and
+was unreachable at review time, which is what it is for. Migration `0098` —
+applied and verified live.
+
+**The SPC hero is a doorway now, not a start button.** `SpcRosterMobile`'s
+espresso block says **SPC Live Sessions** and leads to one screen carrying
+both jobs. The separate "Stage a session for later" row is gone with the
+whole staging state machine it drove (~6.3k chars: `StageTrayBar`,
+`StageWhenSheet`, `StageTraySheet`, the `?staging=` param, seven handlers) —
+that all lives on `app/(coach)/spc/live.js` now. Tapping a roster client
+still opens the block overview; that was only ever wrong as a *picker*.
+
+**The left segment is always "the thing you have", and only offers to BUILD
+one while you have none:**
+
+| | left | right |
+|---|---|---|
+| nothing staged, nothing running | Stage a session | Start now |
+| something staged | Staged sessions | Start now |
+| board running | Block overview | Logging |
+
+Each staged row opens its clients' block overviews — reading a staged group
+before 5am is the most common thing done here, and in the first pass it was
+reachable only once a session was already **live**, which is exactly backwards.
+The left tab is keyed `"left"`/`"start"` internally rather than by label, or
+staging your first group would silently drop the coach onto "Start now" as
+the left segment changed identity underneath them.
+
+Building ANOTHER group is a **circle beside the title** (`StageAnotherButton`
+→ `stagingAside`), shown only when the left side isn't already the picker —
+which is exactly when there would otherwise be no way in. It carries its own
+words: an unlabelled `+` next to a title could mean add a client, a block or
+a session. Taking it replaces the selector with a back link, worded for where
+it returns to. The first pass put this as an inline link under the staged
+card and it read as part of whatever section happened to sit above it.
+
+While a board runs the staged list sits above the two live views, because
+"start the 6am" shouldn't depend on which of them you left open; otherwise it
+IS the left tab. `useStagedSessions()` was lifted out of `StagedSessionsCard`
+for this — the screen needs the count before it can decide what its own
+selector says.
+
+**Picking is expand-then-choose.** `HubClientPickList` used to select on the
+NAME and reveal sessions afterwards, only if there were more than one — so a
+coach committed to a client before seeing what that committed her to, and a
+one-session client never showed her session at all. Now: tap a name to
+expand, tap a session to pick, checkbox lands on the row. One extra tap, and
+it puts the whole decision on screen. Sessions are full-width rounded rows,
+not a wrapping chip row — real titles run to "Alicia SPC: Pull Ups +
+Athleticism" and cannot sit beside a sibling on a phone.
+
+**The count circle is the new number** (`loggedCount`, 0098): how many weeks
+of the CURRENT block that session has been logged. SPC clients do sessions
+out of order and miss them, so "Session 1 (3) · Session 2 (1)" is the
+sentence a coach is actually reading — it says which one is behind, which
+`completed` (this week only) cannot. Counted over the block, not all time: a
+count spanning three blocks only says who has been here longest. Distinct
+`week_number`, so a duplicated completion row still counts once. Purely
+additive to the RPC — every existing caller is untouched.
+
+**The eye is `SessionSheet`, deliberately not the block overview.** New
+`components/hub/HubSessionPreviewSheet.js` opens the member's own session
+sheet (`state="future"`, nothing loggable) — literally "the same one you
+would see when clicking a session on my week". The print-sheet overview
+answers "how has this block gone week by week", which is a review question,
+not a scanning one. Passed as an optional `onPreview` prop, so the **wall's**
+picker doesn't get it: a sheet over a sheet on a touchscreen at 5am is a
+trap, not a preview.
+
+**Date/time is asked at SAVE time**, not before you can add anyone — the
+docked bar opens `StageWhenSheet` (now parameterised with
+`heading`/`ctaLabel`/`busyLabel`/`initial`) once the coach knows who is on
+it. Saving finalizes in one action: there is no half-built state to come
+back to, so leaving it a draft would only mean a group that quietly never
+appears at 5am. New `syncStagedClients()` diffs the picker's whole selection
+against what's stored rather than clearing and rewriting, so a client who was
+already on the group **keeps her slot** — the board renders positions in
+order and people stand at the racks in that order. It mirrors
+`addStagedClient`'s lowest-free rule when recording what it just took, or two
+additions in one save would both be handed the same position.
+
+**`SpcSessionPreview` split into a page + two wrappers.**
+`SpcSessionPreviewPage` is the old body with no Modal and no staging props;
+`SpcSessionPreview` (unchanged API) is Modal + one page; **new
+`SpcSessionDeck`** is Modal + a `pagingEnabled` horizontal ScrollView of
+pages, one client per screen, with arrows, "2 of 4", and dots. Each page
+loads its own client — four opens four reads, which is the cost of real
+week-by-week history and is bounded at four. Used for both a staged
+group and the running board, and in both cases each page is **pinned** to the
+one session that client is actually on (`onlySessionNumber`) — the session
+tabs are dropped and a plain "Session 2 — Upper | Georgie" line takes their
+place, since the tabs would otherwise re-offer a choice that was made last
+night. There is deliberately **no fallback** when the pinned session isn't in
+the block's current week: falling through to the first session would quietly
+show a different workout than the card promised, so the page says it isn't
+published instead. A staged group also passes its own date, so one staged
+across a Monday warns about the right week. The in-body draft warning now keys on that
+`targetWeek` rather than on today's.
+
+### The staging sheet: an analog clock, and a day strip
+
+`TimeStepper` (a pair of +/- steppers) and the day `<select>` are both gone.
+Getting from 12:00 to 5:00 was five jabs, and a 14-row dropdown was the worst
+possible way to say "tomorrow".
+
+**New `components/ClockTimePicker.js`** — a real clock face. Tap an hour, the
+face turns into minutes, tap a quarter; the result fills `HH : MM` boxes
+underneath and either box takes you back to that half of the face, so a wrong
+hour costs one tap rather than a restart. **Minutes are quarters only**,
+because every consumer of a staged time runs on a 15-minute cadence and
+offering `:07` would be a promise nothing keeps — the other eight five-minute
+ticks are still drawn, since a face with four marks on it doesn't read as a
+clock.
+
+Three implementation notes worth keeping:
+- **No SVG.** react-native-svg's web build turns `onPress` on a child element
+  into RN touch-responder props that aren't real DOM attributes (this app has
+  already hit `Unknown event handler property 'onResponderTerminate'` that
+  way), and a face is only circles and text. Positions come from one
+  `pointAt(angleDeg, radius)` helper, so the hand and the labels cannot
+  disagree about where a value lives.
+- **The hand needs no transform-origin.** RN has no dependable one. It is a
+  full-height column centred on the face whose bar occupies only the half
+  above centre, so rotating the column turns the bar about the clock's centre
+  and 0deg points at 12.
+- **Every mode change goes through `goToMode()`**, which clears the pending
+  face swap. Picking an hour waits `FACE_SWAP_MS` (220ms — long enough to
+  watch the hour fill in and the hand swing to it, and deliberately short:
+  450ms read as the picker hanging) before showing minutes, and without that
+  cancellation a coach who tapped a digit box during the wait would be yanked
+  onto the minute face a moment later. Verified: right after the tap the hour
+  face is still up with the new hour already selected, later it is the minute
+  face, and tapping the hour box in between leaves it on hours.
+
+**New `DateStrip`** in `StagingTray` mirrors the member Weekly tab's day strip
+— chevrons either side of seven chips — deliberately, because a coach already
+reads that control on their own training tab. Forward-only from today with a
+two-week horizon (what the dropdown offered), and it carries a written date
+under it, since a day number alone can't say which month. Not extracted from
+the member screen: that one's chips encode nutrition-log state (logged /
+missed / future) that means nothing here, so this mirrors the pattern rather
+than generalising a component into two unrelated data models.
+
+**`StageWhenSheet`'s body is a ScrollView now, with the buttons outside it.**
+The clock made the sheet tall enough that on a short phone its own `maxHeight`
+would clip the bottom — which is where Save lives. Measured at 375x640: body
+scrolls (449 visible / 523 content), and `Start staging` is not inside the
+scroller and sits at 626 in a 640 viewport.
+
+**Deleted with them**: `TimeStepper`, `Stepper`, `StepButton`, `WhenField`,
+the quick-pick time presets, and `StageTrayBar`/`StageTraySheet` — the last
+two had been dead since staging moved off the roster. `parseTime`/`buildTime`
+moved to the picker.
+
+### Three real react-native-web bugs, all found by measuring rather than looking
+
+None were visible to a clean `expo export`, a clean scope pass, or a
+screenshot.
+
+- **A page inside a horizontal `pagingEnabled` ScrollView sizes to its own
+  CONTENT unless you bound it, and then nothing inside it can scroll.**
+  Measured on the real nesting: with the wrapper carrying only `width`, the
+  page's vertical ScrollView came back `clientHeight === scrollHeight ===
+  1460` — i.e. it had grown to fit everything and had nothing left to scroll
+  — while the horizontal scroller's own `overflow-y: hidden` clipped whatever
+  fell past the fold. Vertical scrolling was simply impossible on every deck
+  page. Fixed with `height: "100%"` on **both** the page wrapper and the
+  ScrollView's `contentContainerStyle` (the ScrollView's own `flex: 1` is what
+  makes those percentages resolve): same structure then measures `363` vs
+  `1460` and scrolls. **Rule: a child of a horizontal pager needs an explicit
+  height, or its own scrollers are dead.**
+
+- **A smooth programmatic scroll inside a `pagingEnabled` ScrollView is
+  silently cancelled on web.** `pagingEnabled` compiles to `scroll-snap-type:
+  x mandatory`, and RNW's `scrollTo({animated: true})` routes to
+  `node.scroll({behavior:"smooth"})`. Measured directly on the real
+  container: `behavior:"smooth"` → lands back at **0**; `behavior:"auto"` →
+  lands exactly on **375**. The deck's arrows did nothing at all. Fixed with
+  `animated: Platform.OS !== "web"` — native has no snap CSS and animates
+  properly. **Rule: never pass `animated: true` to `scrollTo` on a
+  paging-enabled ScrollView that runs on web.**
+- **`onMomentumScrollEnd` never fires on react-native-web.** Confirmed in
+  `node_modules/react-native-web/dist/exports/ScrollView/index.js`:
+  `scrollResponderHandleMomentumScrollEnd` is only ever passed down as a prop
+  to a `View`, and nothing on web emits it. A real swipe moved the pages and
+  left the header naming the client you had just swiped away from. Use
+  **`onScroll` + `scrollEventThrottle`** for pager index tracking — it fires
+  on both platforms, and rounding flips the label at the halfway point, which
+  is where a pager should change over.
+
+**Verified**: migration dry-run in a rolled-back transaction and then applied,
+with the RPC's real output read as a real coach (Terra's own row comes back
+Session 1 (3) / Session 2 (1) — exactly the out-of-order signal it exists
+for); `npm run build` + `check:routes` clean; a Babel parse, unresolved-
+identifier AND unused-import pass over all 11 touched files; and the row,
+selection, eye, arrows and swipe all driven for real at 375px through a
+throwaway `app/zz-hubharness.js` (deleted; `git status` confirmed clean).
+`HubClientRow` was extracted and exported for that harness — a real component
+boundary, not a test seam. **Not verified behind a real login** — standing
+limitation. Worth Terra's pass: stage a group end to end, reopen it with
+Edit, and confirm the review deck's pages carry real blocks.
+
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -3993,6 +4200,7 @@ sections; next number after 0080 is 0081.)
 - `0080_session_education_scope.sql` — **run**, verified live 2026-08-23 (column + default confirmed, a bad value rejected by the check, all existing rows defaulted to `'session'` with nothing to backfill). Adds `session_education.scope` (`session`/`warmup`/`exercises`) so "general" can mean the warm-up block as well as the whole day.
 - `0094_exercise_review.sql` — **run**, verified live 2026-08-27 (both columns, the partial index, both rewritten policies, and all 155 existing rows grandfathered to approved; plus a 9-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.exercises.approved_at`/`approved_by` and reopens creation to every staff member. See "Exercise library: everyone adds, reviewers approve" below.
 - `0097_announcement_channels.sql` — **run**, verified live 2026-08-27 (both columns, the member read policy carrying `show_in_app`, all 5 existing rows unchanged; plus a 3-row impersonation test in a rolled-back transaction before applying). Adds `programming.announcements.show_in_app` and `send_push`, both `not null default true`, splitting the in-app popup from the push notification. `show_in_app` is enforced in the member read policy; `send_push` is honoured by `scan-announcements`' query and by `sendAnnouncementPush`. Requires redeploying `scan-announcements` and `send-announcement` (both done, v15). See "Popup and push become separate choices" above.
+- `0098_hub_startable_session_counts.sql` — **run**, verified live 2026-08-28 (dry-run in a rolled-back transaction first, then applied + `NOTIFY pgrst`, with the output read back as a real coach). Adds `loggedCount` to each session object `programming.hub_startable_clients()` returns: how many weeks of the current block that session number has a completion. Purely additive — every existing caller is unaffected, and a caller that doesn't read it is untouched. Backs the count circle on the hub pickers' session rows.
 - `0096_event_publish_at.sql` — **run**, verified live 2026-08-27 (column, index, all six member-facing policies carrying the new gate, and zero existing rows affected; plus a 6-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.events.publish_at` so an event can be scheduled to go live at a set day and time. Nullable, null = live as soon as it's published, so nothing existing changes. **Do not reorder the policy block** — the gate is intentionally inline in all six policies rather than in a helper, since a function reading `programming.events` would recurse inside that table's own policy. See "Events: one event opens straight in" above.
 - `0095_exercise_parents.sql` — **run**, verified live 2026-08-27 (18 parent records, 66 exercises grouped, 0 variations lost, 0 duplicate names, plus an 11-assertion impersonation test in a rolled-back transaction as a reviewer, a non-reviewer coach and a member). Adds `programming.exercise_parents` and `exercises.parent_id`; `exercises.parent_exercise_id` is left populated but unread as the rollback path. See "A parent is its own record now" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).

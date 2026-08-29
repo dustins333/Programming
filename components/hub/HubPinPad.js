@@ -171,7 +171,7 @@ export function HubPinPad({ onVerified, onCancel, compact = false }) {
       </PressFade>
 
       <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.hint, marginTop: 4, textAlign: "center", maxWidth: 300 }}>
-        No PIN yet? Set one on your phone, under SPC · Live session. You can always start a session from there instead.
+        No PIN yet? Set one on your phone, under SPC · Live sessions. You can always start a session from there instead.
       </Text>
     </View>
   );

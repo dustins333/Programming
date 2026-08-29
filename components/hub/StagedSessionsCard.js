@@ -37,7 +37,7 @@ function firstNameOf(name) {
   return (name ?? "").trim().split(/\s+/)[0] || "";
 }
 
-function StagedCard({ group, onStart, onEdit, onDelete, onFinalize, busy }) {
+function StagedCard({ group, onStart, onEdit, onDelete, onFinalize, onReview, busy }) {
   const clients = group.clients ?? [];
   const resolved = group.resolved ?? [];
   const blocked = resolved.filter((r) => !r.resolvable);
@@ -57,7 +57,14 @@ function StagedCard({ group, onStart, onEdit, onDelete, onFinalize, busy }) {
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <View style={{ flex: 1, minWidth: 0 }}>
+        {/* The row IS the way in to the block overviews. A separate "Review"
+            link under it was the discoverable-to-nobody version of this. */}
+        <PressFade
+          onPress={onReview}
+          disabled={!onReview || clients.length === 0}
+          style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 }}
+        >
+          <View style={{ flex: 1, minWidth: 0 }}>
           {/* Title sits with the time, never with the names — appended to the
               name list it reads as one more client. */}
           {/* Two lines, not one: a named group truncated the time itself
@@ -70,7 +77,9 @@ function StagedCard({ group, onStart, onEdit, onDelete, onFinalize, busy }) {
           <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ marginTop: 2, fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted }}>
             {clients.length === 0 ? "Nobody staged yet" : clients.map((c) => firstNameOf(c.client_name)).join(" · ")}
           </Text>
-        </View>
+          </View>
+          {onReview && clients.length > 0 ? <Ionicons name="chevron-forward" size={16} color={colors.muted} /> : null}
+        </PressFade>
         {draft ? (
           <PressFade
             onPress={onFinalize}
@@ -142,15 +151,17 @@ function StagedCard({ group, onStart, onEdit, onDelete, onFinalize, busy }) {
   );
 }
 
-export function StagedSessionsCard({ profile, openSession, onStarted, refreshKey = 0 }) {
-  const router = useRouter();
+// Loading lives here rather than in the card, because the screen above needs
+// the count before it can decide what its own selector says — a coach with
+// something staged gets "Staged sessions" where a coach with nothing gets
+// "Stage a session".
+export function useStagedSessions(profileId, refreshKey = 0) {
   const [groups, setGroups] = useState(null);
-  const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!profile?.id) return;
+  const reload = useCallback(async () => {
+    if (!profileId) return;
     try {
-      const rows = await listMyStagedSessions(profile.id);
+      const rows = await listMyStagedSessions(profileId);
       // Resolve each so "Rae can't start" shows on the card. One RPC per
       // group, and a coach has one or two — not worth batching, and a
       // failure here must only cost the warning line, not the card.
@@ -164,11 +175,18 @@ export function StagedSessionsCard({ profile, openSession, onStarted, refreshKey
     } catch {
       setGroups([]);
     }
-  }, [profile?.id]);
+  }, [profileId]);
 
   useEffect(() => {
-    load();
-  }, [load, refreshKey]);
+    reload();
+  }, [reload, refreshKey]);
+
+  return { groups, reload };
+}
+
+export function StagedSessionsCard({ groups, reload, openSession, onStarted, onReview, showHeading = true }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
 
   const handleStart = async (group) => {
     if (busy) return;
@@ -182,7 +200,7 @@ export function StagedSessionsCard({ profile, openSession, onStarted, refreshKey
       } else {
         showToast("On the board.");
       }
-      await load();
+      await reload?.();
       await onStarted?.();
     } catch (e) {
       toastError("Couldn't start it.", e);
@@ -195,7 +213,7 @@ export function StagedSessionsCard({ profile, openSession, onStarted, refreshKey
     if (!(await confirmDiscardStaged(describeWhen(group)))) return;
     try {
       await deleteStagedSession(group.id);
-      await load();
+      await reload?.();
     } catch (e) {
       toastError("Couldn't delete it.", e);
     }
@@ -204,7 +222,7 @@ export function StagedSessionsCard({ profile, openSession, onStarted, refreshKey
   const handleFinalize = async (group) => {
     try {
       await finalizeStagedSession(group.id);
-      await load();
+      await reload?.();
       showToast("On the board for that morning.");
     } catch (e) {
       toastError("Couldn't finalize it.", e);
@@ -222,17 +240,20 @@ export function StagedSessionsCard({ profile, openSession, onStarted, refreshKey
 
   return (
     <View style={{ marginBottom: 18 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Eyebrow>Staged</Eyebrow>
-        <View style={{ flex: 1, height: 1, backgroundColor: ROW_DIVIDER }} />
-      </View>
+      {showHeading ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Eyebrow>Staged</Eyebrow>
+          <View style={{ flex: 1, height: 1, backgroundColor: ROW_DIVIDER }} />
+        </View>
+      ) : null}
       {groups.map((g) => (
         <StagedCard
           key={g.id}
           group={g}
           busy={busy}
           onStart={() => handleStart(g)}
-          onEdit={() => router.push(`/(coach)/spc?staging=${g.id}`)}
+          onEdit={() => router.push(`/(coach)/spc/live?staging=${g.id}`)}
+          onReview={onReview ? () => onReview(g, g.resolved ?? []) : undefined}
           onDelete={() => handleDelete(g)}
           onFinalize={() => handleFinalize(g)}
         />
