@@ -3852,6 +3852,76 @@ last session is finalized nothing is `"ready"`, so `focus` resolves to null in
 group workout got "Your SPC coach hasn't published this block yet" under her
 done card. Now gated on `focus?.type === "spc" || groups.length === 0`.
 
+## Registration: duplicate GHL contacts, and matching any email on one (2026-08-28)
+
+"Has C.J. tried to sign in?" turned into a real failure mode. No migration —
+the fix is `_shared/ghlContacts.ts` plus both registration functions
+(deployed, `verify_jwt: false` preserved on each).
+
+**Diagnosing "no code arrived", in order.** The tables answer most of it
+before any GHL call:
+- `auth.users.last_sign_in_at` null = never signed in, ever.
+- A `core.registration_codes` row means the function ran, found the member,
+  passed the cooldown, and reached the send. No row means it never got that
+  far — almost always no `core.users` row or no `ghl_contact_id`, since
+  `request-registration-code` returns a uniform `{sent:true}` for both.
+- **`attempts = 0` is the tell**: the code was never submitted. A wrong code
+  increments it. So zero means nothing arrived, not that she fumbled it.
+- Compare against other recent requests. Two members registered fine hours
+  before C.J., which ruled out the token, scopes, location id and the
+  function in one query and made it contact-specific.
+
+**The actual cause: a duplicate contact, which is NOT the merged-contact case
+the self-heal was built for.** A 2026-08-22 webhook test (tagged `testhook`,
+`conditioning form`) built her Kova account from a phone-less **lead** record
+while her real member contact sat separately with her number. The heal only
+fires on a deleted/merged id; here the stored id was alive and healthy and
+simply had no phone, so nothing repaired and nothing complained.
+
+**Why the duplicate was invisible in GHL's UI:** the two records were "C.J.
+Smith" and "CJ Smith". GHL's contact search does not match across the
+periods, so searching one name returns exactly one contact and the other is
+nowhere. Liz Marsden was worse — "Liz Marsden" vs "Elizabeth Sharp-Marsden".
+**Search by last name, or by both emails, before concluding there's only one.**
+
+**The fix — read every address on the contact.** `resolveMemberByEmail`
+(shared) tries Kova's own records first, then asks GHL which contact carries
+the typed address on *any* email, primary or `additionalEmails` (where a
+merge demotes the losing record's address). Two points worth keeping:
+- **Both halves must use it.** `verify-registration-code` resolved by email
+  independently, so an address that could request a code couldn't necessarily
+  verify it — stranding someone one step further in than before. One function
+  now, so they can't drift.
+- **Ambiguity refuses.** Two contacts sharing an address returns null. The
+  wrong pick texts a verification code to the wrong person's phone.
+
+This also repairs the heal, which only ever compared the primary email — a
+merge that promoted the other address left it finding nothing and giving up
+silently, which is precisely what a merged contact looks like.
+
+**Scanned all 37 never-signed-in members** with a GHL contact: only two had
+no phone, both from that same test batch — Liz Marsden (fixed by merging)
+and Terra's own test account. Both merges kept the id Kova already held, so
+no data change was needed either time. Worth re-running that scan after any
+future webhook test batch; the failure is silent until each person tries.
+
+**Verification, honestly mixed.** The new lookup was smoke-tested in
+production against a GHL contact belonging to no Kova member: ran clean,
+uniform response, no code issued, no text sent. The **positive** path
+(secondary email → real member → text) is unverified — neither Terra's nor
+Dustin's contact has a second address to match on, and testing on C.J.
+mid-signup was off the table. Add a secondary email to a staff contact to
+prove it properly.
+
+**Also found:** the GHL token has no *read* scope for conversations (401 on
+`/conversations/search`). Sending is unaffected, but message threads and
+delivery status can't be inspected from here — relevant next time the
+question is "did the text actually go out?"
+
+**Standing constraint that shaped the whole session:** never fire a real code
+at a client to test. Terra's rule is Dustin's or her own account only, and
+even then the code row is the evidence, not the text.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
