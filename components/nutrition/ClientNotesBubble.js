@@ -33,8 +33,9 @@ export function ClientNotesBubble({ userId, client, focusItems, onChanged }) {
   const notesRef = useRef(null);
 
   // "Click off of it and it minimizes" is the whole interaction, so a tap
-  // away has to flush an unsaved note rather than binning it — the Save
-  // button below still works, this is the safety net for not using it.
+  // away has to flush an unsaved note rather than binning it. GamePlan
+  // autosaves and flushes on its own unmount too; this is the belt to that
+  // braces, and it's also what tells us whether to refresh the page behind.
   const handleClose = async () => {
     if (closing) return;
     setClosing(true);

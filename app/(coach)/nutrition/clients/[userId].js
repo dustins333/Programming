@@ -717,7 +717,7 @@ export default function NutritionClientDetail() {
           <View style={{ flexDirection: isWide ? "row" : "column", gap: 18 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Card title="Plan phases">
-                <PlanPhases userId={userId} coachId={profile.id} phases={phases} onChanged={load} />
+                <PlanPhases userId={userId} coachId={profile.id} phases={phases} onPhasesChanged={setPhases} />
               </Card>
             </View>
             <View style={{ width: isWide ? 320 : undefined }}>

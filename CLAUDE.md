@@ -6064,6 +6064,69 @@ with no variations sitting *outside* the "Glute Bridge" parent. Adopting it
 by name match would have been guessing, so it was left alone — one click on
 the manage screen or its own entry fixes it.
 
+## Coach notes autosave; the Plan tab stops reloading the page (2026-08-28)
+
+Two reports from one sitting, same root shape: work disappearing because a
+save was tied to something other than typing. No migration, no deploy step.
+
+**Notes on a nutrition client lost three times in one check-in.**
+`components/nutrition/GamePlan.js` was the last field in the app still holding
+text in local state behind an explicit Save button — and **every surface that
+renders it unmounts on a tap**: the Check-In tab is torn down on a tab switch
+or a week page, and `ClientNotesBubble` closes on tap-away. So the text was not
+"unsaved", it was destroyed. Now autosaves, with **three flushes because each
+covers a case the others miss**: a 700ms debounce while typing (same delay as
+the builder's Coach Ed rail), `onBlur` (clicking a tab moves focus first, so
+this lands before the unmount), and an unmount flush fired directly rather than
+by leaving the timer running. The button is replaced by a status line — *Saves
+as you type → Saving… → Saved*, or a pressable **Not saved — tap to retry** on
+failure, with the text left in the box. `saveIfDirty()` keeps its three-outcome
+contract (`unchanged`/`saved`/`failed`) for the bubble.
+
+**The Plan tab's lag was the page reload, not the input.** Every edit called
+the page's `load()` — ~14 queries in three sequential waves with `listPhases`
+in the **last** one — so a typed phase title genuinely vanished until the whole
+page finished. `PlanPhases` now owns its list: optimistic local edit, persist
+in the background, roll back with a toast only on a real failure, and push the
+updated list up via a new `onPhasesChanged` prop (the page passes `setPhases`)
+instead of refetching. `createPhase`/`addPhaseItem` return the inserted row
+(`.select().single()`) so there is nothing to refetch to learn what was just
+created; temp ids bridge the round-trip and those rows render dimmed and
+non-editable until swapped. Enter now **keeps the bullet input open and
+focused** (`blurOnSubmit={false}`) so a list can be typed straight down.
+
+**A near-miss worth remembering: the preview pane runs at `window.innerWidth`
+0, and that makes layout measurements lie.** Mid-verification the notes box
+crashed with React's "Maximum update depth exceeded" — `onContentSizeChange`
+feeding a measured height back into the style, walking 659 → 642 → … → 516. I
+had it written up as a pre-existing production bug before checking: at a real
+1280px viewport (`resize_window`) it reports once, sanely, and never loops. The
+same zero-width viewport also made `scrollHeight` come back as 676px for an
+EMPTY textarea, which sent an imperative-auto-grow attempt the wrong way.
+**Check `window.innerWidth` before trusting any measurement from that pane**,
+and re-derive rather than believing the first number. What the real-viewport
+testing *did* establish: react-native-web fires `onContentSizeChange` exactly
+once and never again as text grows, so the web notes box has always been fixed
+and scrolling — it just opens at 150px now instead of 100px. Native still grows.
+
+**Driving a controlled RN TextInput from the console**: assigning `.value`
+through the prototype setter + an `input` event drives an `<input>` but did
+**not** drive the multiline `<textarea>` here — React never re-rendered.
+`document.execCommand("insertText", …)` on the focused node does, and it is
+also what makes a race like "type, then unmount inside the debounce" testable
+in a single tool call. A programmatic `click()` on another element unmounts
+**without** blurring, which is how the unmount flush was isolated from the blur
+flush. Also: `computer left_click` with a `ref` landed ~250px off here; raw
+screenshot coordinates worked.
+
+**Verified**: `npm run build` clean, a Babel parse + unresolved-identifier pass
+over all five files, and both flows driven for real in a browser at 1280×900 —
+one write per typing burst, blur flushing immediately, a note surviving an
+unmount with zero writes issued beforehand, and a new phase card on screen 60ms
+after Enter. Console errors checked in a **fresh tab** (the pane's log
+accumulates stale errors across reloads). **Terra confirmed both live** before
+this was committed.
+
 ## Working notes for future sessions
 
 - **Always update this file at the end of a session — it is not optional and
