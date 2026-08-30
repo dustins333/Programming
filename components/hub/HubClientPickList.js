@@ -262,7 +262,13 @@ export function HubClientPickList({
         name: row?.name ?? "",
         spcWorkoutId,
         sessionNumber: session?.sessionNumber ?? null,
-        weekNumber: row?.weekNumber ?? null,
+        // The SESSION's authored week, not the client's current calendar week.
+        // Since 0101 a session can be moved into a different week, and its
+        // completions and logs are keyed on the week it was written in — a
+        // slot carrying the calendar week would file both somewhere nothing
+        // can find them. Falls back to the client row for a roster fetched
+        // before the RPC started returning it.
+        weekNumber: session?.weekNumber ?? row?.weekNumber ?? null,
       };
     });
     onChange?.(slots);

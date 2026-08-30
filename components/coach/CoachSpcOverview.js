@@ -10,13 +10,16 @@ import { ClientGoalCard } from "../ClientGoalCard";
 import { getUser } from "../../lib/programming/clients";
 import { getSpcClient } from "../../lib/programming/spcClients";
 import { listSpcWorkoutsForBlock, listBlocksForSpcClient, labelBlocks } from "../../lib/programming/spcBlocks";
-import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
+import { listSpcWarmups, listSpcWorkoutExercises, setSpcWorkoutScheduledWeek } from "../../lib/programming/spcWorkouts";
+import { listSpcCompletionDetailsForWorkouts } from "../../lib/programming/sessionCompletions";
 import { SessionSheet } from "../SessionSheet";
 import { BlockProgressHero } from "../BlockProgressHero";
-import { BlockWeekCard } from "../BlockWeekCard";
+import { SpcBlockCalendar } from "./SpcBlockCalendar";
+import { calendarMeta } from "./spcCalendarModel";
 import { BlockPicker, blockHeroTitle } from "../BlockPicker";
 import { CommentThread } from "../CommentThread";
 import { PressFade } from "../PressFade";
+import { toastError, toastSuccess } from "../../lib/toast";
 import { fonts, colors } from "../../lib/theme";
 
 const CANVAS = "#faf8f6";
@@ -26,10 +29,15 @@ const CANVAS = "#faf8f6";
 // the builder is a build surface and doesn't hold up on a phone, and this
 // answers "what is this client actually doing" instead.
 //
-// Weeks read plain with only the current one marked; a draft session shows as
-// the dashed tile. Adherence is deliberately left to the SPC dashboard and the
-// session read-out — this screen is about the programming, not the client's
-// week-by-week record.
+// The block reads as a calendar (SpcBlockCalendar, phase 3 of the SPC rework
+// spec): calendar weeks down the side, one full-width bar per session across.
+// A pending session is full width because that is literally what it is — SPC
+// has no day-of-week routing, so a session is any day that week — and it
+// collapses to a chip on the day she finalized once it's done.
+//
+// This is the phone view, and the phone is where coaches actually read this.
+// It also backs the native route and the web "Preview" button; the desktop
+// client page keeps its build grid, with copy mode and End here.
 function prescriptionLine(ex) {
   const reps = Array.isArray(ex.rep_scheme) && new Set(ex.rep_scheme).size > 1 ? ex.rep_scheme.join(", ") : ex.reps;
   return `${ex.sets ?? "–"} × ${reps ?? "–"}`;
@@ -51,10 +59,12 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
   const [modalWorkoutId, setModalWorkoutId] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState(null);
+  const [showAllWeeks, setShowAllWeeks] = useState(false);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
     setSessionContent({});
+    setShowAllWeeks(false);
     try {
       const [member, spcClient] = await Promise.all([getUser(userId), getSpcClient(userId)]);
       // Isolated: throws until 0078 is run, and must never blank the block.
@@ -80,9 +90,16 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
       // Every workout, drafts included — the one thing a coach needs here
       // that the member's own view deliberately hides.
       const workouts = await listSpcWorkoutsForBlock(block.id);
+      // Isolated: the calendar's four states degrade to "nothing is finished
+      // yet" without completions, which is wrong but readable. Letting this
+      // throw would blank a block that is otherwise fine.
+      const completions = await listSpcCompletionDetailsForWorkouts(
+        userId,
+        workouts.map((w) => w.id)
+      ).catch(() => new Map());
       const week = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
 
-      setState({ status: "ready", member, spcClient, blocks, block, workouts, week, today });
+      setState({ status: "ready", member, spcClient, blocks, block, workouts, completions, week, today });
     } catch (err) {
       console.error("Coach SPC overview: failed to load", err);
       setState({ status: "error", message: err.message ?? String(err) });
@@ -97,25 +114,31 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
 
   const blockView = useMemo(() => {
     if (state.status !== "ready") return null;
-    const { block, workouts, week, today } = state;
-    const isCurrentBlock = block.block_start_date <= today && today <= block.block_end_date;
-    const slots = Math.max(1, ...workouts.map((w) => w.session_number));
-    const weeks = Array.from({ length: block.block_length_weeks }, (_, i) => i + 1)
-      .map((weekNumber) => {
-        const sessions = workouts.filter((w) => w.week_number === weekNumber).sort((a, b) => a.session_number - b.session_number);
-        if (sessions.length === 0) return null;
-        return {
-          week: weekNumber,
-          status: isCurrentBlock && weekNumber === week ? "current" : "neutral",
-          sessions: sessions.map((workout) => ({
-            workout,
-            state: workout.status === "published" ? "done" : "missed",
-          })),
-        };
-      })
-      .filter(Boolean);
-    return { weeks, slots, published: workouts.filter((w) => w.status === "published").length, total: workouts.length };
+    const { workouts } = state;
+    return { published: workouts.filter((w) => w.status === "published").length, total: workouts.length };
   }, [state]);
+
+  // Optimistic: a drag that waits on a round trip before the bar lands reads
+  // as a failed drop. On failure the workouts array is put back exactly as it
+  // was and the coach is told — never left looking at a move that didn't
+  // happen.
+  const handleMoveSession = async (bar, week) => {
+    if (!bar?.workout || state.status !== "ready") return;
+    const before = state.workouts;
+    const target = week === bar.workout.week_number ? null : week;
+    setState((prev) =>
+      prev.status === "ready"
+        ? { ...prev, workouts: prev.workouts.map((w) => (w.id === bar.workout.id ? { ...w, scheduled_week: target } : w)) }
+        : prev
+    );
+    try {
+      await setSpcWorkoutScheduledWeek(bar.workout.id, week);
+      toastSuccess(target == null ? `S${bar.sessionNumber} is back in week ${bar.workout.week_number}.` : `S${bar.sessionNumber} moved to week ${week}.`);
+    } catch (err) {
+      setState((prev) => (prev.status === "ready" ? { ...prev, workouts: before } : prev));
+      toastError("Couldn't move that session.", err);
+    }
+  };
 
   const openSession = async (workout) => {
     setModalWorkoutId(workout.id);
@@ -219,31 +242,25 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
             footer={`${blockView.published} of ${blockView.total} sessions published`}
           />
 
-          {blockView.weeks.map((week) => (
-            <BlockWeekCard
-              key={week.week}
-              weekNumber={week.week}
-              status={week.status}
-              slots={blockView.slots}
-              sessions={week.sessions.map((s) => ({
-                key: s.workout.id,
-                label: `Session ${s.workout.session_number}`,
-                state: s.state,
-                onPress: () => openSession(s.workout),
-              }))}
-            />
-          ))}
-
-          {blockView.weeks.length === 0 ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>Nothing written in this block yet.</Text>
-          ) : null}
+          <SpcBlockCalendar
+            block={state.block}
+            workouts={state.workouts}
+            completions={state.completions}
+            sessionsPerWeek={state.spcClient?.sessions_per_week ?? 1}
+            today={state.today}
+            meta={calendarMeta({ block: state.block, sessionsPerWeek: state.spcClient?.sessions_per_week })}
+            onSelectSession={openSession}
+            onMoveSession={handleMoveSession}
+            showAll={showAllWeeks}
+            onToggleShowAll={() => setShowAllWeeks((v) => !v)}
+          />
 
           {/* Coach-to-coach notes on the block being viewed. The pre-overview
               version of this page carried them and the restructure dropped
               them; on a phone this screen IS the block, so it's where a note
               about the block belongs. Keyed on the selected block, so the
               picker re-reads its notes. */}
-          <View style={{ marginTop: 6 }}>
+          <View style={{ marginTop: 18 }}>
             <CommentThread spcBlockId={state.block.id} />
           </View>
         </>

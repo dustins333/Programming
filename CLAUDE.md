@@ -4365,9 +4365,166 @@ state drops the calendar and the Move button entirely. The DB call was stubbed
 for that via a temporary edit to `spcBlocks.js`, restored afterwards and
 **md5-verified byte-identical**. Harness deleted; `git status` confirmed clean.
 
-**Phases 3-4 are unbuilt** and specced in the artifact above: the calendar view
-(weeks down the side, stacked bars, today line, four states), then
-`spc_workouts.scheduled_week` plus the six read sites and the member mirror.
+**Phase 3 — the calendar view — shipped the same day. No migration.** New
+`components/coach/SpcBlockCalendar.js`: calendar weeks down the side, one bar
+per session across, rendered by `CoachSpcOverview` — the phone view, which is
+where coaches actually read this, and which also backs the native route and
+the desktop **Preview** button.
+
+**The desktop client page (`spc/[userId].web.js`) was deliberately not
+touched.** The spec says the calendar "replaces the block grid", but that grid
+is a *build* surface — copy mode, End here, click-to-open-the-builder — and the
+calendar is a *read* surface. Rebuilding copy mode onto stacked bars is a real
+rework of a 1372-line file with no way to click-test it from here, for no gain:
+the desktop page already has a Preview button into `spc/overview/[userId]`,
+which renders `CoachSpcOverview`, so the calendar is reachable at desktop width
+anyway. Copy mode and End here survive by construction.
+
+**The trap the spec warned about was real**: `CoachSpcOverview` mapped
+`workout.status === "published" ? "done" : "missed"` — it was using the tile
+states to mean *published / draft* and had never fetched a completion at all.
+`listSpcCompletionDetailsForWorkouts` is now loaded in its own `.catch(() => new
+Map())`, since a completions failure must degrade to "nothing finished yet",
+never blank a block that is otherwise fine.
+
+Five states, not four: the spec's `pending` / `done` / `pastOpen` /
+`notWritten`, plus **`draft`** — a ghost that has something behind it, so a
+coach can open it and see what's written. `notWritten` is a slot with no
+workout row at all, which is why `slots` is `max(sessions_per_week, highest
+session_number)`: taking it only from the written rows means an empty block
+draws nothing, when "nothing is written" is exactly what it needs to say.
+**The "past & still open" state renders with no action** — the "Do this week"
+pill is phase 4, and a dead button is worse than none.
+
+Two things worth knowing before touching the layout:
+
+- **RN has no CSS grid, so the mock's auto-flow had to be reproduced by hand.**
+  `packLines()` puts a full-width bar on its own line and lets consecutive done
+  chips share one until their day slots collide — that is what makes a week
+  "fill in left to right" instead of stacking two chips on two lines. It's
+  exported and pure, same as `buildSpcCalendar`.
+- **Yoga offsets an absolutely-positioned child by its parent's padding.** The
+  today line is drawn over a container with no padding of its own, with the
+  TODAY caption in normal flow above it — the first version put both inside one
+  padded box and the line overflowed the bottom by exactly that padding.
+
+**Deviations from the mock, both deliberate.** Its media query collapses the
+day columns, the today line and the done chips' day placement below 620px —
+i.e. the entire idea on the one surface that matters most. Measured instead:
+with the week label stacked above the track, 390px leaves ~50px a column and a
+done chip needs ~33px, so the seven columns are kept on the phone. And weeks
+outside the ±2 scroll window get a quiet "Show all N weeks" expander rather
+than being unreachable — "age out silently" is about not nagging, not about
+losing the first half of a block.
+
+**Verified for real.** `npm run build` + `check:routes` clean, a Babel parse +
+unresolved-identifier + unused-import pass over both files, and the calendar
+driven through a throwaway `app/zz-harness.js` at 390px and 1280px (deleted;
+`git status` confirmed clean). Exercised: all five states, the done chips
+sharing a line, the expander flipping both ways, a pending bar and a done chip
+each reporting the right workout id on tap, and a ghost reporting nothing. The
+timezone rule was checked with completions stamped in the Boise evening — a
+UTC `.slice(0,10)` would have put all three chips on the following day, and
+they land on Tue/Fri/Wed as intended. **Not verified**: anything behind a real
+login, and none of it on native — the dashed bars are the thing to look at
+there, since a fully-rounded dashed border can render solid on iOS (the states
+carry redundant wording and colour for exactly that reason).
+
+**Phase 4 — moving sessions — shipped the same day**, brought forward from
+"later" because the calendar without it is a report rather than a tool.
+**Migration `0101_spc_scheduled_week.sql` — run and verified live.**
+
+**The split that everything else follows from**: `coalesce(scheduled_week,
+week_number)` answers *which week is this session in*; the authored
+`week_number` alone answers *which week is a completion or a log filed under*.
+Conflating them files a completion somewhere nothing can find it, silently, and
+you cannot tell from the outside. That is why `week_number` is never rewritten
+(`session_completions` is keyed on it under a unique index) and why the print
+sheet is deliberately left un-coalesced — paper prints the block as authored.
+
+**The `weekNumber` parameter was the trap, and it was already being passed
+wrong in two places.** `finalizeSpcSession` / `unfinalizeSpcSession` /
+`getSpcCompletion` took the week from the caller, and `plan.js` and
+`useHubBoard.js` both handed them the *displayed* week. Fine while nothing
+could move; a live bug the moment something could. All three now resolve the
+authored week off the workout row themselves (`authoredWeekFor`), and the
+parameter is gone rather than deprecated — a param that must not be trusted
+should not exist. Same fix applied to the `weekNumber` that rides along with
+`spcWorkoutId` onto **log** rows (`plan.js`, `index.js`) and onto a hub slot
+(`HubClientPickList` now takes the session's own week, not the client's
+current calendar week).
+
+Read sites coalesced: `listSpcWorkoutsForWeek` (the choke point for My Fitness,
+My Week, `weeklyProgress` and `coachLogs` — one change covers all four),
+`flags.js`'s `addSpcFlags` (a moved session isn't missed; one moved *in* is
+genuinely due), the calendar itself, and `hub_startable_clients` in 0101, which
+is what puts a make-up on the wall display. `trimSpcBlockTo` also clears a move
+that would be stranded past the new end.
+
+**Two clamps, not one.** A row-level CHECK can only say `>= 1` — the upper
+bound lives on the parent block — so a `before insert or update ... when
+(new.scheduled_week is not null)` trigger holds "a session stays inside its
+block". The WHEN clause means ordinary builder saves, copies and bulk publishes
+never pay for the lookup. `setSpcWorkoutScheduledWeek` checks the same bound
+first so a coach gets a sentence instead of a constraint error, and writes
+**null** when the target equals the authored week — so undoing a move leaves no
+trace, matching the rule that the week a session came from shows nothing.
+
+**Her own logging moves a session for free, with nothing written.** A `done`
+bar is placed in the calendar week containing its `completed_at`, not in its
+authored or scheduled week — so finalizing a week-2 session during week 3 lands
+it in week 3, on the day she did it. No coach action, no member decision, no
+RPC, no member write policy on `spc_workouts`. Falling out of this: a week can
+legitimately have fewer bars than slots, and **a ghost is drawn only where
+nothing was ever written for that slot** — a session authored there and moved
+away leaves nothing, and a slot already holding a moved-in bar needs no ghost.
+
+**Three files, because dnd-kit is DOM-only**: `spcCalendarModel.js` (pure, no
+React), `spcCalendarParts.js` (the shapes), then `SpcBlockCalendar.js` (native)
+and `.web.js` (drag). Neither platform file imports the other — a `.web.js`
+importing its own sibling self-resolves and crash-loops. Web drags; native gets
+long-press → a week picker, since a hand-rolled pan would need `onLayout`,
+which cannot be verified from this environment at all (ResizeObserver never
+fires in the preview pane). Both get the **"Do this week"** pill on a
+past-and-still-open bar, which is ~95% of moves and needs no precision.
+
+**Touch matters here and the sensor config is load-bearing.** `PointerSensor`
+with `activationConstraint: { delay: 220, tolerance: 8 }` and
+`touchAction: "manipulation"` — *not* `touch-action: none`. With a
+hold-to-activate sensor the page must still scroll when a finger starts on a
+bar, and this calendar is almost entirely bars. The delay is also what keeps a
+short tap opening the session sheet.
+
+**Real bug Terra caught live, worth remembering as a class:** dnd-kit's
+`<DragOverlay>` renders `position: fixed` **and** subtracts the scroll offset of
+every scrollable ancestor it finds. In this app the page scroller is a nested
+RNW `ScrollView`, not the document (`app/+html.js` sets `body{overflow:hidden}`,
+so every screen supplies its own). Measured: the card sat **exactly `scrollTop`
+above the pointer** — invisible at the top of a page, badly wrong once scrolled,
+while the drop target still followed the pointer correctly. Fixed by dropping
+`DragOverlay` entirely for a preview portalled to `document.body` and positioned
+from the pointer by hand, with the transform written straight to the node so a
+`pointermove` never enters React's render path. **Any dnd-kit overlay in this
+app is suspect for the same reason** — the document is never the scroller here.
+
+**Verification**: migration dry-run in a rolled-back transaction (in-range move
+ok, past-block-end rejected by the trigger, zero rejected by the CHECK, clear
+ok) before applying, then column/constraint/trigger/function all confirmed by
+query. 19 assertions against the pure model (moves leaving no trace, a
+finalize-in-a-later-week landing on the right day, ghost suppression, the ±2
+window, line packing, what is and isn't movable). And the drag driven for real
+in a browser at 390px: hold-and-drag onto another week, the round trip back
+clearing the move, a short tap still opening the session, the "Do this week"
+pill, the native picker sheet, and the grab offset measured as a **constant
+16px while scrolled 320px** — which is what proves the overlay fix. **Not
+verified**: any of it behind a real login, and none of it on native.
+
+**Still unbuilt from phase 4**: the member mirror on `plan-spc-block.js` (same
+rows, no ghosts, no move affordance — hers is a record, the coach's is a to-do
+list). Also known and deliberately not chased: the hub's *staging* path
+(`hub_resolve_staged`) resolves by session number within the current week, so a
+moved-in make-up can be started from the wall (0101 fixed that) but cannot yet
+be pre-staged the night before.
 
 ## A blank screen can be diagnosed now, and the first one it caught (2026-08-29)
 
@@ -4538,6 +4695,7 @@ sections; next number after 0080 is 0081.)
 - `0096_event_publish_at.sql` — **run**, verified live 2026-08-27 (column, index, all six member-facing policies carrying the new gate, and zero existing rows affected; plus a 6-assertion impersonation test in a rolled-back transaction before applying). Adds `programming.events.publish_at` so an event can be scheduled to go live at a set day and time. Nullable, null = live as soon as it's published, so nothing existing changes. **Do not reorder the policy block** — the gate is intentionally inline in all six policies rather than in a helper, since a function reading `programming.events` would recurse inside that table's own policy. See "Events: one event opens straight in" above.
 - `0099_spc_status_derived.sql` — **run**, verified live 2026-08-29 (73 active / 3 paused, CHECK narrowed, default `'active'`, and the shipped `deriveSpcState()` re-run against real data with matching results). Collapses `programming.spc_clients.status` from the five printed-method values to `('active','paused')`; everything else about a client's state is computed by `lib/programming/spcState.js`. **Order is load-bearing — drop the constraint, then update, then re-add**: the new value is illegal under the old CHECK and the old values are illegal under the new one, so either other order fails (a dry run caught this). Requires redeploying `scan-spc-alerts` FIRST, which used to write `'new_program_asap'`. Rollback data is in `programming.zz_spc_status_backup_0099`.
 - `0100_client_errors.sql` — **run**, verified live 2026-08-29 (9 columns, 3 policies, RLS on, 3 indexes, PostgREST 200; plus five RLS assertions in a rolled-back transaction, then the same re-run against the live table and rolled back, leaving no rows). Adds `programming.client_errors` — crash reports from the app. `user_id` references **auth.users, NOT core.users**, on purpose: a member can have an auth row with no profile row (a failed GHL import leaves exactly that state) and that broken account is precisely the one whose crash is worth having. It defaults to `auth.uid()` so the client never supplies it and can't file under someone else's name. Insert is granted to `authenticated` only, never `anon` — an unauthenticated write is a public endpoint anyone can fill; the cost is that a crash before a session exists goes unrecorded. No member SELECT policy at all, and no update policy for anyone.
+- `0101_spc_scheduled_week.sql` — **run**, verified live 2026-08-29 (column, CHECK, trigger, trigger function, the coalescing `hub_startable_clients`, and 0 rows using it; plus a dry-run in a rolled-back transaction proving an in-range move succeeds, past-block-end is rejected by the trigger, 0 is rejected by the CHECK, and clearing always works). Adds `programming.spc_workouts.scheduled_week` — which week a session actually sits in, where its authored `week_number` says where it was written. Nullable, so nothing existing changes and there is nothing to backfill. **Everything that asks "which week is this in" reads `coalesce(scheduled_week, week_number)`; everything that files or looks up a COMPLETION or a LOG keeps using the authored `week_number`** — conflating the two writes a completion nothing can find, silently. The print sheet is deliberately left un-coalesced (paper prints the block as authored). The upper bound can't be a row-level CHECK (it lives on the parent block), so a `when (new.scheduled_week is not null)` trigger holds it. See "SPC statuses go derived" for the full phase-4 write-up.
 - `0095_exercise_parents.sql` — **run**, verified live 2026-08-27 (18 parent records, 66 exercises grouped, 0 variations lost, 0 duplicate names, plus an 11-assertion impersonation test in a rolled-back transaction as a reviewer, a non-reviewer coach and a member). Adds `programming.exercise_parents` and `exercises.parent_id`; `exercises.parent_exercise_id` is left populated but unread as the rollback path. See "A parent is its own record now" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
 - `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.

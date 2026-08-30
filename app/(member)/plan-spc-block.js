@@ -256,7 +256,7 @@ export default function PlanSpcBlock() {
     // session was stored (and read back) on the wrong Boise day.
     // 18:00Z is 12:00 MDT / 11:00 MST — mid-day in Boise either way.
     const completedAt = new Date(`${logDate}T18:00:00Z`).toISOString();
-    await finalizeSpcSession(profile.id, workout.id, workout.week_number, completedAt);
+    await finalizeSpcSession(profile.id, workout.id, completedAt);
     setState((prev) => {
       if (prev.status !== "ready") return prev;
       const next = new Map(prev.completions);

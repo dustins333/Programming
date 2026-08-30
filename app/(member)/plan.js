@@ -653,13 +653,13 @@ export default function MyFitness() {
         sessions: s.sessions.map((row) => (row.sessionNumber === session.sessionNumber ? { ...row, completed } : row)),
       }));
     if (session.completed) {
-      await unfinalizeSpcSession(profile.id, session.workout.id, spc.weekNumber);
+      await unfinalizeSpcSession(profile.id, session.workout.id);
       void clearScreen(SCREEN_MY_WEEK, profile.id);
       setCompleted(false);
       toastSuccess("Un-finalized — keep logging.");
       return;
     }
-    await finalizeSpcSession(profile.id, session.workout.id, spc.weekNumber);
+    await finalizeSpcSession(profile.id, session.workout.id);
     void clearScreen(SCREEN_MY_WEEK, profile.id);
     setCompleted(true);
     try {
@@ -667,7 +667,10 @@ export default function MyFitness() {
       const plate = await buildLiftFinalizePlate({
         userId: profile.id,
         sessionKey: `spc:${session.workout.id}:${spc.weekNumber}`,
-        session: { spcWorkoutId: session.workout.id, weekNumber: spc.weekNumber },
+        // The workout's AUTHORED week, never the week it's being shown in:
+        // a moved session (0101) files its logs under the week it was written
+        // in, which is where every reader looks for them.
+        session: { spcWorkoutId: session.workout.id, weekNumber: session.workout.week_number },
         sessionName: spcDetail?.title || session.workout.title || `Session ${session.sessionNumber}`,
         weekNumber: spc.weekNumber,
         exerciseIds: (spcDetail?.exercises ?? []).map((ex) => ex.exercise?.id),

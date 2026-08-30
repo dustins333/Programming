@@ -256,8 +256,8 @@ export function useHubBoard({ idlePoll = true } = {}) {
     async (userId) => {
       const entry = boardRef.current?.get(userId);
       if (!entry) return;
-      if (entry.finalized) await unfinalizeSpcSession(userId, entry.spcWorkoutId, entry.weekNumber);
-      else await finalizeSpcSession(userId, entry.spcWorkoutId, entry.weekNumber);
+      if (entry.finalized) await unfinalizeSpcSession(userId, entry.spcWorkoutId);
+      else await finalizeSpcSession(userId, entry.spcWorkoutId);
       await refreshBoard();
     },
     [refreshBoard]

@@ -1407,7 +1407,8 @@ export default function MemberHome() {
       logParams: { session: "spc", weekNumber: String(spcEntry.weekNumber), sessionNumber: String(row.sessionNumber) },
       retry: () => openSpcPreview(spcEntry, row),
       source: "spc",
-      session: { spcWorkoutId: row.workout.id, weekNumber: spcEntry.weekNumber },
+      // Authored week, not the displayed one — see plan.js's note.
+      session: { spcWorkoutId: row.workout.id, weekNumber: row.workout.week_number },
       warmups: [],
       exercises: [],
     });
@@ -1421,8 +1422,8 @@ export default function MemberHome() {
       const [warmups, exerciseRows, logs, completion] = await Promise.all([
         listSpcWarmups(row.workout.id),
         listSpcWorkoutExercises(row.workout.id),
-        listLogsForSession(profile.id, { spcWorkoutId: row.workout.id, weekNumber: spcEntry.weekNumber }),
-        getSpcCompletion(profile.id, row.workout.id, spcEntry.weekNumber),
+        listLogsForSession(profile.id, { spcWorkoutId: row.workout.id, weekNumber: row.workout.week_number }),
+        getSpcCompletion(profile.id, row.workout.id),
       ]);
       const completed = !!completion;
       setPreview((p) => ({
