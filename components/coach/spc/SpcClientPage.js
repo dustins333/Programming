@@ -180,10 +180,18 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
             <Eyebrow>THIS WEEK</Eyebrow>
             <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>target {target}</Text>
           </View>
-          <Text style={{ marginTop: 6 }}>
-            <Text style={{ fontFamily: fonts.display, fontSize: 30, color: "#2a211c" }}>{weekNumber ? countForWeek(weekNumber) : 0}</Text>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: "#57534e" }}> of {target} logged</Text>
-          </Text>
+          {/* "0 of 2 logged" under a program that hasn't started reads as a
+              miss. Nothing is owed this week — the program begins later. */}
+          {notStarted ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: "#57534e", marginTop: 8 }}>
+              {`Nothing due yet. Her first week starts Mon ${monthDay(current.block_start_date)}.`}
+            </Text>
+          ) : (
+            <Text style={{ marginTop: 6 }}>
+              <Text style={{ fontFamily: fonts.display, fontSize: 30, color: "#2a211c" }}>{weekNumber ? countForWeek(weekNumber) : 0}</Text>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: "#57534e" }}> of {target} logged</Text>
+            </Text>
+          )}
           <View style={{ flexDirection: "row", gap: 9, marginTop: 11, flexWrap: "wrap" }}>
             {sessionWorkouts.map((w) => {
               const done = completionKeys.has(`${w.id}:${weekNumber}`);
@@ -206,7 +214,11 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
                     Session {w.session_number}
                   </Text>
                   <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: done ? "#4d6142" : "#78716c", marginTop: 2 }}>
-                    {done && completedAt ? `Logged ${weekdayOf(dateInBoise(new Date(completedAt)))}` : "Not yet"}
+                    {done && completedAt
+                      ? `Logged ${weekdayOf(dateInBoise(new Date(completedAt)))}`
+                      : notStarted
+                        ? "Starts Mon " + monthDay(current.block_start_date)
+                        : "Not yet"}
                   </Text>
                 </View>
               );
