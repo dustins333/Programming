@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../PressFade";
 import { listStartableHubClients } from "../../lib/programming/hub";
+import { startNewSpcSessionInstance } from "../../lib/programming/sessionCompletions";
+import { toastError } from "../../lib/toast";
 import { fonts, colors, type } from "../../lib/theme";
 
 // The roster both hub pickers work from — every active SPC client with a
@@ -200,6 +202,95 @@ export function HubClientRow({
   );
 }
 
+/* ---------------------------------------------------- already done today? */
+
+// The coach's side of the member's make-up popup. She logged Session 1 on
+// Monday, she is back on Thursday and wants to do it again: that is a second
+// real session of the same week (0102's instance column), not a mistake.
+//
+// Centered card rather than a bottom sheet, matching the picker it opens
+// from — the hub's dialogs are coach-facing on a landscape screen, which is
+// what the house rule reserves centered dialogs for.
+//
+// Only offered where the board is about to run. Staging tomorrow's 6am is the
+// one place this must NOT appear: the instance would be created against
+// today's week, for a session she has not done yet.
+function RepeatSessionDialog({ visible, name, sessionNumber, busy, onClose, onOpenLogged, onStartNew }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        onPress={busy ? undefined : onClose}
+        style={{ flex: 1, backgroundColor: "rgba(68,64,60,0.45)", alignItems: "center", justifyContent: "center", padding: 20 }}
+      >
+        <Pressable
+          onPress={() => {}}
+          style={{
+            width: "100%",
+            maxWidth: 460,
+            backgroundColor: colors.canvas,
+            borderRadius: 22,
+            borderWidth: 1,
+            borderColor: CARD_BORDER,
+            padding: 22,
+          }}
+        >
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 20, color: INK }}>
+            {`${(name ?? "").split(" ")[0]} already logged Session ${sessionNumber} this week`}
+          </Text>
+          <Text style={{ fontFamily: fonts.sans, fontSize: type.body, color: colors.muted, marginTop: 5 }}>
+            Both are normal. Pick whichever matches what she is doing today.
+          </Text>
+          <View style={{ gap: 10, marginTop: 16 }}>
+            <PressFade
+              onPress={onOpenLogged}
+              disabled={busy}
+              style={{
+                opacity: busy ? 0.5 : 1,
+                backgroundColor: "#fff",
+                borderWidth: 1,
+                borderColor: "#e0dbd4",
+                borderRadius: 14,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+              }}
+            >
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: INK }}>Put that session on the board</Text>
+              <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, marginTop: 3 }}>
+                What she already logged. Add a set, fix a weight.
+              </Text>
+            </PressFade>
+            <PressFade
+              onPress={onStartNew}
+              disabled={busy}
+              style={{
+                opacity: busy ? 0.5 : 1,
+                backgroundColor: "#fff",
+                borderWidth: 1,
+                borderColor: "#e0dbd4",
+                borderRadius: 14,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+              }}
+            >
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: INK }}>Start a new one</Text>
+              <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, marginTop: 3 }}>
+                A second session this week, good for making up one she missed.
+              </Text>
+            </PressFade>
+          </View>
+          <PressFade
+            onPress={onClose}
+            disabled={busy}
+            style={{ alignSelf: "center", marginTop: 16, paddingVertical: 6, paddingHorizontal: 12 }}
+          >
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: colors.primaryOnWhite }}>Never mind</Text>
+          </PressFade>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export function HubClientPickList({
   mode = "multi", // "multi" (stage / start, up to 4) | "single" (add mid-session)
   excludeUserIds = [],
@@ -213,6 +304,11 @@ export function HubClientPickList({
   // slot stores (0090): the block's week rolls over between staging and the
   // morning, so the workout is only resolved at start.
   initialSessionNumbers = null,
+  // Picking a session she has already logged this week asks whether to open
+  // it or start a second one. True only where the board is about to run
+  // (start now, add mid-session) — never when staging a future group, where
+  // a new instance would be filed against the wrong week.
+  allowRepeat = false,
   compact = false,
 }) {
   const [roster, setRoster] = useState(null);
@@ -220,6 +316,12 @@ export function HubClientPickList({
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState({}); // userId -> spcWorkoutId
   const [expanded, setExpanded] = useState(null); // userId
+  const [repeatAsk, setRepeatAsk] = useState(null); // { row, session }
+  const [repeatBusy, setRepeatBusy] = useState(false);
+  // Once she has answered for a session, selecting it again is just a
+  // selection. Without this, deselect-and-reselect would keep asking and
+  // could file a third and fourth instance nobody meant to create.
+  const [repeatAnswered, setRepeatAnswered] = useState(() => new Set());
 
   const load = () => {
     setLoadError(false);
@@ -282,6 +384,31 @@ export function HubClientPickList({
     setExpanded((cur) => (cur === row.userId ? null : row.userId));
   };
 
+  // The select itself, once any "she already did this" question is settled.
+  const selectSession = (row, session) => {
+    const next = mode === "single" ? {} : { ...picked };
+    // Switching session for someone already picked isn't a new slot, so the
+    // cap only applies to a client who isn't on the list yet.
+    if (mode === "multi" && !picked[row.userId] && Object.keys(next).length >= MAX_SLOTS) return;
+    next[row.userId] = session.spcWorkoutId;
+    emit(next);
+  };
+
+  const handleStartNewInstance = async () => {
+    const { row, session } = repeatAsk;
+    setRepeatBusy(true);
+    try {
+      await startNewSpcSessionInstance(row.userId, session.spcWorkoutId);
+      setRepeatAnswered((prev) => new Set(prev).add(`${row.userId}:${session.spcWorkoutId}`));
+      setRepeatAsk(null);
+      selectSession(row, session);
+    } catch (e) {
+      toastError("Couldn't start a second session", e);
+    } finally {
+      setRepeatBusy(false);
+    }
+  };
+
   const chooseSession = (row, session) => {
     const already = picked[row.userId] === session.spcWorkoutId;
     if (already) {
@@ -290,12 +417,11 @@ export function HubClientPickList({
       emit(next);
       return;
     }
-    const next = mode === "single" ? {} : { ...picked };
-    // Switching session for someone already picked isn't a new slot, so the
-    // cap only applies to a client who isn't on the list yet.
-    if (mode === "multi" && !picked[row.userId] && Object.keys(next).length >= MAX_SLOTS) return;
-    next[row.userId] = session.spcWorkoutId;
-    emit(next);
+    if (allowRepeat && session.completed && !repeatAnswered.has(`${row.userId}:${session.spcWorkoutId}`)) {
+      setRepeatAsk({ row, session });
+      return;
+    }
+    selectSession(row, session);
   };
 
   if (loadError) {
@@ -370,6 +496,20 @@ export function HubClientPickList({
           );
         })}
       </ScrollView>
+      <RepeatSessionDialog
+        visible={Boolean(repeatAsk)}
+        name={repeatAsk?.row?.name}
+        sessionNumber={repeatAsk?.session?.sessionNumber}
+        busy={repeatBusy}
+        onClose={() => (repeatBusy ? null : setRepeatAsk(null))}
+        onOpenLogged={() => {
+          const { row, session } = repeatAsk;
+          setRepeatAnswered((prev) => new Set(prev).add(`${row.userId}:${session.spcWorkoutId}`));
+          setRepeatAsk(null);
+          selectSession(row, session);
+        }}
+        onStartNew={handleStartNewInstance}
+      />
     </View>
   );
 }

@@ -170,6 +170,9 @@ function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSess
           onChange={onChange}
           onPreview={onPreview}
           initialSessionNumbers={initialSessionNumbers}
+          // Starting now only. Staging a future group must not offer to file
+          // a second instance, which would land against today's week.
+          allowRepeat={mode === "start"}
           compact
         />
       </View>

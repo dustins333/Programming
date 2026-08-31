@@ -206,7 +206,7 @@ export function HubStartModal({ visible, onClose, onStarted }) {
           <Text style={{ fontFamily: fonts.sans, fontSize: type.body, color: colors.muted, marginTop: 4, marginBottom: 14 }}>
             {`${coach?.coachName?.split(" ")[0] ?? "Coach"} is coaching · up to four clients · each defaults to her next session`}
           </Text>
-          <HubClientPickList mode="multi" onChange={setSlots} />
+          <HubClientPickList mode="multi" onChange={setSlots} allowRepeat />
           <View style={{ flexDirection: "row", alignItems: "center", marginTop: 14 }}>
             <PressFade onPress={close} style={{ paddingHorizontal: 14, paddingVertical: 13 }}>
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: colors.muted }}>Cancel</Text>
@@ -271,7 +271,7 @@ export function HubAddClientModal({ visible, onClose, onBoardUserIds = [], onAdd
             ? "The board holds four — drop someone first."
             : "She joins the board straight away, in the next free column."}
         </Text>
-        {atCapacity ? null : <HubClientPickList mode="single" excludeUserIds={onBoardUserIds} onChange={setSlots} />}
+        {atCapacity ? null : <HubClientPickList mode="single" excludeUserIds={onBoardUserIds} onChange={setSlots} allowRepeat />}
         <View style={{ flexDirection: "row", alignItems: "center", marginTop: 14 }}>
           <PressFade onPress={close} style={{ paddingHorizontal: 14, paddingVertical: 13 }}>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: colors.muted }}>Cancel</Text>

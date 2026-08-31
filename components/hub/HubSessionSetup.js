@@ -57,7 +57,7 @@ export function HubSessionSetup({ profile, onStarted }) {
           flex:1 list would collapse to nothing there, and a self-sizing one
           would nest a scroller inside a scroller. */}
       <View style={{ height: 460 }}>
-        <HubClientPickList mode="multi" onChange={setSlots} compact />
+        <HubClientPickList mode="multi" onChange={setSlots} allowRepeat compact />
       </View>
 
       <PressFade
