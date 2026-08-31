@@ -149,7 +149,7 @@ function StageAnotherButton({ onPress }) {
 // Both halves of the selector show the same roster; only the sentence above
 // it and what the docked bar does with the result differ. One component so
 // "tap a name, then tap her session" cannot drift between the two.
-function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSessionNumbers, initialProgram }) {
+function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSessionNumbers, initialProgram, onGoToStartNow }) {
   return (
     <View style={{ flex: 1 }}>
       <Text style={{ fontFamily: fonts.sans, fontSize: type.body, lineHeight: 20, color: colors.muted, marginBottom: 14 }}>
@@ -159,6 +159,32 @@ function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSess
             ? `Editing ${describeWhen(editing)}. Tap a name to see her sessions, then tap the one she's doing.`
             : "Up to four clients. Tap a name to see her sessions, then tap the one she's doing."}
       </Text>
+
+      {/* Staging is SPC-only and always has been (a staged slot stores a
+          session NUMBER, resolved against SPC on the morning it runs — see
+          0106's header), so the group segments simply aren't offered here.
+          Said out loud rather than left as an absence: an LLYL girl who is
+          on Start now and missing from this list reads as a bug, and the
+          only way to find out otherwise was to ask. */}
+      {mode === "stage" && onGoToStartNow ? (
+        <PressFade
+          onPress={onGoToStartNow}
+          style={{
+            backgroundColor: "#fdf6f2",
+            borderWidth: 1,
+            borderColor: "#f0ddd2",
+            borderRadius: 12,
+            paddingVertical: 11,
+            paddingHorizontal: 13,
+            marginBottom: 14,
+          }}
+        >
+          <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, lineHeight: 17, color: "#7a5a49" }}>
+            SPC clients only. A group program can't be staged ahead.{" "}
+            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Start an LLYL board now →</Text>
+          </Text>
+        </PressFade>
+      ) : null}
 
       {/* A fixed height because this sits inside the page's own ScrollView: a
           flex:1 list would collapse to nothing there, and a self-sizing one
@@ -204,8 +230,12 @@ export default function SpcLiveSessions() {
   // Arriving from a group program's "Live session" link (0106): open Start now
   // with that program's segment already selected, rather than the Stage tab a
   // coach lands on when she opens this screen cold.
+  // `?tab=start` is the dashboard's Live session button, whose whole job is
+  // to remove taps — landing on the Stage tab would add one back, and Stage
+  // is also the one tab that can't offer LLYL (see below).
   const programParam = typeof params.program === "string" ? params.program : null;
-  const [idleTab, setIdleTab] = useState(programParam ? "start" : "left");
+  const wantsStart = programParam !== null || params.tab === "start";
+  const [idleTab, setIdleTab] = useState(wantsStart ? "start" : "left");
   const [liveTab, setLiveTab] = useState("logging");
   // Building a new group when the left side is already showing something
   // else. Not a third segment: it is a detour, and it takes the screen over
@@ -400,7 +430,27 @@ export default function SpcLiveSessions() {
     : [
         { key: leftKey, label: hasStaged ? "Staged sessions" : "Stage a session" },
         { key: "start", label: "Start now" },
+        { key: "history", label: "History" },
       ];
+
+  // History is a doorway rather than a third pane: selecting it navigates and
+  // the selector goes back to where it was, so there is no third body to keep
+  // in step with the two real ones.
+  // Leaves the staging detour if one is open, so the tap always lands on the
+  // roster it promises rather than under the aside.
+  const goToStartNow = () => {
+    setStagingAside(false);
+    setSlots([]);
+    setIdleTab("start");
+  };
+
+  const handleIdleTab = (key) => {
+    if (key === "history") {
+      router.push("/(coach)/spc/sessions");
+      return;
+    }
+    setIdleTab(key === leftKey ? "left" : key);
+  };
 
   // One flag decides both what's shown and what the docked bar does.
   const stagingNow = stagingAside || (!live && tab === "stage");
@@ -519,7 +569,7 @@ export default function SpcLiveSessions() {
               </Text>
             </PressFade>
           ) : (
-            <SegmentedControl segments={segments} activeKey={tab} onSelect={live ? setLiveTab : setIdleTab} />
+            <SegmentedControl segments={segments} activeKey={tab} onSelect={live ? setLiveTab : handleIdleTab} />
           )}
 
           {/* While a board runs this sits above the two live views, because
@@ -537,6 +587,7 @@ export default function SpcLiveSessions() {
               onChange={setSlots}
               onPreview={(row, session) => setPreview({ clientName: row.name, weekNumber: row.weekNumber, session })}
               initialSessionNumbers={initialSessionNumbers}
+              onGoToStartNow={goToStartNow}
             />
           ) : live ? (
             tab === "overview" ? (
@@ -591,6 +642,7 @@ export default function SpcLiveSessions() {
                 onChange={setSlots}
                 onPreview={(row, session) => setPreview({ clientName: row.name, weekNumber: row.weekNumber, session })}
                 initialSessionNumbers={tab === "stage" ? initialSessionNumbers : null}
+                onGoToStartNow={tab === "stage" ? goToStartNow : null}
               />
               {tab === "start" ? <HubPinCard /> : null}
             </View>

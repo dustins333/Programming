@@ -333,23 +333,35 @@ export function HubLiftCard({
         <ActionButton label="Same as last" onPress={onSameAsLast} disabled={(active?.set ?? 0) === 0} />
       </View>
 
-      {/* One note field. Coach or client — one note, both see it. */}
+      {/* One note field. Coach or client — one note, both see it.
+          Multiline with a FIXED height that scrolls, never auto-growing off
+          onContentSizeChange: on web that feeds back on itself (the box is
+          overflow-hidden with an explicit height, so the "content" it measures
+          is the height just set) and this codebase has been bitten three times
+          — CommentThread's NoteField, GamePlan, and ExerciseCard, where it
+          reached a real client as React #185 and a blank screen. Three lines
+          is what a rack-side note runs to; longer scrolls. */}
       <TextInput
         value={note}
         onChangeText={onChangeNote}
         onBlur={onCommitNote}
+        multiline
+        textAlignVertical="top"
         placeholder={weekNumber != null ? `Add a note for week ${weekNumber}…` : "Add a note…"}
         placeholderTextColor={colors.hint}
         style={{
           marginTop: 10,
-          height: 42,
+          height: compact ? 66 : 72,
           borderRadius: 12,
           borderWidth: 1,
           borderColor: CARD_BORDER,
           backgroundColor: "white",
           paddingHorizontal: 12,
+          paddingTop: 9,
+          paddingBottom: 9,
           fontFamily: fonts.sans,
           fontSize: 13,
+          lineHeight: 18,
           color: "#292524",
         }}
       />

@@ -5001,6 +5001,110 @@ arrows are gone while dropping a client still works.
 test collided with them. So the board's read path will find real history from
 day one, not an empty column.
 
+## Live sessions get a front door, and a history you can write up later (2026-08-30)
+
+Three asks in one pass, **no migration** — everything here already existed in
+the schema and was simply never read back.
+
+**The dashboard has a Live session strip.** `components/coach/LiveSessionStrip.js`
+is one component rendered by both home screens so they can't drift, above the
+Today band on mobile and above the resume card on desktop. It is live-state
+aware because the two questions differ: with nothing running it is "get me to
+the roster", with a board up it is "get me back to the one I am running" —
+which is also how a coach finds out someone else already started one. Gated
+on admin-or-`can_view_spc`, and `useOpenHubSession` swallows its own error, so
+a coach RLS refuses never breaks the dashboard over one optional strip.
+
+**It lands on `?tab=start`, not the screen's own default, and that is the
+whole fix for "LLYL isn't there".** The complaint was real but it was never
+the filter: `allowPrograms={mode === "start"}` — **staging is SPC-only and
+always has been**, because a staged slot stores a session NUMBER resolved
+against SPC on the morning it runs (0090/0091, and 0106's header says so).
+Opening the screen cold lands on Stage, which is the one tab that cannot
+offer a group program; arriving from Group Programs' "Live session" link
+carries `?program=` and lands on Start now, which can. So it looked like the
+tab appeared and disappeared depending on how you got in. Two changes: the
+dashboard skips Stage entirely, and the Stage tab now **says** it is SPC-only
+with a one-tap "Start an LLYL board now →" instead of leaving the absence to
+be discovered. **An absent option reads as a bug; say why it is absent.**
+
+**Past boards are reviewable and fully writable.** Ending a board only stamps
+`hub_sessions.ended_at` — the row and its `hub_session_clients` snapshot stay,
+and 0071's `staff manage hub_sessions` already let any SPC coach read them.
+So this needed no schema at all, only:
+- `fetchHubBoard(slots, dateOverride)` — the logs half was hardcoded to
+  `todayInBoise()`, and a finished session's sets sit on the day it ran.
+  Structure, completions and notes stay CURRENT state on purpose.
+- `useHubBoard({ reviewSession })` — same hook, so sets/notes/ticks/finalize
+  write exactly as they do live; it just stops polling for the open session
+  and writes to the board's own date.
+- `lib/programming/hubHistory.js` + `app/(coach)/spc/sessions/` (list +
+  `[sessionId]`), reached from a third **History** segment on the live screen,
+  idle only. The detail screen renders the real `HubLiveSession` rather than a
+  read-only lookalike — a second lift card is a second thing to keep in step.
+
+Decisions taken with Terra: all coaches' boards with a "Just mine" filter (three
+people run boards); sessions with **zero logged sets are hidden** (there are a
+lot of four-second test boards in there); two days by default with "Show older"
+paging back rather than a hard cutoff, since a window that loses last week is
+worse than a list that scrolls; and a past board stays fully editable, because
+finishing the write-up afterwards is the entire point.
+
+**Real bug Terra caught on the first click-through, and it wasn't what it
+looked like.** Sessions appeared with "16 sets logged", opened, and every card
+was empty — she reasonably suspected the card's clear-on-focus behaviour. It
+was the count: the first pass bucketed logs by (day, client) with no workout
+in the key, so any set that client logged ANYWHERE that day counted toward
+that board. Four of the six boards in the last two days had genuinely nothing
+typed into them and were being let through on the strength of the client's
+other training. Fixed by keying on (day, client, workout) — the count now
+answers the same question the board itself will. **A "does this have data"
+count and the screen it gates must read the same rows, or the gate is
+decoration.** Verified in SQL against every board of the last nine days before
+and after.
+
+That diagnosis also surfaced something real about the boards themselves, worth
+knowing rather than filed as a code note: those empty boards weren't idle
+clients. C.J. logged 18 sets that day on SPC Session 1 while her board slot
+pointed at a different workout, and Lindsey was put on a board three times as
+an SPC slot while everything she logged was her GROUP session. The board and
+the training diverged; nothing was typed into the board either time.
+
+**The lift card's note field wraps now** (`HubLiftCard`) — it was a single-line
+`TextInput` with a fixed 42px height, so a real rack-side note ran off the side
+instead of wrapping. Now `multiline` at a **fixed** 72px (three lines) that
+scrolls past that. Deliberately NOT auto-growing off `onContentSizeChange`: on
+web that feeds back on itself, and this codebase has now been bitten by it
+three separate times (CommentThread's NoteField, GamePlan, and ExerciseCard —
+where it reached a real client as React #185 and a blank screen). Measured
+after the change: box height stays 72 through a six-line note while
+`scrollHeight` grows to 108, so there is no loop.
+
+**The one fidelity limit, stated in the lib's header too**: `programming.logs`
+carries no hub-session reference, so a past board shows "that client's sets for
+that session on that day", not literally what was typed on that board. Two
+boards on the same day with the same client on the same session would show
+identical lifts. Same known join gap already documented for the day timeline;
+fixing it properly means a session reference on `logs`, not a cleverer query.
+
+**Real bug caught by looking rather than reasoning**: the review screen sat on
+a spinner for a full ten seconds. `sessionRef.current` was assigned from state
+during render, but in review mode the session arrives as a PROP via an effect —
+so the poll effect's kickoff, running in that same commit, still saw `undefined`
+and skipped the board fetch, leaving nothing until the first 10s tick. Fixed
+with `sessionRef.current = reviewSession ?? hubSession`. **A ref fed only by
+state is a tick behind a prop that arrives in the same commit** — worth
+remembering for any hook that takes both.
+
+Verified: `npm run build` + `check:routes` clean, a Babel parse /
+unresolved-identifier / unused-import pass over all nine touched files, and the
+strip (both states), the history list with its day grouping and coach filter,
+the Stage banner switching tabs, `?tab=start`, and the review header all driven
+at 390px through a throwaway `app/zz-harness.js` (deleted; the stubbed lib was
+restored and md5-verified byte-identical). **Not verified behind a real login** —
+standing limitation. Worth Terra's pass: open a real board she ran, confirm the
+girls' lifts are there, and add a note to one.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

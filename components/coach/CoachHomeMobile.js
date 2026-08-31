@@ -7,6 +7,7 @@ import { computeAttentionItems, filterDismissedItems } from "../../lib/programmi
 import { decorateAttentionItems, filterAttentionByPermission, CARD_TONES } from "../../lib/programming/launchpad";
 import { dismissAttentionItem } from "../../lib/programming/dashboardDismissals";
 import { useCoachDashboard } from "../../lib/programming/useCoachDashboard";
+import { LiveSessionStrip, useOpenHubSession } from "./LiveSessionStrip";
 import { listMembers } from "../../lib/programming/clients";
 import { formatDateMDY } from "../../lib/formatDate";
 import { CoachShell } from "../CoachShell";
@@ -517,6 +518,9 @@ export function CoachHomeMobile() {
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [sheet, setSheet] = useState(null); // "nutrition" | "spc" | "group" | "payroll"
   const { profile, stats, extras, dismissals, setDismissals, nutritionToday, loadError, reload: load } = useCoachDashboard();
+  // A hook, so it sits above the loading/error returns below.
+  const canSeeHub = profile?.role === "admin" || Boolean(profile?.can_view_spc);
+  const openHub = useOpenHubSession(canSeeHub);
 
   if (loadError) {
     return (
@@ -587,6 +591,8 @@ export function CoachHomeMobile() {
             {greeting()}, {profile?.name?.split(" ")[0] ?? "coach"}
           </Text>
         </View>
+
+        {canSeeHub ? <LiveSessionStrip session={openHub} compact /> : null}
 
         <PulseBand gym={safeExtras.gym} onOpenSessions={() => setSessionsOpen(true)} />
 

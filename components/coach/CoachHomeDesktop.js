@@ -7,6 +7,7 @@ import { computeAttentionItems, filterDismissedItems } from "../../lib/programmi
 import { buildLaunchCards, decorateAttentionItems, filterAttentionByPermission, CARD_TONES } from "../../lib/programming/launchpad";
 import { dismissAttentionItem } from "../../lib/programming/dashboardDismissals";
 import { useCoachDashboard } from "../../lib/programming/useCoachDashboard";
+import { LiveSessionStrip, useOpenHubSession } from "./LiveSessionStrip";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
 import { SessionPreviewModal } from "../../components/SessionPreviewModal";
@@ -362,6 +363,10 @@ export function CoachHomeDesktop() {
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const { width } = useWindowDimensions();
   const { profile, stats, extras, dismissals, setDismissals, loadError, reload: load } = useCoachDashboard();
+  // Above the early returns, because it's a hook. Enabled off the profile the
+  // dashboard already has rather than a second read.
+  const canSpc = profile?.role === "admin" || Boolean(profile?.can_view_spc);
+  const openHub = useOpenHubSession(canSpc);
 
   const openPreview = async ({ previewWorkoutId, previewKind }) => {
     setPreview({ loading: true, title: "Preview", warmups: [], exercises: [] });
@@ -450,6 +455,12 @@ export function CoachHomeDesktop() {
           <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primary, lineHeight: 34, marginBottom: 22 }}>
             {greeting()}, {profile?.name?.split(" ")[0] ?? "coach"}
           </Text>
+
+          {canSpc ? (
+            <View style={{ marginBottom: 16 }}>
+              <LiveSessionStrip session={openHub} />
+            </View>
+          ) : null}
 
           <ResumeCard resume={safeExtras.resume} router={router} onPreview={openPreview} />
 

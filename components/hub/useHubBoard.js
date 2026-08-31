@@ -21,7 +21,7 @@ import {
   unfinalizeGroupSession,
 } from "../../lib/programming/sessionCompletions";
 import { addCoachingNote } from "../../lib/programming/coachingNotes";
-import { todayInBoise } from "../../lib/boiseDate";
+import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
 
 // The live hub's brain — shared by the wall display (app/(display)/index.js)
 // and the coach's phone (app/(coach)/spc/live.js). One open hub session at a
@@ -35,9 +35,19 @@ import { todayInBoise } from "../../lib/boiseDate";
 // the source of truth already has.
 const IDLE_POLL_MS = 5000;
 const LIVE_POLL_MS = 3000;
+// A finished board isn't racing anyone at a rack, but two coaches can still
+// be reviewing the same noon session — so it polls, just far less often.
+const REVIEW_POLL_MS = 10000;
 
-export function useHubBoard({ idlePoll = true } = {}) {
-  const [hubSession, setHubSession] = useState(undefined); // undefined = loading, null = none open
+// `reviewSession` turns this into the review brain for a session that has
+// already ended (app/(coach)/spc/sessions/[sessionId].js). Everything a coach
+// does on it — sets, notes, ticks, finalize — writes exactly as it does live;
+// the only differences are that there is no open session to poll for, and
+// that logs are read from and written to the day the board actually ran
+// rather than today.
+export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
+  const reviewMode = Boolean(reviewSession);
+  const [hubSession, setHubSession] = useState(reviewSession ?? undefined); // undefined = loading, null = none open
   const [board, setBoard] = useState(null); // Map<userId, entry> from fetchHubBoard
   const [warmups, setWarmups] = useState(new Map()); // Map<workoutId, rows>
   const [pollError, setPollError] = useState(false);
@@ -62,12 +72,34 @@ export function useHubBoard({ idlePoll = true } = {}) {
   // lift" would be wrong the moment a second column is opened.
   const editingRef = useRef(new Map()); // Map<userId, {exerciseId, seq, savedSeq}>
   const sessionRef = useRef(undefined);
-  sessionRef.current = hubSession;
+  // In review mode the session is a PROP, so it is authoritative the instant
+  // it arrives. Reading it only out of state left the board blank until the
+  // first poll tick: setHubSession is queued by an effect, but sessionRef is
+  // assigned during render, so the kickoff in the same commit still saw
+  // undefined and skipped the board fetch entirely.
+  sessionRef.current = reviewSession ?? hubSession;
   const boardRef = useRef(null);
   boardRef.current = board;
   const warmupsForRef = useRef(null); // hub session id the warmups were fetched for
+  // The Boise day this board's sets belong to. Null while live, which is what
+  // keeps every write on the live path reading todayInBoise() at the moment
+  // the key was pressed rather than at mount.
+  const boardDateRef = useRef(null);
+  boardDateRef.current = reviewSession
+    ? reviewSession.date ?? dateInBoise(new Date(reviewSession.created_at))
+    : null;
+
+  // A different session id means a different board; identity churn on the
+  // same one must not reset it.
+  const reviewId = reviewSession?.id ?? null;
+  useEffect(() => {
+    if (reviewSession) setHubSession(reviewSession);
+  }, [reviewId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshSession = useCallback(async () => {
+    // A finished board is fixed — asking which session is open would replace
+    // the one being reviewed with whatever is running on the floor right now.
+    if (reviewMode) return sessionRef.current ?? null;
     try {
       const open = await getOpenHubSession();
       setPollError(false);
@@ -82,13 +114,13 @@ export function useHubBoard({ idlePoll = true } = {}) {
       setPollError(true);
       return sessionRef.current ?? null;
     }
-  }, []);
+  }, [reviewMode]);
 
   const refreshBoard = useCallback(async () => {
     const session = sessionRef.current;
     if (!session) return;
     try {
-      const next = await fetchHubBoard(session.clients);
+      const next = await fetchHubBoard(session.clients, boardDateRef.current);
       setPollError(false);
       for (const [editUserId, edit] of editingRef.current) {
         if (edit.seq === edit.savedSeq) continue; // nothing unsaved — let the poll through
@@ -141,27 +173,31 @@ export function useHubBoard({ idlePoll = true } = {}) {
       if (session) {
         await refreshBoard();
         // The session itself can end from another device mid-poll.
-        await refreshSession();
+        if (!reviewMode) await refreshSession();
       } else if (idlePoll) {
         const open = await refreshSession();
         if (open && !cancelled) await refreshBoard();
       }
       if (cancelled) return;
-      timer = setTimeout(tick, sessionRef.current ? LIVE_POLL_MS : IDLE_POLL_MS);
+      timer = setTimeout(tick, reviewMode ? REVIEW_POLL_MS : sessionRef.current ? LIVE_POLL_MS : IDLE_POLL_MS);
     };
 
-    // Kick off immediately.
+    // Kick off immediately. `idlePoll: false` with nothing known yet means the
+    // caller is waiting on its own session (the review screen, whose session
+    // arrives a tick later) — looking up whichever board is running on the
+    // floor right now would flash the wrong one onto the screen.
     (async () => {
-      const open = await refreshSession();
+      const known = sessionRef.current;
+      const open = !known && !idlePoll ? null : await refreshSession();
       if (open && !cancelled) await refreshBoard();
-      if (!cancelled) timer = setTimeout(tick, sessionRef.current ? LIVE_POLL_MS : IDLE_POLL_MS);
+      if (!cancelled) timer = setTimeout(tick, reviewMode ? REVIEW_POLL_MS : sessionRef.current ? LIVE_POLL_MS : IDLE_POLL_MS);
     })();
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [refreshSession, refreshBoard, idlePoll]);
+  }, [refreshSession, refreshBoard, idlePoll, reviewMode, reviewId]);
 
   const setEditing = useCallback((userId, exerciseId) => {
     editingRef.current.set(userId, { exerciseId, seq: 0, savedSeq: 0 });
@@ -194,7 +230,7 @@ export function useHubBoard({ idlePoll = true } = {}) {
   // converge as last-write-per-set, accepted for a coached session where
   // everyone is standing at the same rack.
   const saveSets = useCallback(async ({ userId, entry, exerciseId, rows }) => {
-    const datePerformed = todayInBoise();
+    const datePerformed = boardDateRef.current ?? todayInBoise();
     const startedAt = editingRef.current.get(userId)?.seq ?? 0;
     const session = sessionRefFor(entry);
     await Promise.all(
