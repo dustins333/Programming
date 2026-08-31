@@ -57,7 +57,15 @@ export default function ReviewHubSession() {
     for (const rows of entry?.logsByExerciseId?.values() ?? []) {
       for (const row of rows) if (row.reps != null || row.weight != null) sets += 1;
     }
-    return { userId: c.user_id, name: (c.client_name ?? "").split(" ")[0], sets };
+    return {
+      userId: c.user_id,
+      name: (c.client_name ?? "").split(" ")[0],
+      sets,
+      // Swapped out part-way — a coach running back-to-back groups drops one
+      // and adds the next into the freed slot. Named on the chip so a short
+      // stint reads as "she went home", not "her data is missing".
+      left: c.removed_at ? formatTimeInBoise(c.removed_at) : null,
+    };
   });
 
   if (loadError) {
@@ -133,6 +141,7 @@ export default function ReviewHubSession() {
                     style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.sets > 0 ? "#4d6142" : colors.muted }}
                   >
                     {c.name} {c.sets > 0 ? `${c.sets} set${c.sets === 1 ? "" : "s"}` : "nothing logged"}
+                    {c.left ? ` · left ${c.left}` : ""}
                   </Text>
                 </View>
               ))}

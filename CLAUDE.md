@@ -5102,6 +5102,27 @@ misleading:
    / "Rae nothing logged") so an empty column is explained before she taps a
    name rather than after.
 
+**Third report, and the one that needed a migration: back-to-back boards lost
+people.** Terra's own hypothesis — Rae was pre-staged, didn't show, the coach
+dropped her, and she lingered in history — turned out to be the *opposite* of
+what was possible, and checking it is what found the real gap. The roster is
+captured at **start** (`hub_start_session` / `hub_start_staged` write
+`hub_session_clients`; staging keeps its own separate table), then mutated
+live by add/remove, and never touched at end. And `hub_remove_client` did a
+hard DELETE — so a dropped client left no trace at all. Rae appearing in
+history was therefore proof she was on the board start to finish and simply
+never logged; the real bug was the mirror image, and it bites the way coaches
+actually work: one client finishes, she is dropped, the next is added into the
+freed slot, and the woman who just trained for an hour disappears from that
+board's record while her sets sit in `logs` attached to no board. Fixed by
+0107 (above); the review screen now says "Victoria 9 sets · left 11:40 AM"
+beside "Aishie 12 sets", so a swap reads as the sequence it was.
+
+**Worth remembering as a shape**: a user's wrong theory can still be the thing
+that finds the bug. Testing "does removal leave a trace?" answered her question
+(no, so her theory was impossible) and simultaneously exposed a silent
+data-completeness hole nobody had asked about.
+
 **Generalisable**: when a screen reports on a past moment, every fact on it
 has to be scoped to that moment or explicitly marked as current. Mixing the
 two silently is worse than showing neither — a date-scoped number next to an
@@ -5216,6 +5237,8 @@ sections; next number after 0080 is 0081.)
 - `0095_exercise_parents.sql` — **run**, verified live 2026-08-27 (18 parent records, 66 exercises grouped, 0 variations lost, 0 duplicate names, plus an 11-assertion impersonation test in a rolled-back transaction as a reviewer, a non-reviewer coach and a member). Adds `programming.exercise_parents` and `exercises.parent_id`; `exercises.parent_exercise_id` is left populated but unread as the rollback path. See "A parent is its own record now" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
 - `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.
+
+- `0107_hub_client_removed_at.sql` — **run**, verified live 2026-08-30 (both columns, both partial indexes, both old constraints gone, all five functions and the display policy scoped; plus an 8-assertion dry-run as a real coach in a rolled-back transaction first). Taking a client off the live board is a **soft delete** now — `hub_session_clients.removed_at` — because coaches run back-to-back groups on one board and a hard DELETE erased whoever had just trained on it. `added_at` is added nullable with the default set afterwards, so pre-existing rows stay null rather than claiming a made-up join time. **Both UNIQUE constraints have to become partial** (`where removed_at is null`), each for its own reason: `(hub_session_id, position)` or a vacated slot stays occupied and four swaps fill the four-client cap with people who went home; `(hub_session_id, user_id)` or a client who stepped out can never be swapped back in. `hub_active_client` and the two group predicates gate every display policy on logs/completions/notes, so they exclude removed rows — **access has to evaporate on removal exactly as it does when the session ends**. ⚠ Past removals are gone for good; nothing recorded them.
 
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
