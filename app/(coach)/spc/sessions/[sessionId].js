@@ -47,6 +47,19 @@ export default function ReviewHubSession() {
 
   const back = () => (router.canGoBack() ? router.back() : router.push("/(coach)/spc/sessions"));
 
+  // Who actually got logged on this board, stated before she taps a name.
+  // The list row's count is the SESSION total, so a board reading "18 sets"
+  // can still have a client on it who was never touched — which is exactly
+  // what made an empty column look like data had gone missing.
+  const perClient = (session?.clients ?? []).map((c) => {
+    const entry = hub.board?.get(c.user_id);
+    let sets = 0;
+    for (const rows of entry?.logsByExerciseId?.values() ?? []) {
+      for (const row of rows) if (row.reps != null || row.weight != null) sets += 1;
+    }
+    return { userId: c.user_id, name: (c.client_name ?? "").split(" ")[0], sets };
+  });
+
   if (loadError) {
     return (
       <CoachShell>
@@ -100,6 +113,31 @@ export default function ReviewHubSession() {
             {session.coach_name ? `${session.coach_name} · ` : ""}
             {session.clients.length} client{session.clients.length === 1 ? "" : "s"} · anything you change here saves to that day
           </Text>
+
+          {hub.board && perClient.length > 0 ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+              {perClient.map((c) => (
+                <View
+                  key={c.userId}
+                  style={{
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: c.sets > 0 ? "#dbe8cf" : "#ece7e1",
+                    backgroundColor: c.sets > 0 ? "#f3f6ef" : "#faf8f6",
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                  }}
+                >
+                  <Text
+                    maxFontSizeMultiplier={1.15}
+                    style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: c.sets > 0 ? "#4d6142" : colors.muted }}
+                  >
+                    {c.name} {c.sets > 0 ? `${c.sets} set${c.sets === 1 ? "" : "s"}` : "nothing logged"}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           {!hub.board ? (
             <View style={{ paddingVertical: 40, alignItems: "center" }}>

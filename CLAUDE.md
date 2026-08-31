@@ -5080,6 +5080,33 @@ where it reached a real client as React #185 and a blank screen). Measured
 after the change: box height stays 72 through a six-line note while
 `scrollHeight` grows to 108, so there is no loop.
 
+**Second report, and the more important one: "her data was there, then it was
+gone."** Nothing was destroyed — checked the real rows first, and Rae's sets
+were intact throughout. What she opened was the 08/27 board, which had TWO
+clients on it: Victoria logged 18 sets, **Rae logged nothing**. The list row's
+count is the SESSION total, so the row honestly said "18 sets" and then tapping
+to Rae showed an empty column. Two fixes, because two different things were
+misleading:
+
+1. **Completions are now date-scoped in review mode too.** Rae trained the same
+   session the *next* day (08/28) and her ticks are stamped 08/28 — but ticks
+   were rendering as current state while sets were date-scoped, so the 08/27
+   board showed a full column of checkmarks over empty boxes. That is what
+   reads as "the data vanished". `completed_at` is never null on either
+   completions table (verified live: 1043 + 238 rows, zero), so filtering
+   can't hide a real completion. Live behaviour is unchanged — "a lift ticked
+   yesterday is still ticked" is right on a running board and wrong on a
+   finished one. Structure and notes deliberately stay current: a note added
+   afterwards is the point of the screen.
+2. **The review screen states per-client counts up front** ("Victoria 18 sets"
+   / "Rae nothing logged") so an empty column is explained before she taps a
+   name rather than after.
+
+**Generalisable**: when a screen reports on a past moment, every fact on it
+has to be scoped to that moment or explicitly marked as current. Mixing the
+two silently is worse than showing neither — a date-scoped number next to an
+unscoped tick invents an event that never happened.
+
 **The one fidelity limit, stated in the lib's header too**: `programming.logs`
 carries no hub-session reference, so a past board shows "that client's sets for
 that session on that day", not literally what was typed on that board. Two
