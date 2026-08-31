@@ -10,7 +10,7 @@ import { listSpcCompletionDetailsForWorkouts } from "../../../lib/programming/se
 import { getExerciseStats } from "../../../lib/programming/exerciseStats";
 import { getClient as getNutritionClient } from "../../../lib/nutrition/clients";
 import { getClientGoal } from "../../../lib/programming/clientGoals";
-import { deriveSpcState, monthDay, SPC_ENROLLMENT_LABELS } from "../../../lib/programming/spcState";
+import { deriveSpcState, resolveClientPrograms, monthDay, SPC_ENROLLMENT_LABELS } from "../../../lib/programming/spcState";
 import { calendarWeekNumber } from "../../../lib/programming/schedule";
 import { describeLastSession } from "../../../lib/programming/spcRoster";
 import { todayInBoise, daysBetween, dateInBoise, addDays } from "../../../lib/boiseDate";
@@ -84,7 +84,7 @@ function weekdayOf(iso) {
 /* ------------------------------------------------------------- overview */
 
 // Exported for the visual harness — a real component boundary, not a test seam.
-export function OverviewTab({ derived, current, upcoming, weekNumber, spcClient, member, completionKeys, sessionWorkouts, stats, lastSessionAt, onGoSessions, onGoPrint }) {
+export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, member, completionKeys, sessionWorkouts, stats, lastSessionAt, onGoSessions, onGoPrint }) {
   const router = useRouter();
   const clientFirst = firstNameOf(member?.name);
   const target = spcClient?.sessions_per_week ?? 1;
@@ -99,6 +99,15 @@ export function OverviewTab({ derived, current, upcoming, weekNumber, spcClient,
         title: `Program ${clientFirst} now`,
         line: "Enrolled, never programmed. Build her first program, or pause her to silence this.",
         cta: "Build her first program",
+      };
+    }
+    // Her program is built and waiting for its Monday. Nothing is due, and the
+    // week-N lines below would be counting weeks of a program that hasn't run.
+    if (notStarted) {
+      return {
+        title: `Ready and waiting for Mon ${monthDay(current.block_start_date)}`,
+        line: `Her program is published. ${clientFirst} can't see it until it starts, and you can still change the dates or edit it on the Sessions tab.`,
+        cta: "See her program",
       };
     }
     if (derived.state === "goodToGo" && upcoming?.status === "active") {
@@ -478,11 +487,9 @@ export function SpcClientPage({ userId }) {
       // The current run's sessions + her completions, for the Overview's
       // this-week card and timeline. Isolated — a failure here degrades to
       // "nothing logged yet", never a blank page.
-      const scheduled = blockRows.filter((b) => b.status !== "draft" && b.block_start_date);
-      const cur =
-        scheduled.find((b) => b.block_start_date <= today && (b.block_end_date == null || today <= b.block_end_date)) ??
-        [...scheduled].sort((a, b) => (a.block_start_date < b.block_start_date ? 1 : -1)).find((b) => b.format === "sessions" && b.block_start_date <= today) ??
-        null;
+      // Same resolver the render uses, or the Overview would list one
+      // program's sessions under another program's dates.
+      const { current: cur } = resolveClientPrograms(blockRows, today);
       if (cur) {
         try {
           const workouts = await listSpcWorkoutsForBlock(cur.id);
@@ -515,16 +522,14 @@ export function SpcClientPage({ userId }) {
     }, [load])
   );
 
-  const scheduled = useMemo(() => blocks.filter((b) => b.status !== "draft" && b.block_start_date), [blocks]);
-  const current = useMemo(() => {
-    return (
-      scheduled.find((b) => b.block_start_date <= today && (b.block_end_date == null || today <= b.block_end_date)) ??
-      [...scheduled].sort((a, b) => (a.block_start_date < b.block_start_date ? 1 : -1)).find((b) => b.format === "sessions" && b.block_start_date <= today) ??
-      null
-    );
-  }, [scheduled, today]);
-  const queued = useMemo(() => scheduled.find((b) => b.block_start_date > today) ?? null, [scheduled, today]);
-  const draft = useMemo(() => blocks.find((b) => b.status === "draft") ?? null, [blocks]);
+  // Shared with the roster. This page used to answer "which program is she on"
+  // on its own and stop at "covering today", so a client whose only program
+  // was queued read "No current program · Due now" here while the roster
+  // called her Good to go — 33 of 74 clients on the day this was found.
+  const { current, queued, draft, notStarted, everScheduled } = useMemo(
+    () => resolveClientPrograms(blocks, today),
+    [blocks, today]
+  );
   const upcoming = queued ?? draft;
 
   const weekNumber = current ? calendarWeekNumber(current.block_start_date, today) : null;
@@ -545,7 +550,8 @@ export function SpcClientPage({ userId }) {
     nextQueued: Boolean(queued),
     nextQueuedStart: queued?.block_start_date ?? null,
     finalWeekDone: thisWeekCount >= (spcClient?.sessions_per_week ?? 1),
-    everScheduled: scheduled.length > 0,
+    everScheduled,
+    notStarted,
     notes: spcClient?.notes_goals_feedback,
   });
 
@@ -606,6 +612,7 @@ export function SpcClientPage({ userId }) {
         <OverviewTab
           derived={derived}
           current={current}
+          notStarted={notStarted}
           upcoming={upcoming}
           weekNumber={weekNumber}
           spcClient={spcClient}
@@ -625,6 +632,7 @@ export function SpcClientPage({ userId }) {
           spcClient={spcClient}
           coachId={profile?.id}
           current={current}
+          currentNotStarted={notStarted}
           upcoming={upcoming}
           onChanged={load}
           isDesktop={isDesktop}

@@ -435,9 +435,48 @@ export function PublishProgramModal({ visible, onClose, current, spcClient, onPu
   );
 }
 
+/* ------------------------------------------------- queued program controls */
+
+// A published program that hasn't reached its Monday yet, and what can still
+// be done to it. Lives wherever that program is showing: normally the Upcoming
+// pane, but in Current when it is the only program she has — a client waiting
+// on her next program is not a client with no program, and putting a blank
+// "No current program" in front of the coach made 33 of them read as due when
+// the work was already done.
+//
+// Everything here is safe because she cannot see the program at all until it
+// starts (0102 gates her reads on block_start_date <= today), so nothing she
+// has already seen changes.
+function QueuedProgramStrip({ block, clientFirst, busy, onReschedule, onCancel }) {
+  return (
+    <View style={{ backgroundColor: "#eef1e7", borderRadius: 10, padding: 12 }}>
+      <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#4d6142" }}>
+        ✓ Published · goes live to {clientFirst} {monFmt(block.block_start_date)}
+      </Text>
+      <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#57534e", marginTop: 2 }}>
+        {block.block_end_date == null
+          ? "Ongoing, no end date. Edits keep flowing into it until then."
+          : `Runs to ${sunFmt(block.block_end_date)}. Edits keep flowing into it until then.`}
+      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
+        <PressFade onPress={onReschedule} disabled={busy} hitSlop={6}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#4d6142", opacity: busy ? 0.5 : 1 }}>
+            Change dates
+          </Text>
+        </PressFade>
+        <PressFade onPress={onCancel} disabled={busy} hitSlop={6}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#b23a22", opacity: busy ? 0.5 : 1 }}>
+            Cancel program
+          </Text>
+        </PressFade>
+      </View>
+    </View>
+  );
+}
+
 /* -------------------------------------------------------------- main tab */
 
-export function SpcSessionsTab({ userId, member, spcClient, coachId, current, upcoming, onChanged, isDesktop }) {
+export function SpcSessionsTab({ userId, member, spcClient, coachId, current, currentNotStarted = false, upcoming, onChanged, isDesktop }) {
   const router = useRouter();
   const today = todayInBoise();
   const clientFirst = firstNameOf(member?.name);
@@ -537,7 +576,11 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
       }
       setDrafts({});
       await reloadSessions();
-      toastSuccess(`Updated. ${clientFirst} sees this now.`);
+      toastSuccess(
+        currentNotStarted
+          ? `Updated. ${clientFirst} sees this when it starts ${monFmt(current.block_start_date)}.`
+          : `Updated. ${clientFirst} sees this now.`
+      );
     } catch (err) {
       toastError("Couldn't update", err);
     } finally {
@@ -563,7 +606,11 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
       // Adding to a live session shows immediately; adding to a hidden draft
       // session stays hidden until Update publishes it.
       await reloadSessions();
-      if (session.workout.status === "published") toastSuccess(`Added. Live to ${clientFirst}.`);
+      if (session.workout.status === "published") {
+        toastSuccess(
+          currentNotStarted ? `Added. She sees it ${monFmt(current.block_start_date)}.` : `Added. Live to ${clientFirst}.`
+        );
+      }
     } catch (err) {
       toastError("Couldn't add the lift", err);
     }
@@ -681,7 +728,7 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
   const handleReschedule = async (startDate, { lengthWeeks = null, ongoing = false } = {}) => {
     setBusy(true);
     try {
-      const result = await rescheduleSpcProgram(upcoming.id, { startDate, lengthWeeks, ongoing });
+      const result = await rescheduleSpcProgram(queuedBlock.id, { startDate, lengthWeeks, ongoing });
       setRescheduleOpen(false);
       toastSuccess(
         result.startDate <= today
@@ -697,10 +744,10 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
   };
 
   const handleCancelUpcoming = async () => {
-    if (!(await confirmCancelQueuedProgram(clientFirst, monFmt(upcoming.block_start_date)))) return;
+    if (!(await confirmCancelQueuedProgram(clientFirst, monFmt(queuedBlock.block_start_date)))) return;
     setBusy(true);
     try {
-      await unpublishSpcProgram(upcoming.id);
+      await unpublishSpcProgram(queuedBlock.id);
       toastSuccess("Cancelled. It's back in your build space as a draft.");
       onChanged();
     } catch (err) {
@@ -714,16 +761,16 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
   // and nothing was ever going to publish it — so it sat invisible to her with
   // the pane saying "Published" above it. Same deliberate press as the current
   // program's Update.
-  const handlePublishAdded = async () => {
+  const handlePublishAdded = async (block, startsLater) => {
     setBusy(true);
     try {
-      const { published } = await publishReadySessions(upcoming.id);
+      const { published } = await publishReadySessions(block.id);
       toastSuccess(
         published === 0
           ? "Nothing new to send yet."
-          : upcoming.block_start_date <= today
-            ? `Sent. ${clientFirst} sees ${published === 1 ? "it" : "them"} now.`
-            : `Sent. ${clientFirst} sees ${published === 1 ? "it" : "them"} ${monFmt(upcoming.block_start_date)}.`
+          : startsLater
+            ? `Sent. ${clientFirst} sees ${published === 1 ? "it" : "them"} ${monFmt(block.block_start_date)}.`
+            : `Sent. ${clientFirst} sees ${published === 1 ? "it" : "them"} now.`
       );
       onChanged();
     } catch (err) {
@@ -740,11 +787,20 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
   const expected = weekNumber ? weekNumber * (spcClient?.sessions_per_week ?? 1) : 0;
   const targetSessions = spcClient?.sessions_per_week ?? 1;
   const upcomingQueued = Boolean(upcoming && upcoming.status === "active");
+  // The published-but-not-yet-started program, whichever pane is holding it.
+  // When it is the only program she has it sits in Current (labelled), so its
+  // controls have to follow it there rather than living in one pane.
+  const queuedBlock = currentNotStarted ? current : upcomingQueued ? upcoming : null;
+  const queuedSessions = currentNotStarted ? currentSessions : upcomingSessions;
   // Sessions built after it was published: they hold lifts but are still
   // drafts, so she cannot see them and nothing on screen said so.
-  const unsentUpcoming = upcomingQueued
-    ? (upcomingSessions ?? []).filter((s) => s.exercises.length > 0 && s.workout.status !== "published").length
-    : 0;
+  const unsent = (list) => (list ?? []).filter((s) => s.exercises.length > 0 && s.workout.status !== "published").length;
+  const unsentQueued = queuedBlock ? unsent(queuedSessions) : 0;
+  // Same gap on a LIVE program: a session built after publishing is created as
+  // a draft, and the Update bar only appears when a sets/reps/rest field is
+  // dirty — so adding a whole session and touching nothing else left it
+  // invisible to her with no way to tell.
+  const unsentCurrent = current && !currentNotStarted ? unsent(currentSessions) : 0;
 
   const missingCurrentSlots = useMemo(() => {
     if (!current || !currentSessions) return [];
@@ -757,9 +813,16 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
   const currentPane = (
     <View style={{ flex: 1, minWidth: 0 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: OLIVE }} />
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: currentNotStarted ? "#a8a29e" : OLIVE }} />
         <Text style={{ fontFamily: fonts.display, fontSize: 20, color: "#2a211c" }}>Current program</Text>
-        <Badge label={`LIVE TO ${clientFirst.toUpperCase()}`} live />
+        {/* Her program IS this one — it just hasn't reached its Monday. Saying
+            "live to her" would be a lie, and showing nothing at all was what
+            made a waiting client read as one with no program. */}
+        {currentNotStarted ? (
+          <Badge label={`STARTS ${monFmt(current.block_start_date).toUpperCase()}`} />
+        ) : (
+          <Badge label={`LIVE TO ${clientFirst.toUpperCase()}`} live />
+        )}
       </View>
 
       {!current ? (
@@ -815,13 +878,51 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e" }}>Ongoing</Text>
             </View>
             <Text style={{ flex: 1, minWidth: 160, textAlign: "right", fontFamily: fonts.sans, fontSize: 12, color: lapsed ? "#9a6b1f" : "#78716c" }}>
-              {lapsed
-                ? `Ended ${sunFmt(current.block_end_date)} · still live to her until you publish something new`
-                : current.block_end_date
-                  ? `Week ${weekNumber} of ${current.block_length_weeks} · she's logged ${loggedCount} of ${expected} so far`
-                  : `Week ${weekNumber} · runs until you set an end date`}
+              {currentNotStarted
+                ? `Waiting to start · nothing is due`
+                : lapsed
+                  ? `Ended ${sunFmt(current.block_end_date)} · still live to her until you publish something new`
+                  : current.block_end_date
+                    ? `Week ${weekNumber} of ${current.block_length_weeks} · she's logged ${loggedCount} of ${expected} so far`
+                    : `Week ${weekNumber} · runs until you set an end date`}
             </Text>
           </View>
+
+          {currentNotStarted ? (
+            <View style={{ marginTop: 12 }}>
+              <QueuedProgramStrip
+                block={current}
+                clientFirst={clientFirst}
+                busy={busy}
+                onReschedule={() => setRescheduleOpen(true)}
+                onCancel={handleCancelUpcoming}
+              />
+              {unsentQueued > 0 ? (
+                <>
+                  <PressFade
+                    onPress={() => handlePublishAdded(current, true)}
+                    disabled={busy}
+                    style={{
+                      backgroundColor: "#33251f",
+                      borderRadius: 12,
+                      paddingVertical: 13,
+                      alignItems: "center",
+                      marginTop: 10,
+                      opacity: busy ? 0.5 : 1,
+                    }}
+                  >
+                    <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#f7f3ee" }}>
+                      {`↑ Send ${unsentQueued} new session${unsentQueued === 1 ? "" : "s"}`}
+                    </Text>
+                  </PressFade>
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", textAlign: "center", marginTop: 6 }}>
+                    {unsentQueued === 1 ? "This one was" : "These were"} built after you published, so {clientFirst} can't see{" "}
+                    {unsentQueued === 1 ? "it" : "them"} yet.
+                  </Text>
+                </>
+              ) : null}
+            </View>
+          ) : null}
 
           {currentSessions.map((s) => (
             <SessionCard
@@ -852,6 +953,31 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
               </Text>
             </PressFade>
           ))}
+
+          {unsentCurrent > 0 ? (
+            <>
+              <PressFade
+                onPress={() => handlePublishAdded(current, false)}
+                disabled={busy}
+                style={{
+                  backgroundColor: "#33251f",
+                  borderRadius: 12,
+                  paddingVertical: 13,
+                  alignItems: "center",
+                  marginTop: 16,
+                  opacity: busy ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#f7f3ee" }}>
+                  {`↑ Send ${unsentCurrent} new session${unsentCurrent === 1 ? "" : "s"}`}
+                </Text>
+              </PressFade>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", textAlign: "center", marginTop: 6 }}>
+                {unsentCurrent === 1 ? "This one is" : "These are"} built but not sent, so {clientFirst} can't see{" "}
+                {unsentCurrent === 1 ? "it" : "them"} yet.
+              </Text>
+            </>
+          ) : null}
 
           {dirtyRows.length > 0 ? (
             <View
@@ -947,31 +1073,13 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
           {upcomingQueued ? (
             /* Published-with-a-future-date needs to LOOK published, or a
                coach reads the pane as "nothing happened" (Terra's item 4). */
-            <View style={{ backgroundColor: "#eef1e7", borderRadius: 10, padding: 12 }}>
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#4d6142" }}>
-                ✓ Published · goes live to {clientFirst} {monFmt(upcoming.block_start_date)}
-              </Text>
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#57534e", marginTop: 2 }}>
-                {upcoming.block_end_date == null
-                  ? "Ongoing, no end date. Edits keep flowing into it until then."
-                  : `Runs to ${sunFmt(upcoming.block_end_date)}. Edits keep flowing into it until then.`}
-              </Text>
-              {/* Published is not final. Nothing here is visible to her yet
-                  (0102 gates her reads on the start date), so both of these
-                  are safe right up until the Monday it starts. */}
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
-                <PressFade onPress={() => setRescheduleOpen(true)} disabled={busy} hitSlop={6}>
-                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#4d6142", opacity: busy ? 0.5 : 1 }}>
-                    Change dates
-                  </Text>
-                </PressFade>
-                <PressFade onPress={handleCancelUpcoming} disabled={busy} hitSlop={6}>
-                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#b23a22", opacity: busy ? 0.5 : 1 }}>
-                    Cancel program
-                  </Text>
-                </PressFade>
-              </View>
-            </View>
+            <QueuedProgramStrip
+              block={upcoming}
+              clientFirst={clientFirst}
+              busy={busy}
+              onReschedule={() => setRescheduleOpen(true)}
+              onCancel={handleCancelUpcoming}
+            />
           ) : (
             <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
               Autosaves in the editor · publish it when it's ready
@@ -1004,10 +1112,10 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
             </Text>
           </View>
 
-          {upcomingQueued && unsentUpcoming > 0 ? (
+          {upcomingQueued && !currentNotStarted && unsentQueued > 0 ? (
             <>
               <PressFade
-                onPress={handlePublishAdded}
+                onPress={() => handlePublishAdded(upcoming, true)}
                 disabled={busy}
                 style={{
                   backgroundColor: "#33251f",
@@ -1019,12 +1127,12 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
                 }}
               >
                 <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: "#f7f3ee" }}>
-                  {`↑ Send ${unsentUpcoming} new session${unsentUpcoming === 1 ? "" : "s"}`}
+                  {`↑ Send ${unsentQueued} new session${unsentQueued === 1 ? "" : "s"}`}
                 </Text>
               </PressFade>
               <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", textAlign: "center", marginTop: 8 }}>
-                {unsentUpcoming === 1 ? "This one was" : "These were"} built after you published, so {clientFirst} can't see{" "}
-                {unsentUpcoming === 1 ? "it" : "them"} yet.
+                {unsentQueued === 1 ? "This one was" : "These were"} built after you published, so {clientFirst} can't see{" "}
+                {unsentQueued === 1 ? "it" : "them"} yet.
               </Text>
             </>
           ) : null}
