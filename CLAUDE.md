@@ -4896,6 +4896,111 @@ new tabbed page. Verified by query, not assumed.
 5. The `zz_*_0105` backup tables can be dropped once the model has run for a
    while without incident.
 
+## LLYL goes on the live board (2026-08-30)
+
+LLYL is four women (six enrolled, two testers) lifting the SAME program —
+which is exactly why it was built as a group rather than four parallel SPC
+clients, and why it will keep working that way as it grows. The ask was
+narrow: put them on the gym-floor board. Their programming does not move.
+
+**Opt-in per program**: `group_programs.hub_enabled`, default false, toggled
+in the ⚙ program settings modal. A boolean, not a name test — this repo
+already has a scar from `"Flagship"` hardcoded in the dashboard lookup.
+
+**The timing mattered.** Until 0102/0105 landed the same day, SPC was also a
+week grid and this would have been one shared code path. SPC is now
+sessions-format, so **group revives 0104's WEEKLY arm**, which the cutover had
+left with no users at all. The group arms are modelled on that arm, and the
+SPC arms of `hub_startable_clients` are byte-identical to 0104's — verified by
+diffing the extracted region against `pg_get_functiondef` output, which caught
+two real hand-copy errors (`w.moved_from_week`, which does not exist, and a
+missing `coalesce(w.scheduled_week, w.week_number)` from 0101). **Worth
+reusing: when a migration says an arm is "byte-identical", pull the live
+definition and actually diff it.**
+
+**Three differences, each forced by the model** (all spelled out in 0106's
+header):
+1. Four clients share ONE `group_workouts` row. Everything per-client is keyed
+   on `user_id`, so logging stays separate for free. What is shared is
+   `position` — so **reorder is hidden for a group column** (the toggle stays,
+   because dropping a client lives behind it; the icon becomes
+   `person-remove-outline`), and `useHubBoard.moveLift` refuses as well.
+2. **A group completion carries no week number** — 0040's check constraint
+   requires it null, because the join row is already week-specific. SPC's
+   sessions format went the opposite way and files under the calendar week.
+   `sessionRefFor(entry)` in `lib/programming/hub.js` is the single place that
+   decides; `hub_session_clients.week_number` is display-only for a group slot.
+3. No ongoing programs, no lapsed fallback — both are sessions-format only
+   (0103). **When a group block ends with nothing queued its members drop off
+   the picker**, where a lapsed SPC run keeps running. LLYL's current block
+   ends **2026-09-06**, so this will be seen within a week of shipping. Not a
+   bug and deliberately not changed.
+
+**Staging is deliberately excluded.** `hub_staged_clients` stores a session
+NUMBER and resolves it against SPC at start time (0090/0091), so a group arm
+would need a program reference on the staged row plus arms in
+`hub_resolve_staged` and `hub_start_staged`. The picker takes
+`allowPrograms` (default **true**, so the wall's own picker and add-mid-session
+get segments without opting in) and staging passes `false`.
+
+**The picker's segment**: SPC opens by default, one segment per `hub_enabled`
+program present in the roster, built from the data. Selection moved from
+`picked[userId]` to a composite `row.key` (`programKind:programId:userId`) —
+someone who is both an SPC client and a group member is two rows with two
+different sessions, and the old keying would have collided on the React key
+and on the emitted slot. `SegmentedControl` gained a `dense` prop (trims
+`mb-6` to `mb-2.5`; default unchanged).
+
+**Real bug worth remembering: a policy ON a table cannot SELECT that table.**
+The first display policy on `group_workouts` needed the board's block, which
+meant reading `group_workouts` — infinite recursion, `42P17`, caught in the
+RLS test rather than by review. Fixed with two security-definer predicates
+(`hub_active_group_workout` / `hub_active_group_block`), the same pattern
+`hub_active_client` exists for and 0096's header warns about from the other
+direction. The block-wide one is what the lift-history strip needs; the
+workout-scoped one gates exercises and warm-ups.
+
+Display reads are **scoped to the block a board workout belongs to** —
+tighter than the SPC equivalent, deliberately: the plain Group programme has
+94 members, and a program-wide policy would open all of it to the wall the day
+one of them lands on the board.
+
+**Entry points**: a clay "Live session" pill on the Group Programs page — in
+`CoachBlockOverview` (native + mobile web) and next to ⚙ settings on desktop —
+rendered only when `hub_enabled`. It lands on `/(coach)/spc/live?program=<id>`,
+which opens the Start now tab with that segment already selected. The address
+stays `/spc/live` (Terra's call).
+
+**`components/hub/HubSessionSetup.js` is dead** — nothing has imported it since
+live.js grew its own `StagePicker` (2026-08-28). Kept in step with 0106 rather
+than deleted, since deleting a working component is Terra's call.
+
+**Verification**: 29 assertions against the live DB in rolled-back
+transactions — the RPC's group arm against real LLYL rows, the `hub_enabled`
+gate in both directions, `hub_group_workout_belongs_to` accepting a real
+pairing and rejecting a non-member and a switched-off program, the display
+reading the board workout and its whole block while blind to another program,
+access evaporating when the board ends, a full write/read round trip on group
+keys (log, tick, finalize, note — all four written exactly as the JS writes
+them and read back with the queries `fetchHubBoard` runs), and both
+constraints biting. The picker was driven in a browser through a throwaway
+`app/zz-harness.js` with a stubbed roster (deleted; `lib/programming/hub.js`
+restored and md5-verified byte-identical): segments render, filtering is
+exact, a **mixed board** holds both kinds, and the emitted slot carries
+`groupWorkoutId` with `spcWorkoutId` null. `npm run build` clean, Babel parse
++ unresolved-identifier + unused-import pass clean across the whole hub
+surface.
+
+**Not verified**: anything behind a real login, and nothing on the actual wall
+display. Worth Terra's pass: turn LLYL on, start a board from the Group page
+AND from the wall's own PIN picker, log a real set, and confirm the reorder
+arrows are gone while dropping a client still works.
+
+**Found while testing, worth knowing**: the LLYL girls already have real
+`exercise_completions` and `logs` rows from the member app — the round-trip
+test collided with them. So the board's read path will find real history from
+day one, not an empty column.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -4976,6 +5081,7 @@ sections; next number after 0080 is 0081.)
 - `0103_spc_ongoing_programs.sql` — **run**, verified live 2026-08-30 (dry-run first: sessions-format null-end accepted, weekly null-end refused, dateless-active refused). Relaxes `spc_blocks_active_has_dates` so an ACTIVE sessions-format block may have `block_end_date` NULL — an **Ongoing program**, from the design handoff. Weekly rows keep the full both-dates guarantee, so no legacy code path can ever meet a dateless active block. `block_length_weeks` stays populated but unread while the end is null.
 - `0104_hub_sessions_format.sql` — **run**, verified live 2026-08-30 (dry-run first: the full result set of both RPCs diffed before/after in a rolled-back transaction, 0 changes for every weekly-or-null client and 0 for staged rows; then the sessions path exercised for real against a simulated run — uncapped week, all published rows returned despite authored week 1, correct completed/loggedCount, ongoing and lapsed both resolving, and a lapsed *weekly* block correctly staying finished). Makes `hub_startable_clients()` and `hub_resolve_staged()` branch on `spc_blocks.format` so the wall display and the staging picker can start a sessions-format client. **Weekly behaviour is byte-identical on purpose** — including `hub_startable_clients`' missing status filter, which is pre-existing and not this migration's to change. The sessions arm emits the **calendar** week per session, not the authored 1; see the SPC simplification section for why that is load-bearing rather than cosmetic.
 - `0105_spc_sessions_cutover.sql` — **run**, verified live 2026-08-30. The cutover: every weekly block still in play (live / queued / draft) becomes a sessions-format program; finished blocks are deliberately untouched. Live blocks whose current week is 1 convert in place, the rest get a new run seeded from this week's content with the old block trimmed to end the day before — and this week's completions, logs and per-exercise ticks are repointed onto the new rows. Creates five `zz_*_0105` rollback/audit tables (RLS enabled, grants revoked). Post-conditions to re-check if anything looks wrong: `format='weekly' and (status='draft' or block_end_date >= today)` = 0, and no sessions-format workout row off `week_number = 1`.
+- `0106_hub_group_programs.sql` — **run**, verified live 2026-08-30 (column, XOR constraint, 3 functions, 3 display policies; plus 29 assertions across three rolled-back transactions before applying — see the section above). Lets a `hub_enabled` group program go on the SPC live board: `group_programs.hub_enabled`, `hub_session_clients.group_workout_id` (+ XOR check, `spc_workout_id` made nullable), a group arm in `hub_startable_clients()` with three new tag columns, group branches in `hub_start_session`/`hub_add_client`, `hub_group_workout_belongs_to()`, and display reads on the three group content tables. **The SPC arms are byte-identical to 0104's** — diff them against `pg_get_functiondef` before touching this. `hub_startable_clients` and both start/add functions are DROP+CREATE (return type and signature change); the new `hub_add_client` argument is defaulted so a stale tab's 3-param call still resolves. `exercise_coaching_notes` needed nothing — 0087 already gave it `group_workout_id`.
 - `0095_exercise_parents.sql` — **run**, verified live 2026-08-27 (18 parent records, 66 exercises grouped, 0 variations lost, 0 duplicate names, plus an 11-assertion impersonation test in a rolled-back transaction as a reviewer, a non-reviewer coach and a member). Adds `programming.exercise_parents` and `exercises.parent_id`; `exercises.parent_exercise_id` is left populated but unread as the rollback path. See "A parent is its own record now" below.
 - `0092_staff_documents.sql` — **run**, verified live 2026-08-25 (4 tables, 9 policies, plus a 15-assertion impersonation test as a real coach and a real admin in a rolled-back transaction). `programming.documents` / `document_versions` / `document_assignments` / `document_signatures` — SOPs and employment agreements for staff. Staff-only in every direction; no member policy at all, same as `client_limitations` (0057) and `session_education` (0079).
 - `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.
