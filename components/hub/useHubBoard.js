@@ -7,13 +7,18 @@ import {
   reorderHubExercises,
 } from "../../lib/programming/hub";
 import { logResult } from "../../lib/programming/memberPlan";
+import { sessionRefFor } from "../../lib/programming/hub";
 import {
   markSpcExerciseComplete,
   unmarkSpcExerciseComplete,
+  markGroupExerciseComplete,
+  unmarkGroupExerciseComplete,
 } from "../../lib/programming/exerciseCompletions";
 import {
   finalizeSpcSession,
   unfinalizeSpcSession,
+  finalizeGroupSession,
+  unfinalizeGroupSession,
 } from "../../lib/programming/sessionCompletions";
 import { addCoachingNote } from "../../lib/programming/coachingNotes";
 import { todayInBoise } from "../../lib/boiseDate";
@@ -34,7 +39,7 @@ const LIVE_POLL_MS = 3000;
 export function useHubBoard({ idlePoll = true } = {}) {
   const [hubSession, setHubSession] = useState(undefined); // undefined = loading, null = none open
   const [board, setBoard] = useState(null); // Map<userId, entry> from fetchHubBoard
-  const [warmups, setWarmups] = useState(new Map()); // Map<spcWorkoutId, rows>
+  const [warmups, setWarmups] = useState(new Map()); // Map<workoutId, rows>
   const [pollError, setPollError] = useState(false);
 
   // While a lift has UNSAVED keystrokes in it, poll results must not stomp
@@ -182,14 +187,16 @@ export function useHubBoard({ idlePoll = true } = {}) {
   // pre-edit logs until the next 3s tick happened to arrive. One refresh per
   // typing pause, not per keystroke.
   //
-  // Same write contract as the member phone: every set row rewritten, source
-  // "spc", the session stamped — so hub-entered sets are indistinguishable
+  // Same write contract as the member phone: every set row rewritten, the
+  // session stamped, source tagged to the kind — so hub-entered sets are
+  // indistinguishable
   // from phone-entered ones. Simultaneous edits from the client's own phone
   // converge as last-write-per-set, accepted for a coached session where
   // everyone is standing at the same rack.
-  const saveSets = useCallback(async ({ userId, spcWorkoutId, weekNumber, exerciseId, rows }) => {
+  const saveSets = useCallback(async ({ userId, entry, exerciseId, rows }) => {
     const datePerformed = todayInBoise();
     const startedAt = editingRef.current.get(userId)?.seq ?? 0;
+    const session = sessionRefFor(entry);
     await Promise.all(
       rows.map((row, i) =>
         logResult({
@@ -199,8 +206,8 @@ export function useHubBoard({ idlePoll = true } = {}) {
           setNumber: i + 1,
           reps: row.reps === "" || row.reps == null ? null : Number(row.reps) || null,
           weight: row.weight === "" || row.weight == null ? null : Number(row.weight),
-          source: "spc",
-          session: { spcWorkoutId, weekNumber },
+          source: entry.kind === "group" ? "group" : "spc",
+          session,
         })
       )
     );
@@ -218,22 +225,28 @@ export function useHubBoard({ idlePoll = true } = {}) {
   // edited in place. authorName is snapshotted because the TV cannot read
   // core.users to resolve author_id to a person.
   const saveNote = useCallback(
-    async ({ userId, spcWorkoutId, weekNumber, exerciseId, body, authorId, authorName }) => {
+    async ({ userId, entry, exerciseId, body, authorId, authorName }) => {
       await addCoachingNote({
         userId,
         exerciseId,
         authorId: authorId ?? null,
         authorName: authorName ?? null,
         body,
-        session: { spcWorkoutId, weekNumber },
+        session: sessionRefFor(entry),
       });
       await refreshBoard();
     },
     [refreshBoard]
   );
 
+  // A GROUP tick carries no week number — 0040's constraint requires it null,
+  // because a group_workouts row is already week-specific. Reading the entry
+  // here rather than taking a weekNumber argument is what keeps that from
+  // being passed in by a caller that doesn't know the difference.
   const toggleExerciseComplete = useCallback(
-    async (userId, item, weekNumber, next) => {
+    async (userId, item, next) => {
+      const entry = boardRef.current?.get(userId);
+      if (!entry) return;
       // Optimistic — the checkbox should feel instant on a touchscreen.
       setBoard((prev) => {
         if (!prev) return prev;
@@ -246,8 +259,14 @@ export function useHubBoard({ idlePoll = true } = {}) {
         copy.set(userId, { ...entry, completedItemIds: ids });
         return copy;
       });
-      if (next) await markSpcExerciseComplete(userId, item.id, weekNumber);
-      else await unmarkSpcExerciseComplete(userId, item.id, weekNumber);
+      if (entry.kind === "group") {
+        if (next) await markGroupExerciseComplete(userId, item.id);
+        else await unmarkGroupExerciseComplete(userId, item.id);
+      } else if (next) {
+        await markSpcExerciseComplete(userId, item.id, entry.weekNumber);
+      } else {
+        await unmarkSpcExerciseComplete(userId, item.id, entry.weekNumber);
+      }
     },
     []
   );
@@ -256,8 +275,14 @@ export function useHubBoard({ idlePoll = true } = {}) {
     async (userId) => {
       const entry = boardRef.current?.get(userId);
       if (!entry) return;
-      if (entry.finalized) await unfinalizeSpcSession(userId, entry.spcWorkoutId);
-      else await finalizeSpcSession(userId, entry.spcWorkoutId);
+      if (entry.kind === "group") {
+        if (entry.finalized) await unfinalizeGroupSession(userId, entry.groupWorkoutId);
+        else await finalizeGroupSession(userId, entry.groupWorkoutId);
+      } else if (entry.finalized) {
+        await unfinalizeSpcSession(userId, entry.spcWorkoutId);
+      } else {
+        await finalizeSpcSession(userId, entry.spcWorkoutId);
+      }
       await refreshBoard();
     },
     [refreshBoard]
@@ -269,6 +294,10 @@ export function useHubBoard({ idlePoll = true } = {}) {
     async (userId, itemId, dir) => {
       const entry = boardRef.current?.get(userId);
       if (!entry) return;
+      // Position lives on the shared join row, so reordering a group column
+      // would rewrite that week's session for every member of the program.
+      // The UI hides the arrows; this is the belt to that brace.
+      if (entry.kind === "group") return;
       const ordered = [...entry.items];
       const index = ordered.findIndex((i) => i.id === itemId);
       const target = index + dir;

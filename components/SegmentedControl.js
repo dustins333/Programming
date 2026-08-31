@@ -6,10 +6,12 @@ import { fonts } from "../lib/theme";
 // just renders as tabs and highlights whichever one is active).
 // `badges` (optional, array/Set of segment keys) renders a small rust dot
 // on those segments — e.g. Check-In when this week's isn't submitted yet.
-export function SegmentedControl({ segments, activeKey, onSelect, badges }) {
+// `dense` trims the bottom margin, for a control that sits inside a
+// fixed-height list rather than above a page.
+export function SegmentedControl({ segments, activeKey, onSelect, badges, dense = false }) {
   const badgeSet = badges ? new Set(badges) : null;
   return (
-    <View className="mb-6 flex-row rounded-xl bg-stone-100 p-1">
+    <View className={`${dense ? "mb-2.5" : "mb-6"} flex-row rounded-xl bg-stone-100 p-1`}>
       {segments.map((seg) => {
         const active = seg.key === activeKey;
         return (

@@ -53,7 +53,7 @@ export function HubBoard({ hubSession, board, warmups, scale = "tv", now, author
         <HubClientColumn
           entry={entry}
           userId={slot.user_id}
-          warmups={warmups.get(slot.spc_workout_id)}
+          warmups={warmups.get(slot.group_workout_id ?? slot.spc_workout_id)}
           scale={scale}
           authorName={authorName}
           onToggleComplete={(item, next) => handlers.onToggleComplete(slot, item, next)}

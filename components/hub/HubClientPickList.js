@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../PressFade";
+import { SegmentedControl } from "../SegmentedControl";
 import { listStartableHubClients } from "../../lib/programming/hub";
 import { startNewSpcSessionInstance } from "../../lib/programming/sessionCompletions";
 import { toastError } from "../../lib/toast";
@@ -9,6 +10,13 @@ import { fonts, colors, type } from "../../lib/theme";
 
 // The roster both hub pickers work from — every active SPC client with a
 // block covering today, their week, and that week's published sessions.
+//
+// Since 0106 it also carries members of any hub_enabled GROUP program (LLYL),
+// behind a segmented control that opens on SPC. One roster rather than two so
+// the two populations cannot disagree about who is startable; the segment is
+// only a filter over it. Staging passes allowPrograms={false} — a staged group
+// resolves its workout against SPC at start time (0090/0091), so offering a
+// group member there would stage something that can't be started.
 //
 // Shared by "stage a session", "start a session" and "add a client
 // mid-session". One list rather than three so they cannot disagree about who
@@ -144,7 +152,10 @@ export function HubClientRow({
   onPreview,
 }) {
   const selected = Boolean(selectedWorkout);
-  const chosen = (row.sessions ?? []).find((s) => s.spcWorkoutId === selectedWorkout);
+  // A session row carries one of the two ids (0106); the picked value is
+  // whichever it was, so compare against the same coalesce everywhere.
+  const idOf = (s) => s.groupWorkoutId ?? s.spcWorkoutId;
+  const chosen = (row.sessions ?? []).find((s) => idOf(s) === selectedWorkout);
   return (
     <View
       style={{
@@ -184,9 +195,9 @@ export function HubClientRow({
         <View style={{ marginLeft: compact ? 32 : 36, marginTop: 2, opacity: full ? 0.5 : 1 }}>
           {row.sessions.map((s) => (
             <SessionRow
-              key={s.spcWorkoutId}
+              key={idOf(s)}
               session={s}
-              active={selectedWorkout === s.spcWorkoutId}
+              active={selectedWorkout === idOf(s)}
               onPress={() => onChooseSession(s)}
               onPreview={onPreview ? () => onPreview(s) : undefined}
             />
@@ -294,7 +305,7 @@ function RepeatSessionDialog({ visible, name, sessionNumber, busy, onClose, onOp
 export function HubClientPickList({
   mode = "multi", // "multi" (stage / start, up to 4) | "single" (add mid-session)
   excludeUserIds = [],
-  onChange, // (slots) => void — [{ userId, name, spcWorkoutId, sessionNumber, weekNumber }]
+  onChange, // (slots) => void — [{ userId, name, spcWorkoutId | groupWorkoutId, programKind, programId, sessionNumber, weekNumber }]
   // Optional. When given, each session row grows an eye that opens the
   // caller's own preview — the wall's picker passes nothing, because a sheet
   // over a sheet on a touchscreen at 5am is not a preview, it's a trap.
@@ -309,13 +320,25 @@ export function HubClientPickList({
   // (start now, add mid-session) — never when staging a future group, where
   // a new instance would be filed against the wrong week.
   allowRepeat = false,
+  // Whether the SPC / group segments are offered. Default on so the wall's
+  // own picker and add-mid-session get them without opting in; staging turns
+  // it off (see the header).
+  allowPrograms = true,
+  // Which segment to open on — a group program's id, arriving from the Group
+  // Programs page's "Live session" link. Falls back to SPC if that program
+  // isn't startable right now (no block covering today, or it was turned off).
+  initialProgram = null,
   compact = false,
 }) {
   const [roster, setRoster] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
-  const [picked, setPicked] = useState({}); // userId -> spcWorkoutId
-  const [expanded, setExpanded] = useState(null); // userId
+  // Keyed on row.key (programKind:programId:userId), not userId: one person
+  // can legitimately be both an SPC client and a member of a hub_enabled
+  // group, which is two rows and two different sessions.
+  const [picked, setPicked] = useState({}); // row.key -> workout id
+  const [expanded, setExpanded] = useState(null); // row.key
+  const [program, setProgram] = useState(initialProgram ?? "spc");
   const [repeatAsk, setRepeatAsk] = useState(null); // { row, session }
   const [repeatBusy, setRepeatBusy] = useState(false);
   // Once she has answered for a session, selecting it again is just a
@@ -340,29 +363,68 @@ export function HubClientPickList({
     if (seeded || !roster || !initialSessionNumbers) return;
     const next = {};
     for (const [userId, sessionNumber] of Object.entries(initialSessionNumbers)) {
-      const row = roster.find((r) => r.userId === userId);
+      const row = roster.find((r) => r.userId === userId && r.programKind === "spc");
       const session = (row?.sessions ?? []).find((s) => s.sessionNumber === sessionNumber);
-      if (session) next[userId] = session.spcWorkoutId;
+      if (session) next[row.key] = session.spcWorkoutId;
     }
     setSeeded(true);
     if (Object.keys(next).length > 0) emit(next);
   }, [roster, initialSessionNumbers, seeded]);
 
   const excluded = useMemo(() => new Set(excludeUserIds), [excludeUserIds]);
+
+  // One segment per hub_enabled program actually present in the roster, in
+  // name order after SPC. Built from the data rather than a fixed list, so
+  // turning a program on in settings is all it takes to see it here.
+  const segments = useMemo(() => {
+    if (!allowPrograms || !roster) return [];
+    const byId = new Map();
+    for (const r of roster) {
+      if (r.programKind !== "group" || !r.programId) continue;
+      if (!byId.has(r.programId)) byId.set(r.programId, r.programName ?? "Group");
+    }
+    if (byId.size === 0) return [];
+    return [
+      { key: "spc", label: "SPC" },
+      ...[...byId.entries()]
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([id, name]) => ({ key: id, label: name })),
+    ];
+  }, [roster, allowPrograms]);
+
+  // A program turned off (or its block ending) between renders must not strand
+  // the picker on a segment that no longer exists.
+  const activeProgram = segments.length > 0 && segments.some((x) => x.key === program) ? program : "spc";
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (roster ?? []).filter((r) => !excluded.has(r.userId) && (!q || r.name.toLowerCase().includes(q)));
-  }, [roster, search, excluded]);
+    return (roster ?? []).filter((r) => {
+      if (excluded.has(r.userId)) return false;
+      if (!allowPrograms) {
+        if (r.programKind !== "spc") return false;
+      } else if (activeProgram === "spc") {
+        if (r.programKind !== "spc") return false;
+      } else if (r.programId !== activeProgram) {
+        return false;
+      }
+      return !q || r.name.toLowerCase().includes(q);
+    });
+  }, [roster, search, excluded, activeProgram, allowPrograms]);
 
   const emit = (next) => {
     setPicked(next);
-    const slots = Object.entries(next).map(([userId, spcWorkoutId]) => {
-      const row = (roster ?? []).find((r) => r.userId === userId);
-      const session = (row?.sessions ?? []).find((s) => s.spcWorkoutId === spcWorkoutId);
+    const slots = Object.entries(next).map(([key, workoutId]) => {
+      const row = (roster ?? []).find((r) => r.key === key);
+      const session = (row?.sessions ?? []).find(
+        (s) => (s.groupWorkoutId ?? s.spcWorkoutId) === workoutId
+      );
       return {
-        userId,
+        userId: row?.userId ?? null,
         name: row?.name ?? "",
-        spcWorkoutId,
+        programKind: row?.programKind ?? "spc",
+        programId: row?.programId ?? null,
+        spcWorkoutId: session?.groupWorkoutId ? null : workoutId,
+        groupWorkoutId: session?.groupWorkoutId ?? null,
         sessionNumber: session?.sessionNumber ?? null,
         // The SESSION's authored week, not the client's current calendar week.
         // Since 0101 a session can be moved into a different week, and its
@@ -381,7 +443,7 @@ export function HubClientPickList({
   // default we guessed the moment she opened it to look.
   const toggleExpand = (row) => {
     if (row.sessions.length === 0) return;
-    setExpanded((cur) => (cur === row.userId ? null : row.userId));
+    setExpanded((cur) => (cur === row.key ? null : row.key));
   };
 
   // The select itself, once any "she already did this" question is settled.
@@ -389,8 +451,8 @@ export function HubClientPickList({
     const next = mode === "single" ? {} : { ...picked };
     // Switching session for someone already picked isn't a new slot, so the
     // cap only applies to a client who isn't on the list yet.
-    if (mode === "multi" && !picked[row.userId] && Object.keys(next).length >= MAX_SLOTS) return;
-    next[row.userId] = session.spcWorkoutId;
+    if (mode === "multi" && !picked[row.key] && Object.keys(next).length >= MAX_SLOTS) return;
+    next[row.key] = session.groupWorkoutId ?? session.spcWorkoutId;
     emit(next);
   };
 
@@ -399,7 +461,7 @@ export function HubClientPickList({
     setRepeatBusy(true);
     try {
       await startNewSpcSessionInstance(row.userId, session.spcWorkoutId);
-      setRepeatAnswered((prev) => new Set(prev).add(`${row.userId}:${session.spcWorkoutId}`));
+      setRepeatAnswered((prev) => new Set(prev).add(`${row.key}:${session.spcWorkoutId}`));
       setRepeatAsk(null);
       selectSession(row, session);
     } catch (e) {
@@ -410,14 +472,17 @@ export function HubClientPickList({
   };
 
   const chooseSession = (row, session) => {
-    const already = picked[row.userId] === session.spcWorkoutId;
-    if (already) {
+    const workoutId = session.groupWorkoutId ?? session.spcWorkoutId;
+    if (picked[row.key] === workoutId) {
       const next = { ...picked };
-      delete next[row.userId];
+      delete next[row.key];
       emit(next);
       return;
     }
-    if (allowRepeat && session.completed && !repeatAnswered.has(`${row.userId}:${session.spcWorkoutId}`)) {
+    // "She already did this — open it or start a second?" is an SPC question:
+    // the second instance is filed under a calendar week (0102), which a group
+    // completion doesn't have.
+    if (row.programKind === "spc" && allowRepeat && session.completed && !repeatAnswered.has(`${row.key}:${workoutId}`)) {
       setRepeatAsk({ row, session });
       return;
     }
@@ -448,6 +513,9 @@ export function HubClientPickList({
 
   return (
     <View style={{ flex: 1 }}>
+      {segments.length > 0 ? (
+        <SegmentedControl segments={segments} activeKey={activeProgram} onSelect={setProgram} dense />
+      ) : null}
       <TextInput
         value={search}
         onChangeText={setSearch}
@@ -469,19 +537,23 @@ export function HubClientPickList({
       <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
         {rows.length === 0 ? (
           <Text style={{ fontFamily: fonts.sans, fontSize: type.body, color: colors.muted, paddingVertical: 14 }}>
-            {roster.length === 0 ? "Nobody has a block running today." : "No clients match."}
+            {roster.length === 0
+              ? "Nobody has a block running today."
+              : search.trim()
+                ? "No clients match."
+                : "Nobody on this program has a block running today."}
           </Text>
         ) : null}
         {rows.map((row) => {
-          const selectedWorkout = picked[row.userId];
+          const selectedWorkout = picked[row.key];
           const betweenBlocks = row.weekNumber == null;
           const unavailable = betweenBlocks || row.sessions.length === 0;
           return (
             <HubClientRow
-              key={row.userId}
+              key={row.key}
               row={row}
               selectedWorkout={selectedWorkout}
-              isOpen={expanded === row.userId}
+              isOpen={expanded === row.key}
               unavailable={unavailable}
               reason={betweenBlocks ? "No block running" : "Nothing published this week"}
               // A full board still lets you open a name to look, and still
@@ -504,7 +576,7 @@ export function HubClientPickList({
         onClose={() => (repeatBusy ? null : setRepeatAsk(null))}
         onOpenLogged={() => {
           const { row, session } = repeatAsk;
-          setRepeatAnswered((prev) => new Set(prev).add(`${row.userId}:${session.spcWorkoutId}`));
+          setRepeatAnswered((prev) => new Set(prev).add(`${row.key}:${session.spcWorkoutId}`));
           setRepeatAsk(null);
           selectSession(row, session);
         }}

@@ -33,13 +33,7 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now, o
     const entry = board?.get(slot.user_id);
     if (!entry) return;
     try {
-      await saveSets({
-        userId: slot.user_id,
-        spcWorkoutId: entry.spcWorkoutId,
-        weekNumber: entry.weekNumber,
-        exerciseId,
-        rows,
-      });
+      await saveSets({ userId: slot.user_id, entry, exerciseId, rows });
     } catch (e) {
       toastError("Couldn't save those sets — check the connection.", e);
     }
@@ -51,8 +45,7 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now, o
     try {
       await saveNote({
         userId: slot.user_id,
-        spcWorkoutId: entry.spcWorkoutId,
-        weekNumber: entry.weekNumber,
+        entry,
         exerciseId,
         body,
         authorId,
@@ -65,8 +58,7 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now, o
 
   const handleToggleComplete = async (slot, item, next) => {
     try {
-      const entry = board.get(slot.user_id);
-      await toggleExerciseComplete(slot.user_id, item, entry.weekNumber, next);
+      await toggleExerciseComplete(slot.user_id, item, next);
     } catch (e) {
       toastError("Couldn't update — try again.", e);
       hub.refreshBoard();
@@ -132,7 +124,7 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now, o
           <HubClientColumn
             entry={entry}
             userId={slot.user_id}
-            warmups={warmups.get(slot.spc_workout_id)}
+            warmups={warmups.get(slot.group_workout_id ?? slot.spc_workout_id)}
             scale="phone"
             authorName={authorName}
             onToggleComplete={(item, next) => handleToggleComplete(slot, item, next)}

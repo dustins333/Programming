@@ -143,7 +143,7 @@ function ReorderArrows({ isFirst, isLast, onMove }) {
 }
 
 // A resting lift: name, prescription, that lift's sets as bubbles, its tick.
-function RestingRow({ item, letter, logs, completed, hasNote, editOrder, isFirst, isLast, onPress, onToggleComplete, onMove }) {
+function RestingRow({ item, letter, logs, completed, hasNote, editOrder, canReorder, isFirst, isLast, onPress, onToggleComplete, onMove }) {
   const tracksWeight = item.exercise?.tracks_weight !== false;
   const indent = letter ? 29 : 0;
   const targetCount = item.targetSets > 0 ? item.targetSets : 3;
@@ -173,7 +173,11 @@ function RestingRow({ item, letter, logs, completed, hasNote, editOrder, isFirst
           {item.exercise.name}
         </Text>
         {hasNote ? <Ionicons name="chatbox-ellipses-outline" size={15} color={colors.primaryOnWhite} style={{ marginRight: 4 }} /> : null}
-        {editOrder ? <ReorderArrows isFirst={isFirst} isLast={isLast} onMove={onMove} /> : <CompletionTick completed={completed} onPress={onToggleComplete} />}
+        {editOrder && canReorder ? (
+          <ReorderArrows isFirst={isFirst} isLast={isLast} onMove={onMove} />
+        ) : (
+          <CompletionTick completed={completed} onPress={onToggleComplete} />
+        )}
       </View>
       <View style={{ height: ROW_SCHEME_H, justifyContent: "center", marginLeft: indent }}>
         {/* The coach's note rides the prescription line rather than earning a
@@ -209,7 +213,7 @@ function RestingRow({ item, letter, logs, completed, hasNote, editOrder, isFirst
 // its tick — nothing else. Full rows are ~104px each and five of them plus a
 // usable card does not fit in a column's 992px at any client count, so this
 // is arithmetic rather than taste.
-function CollapsedRow({ item, letter, logs, completed, hasNote, editOrder, isFirst, isLast, onPress, onToggleComplete, onMove }) {
+function CollapsedRow({ item, letter, logs, completed, hasNote, editOrder, canReorder, isFirst, isLast, onPress, onToggleComplete, onMove }) {
   return (
     <PressFade
       onPress={onPress}
@@ -235,7 +239,7 @@ function CollapsedRow({ item, letter, logs, completed, hasNote, editOrder, isFir
       <Text numberOfLines={1} style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: colors.muted, maxWidth: "52%" }}>
         {summaryText(item, logs)}
       </Text>
-      {editOrder ? (
+      {editOrder && canReorder ? (
         <View style={{ marginLeft: 4 }}>
           <ReorderArrows isFirst={isFirst} isLast={isLast} onMove={onMove} />
         </View>
@@ -285,6 +289,11 @@ export function HubClientColumn({
   const compact = scale !== "tv";
   const nameH = compact ? HEADER_NAME_H_COMPACT : HEADER_NAME_H_TV;
   const [editOrder, setEditOrder] = useState(false);
+  // Position lives on the join row, and a group program's join row is shared
+  // by everyone on it — so reordering an LLYL column would rewrite that week's
+  // session for the whole group. The toggle stays (it is also where dropping a
+  // client lives) but it opens drop-only.
+  const canReorder = entry.kind !== "group";
   const [showWarmups, setShowWarmups] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [rows, setRows] = useState([]);
@@ -385,14 +394,15 @@ export function HubClientColumn({
     getLiftBlockHistory({
       userId,
       exerciseId: expandedItem.exercise.id,
-      spcBlockId: entry.spcBlockId,
-      excludeWorkoutId: entry.spcWorkoutId,
+      blockId: entry.blockId,
+      kind: entry.kind,
+      excludeWorkoutId: entry.workoutId,
     })
       .then(setHistory)
       .catch(() => setHistory([])); // history is context, never a blocker on logging
     // calc is a stable-ish hook object; only the identity of the open lift matters here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expandedItem?.id, userId, entry.spcBlockId, entry.spcWorkoutId]);
+  }, [expandedItem?.id, userId, entry.blockId, entry.kind, entry.workoutId]);
 
   useEffect(() => () => flushSets(), [flushSets]);
 
@@ -613,6 +623,7 @@ export function HubClientColumn({
       completed: entry.completedItemIds.has(item.id),
       hasNote: entry.latestNoteByExerciseId.has(item.exercise.id),
       editOrder,
+      canReorder,
       isFirst: index === 0,
       isLast: index === entry.items.length - 1,
       onPress: () => (editOrder ? null : expand(item)),
@@ -696,7 +707,11 @@ export function HubClientColumn({
             </View>
           ) : null}
           <PressFade onPress={() => setEditOrder((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
-            <Ionicons name={editOrder ? "close-circle" : "swap-vertical"} size={compact ? 22 : 25} color={editOrder ? colors.primary : colors.muted} />
+            <Ionicons
+              name={editOrder ? "close-circle" : canReorder ? "swap-vertical" : "person-remove-outline"}
+              size={compact ? 22 : 25}
+              color={editOrder ? colors.primary : colors.muted}
+            />
           </PressFade>
         </View>
 

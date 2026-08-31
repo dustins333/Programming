@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import {
   listGroupPrograms,
@@ -512,7 +513,7 @@ function BlocksDesktop() {
     }
   };
 
-  const handleUpdateProgram = async ({ name, sessionsPerWeek, sessionDays }) => {
+  const handleUpdateProgram = async ({ name, sessionsPerWeek, sessionDays, hubEnabled }) => {
     try {
       // block_length_weeks deliberately not written here — a program no
       // longer carries an editable default length. It's picked per block.
@@ -520,6 +521,7 @@ function BlocksDesktop() {
         name,
         sessions_per_week: sessionsPerWeek,
         session_days: sessionDays,
+        hub_enabled: Boolean(hubEnabled),
       });
       await load();
     } catch (err) {
@@ -717,6 +719,17 @@ function BlocksDesktop() {
             <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: "#a8a29e" }}>+ New program</Text>
           </Pressable>
           <View style={{ flex: 1 }} />
+          {/* Only for a program flagged hub_enabled (0106). Lands on the live
+              screen with this program's segment already open. */}
+          {selected?.program?.hub_enabled ? (
+            <Pressable
+              onPress={() => router.push(`/(coach)/spc/live?program=${selected.program.id}`)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingBottom: 10, paddingRight: 16 }}
+            >
+              <Ionicons name="tv-outline" size={14} color={colors.primaryOnWhite} />
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>Live session</Text>
+            </Pressable>
+          ) : null}
           {selected ? (
             <Pressable onPress={() => setEditProgramOpen(true)} style={{ paddingBottom: 10 }}>
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#a8a29e" }}>⚙ {selected.program.name} settings</Text>

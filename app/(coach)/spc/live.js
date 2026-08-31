@@ -149,7 +149,7 @@ function StageAnotherButton({ onPress }) {
 // Both halves of the selector show the same roster; only the sentence above
 // it and what the docked bar does with the result differ. One component so
 // "tap a name, then tap her session" cannot drift between the two.
-function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSessionNumbers }) {
+function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSessionNumbers, initialProgram }) {
   return (
     <View style={{ flex: 1 }}>
       <Text style={{ fontFamily: fonts.sans, fontSize: type.body, lineHeight: 20, color: colors.muted, marginBottom: 14 }}>
@@ -173,6 +173,11 @@ function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSess
           // Starting now only. Staging a future group must not offer to file
           // a second instance, which would land against today's week.
           allowRepeat={mode === "start"}
+          // Likewise: a staged slot stores a session NUMBER and resolves it
+          // against SPC in the morning (0090/0091), so a group member staged
+          // here would be unstartable. See 0106's header.
+          allowPrograms={mode === "start"}
+          initialProgram={mode === "start" ? initialProgram : null}
           compact
         />
       </View>
@@ -196,7 +201,11 @@ export default function SpcLiveSessions() {
   // Which half of the selector. Tracked as its own key per mode so switching
   // to "Logging" during a session doesn't leave "Start now" selected
   // underneath for when the session ends.
-  const [idleTab, setIdleTab] = useState("left");
+  // Arriving from a group program's "Live session" link (0106): open Start now
+  // with that program's segment already selected, rather than the Stage tab a
+  // coach lands on when she opens this screen cold.
+  const programParam = typeof params.program === "string" ? params.program : null;
+  const [idleTab, setIdleTab] = useState(programParam ? "start" : "left");
   const [liveTab, setLiveTab] = useState("logging");
   // Building a new group when the left side is already showing something
   // else. Not a third segment: it is a detour, and it takes the screen over
@@ -285,6 +294,7 @@ export default function SpcLiveSessions() {
           userId: s.userId,
           clientName: s.name,
           spcWorkoutId: s.spcWorkoutId,
+          groupWorkoutId: s.groupWorkoutId ?? null,
           weekNumber: s.weekNumber,
         })),
       });
@@ -576,6 +586,7 @@ export default function SpcLiveSessions() {
             <View style={{ flex: 1 }}>
               <StagePicker
                 mode={tab === "start" ? "start" : "stage"}
+                initialProgram={programParam}
                 editing={tab === "stage" ? editing : null}
                 onChange={setSlots}
                 onPreview={(row, session) => setPreview({ clientName: row.name, weekNumber: row.weekNumber, session })}

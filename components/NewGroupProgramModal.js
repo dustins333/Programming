@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
-import { Modal, View, Text, TextInput, Pressable } from "react-native";
+import { Modal, View, Text, TextInput, Pressable, Switch } from "react-native";
 import { SessionDayPicker, resizeSessionDays } from "./SessionDayPicker";
 import { DEFAULT_SESSION_DAYS } from "../lib/programming/schedule";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { KeyboardDoneButton } from "./KeyboardDoneButton";
 
-const DEFAULTS = { name: "", sessionsPerWeek: "3", sessionDays: DEFAULT_SESSION_DAYS };
+const DEFAULTS = { name: "", sessionsPerWeek: "3", sessionDays: DEFAULT_SESSION_DAYS, hubEnabled: false };
 
 function fromProgram(program) {
   return {
     name: program.name,
     sessionsPerWeek: String(program.sessions_per_week),
     sessionDays: resizeSessionDays(program.session_days ?? DEFAULT_SESSION_DAYS, program.sessions_per_week),
+    hubEnabled: Boolean(program.hub_enabled),
   };
 }
 
@@ -50,6 +51,7 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
         name: form.name.trim(),
         sessionsPerWeek: Number(form.sessionsPerWeek) || 3,
         sessionDays: form.sessionDays,
+        hubEnabled: form.hubEnabled,
       });
       onClose();
     } finally {
@@ -101,6 +103,24 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
               sessionsPerWeek={Number(form.sessionsPerWeek) || 0}
               value={form.sessionDays}
               onChange={(sessionDays) => setForm((f) => ({ ...f, sessionDays }))}
+            />
+          </View>
+
+          {/* Off for every program until someone turns it on (0106). Deliberately
+              not every group type — LLYL works on the board because all of its
+              members lift the same session; a 94-member program does not. */}
+          <View className="mb-6 flex-row items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-4 py-3">
+            <View className="flex-1 pr-3">
+              <Text className="text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+                Live session board
+              </Text>
+              <Text className="mt-0.5 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+                Put this program's clients on the gym floor screen.
+              </Text>
+            </View>
+            <Switch
+              value={form.hubEnabled}
+              onValueChange={(hubEnabled) => setForm((f) => ({ ...f, hubEnabled }))}
             />
           </View>
 

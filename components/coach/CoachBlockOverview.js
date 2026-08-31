@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { todayInBoise } from "../../lib/boiseDate";
@@ -199,6 +200,33 @@ export function CoachBlockOverview({ initialProgramId = null, showBack = false, 
             );
           })}
         </View>
+      ) : null}
+
+      {/* Only for a program flagged hub_enabled (0106) — LLYL, where everyone
+          lifts the same session, not every group type. Lands on the live
+          screen with this program's segment already open. */}
+      {state.program?.hub_enabled ? (
+        <PressFade
+          onPress={() => router.push(`/(coach)/spc/live?program=${state.program.id}`)}
+          style={{
+            alignSelf: "flex-start",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 14,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: "#e8c4b8",
+            backgroundColor: "#fdf6f2",
+            paddingHorizontal: 13,
+            paddingVertical: 7,
+          }}
+        >
+          <Ionicons name="tv-outline" size={15} color={colors.primaryOnWhite} />
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+            Live session
+          </Text>
+        </PressFade>
       ) : null}
 
       {state.status !== "ready" ? (

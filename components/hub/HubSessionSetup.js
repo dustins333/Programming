@@ -19,6 +19,10 @@ import { fonts, colors, type } from "../../lib/theme";
 //
 // No PIN on this side: the coach is already signed in. The PIN only exists so
 // the board can name a coach who isn't.
+//
+// NOTE: nothing imports this today — app/(coach)/spc/live.js grew its own
+// StagePicker when it became one screen (2026-08-28). Kept in step with 0106
+// rather than deleted, since deleting a working component is Terra's call.
 
 export function HubSessionSetup({ profile, onStarted }) {
   const [slots, setSlots] = useState([]);
@@ -35,6 +39,7 @@ export function HubSessionSetup({ profile, onStarted }) {
           userId: s.userId,
           clientName: s.name,
           spcWorkoutId: s.spcWorkoutId,
+          groupWorkoutId: s.groupWorkoutId ?? null,
           weekNumber: s.weekNumber,
         })),
       });
