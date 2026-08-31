@@ -184,7 +184,7 @@ export function useStagedSessions(profileId, refreshKey = 0) {
   return { groups, reload };
 }
 
-export function StagedSessionsCard({ groups, reload, openSession, onStarted, onReview, showHeading = true }) {
+export function StagedSessionsCard({ groups, reload, openSession, onStarted, onReview, onDeleted, showHeading = true }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -213,6 +213,10 @@ export function StagedSessionsCard({ groups, reload, openSession, onStarted, onR
     if (!(await confirmDiscardStaged(describeWhen(group)))) return;
     try {
       await deleteStagedSession(group.id);
+      // Before the reload: the screen above may be holding this group as the
+      // one it is editing, and it must not still be doing so once the list
+      // re-renders without it.
+      onDeleted?.(group);
       await reload?.();
     } catch (e) {
       toastError("Couldn't delete it.", e);

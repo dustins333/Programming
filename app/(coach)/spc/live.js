@@ -265,6 +265,9 @@ export default function SpcLiveSessions() {
     reload: reloadStaged,
     openSession: hubSession,
     onStarted: () => handleStarted(),
+    onDeleted: (group) => {
+      if (group.id === editId) clearEditing();
+    },
     onReview: (group, resolved) =>
       setDeck({
         label: `Staged · ${describeWhen(group)}`,
@@ -282,9 +285,14 @@ export default function SpcLiveSessions() {
           cancelled = true;
         };
       }
-      setIdleTab("stage");
-      // A failed read must not strand the coach on a blank Stage tab — it
-      // falls back to building a new group, which is never destructive.
+      // The DETOUR, not a tab. `setIdleTab("stage")` looked right and did
+      // nothing: idleTab is only ever compared against "start", so anything
+      // else falls through to leftKey — which is "staged" whenever a group
+      // exists, i.e. always when you are editing one. Edit therefore landed
+      // straight back on the list it came from, every time.
+      setStagingAside(true);
+      // A failed read must not strand the coach on a blank picker — it falls
+      // back to building a new group, which is never destructive.
       getStagedSession(editId)
         .then((g) => !cancelled && setEditing(g))
         .catch(() => !cancelled && setEditing(null));
@@ -433,14 +441,28 @@ export default function SpcLiveSessions() {
         { key: "history", label: "History" },
       ];
 
+  // Leaving an edit has to take the ?staging param with it. Otherwise the
+  // next "Stage another session" reopens seeded with the group you just left
+  // — or, after a delete, with one that no longer exists, behind a "Save
+  // changes" button that would write to a deleted row.
+  const clearEditing = () => {
+    setEditing(null);
+    setSlots([]);
+    if (editId) router.replace("/(coach)/spc/live");
+  };
+
+  const leaveStagingAside = () => {
+    setStagingAside(false);
+    clearEditing();
+  };
+
   // History is a doorway rather than a third pane: selecting it navigates and
   // the selector goes back to where it was, so there is no third body to keep
   // in step with the two real ones.
   // Leaves the staging detour if one is open, so the tap always lands on the
   // roster it promises rather than under the aside.
   const goToStartNow = () => {
-    setStagingAside(false);
-    setSlots([]);
+    leaveStagingAside();
     setIdleTab("start");
   };
 
@@ -563,7 +585,7 @@ export default function SpcLiveSessions() {
           ) : null}
 
           {stagingAside ? (
-            <PressFade onPress={() => setStagingAside(false)} style={{ marginBottom: 16, paddingVertical: 6 }}>
+            <PressFade onPress={leaveStagingAside} style={{ marginBottom: 16, paddingVertical: 6 }}>
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>
                 {live ? "‹ Back to the board" : "‹ Back to staged sessions"}
               </Text>

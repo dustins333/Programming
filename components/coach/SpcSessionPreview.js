@@ -438,8 +438,14 @@ function SpcSessionPreviewPage({
   // week number that isn't.
   const unpublishedWeek = useMemo(() => {
     if (!session || targetWeek == null) return null;
-    return session.statusByWeek?.[targetWeek] === "published" ? null : targetWeek;
-  }, [session, targetWeek]);
+    // A sessions-format run (0102) keeps ONE row per session and recurs it
+    // every week, so that row's own flag answers for every week. Looking up
+    // statusByWeek there finds nothing for anything past week 1 and reports a
+    // published program as a draft — on exactly the week a group staged for
+    // tomorrow runs in, which is what staging is for.
+    const status = data?.sessionsFormat ? session.status : session.statusByWeek?.[targetWeek];
+    return status === "published" ? null : targetWeek;
+  }, [session, targetWeek, data]);
 
   const openPrint = () => {
     if (!data?.block || !session) return;
