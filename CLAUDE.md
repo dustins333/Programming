@@ -5153,6 +5153,82 @@ restored and md5-verified byte-identical). **Not verified behind a real login** 
 standing limitation. Worth Terra's pass: open a real board she ran, confirm the
 girls' lifts are there, and add a note to one.
 
+## Ongoing programs broke every screen that reads a block (2026-08-30)
+
+Reviewing a staged group showed **"invalid input syntax for type date:
+null"** on one client's page. Three separate bugs, no migration.
+
+**`.lte(col, null)` is not a no-op — it is an error.** supabase-js
+serializes it as `date_performed=lte.null` and Postgres rejects it (22007).
+`listBlockLogs` (`spcBlockDetail.js`) already guarded a null START date for
+drafts; 0103 then made `block_end_date` nullable for an **Ongoing** program
+and nobody added the matching end guard. Reproduced against the live
+endpoint before touching anything and again after — the old shape 400s, the
+new one 200s. **Worth generalising: any range filter written against a
+column that later became nullable is a live bug, and it fails loudly at
+runtime while `expo export` stays clean.**
+
+Only one ongoing program existed, which is why only her page failed — but
+this runs through `getSpcBlockDetail`, so it would have hit the SPC roster
+preview, the board's Block overview and the client page for anyone set to
+Ongoing.
+
+**A drifted third copy of "which program is she on".**
+`getSpcSessionPreview` rolled its own block picker testing `today <=
+block_end_date` — false for null, so an ongoing program never matched the
+covering branch and lost outright to any program queued behind it. It reads
+the shared `resolveClientPrograms` (`spcState.js`) now, whose own comment
+already records that the client page and the roster used to disagree "for a
+third of the roster". That made **three** copies; the newest was the stale
+one. Verified by running the real shipped resolver against her actual rows,
+including the queued-program case the old code got wrong.
+
+**A sessions-format run has no per-week status row.** The draft banner did
+`statusByWeek[targetWeek]`, and all **84** sessions-format workouts sit at
+week 1 (0105) — so any group staged into week 2+ of its run reported every
+client as an unpublished draft. That is precisely the case staging exists
+for (`targetDate` is there because a group staged for tomorrow can sit the
+other side of a week boundary). The session row's own flag answers for every
+week now, behind a `sessionsFormat` flag from the data layer.
+
+**Two bugs on the staged card itself, one of them dangerous.**
+
+- **Edit did nothing, every time.** `setIdleTab("stage")` looked right and
+  could never win: `idleTab` is only ever compared against `"start"`, so
+  anything else falls through to `leftKey` — which is `"staged"` whenever a
+  group exists, i.e. always when you are editing one. It opens the staging
+  **detour** (`stagingAside`) instead, which already had the seeded picker.
+  A state key that is never read is invisible to the bundler, to the scope
+  pass and to a screenshot; the only way to catch it is to trace what
+  actually consumes the value.
+- **Delete worked, but left the edit behind it.** Nothing cleared
+  `?staging`, so the picker that appeared after a delete came up seeded with
+  the deleted group behind a **"Save changes"** button that would have
+  written to a row that no longer existed. Every exit from an edit
+  (back link, Start now, delete) goes through one `clearEditing()` now, and
+  `StagedSessionsCard` takes an `onDeleted` so the screen above can drop a
+  group it was holding.
+
+Reported as "delete seems to open the edit screen": it was the left segment
+legitimately re-becoming "Stage a session" once the last group went, with
+the stale seeding on top. That segment behaviour is the documented design
+and was left alone.
+
+**Still open, all in the SPC-model rework's territory rather than this
+fix's**: `sessionState` calls a sessions-format run "skipped" once week 1's
+calendar window passes; `flags.js` and `coachDashboard.js` carry the same
+`today <= block_end_date` test, so an ongoing program is invisible to
+missed-session flags; and an ongoing program still displays "Week 1 of 3"
+despite having no end.
+
+**Verified**: both query shapes curled against the live endpoint, the real
+resolver run against her three real rows across four dates, the week-1
+assumption confirmed across all 84 rows, `npm run build` + `check:routes`
+clean, and a Babel parse + unresolved-identifier + unused-import pass over
+all five files. **Not click-tested** — `live.js` needs a coach login, so the
+Edit/Delete flow is reasoned from the render path, not driven. Worth Terra's
+pass: Edit → seeded picker → Back, then Edit → Delete.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
