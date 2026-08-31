@@ -344,6 +344,23 @@ export default function SpcWorkoutBuilderWeb() {
     }
   };
 
+  // Sessions-format only: everything already autosaved, so this just makes
+  // the row visible-when-live (published iff it has lifts) and returns to the
+  // client's Sessions page, which refetches on focus.
+  const handleSaveAndBack = async () => {
+    setPublishing(true);
+    try {
+      if (exercises.length > 0 && workout.status !== "published") {
+        await setSpcWorkoutStatus(workoutId, "published");
+      }
+      if (router.canGoBack()) router.back();
+      else router.push(`/(coach)/spc/${workout.spc_blocks.spc_client_id}`);
+    } catch (err) {
+      toastError("Couldn't save", err);
+      setPublishing(false);
+    }
+  };
+
   const handleTogglePublish = async () => {
     setPublishing(true);
     try {
@@ -473,11 +490,13 @@ export default function SpcWorkoutBuilderWeb() {
 
             <SaveLight state={saveState} />
 
-            <View style={{ backgroundColor: published ? "#e3ead9" : "#fdf6ec", borderRadius: 99, paddingVertical: 4, paddingHorizontal: 10 }}>
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.8, color: published ? "#4d6142" : "#8a6320" }}>
-                {published ? "PUBLISHED" : "DRAFT"}
-              </Text>
-            </View>
+            {workout.spc_blocks?.format !== "sessions" ? (
+              <View style={{ backgroundColor: published ? "#e3ead9" : "#fdf6ec", borderRadius: 99, paddingVertical: 4, paddingHorizontal: 10 }}>
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.8, color: published ? "#4d6142" : "#8a6320" }}>
+                  {published ? "PUBLISHED" : "DRAFT"}
+                </Text>
+              </View>
+            ) : null}
 
             <PressFade
               onPress={() => setPreviewOpen(true)}
@@ -485,22 +504,43 @@ export default function SpcWorkoutBuilderWeb() {
             >
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Preview</Text>
             </PressFade>
-            <Pressable
-              onPress={publishing ? undefined : handleTogglePublish}
-              style={{
-                backgroundColor: published ? "#fff" : colors.primary,
-                borderWidth: published ? 1 : 0,
-                borderColor: "#d9d4cd",
-                borderRadius: 9,
-                paddingVertical: 9,
-                paddingHorizontal: 18,
-                opacity: publishing ? 0.6 : 1,
-              }}
-            >
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: published ? "#44403c" : "#fff" }}>
-                {published ? "Unpublish" : "Publish"}
-              </Text>
-            </Pressable>
+            {workout.spc_blocks?.format === "sessions" ? (
+              /* Sessions-format runs (0102): per-session publish isn't the
+                 visibility gate any more — the block's own status/dates are —
+                 so the builder's job here is just "make sure this session
+                 counts, then return to the Sessions page", which reloads on
+                 focus. The row is still flipped published when it has lifts
+                 so member RLS keeps working once the run is live. */
+              <Pressable
+                onPress={publishing ? undefined : handleSaveAndBack}
+                style={{
+                  backgroundColor: colors.primary,
+                  borderRadius: 9,
+                  paddingVertical: 9,
+                  paddingHorizontal: 18,
+                  opacity: publishing ? 0.6 : 1,
+                }}
+              >
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>Save & go back</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={publishing ? undefined : handleTogglePublish}
+                style={{
+                  backgroundColor: published ? "#fff" : colors.primary,
+                  borderWidth: published ? 1 : 0,
+                  borderColor: "#d9d4cd",
+                  borderRadius: 9,
+                  paddingVertical: 9,
+                  paddingHorizontal: 18,
+                  opacity: publishing ? 0.6 : 1,
+                }}
+              >
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: published ? "#44403c" : "#fff" }}>
+                  {published ? "Unpublish" : "Publish"}
+                </Text>
+              </Pressable>
+            )}
           </View>
 
           <View style={{ flex: 1, flexDirection: "row" }}>

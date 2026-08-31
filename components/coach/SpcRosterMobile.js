@@ -40,11 +40,7 @@ const ESPRESSO = "#33251f";
 const ESPRESSO_TEXT = "#f7f3ee";
 const ESPRESSO_SUB = "#a89a92";
 const INK = "#2a211c";
-const RUN_OUT_DAYS = 7;
 
-// The full labels stay in the filter sheet, where there's a whole row to
-// read them on. A roster row has one column shared with a dot and a
-// days-left line, so they shorten.
 function initials(name) {
   return (
     (name ?? "")
@@ -62,22 +58,6 @@ function firstNameOf(name) {
 
 function toneOf(state) {
   return statusColors[SPC_STATES[state]?.tone] ?? statusColors.paused;
-}
-
-// "3d left" / "ends today" / "ended 2d ago". A paused client has no clock
-// running, and a client with no block has none to run — both say nothing
-// rather than inventing a zero.
-function describeDaysLeft(row) {
-  if (row.status === "paused" || !row.block || row.daysLeft == null) return null;
-  if (row.daysLeft > 0) return { text: `${row.daysLeft}d left`, overdue: false };
-  if (row.daysLeft === 0) return { text: "ends today", overdue: false };
-  return { text: `ended ${Math.abs(row.daysLeft)}d ago`, overdue: true };
-}
-
-function describeBlock(row) {
-  if (row.status === "paused") return "paused";
-  if (!row.block) return "no block yet";
-  return `${row.blockLabel}, wk ${row.weekNumber} of ${row.blockLengthWeeks}`;
 }
 
 /* ------------------------------------------------------------ live button */
@@ -281,12 +261,17 @@ function FilterSheet({ visible, onClose, searched, statusFilter, coachFilter, on
 
 /* -------------------------------------------------------------------- row */
 
-function ClientRow({ row, first, onPress }) {
+// Row anatomy from design_handoff_spc_rework_v1 (1e): tone-tinted initials,
+// name with the full status pill beside it, a meta line
+// "Terra · 2×/wk · 13d left" (the clock is date-derived and independent of
+// queue state — see spcState.js), and the reason sentence under it. The meta
+// line goes red on Due now so the urgent rows read down the list at a glance.
+export function ClientRow({ row, first, onPress }) {
   const tone = toneOf(row.state);
-  const left = describeDaysLeft(row);
-  const sub = [firstNameOf(row.coachName) || row.coachName, `${row.sessionsPerWeek}×/wk`, describeBlock(row)]
+  const meta = [firstNameOf(row.coachName) || row.coachName, `${row.sessionsPerWeek}×/wk`, row.clock]
     .filter(Boolean)
     .join(" · ");
+  const urgent = row.state === "dueNow";
 
   return (
     <PressFade
@@ -294,7 +279,7 @@ function ClientRow({ row, first, onPress }) {
       accessibilityLabel={`${row.name}, ${SPC_STATES[row.state]?.label ?? row.state}`}
       style={{
         flexDirection: "row",
-        alignItems: "center",
+        alignItems: "flex-start",
         gap: 11,
         paddingVertical: 13,
         paddingHorizontal: 14,
@@ -318,35 +303,48 @@ function ClientRow({ row, first, onPress }) {
       </View>
 
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 14, color: INK }}>
-          {row.name}
-        </Text>
-        <Text numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: colors.muted }}>
-          {sub}
-        </Text>
-      </View>
-
-      <View style={{ alignItems: "flex-end" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: tone.text }} />
-          <Text
-            numberOfLines={1}
-            maxFontSizeMultiplier={1.1}
-            style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: tone.text }}
-          >
-            {SPC_STATES[row.state]?.short ?? row.state}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 14.5, color: INK }}>
+            {row.name}
           </Text>
-        </View>
-        {left ? (
-          <Text
-            numberOfLines={1}
-            maxFontSizeMultiplier={1.1}
-            style={{ marginTop: 1, fontFamily: fonts.sans, fontSize: 11, color: left.overdue ? "#b23a22" : colors.muted }}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 5,
+              backgroundColor: tone.bg,
+              borderRadius: 99,
+              paddingVertical: 2.5,
+              paddingHorizontal: 9,
+            }}
           >
-            {left.text}
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tone.text }} />
+            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: tone.text }}>
+              {SPC_STATES[row.state]?.label ?? row.state}
+            </Text>
+          </View>
+        </View>
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.1}
+          style={{ marginTop: 2, fontFamily: fonts.sans, fontSize: 12, color: urgent ? tone.text : colors.muted }}
+        >
+          {meta}
+        </Text>
+        {row.reason ? (
+          <Text
+            numberOfLines={2}
+            maxFontSizeMultiplier={1.1}
+            style={{ marginTop: 2, fontFamily: fonts.sans, fontSize: 12, color: colors.muted }}
+          >
+            {row.reason}
           </Text>
         ) : null}
       </View>
+
+      <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.hint, marginTop: 4 }}>
+        ›
+      </Text>
     </PressFade>
   );
 }
@@ -369,13 +367,17 @@ export function SpcRosterMobile() {
   // mounted, so the initializer alone would miss a second arrival with a
   // different status.
   const params = useLocalSearchParams();
-  const [statusFilter, setStatusFilter] = useState(typeof params.status === "string" && params.status ? params.status : null);
+  // Old dashboard links can carry retired state keys (the pre-simplification
+  // taxonomy) — an unknown key would filter everything to zero rows, so only
+  // a current state name is accepted.
+  const validStatus = (raw) => (typeof raw === "string" && SPC_STATES[raw] ? raw : null);
+  const [statusFilter, setStatusFilter] = useState(validStatus(params.status));
   const appliedStatusParamRef = useRef(typeof params.status === "string" ? params.status : "");
   useEffect(() => {
     const raw = typeof params.status === "string" ? params.status : "";
     if (appliedStatusParamRef.current === raw) return;
     appliedStatusParamRef.current = raw;
-    setStatusFilter(raw || null);
+    setStatusFilter(validStatus(raw));
   }, [params.status]);
 
   const load = useCallback(async () => {
@@ -430,8 +432,13 @@ export function SpcRosterMobile() {
     return dir === 1 ? sorted : sorted.reverse();
   }, [searched, statusFilter, coachFilter, sort, dir]);
 
-  const runningOut = useMemo(
-    () => searched.filter((r) => r.status !== "paused" && r.daysLeft != null && r.daysLeft >= 0 && r.daysLeft <= RUN_OUT_DAYS).length,
+  // "2 need programming" counts clients whose PROGRAM is running out (due
+  // soon/now with something currently running) — deliberately not the
+  // never-programmed, who would otherwise make this read "53 need
+  // programming" for as long as the migration-onto-the-app cohort lasts.
+  // They're still red in the list itself.
+  const needProgramming = useMemo(
+    () => searched.filter((r) => (r.state === "dueSoon" || r.state === "dueNow") && r.block).length,
     [searched]
   );
 
@@ -493,7 +500,7 @@ export function SpcRosterMobile() {
 
         <Text maxFontSizeMultiplier={1.15} style={{ marginTop: 2, fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted }}>
           {searched.length} client{searched.length === 1 ? "" : "s"}
-          {runningOut > 0 ? ` · ${runningOut} run out this week` : ""}
+          {needProgramming > 0 ? ` · ${needProgramming} need programming` : ""}
         </Text>
 
         <View style={{ marginTop: 14 }}>
@@ -502,7 +509,7 @@ export function SpcRosterMobile() {
 
         {roster.length === 0 ? (
           <Text style={{ marginTop: 20, fontFamily: fonts.sans, fontSize: 13.5, color: colors.muted }}>
-            No SPC clients yet — assign one from the Clients page.
+            No SPC clients yet. Assign one from the Clients page.
           </Text>
         ) : (
           <>
@@ -592,6 +599,10 @@ export function SpcRosterMobile() {
                 ))
               )}
             </View>
+
+            <Text maxFontSizeMultiplier={1.15} style={{ marginTop: 12, fontFamily: fonts.sans, fontSize: 12, color: colors.muted }}>
+              Status comes from the current program's end date. No one sets it by hand.
+            </Text>
           </>
         )}
       </ScrollView>

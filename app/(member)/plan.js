@@ -6,7 +6,7 @@ import { getClientGoal } from "../../lib/programming/clientGoals";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
-import { currentWeekNumber, sessionNumberForDate, blockLengthWeeks } from "../../lib/programming/schedule";
+import { currentWeekNumber, calendarWeekNumber, sessionNumberForDate, blockLengthWeeks } from "../../lib/programming/schedule";
 import { listMyAssignments, getCurrentBlock, getWorkout, listWorkoutsForWeek } from "../../lib/programming/memberPlan";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
@@ -375,8 +375,15 @@ export default function MyFitness() {
           const block = await getCurrentSpcBlock(profile.id, today);
           if (!block) return { active, spc: { status: "no_block" } };
 
-          const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
-          const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber);
+          // Sessions-format runs (0102) count weeks uncapped off the start
+          // date — a lapsed or ongoing run keeps running, and completions file
+          // under that same uncapped week, so the clamped legacy math would
+          // stop matching them the week the run outlived its planned length.
+          const weekNumber =
+            block.format === "sessions"
+              ? calendarWeekNumber(block.block_start_date, today)
+              : currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+          const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber, block);
           if (workouts.length === 0) return { active, spc: { status: "not_published" } };
 
           const sessionsPerWeek = spcClient.sessions_per_week;

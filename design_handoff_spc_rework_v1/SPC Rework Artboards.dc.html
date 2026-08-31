@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#e4e0da;font-family:'Montserrat',sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#8a5140;text-decoration:none}a:hover{color:#a46a57}
+  *{box-sizing:border-box}
+  input{outline:none;font-family:'Montserrat',sans-serif}
+  input::placeholder{color:#9a9187}
+  ::-webkit-scrollbar{width:0;height:0}
+  @keyframes kv-pulse{0%{box-shadow:0 0 0 0 rgba(143,180,115,.55)}70%{box-shadow:0 0 0 8px rgba(143,180,115,0)}100%{box-shadow:0 0 0 0 rgba(143,180,115,0)}}
+  @keyframes kv-rise{from{transform:translateY(100%)}to{transform:translateY(0)}}
+</style>
+</helmet>
+
+<section style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:56px;padding:56px 56px 90px 56px">
+
+  <div id="1a" style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1a</span>
+      <span style="font-weight:700;font-size:14px;color:#2a211c">SPC client page frame</span>
+      <span style="font-size:12.5px;color:#6f6862">Desktop 1280 · tab strip is live</span>
+    </div>
+
+    <div data-screen-label="1a Client page (desktop)" style="width:1280px;background:#faf8f6;border:1px solid #ded8d0;border-radius:16px;overflow:hidden;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+      <div style="display:flex;align-items:center;gap:14px;padding:14px 28px;border-bottom:1px solid #ece7e1;background:#fff">
+        <span style="font-family:'Protest Strike';font-size:19px;color:#a46a57">SPC</span>
+        <span style="font-size:12.5px;color:#a8a29e">/</span>
+        <span style="font-weight:600;font-size:12.5px;color:#6f6862">Roster</span>
+        <span style="font-size:12.5px;color:#a8a29e">/</span>
+        <span style="font-weight:600;font-size:12.5px;color:#2a211c">Maddie Kerr</span>
+        <div style="flex:1"></div>
+      </div>
+
+      <div style="display:flex;align-items:flex-start;gap:32px;padding:26px 28px 34px 28px">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:20px">
+          <div style="font-weight:600;font-size:12.5px;color:#a8a29e;cursor:pointer">‹ SPC</div>
+
+          <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+            <div style="width:46px;height:46px;border-radius:99px;background:#fdece5;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <span style="font-weight:700;font-size:15px;color:#b23a22">MK</span>
+            </div>
+            <div style="flex:1;min-width:240px">
+              <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                <span style="font-family:'Protest Strike';font-size:29px;color:#2a211c">Maddie Kerr</span>
+                <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:10px;letter-spacing:0.7px;border-radius:99px;padding:3px 10px">SPC</span>
+                <span style="background:#e3ead9;color:#4d6142;font-weight:600;font-size:11px;border-radius:99px;padding:3px 10px;cursor:pointer">Nutrition ›</span>
+                <div style="display:flex;align-items:center;gap:6px;background:{{ ov.pillBg }};border-radius:99px;padding:4px 11px">
+                  <span style="width:7px;height:7px;border-radius:99px;background:{{ ov.pillFg }}"></span>
+                  <span style="font-weight:700;font-size:11px;color:{{ ov.pillFg }}">{{ ov.statusLabel }}</span>
+                </div>
+              </div>
+              <div style="font-size:12.5px;color:#78716c;margin-top:3px">Coach: Terra · training 2× a week</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+                <div style="border:1px solid #d9d4cd;border-radius:9px;background:#fff;padding:9px 15px;cursor:pointer">
+                  <span style="font-weight:600;font-size:13px;color:#44403c">Preview</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;border:1px solid #d9d4cd;border-radius:9px;background:#fff;padding:9px 15px;cursor:pointer">
+                  <span style="width:8px;height:8px;border-radius:99px;background:#8fb473;animation:kv-pulse 2.2s infinite"></span>
+                  <span style="font-weight:600;font-size:13px;color:#44403c">Live session</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="width:380px;flex-shrink:0">
+              <div style="border-radius:16px;background:#a46a57;padding:16px;position:relative;overflow:hidden">
+                <div style="position:absolute;right:-34px;top:-34px;width:120px;height:120px;border-radius:99px;background:rgba(255,255,255,0.07)"></div>
+                <div style="display:flex;align-items:center;gap:6px;position:relative">
+                  <svg width="12" height="13" viewBox="0 0 12 13" fill="none"><path d="M2 1v11" stroke="#f5d9cd" stroke-width="1.4" stroke-linecap="round"></path><path d="M2 1.5h7.5L7.5 4l2 2.5H2z" fill="#f5d9cd"></path></svg>
+                  <span style="font-weight:700;font-size:11px;letter-spacing:1.2px;color:#f5d9cd">WORKING TOWARD</span>
+                  <div style="flex:1"></div>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 8s2.6-4.2 7-4.2S15 8 15 8s-2.6 4.2-7 4.2S1 8 1 8z" stroke="#e8c4b6" stroke-width="1.2"></path><circle cx="8" cy="8" r="1.9" stroke="#e8c4b6" stroke-width="1.2"></circle></svg>
+                </div>
+                <div style="font-family:'Protest Strike';font-size:22px;line-height:27px;color:#fff9f6;margin-top:7px;position:relative">Back squat 225 by ski season</div>
+              </div>
+              <div style="border:1px solid #ece7e1;border-top:0px;border-radius:0px 0px 14px 14px;background:#fff;padding:18px 14px 14px 14px;margin-top:-8px">
+                <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px">
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="2.2" y="5.2" width="7.6" height="5.6" rx="1.4" stroke="#a8a29e" stroke-width="1.2"></rect><path d="M4 5.2V3.9a2 2 0 0 1 4 0v1.3" stroke="#a8a29e" stroke-width="1.2"></path></svg>
+                  <span style="font-weight:700;font-size:10px;letter-spacing:1px;color:#a8a29e">COACH NOTES</span>
+                </div>
+                <div style="border:1px solid #ece7e1;border-radius:8px;padding:9px;font-size:12.5px;color:#2a211c;line-height:1.5;min-height:54px;text-wrap:pretty">Wants to push squat before ski season. Keep hinge volume moderate. Low back lit up in July. Cues go on the printed sheet.</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:26px;border-bottom:1px solid #e6e1da">
+            <sc-for list="{{ a1tabs }}" as="t" hint-placeholder-count="4">
+              <div onClick="{{ t.onPick }}" style="padding:0px 2px 13px 2px;border-bottom:2px solid {{ t.bd }};margin-bottom:-1px;cursor:pointer">
+                <span style="font-weight:700;font-size:14px;color:{{ t.fg }}">{{ t.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ a1Overview }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="display:flex;align-items:center;gap:14px;background:{{ ov.bannerBg }};border:1px solid {{ ov.bannerBd }};border-radius:12px;padding:16px 18px">
+                <span style="width:10px;height:10px;border-radius:99px;background:{{ ov.pillFg }};flex-shrink:0"></span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:700;font-size:15px;color:{{ ov.pillFg }}">{{ ov.nextStep }}</div>
+                  <div style="font-size:12.5px;color:#57534e;margin-top:3px">{{ ov.nextSub }}</div>
+                </div>
+                <div style="border-radius:9px;background:{{ ov.ctaBg }};padding:9px 15px;cursor:pointer;flex-shrink:0">
+                  <span style="font-weight:700;font-size:12.5px;color:#fff">{{ ov.ctaLabel }}</span>
+                </div>
+              </div>
+
+              <div style="display:flex;gap:16px">
+                <div style="flex:1;background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:16px 18px">
+                  <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">THIS WEEK · AUG 24–30</div>
+                  <div style="display:flex;align-items:flex-end;gap:8px;margin-top:9px">
+                    <span style="font-family:'Protest Strike';font-size:30px;color:#2a211c;line-height:1">1</span>
+                    <span style="font-size:13px;color:#6f6862;padding-bottom:4px">of 2 logged</span>
+                  </div>
+                  <div style="font-size:12px;color:#6f6862;margin-top:6px">Session 2 still open</div>
+                </div>
+                <div style="flex:1.6;background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:16px 18px">
+                  <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:10px">RECENT PRS</div>
+                  <sc-for list="{{ prs }}" as="p" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:baseline;gap:10px;padding:4px 0px">
+                      <span style="flex:1;font-weight:600;font-size:13.5px;color:#2a211c">{{ p.name }}</span>
+                      <span style="font-family:'Protest Strike';font-size:16px;color:#4d6142">{{ p.value }}</span>
+                      <span style="font-size:11.5px;color:#6f6862;width:52px;text-align:right">{{ p.when }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:16px 18px">
+                <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+                  <span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">CURRENT PROGRAM</span>
+                  <span style="font-weight:600;font-size:12.5px;color:#2a211c">Aug 3 – Sep 13 · 6 weeks</span>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="6">
+                    <div style="flex:1;background:{{ w.colBg }};border:1px {{ w.colBs }} {{ w.colBd }};border-radius:10px;padding:10px 8px">
+                      <div style="font-weight:700;font-size:11px;color:{{ w.labelFg }}">{{ w.label }}</div>
+                      <div style="font-size:10.5px;color:#6f6862;margin-top:1px">{{ w.date }}</div>
+                      <div style="display:flex;gap:4px;margin-top:9px">
+                        <sc-for list="{{ w.dots }}" as="d" hint-placeholder-count="2">
+                          <span style="width:9px;height:9px;border-radius:3px;background:{{ d.bg }};border:1px solid {{ d.bd }}"></span>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ ov.hasUpcoming }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:12px;border:1px dashed #cfc8bf;border-radius:10px;padding:12px 14px;background:#f6f3ef">
+                    <span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">UPCOMING PROGRAM</span>
+                    <span style="font-weight:600;font-size:12.5px;color:#57534e">Sep 14 – Oct 25 · 6 weeks</span>
+                    <div style="flex:1"></div>
+                    <span style="font-size:12px;color:#6f6862">Queued Aug 28 · invisible to Maddie until Sep 14</span>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a1Sessions }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:16px">
+              <div style="flex:1;background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:16px 18px">
+                <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#4d6142">CURRENT PROGRAM · LIVE</div>
+                <div style="font-size:12.5px;color:#6f6862;margin-top:6px">Aug 3 → Sep 13 · 6 weeks · 2 sessions</div>
+                <div style="font-size:12.5px;color:#8a5140;margin-top:12px;font-weight:600">Full pane in 1c ›</div>
+              </div>
+              <div style="flex:1;border:1px dashed #cfc8bf;border-radius:12px;padding:16px 18px;background:#f6f3ef">
+                <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">UPCOMING PROGRAM · INVISIBLE</div>
+                <div style="font-size:12.5px;color:#6f6862;margin-top:6px">Drafted · not published</div>
+                <div style="font-size:12.5px;color:#8a5140;margin-top:12px;font-weight:600">Full pane in 1c ›</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a1History }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;overflow:hidden">
+              <sc-for list="{{ history }}" as="h" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:16px;padding:15px 18px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+                  <div style="width:150px;flex-shrink:0">
+                    <div style="font-weight:700;font-size:14px;color:#2a211c">{{ h.range }}</div>
+                    <div style="font-size:11.5px;color:#a8a29e;margin-top:2px">{{ h.weeks }}</div>
+                  </div>
+                  <div style="flex:1;min-width:0;font-size:13px;color:#57534e;line-height:1.5">{{ h.note }}</div>
+                  <div style="text-align:right;flex-shrink:0">
+                    <div style="font-family:'Protest Strike';font-size:17px;color:#4d6142">{{ h.logged }}</div>
+                    <div style="font-size:11px;color:#a8a29e;margin-top:2px">sessions logged</div>
+                  </div>
+                  <span style="font-size:17px;color:#c9c2b9">›</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a1Print }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:18px 20px">
+              <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:12px">PRINT SHEETS · CURRENT PROGRAM</div>
+              <sc-for list="{{ printRows }}" as="p" hint-placeholder-count="2">
+                <div style="display:flex;align-items:center;gap:14px;padding:12px 0px;border-bottom:1px solid #f4f1ec">
+                  <div style="flex:1">
+                    <div style="font-weight:700;font-size:14px;color:#2a211c">{{ p.title }}</div>
+                    <div style="font-size:12px;color:#6f6862;margin-top:2px">{{ p.sub }}</div>
+                  </div>
+                  <div style="border:1px solid #d9d4cd;border-radius:9px;background:#fff;padding:8px 14px;cursor:pointer">
+                    <span style="font-weight:600;font-size:12.5px;color:#44403c">Preview</span>
+                  </div>
+                  <div style="border-radius:9px;background:#33251f;padding:8px 14px;cursor:pointer">
+                    <span style="font-weight:700;font-size:12.5px;color:#f7f3ee">Print</span>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="font-size:12px;color:#6f6862;margin-top:14px">Both sheets print the program's date range in the header: Aug 3 – Sep 13.</div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:36px">
+          <div>
+            <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:10px">NOTES</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ thread }}" as="c" hint-placeholder-count="2">
+                <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:12px 13px">
+                  <div style="font-size:12.5px;color:#44403c;line-height:1.5;text-wrap:pretty">{{ c.text }}</div>
+                  <div style="font-size:11px;color:#6f6862;margin-top:6px">{{ c.meta }}</div>
+                </div>
+              </sc-for>
+              <div style="border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:10px 11px;font-size:12.5px;color:#9a9187;cursor:pointer">Add a note for the coaches…</div>
+            </div>
+
+            <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:14px 15px 6px 15px;margin-top:14px">
+              <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:10px">CLIENT NOTES</div>
+              <sc-for list="{{ clientNotes }}" as="n" hint-placeholder-count="3">
+                <div style="border:1px solid #ece7e1;border-radius:10px;padding:11px 12px;margin-bottom:9px">
+                  <div style="font-size:12px;color:#44403c;line-height:1.5;font-style:italic;text-wrap:pretty">“{{ n.text }}”</div>
+                  <div style="font-size:11px;color:#6f6862;margin-top:6px">{{ n.meta }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:10px">CLIENT SETTINGS</div>
+            <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:15px">
+              <div style="font-size:11.5px;color:#78716c;margin-bottom:5px">Status</div>
+              <div style="display:flex;background:#efe9e2;border-radius:9px;padding:3px">
+                <sc-for list="{{ statusSeg }}" as="o" hint-placeholder-count="2">
+                  <div onClick="{{ o.onPick }}" style="flex:1;text-align:center;padding:8px 0px;border-radius:7px;background:{{ o.bg }};box-shadow:{{ o.shadow }};cursor:pointer">
+                    <span style="font-weight:700;font-size:12.5px;color:{{ o.fg }}">{{ o.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="font-size:11.5px;color:#78716c;margin:13px 0px 5px 0px">Assigned coach</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;border:1px solid #d9d4cd;border-radius:8px;background:#fff;padding:9px 10px;cursor:pointer">
+                <span style="font-size:13px;color:#2a211c">Terra</span>
+                <span style="font-size:10px;color:#78716c">▾</span>
+              </div>
+
+              <div style="font-size:11.5px;color:#78716c;margin:13px 0px 5px 0px">Sessions a week</div>
+              <div style="display:flex;background:#efe9e2;border-radius:9px;padding:3px">
+                <sc-for list="{{ freqSeg }}" as="o" hint-placeholder-count="4">
+                  <div onClick="{{ o.onPick }}" style="flex:1;text-align:center;padding:8px 0px;border-radius:7px;background:{{ o.bg }};box-shadow:{{ o.shadow }};cursor:pointer">
+                    <span style="font-weight:700;font-size:12.5px;color:{{ o.fg }}">{{ o.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="font-size:11.5px;color:#6f6862;margin-top:13px;line-height:1.45">Program status is computed from the program's end date. Nothing to set by hand.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="1b" style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1b</span>
+      <span style="font-weight:700;font-size:14px;color:#2a211c">Overview tab</span>
+      <span style="font-size:12.5px;color:#6f6862">Phone 390</span>
+    </div>
+
+    <div data-screen-label="1b Overview (phone)" style="width:390px;height:844px;background:#faf8f6;border:1px solid #ded8d0;border-radius:20px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+      <div style="padding:18px 18px 0px 18px;background:#faf8f6;border-bottom:1px solid #ece7e1">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-weight:600;font-size:12.5px;color:#8a5140;cursor:pointer">‹ SPC</span>
+          <div style="display:flex;align-items:center;gap:6px;background:{{ ov.pillBg }};border-radius:99px;padding:5px 11px">
+            <span style="width:7px;height:7px;border-radius:99px;background:{{ ov.pillFg }}"></span>
+            <span style="font-weight:700;font-size:11px;color:{{ ov.pillFg }}">{{ ov.statusLabel }}</span>
+          </div>
+        </div>
+        <div style="font-family:'Protest Strike';font-size:26px;color:#2a211c;margin-top:8px">Maddie Kerr</div>
+        <div style="font-size:12px;color:#6f6862;margin-top:3px">Coach Terra · 2× / week</div>
+        <div style="display:flex;gap:22px;margin-top:14px">
+          <div style="padding-bottom:11px;border-bottom:2px solid #a46a57"><span style="font-weight:700;font-size:13.5px;color:#2a211c">Overview</span></div>
+          <div style="padding-bottom:11px;border-bottom:2px solid transparent"><span style="font-weight:600;font-size:13.5px;color:#a8a29e">Sessions</span></div>
+          <div style="padding-bottom:11px;border-bottom:2px solid transparent"><span style="font-weight:600;font-size:13.5px;color:#a8a29e">History</span></div>
+          <div style="padding-bottom:11px;border-bottom:2px solid transparent"><span style="font-weight:600;font-size:13.5px;color:#a8a29e">Print</span></div>
+        </div>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:16px 18px 28px 18px;display:flex;flex-direction:column;gap:14px">
+        <div style="background:{{ ov.bannerBg }};border:1px solid {{ ov.bannerBd }};border-radius:14px;padding:15px 16px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="width:9px;height:9px;border-radius:99px;background:{{ ov.pillFg }}"></span>
+            <span style="font-weight:700;font-size:11px;letter-spacing:0.8px;color:{{ ov.pillFg }}">{{ ov.statusUpper }}</span>
+          </div>
+          <div style="font-weight:700;font-size:17px;color:#2a211c;margin-top:9px;line-height:1.3;text-wrap:pretty">{{ ov.nextStep }}</div>
+          <div style="font-size:12.5px;color:#57534e;margin-top:5px;line-height:1.45;text-wrap:pretty">{{ ov.nextSub }}</div>
+          <div style="margin-top:13px;text-align:center;border-radius:10px;background:{{ ov.ctaBg }};padding:11px 0px;cursor:pointer">
+            <span style="font-weight:700;font-size:13.5px;color:#fff">{{ ov.ctaLabel }}</span>
+          </div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:14px;padding:15px 16px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">THIS WEEK · AUG 24–30</span>
+            <span style="font-size:11.5px;color:#6f6862">target 2</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:8px;margin-top:10px">
+            <span style="font-family:'Protest Strike';font-size:32px;color:#2a211c;line-height:1">1</span>
+            <span style="font-size:13px;color:#6f6862;padding-bottom:4px">of 2 logged</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <div style="flex:1;background:#e3ead9;border-radius:9px;padding:9px 11px">
+              <div style="font-weight:700;font-size:12.5px;color:#4d6142">Session 1</div>
+              <div style="font-size:11px;color:#4d6142;margin-top:2px">Logged Wed</div>
+            </div>
+            <div style="flex:1;border:1px dashed #d6d1ca;border-radius:9px;padding:9px 11px">
+              <div style="font-weight:700;font-size:12.5px;color:#78716c">Session 2</div>
+              <div style="font-size:11px;color:#6f6862;margin-top:2px">Not yet</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:14px;padding:15px 16px">
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">CURRENT PROGRAM</div>
+          <div style="font-weight:600;font-size:13px;color:#2a211c;margin-top:4px">Aug 3 – Sep 13 · 6 weeks</div>
+          <div style="display:flex;flex-direction:column;margin-top:12px">
+            <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="6">
+              <div style="display:flex;align-items:center;gap:11px;padding:8px 0px;border-top:1px solid #f4f1ec">
+                <span style="font-weight:700;font-size:12px;color:{{ w.labelFg }};width:26px">{{ w.label }}</span>
+                <span style="font-size:11.5px;color:#6f6862;width:44px">{{ w.date }}</span>
+                <div style="display:flex;gap:5px;flex:1">
+                  <sc-for list="{{ w.dots }}" as="d" hint-placeholder-count="2">
+                    <span style="width:22px;height:9px;border-radius:3px;background:{{ d.bg }};border:1px solid {{ d.bd }}"></span>
+                  </sc-for>
+                </div>
+                <span style="font-size:11.5px;color:{{ w.countFg }};font-weight:600">{{ w.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ ov.hasUpcoming }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:12px;border:1px dashed #cfc8bf;border-radius:11px;padding:12px 13px;background:#f6f3ef">
+              <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">UPCOMING PROGRAM · QUEUED</div>
+              <div style="font-weight:600;font-size:13px;color:#57534e;margin-top:4px">Sep 14 – Oct 25 · 6 weeks</div>
+              <div style="font-size:11.5px;color:#6f6862;margin-top:4px">She can't see it until Sep 14.</div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:14px;padding:15px 16px">
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:10px">RECENT PRS</div>
+          <sc-for list="{{ prs }}" as="p" hint-placeholder-count="3">
+            <div style="display:flex;align-items:baseline;gap:10px;padding:5px 0px">
+              <span style="flex:1;font-weight:600;font-size:13.5px;color:#2a211c">{{ p.name }}</span>
+              <span style="font-family:'Protest Strike';font-size:17px;color:#4d6142">{{ p.value }}</span>
+              <span style="font-size:11px;color:#6f6862;width:46px;text-align:right">{{ p.when }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:14px;padding:15px 16px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">LAST SESSION</span>
+            <span style="font-weight:600;font-size:12px;color:#8a5140;cursor:pointer">Open ›</span>
+          </div>
+          <div style="font-weight:700;font-size:14.5px;color:#2a211c;margin-top:8px">Session 1 · Wed Aug 26</div>
+          <div style="font-size:12px;color:#6f6862;margin-top:3px">5 lifts · 18 sets · 48 min</div>
+          <div style="font-size:12.5px;color:#44403c;font-style:italic;margin-top:10px;border-top:1px solid #f4f1ec;padding-top:9px;line-height:1.45">“Depth felt way better at the heavier weight, knee was quiet.” <span style="font-style:normal;color:#a8a29e">Maddie</span></div>
+        </div>
+
+        <div style="display:flex;gap:9px">
+          <div style="flex:1;text-align:center;border:1px solid #d9d4cd;border-radius:11px;background:#fff;padding:12px 0px;cursor:pointer">
+            <span style="font-weight:600;font-size:13px;color:#44403c">Print sheet</span>
+          </div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:11px;background:#33251f;padding:12px 0px;cursor:pointer">
+            <span style="width:8px;height:8px;border-radius:99px;background:#8fb473;animation:kv-pulse 2.2s infinite"></span>
+            <span style="font-weight:700;font-size:13px;color:#f7f3ee">Live session</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="1c" style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1c</span>
+      <span style="font-weight:700;font-size:14px;color:#2a211c">Sessions tab</span>
+      <span style="font-size:12.5px;color:#6f6862">Desktop 1280 · edit a rep field to dirty the Update bar · Publish opens the modal</span>
+    </div>
+
+    <div data-screen-label="1c Sessions (desktop)" style="width:1280px;background:#faf8f6;border:1px solid #ded8d0;border-radius:16px;overflow:hidden;position:relative;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+      <div style="display:flex;align-items:center;gap:14px;padding:14px 28px;border-bottom:1px solid #ece7e1;background:#fff">
+        <span style="font-family:'Protest Strike';font-size:19px;color:#a46a57">SPC</span>
+        <span style="font-weight:600;font-size:12.5px;color:#2a211c">Maddie Kerr</span>
+        <span style="font-size:12.5px;color:#a8a29e">·</span>
+        <span style="font-weight:600;font-size:12.5px;color:#6f6862">2× / week</span>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:22px">
+          <span style="font-weight:600;font-size:13.5px;color:#a8a29e;cursor:pointer">Overview</span>
+          <span style="font-weight:700;font-size:13.5px;color:#2a211c;border-bottom:2px solid #a46a57;padding-bottom:3px">Sessions</span>
+          <span style="font-weight:600;font-size:13.5px;color:#a8a29e;cursor:pointer">History</span>
+          <span style="font-weight:600;font-size:13.5px;color:#a8a29e;cursor:pointer">Print</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:24px;padding:24px 28px 34px 28px;align-items:flex-start">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="width:8px;height:8px;border-radius:99px;background:#4d6142"></span>
+            <span style="font-family:'Protest Strike';font-size:20px;color:#2a211c">Current program</span>
+            <span style="background:#e3ead9;color:#4d6142;font-weight:700;font-size:10px;letter-spacing:0.6px;border-radius:99px;padding:4px 9px">LIVE TO MADDIE</span>
+          </div>
+
+          <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">DATES</span>
+              <span style="font-weight:600;font-size:13.5px;color:#2a211c">Mon Aug 3</span>
+              <span style="font-size:13px;color:#c9c2b9">→</span>
+              <div onClick="{{ onEndDate }}" style="display:flex;align-items:center;gap:7px;border:1px solid #e2ddd6;border-radius:9px;background:#fff;padding:6px 11px;cursor:pointer">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.2" y="2.4" width="11.6" height="10.4" rx="2" stroke="#8a5140" stroke-width="1.3"></rect><path d="M1.2 5.6h11.6M4.6 1.2v2.4M9.4 1.2v2.4" stroke="#8a5140" stroke-width="1.3" stroke-linecap="round"></path></svg>
+                <span style="font-weight:700;font-size:13.5px;color:#2a211c">{{ run.endLabel }}</span>
+              </div>
+              <span style="font-size:12.5px;color:#6f6862">· {{ run.weeksLabel }}</span>
+            </div>
+            <sc-if value="{{ run.canAddWeek }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ onAddWeek }}" style="border:1px dashed #cbb9ae;border-radius:9px;padding:6px 12px;cursor:pointer">
+                <span style="font-weight:600;font-size:12.5px;color:#8a5140">+ Add a week</span>
+              </div>
+            </sc-if>
+            <div onClick="{{ onToggleOngoing }}" style="display:flex;align-items:center;gap:8px;border:1px solid {{ run.ongoingBd }};background:{{ run.ongoingBg }};border-radius:9px;padding:6px 12px;cursor:pointer">
+              <span style="width:26px;height:15px;border-radius:99px;background:{{ run.ongoingTrack }};display:flex;align-items:center;justify-content:{{ run.ongoingJustify }};padding:2px">
+                <span style="width:11px;height:11px;border-radius:99px;background:#fff"></span>
+              </span>
+              <span style="font-weight:600;font-size:12.5px;color:{{ run.ongoingFg }}">Ongoing</span>
+            </div>
+            <div style="flex:1"></div>
+            <span style="font-size:12px;color:#6f6862">{{ run.progressLine }}</span>
+          </div>
+
+          <sc-for list="{{ current }}" as="s" hint-placeholder-count="2">
+            <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:11px;padding:13px 16px;border-bottom:1px solid #f4f1ec">
+                <span style="font-weight:700;font-size:15px;color:#2a211c">{{ s.title }}</span>
+                <span style="font-size:12px;color:#6f6862">{{ s.meta }}</span>
+                <div style="flex:1"></div>
+                <span style="font-weight:600;font-size:12.5px;color:#8a5140;cursor:pointer">+ Add lift</span>
+              </div>
+              <sc-for list="{{ s.lifts }}" as="l" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid #f7f4f0;border-left:{{ l.superBd }}">
+                  <div style="width:26px;height:26px;border:1.5px solid #e0dbd4;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <span style="font-weight:700;font-size:11px;color:#8a5140">{{ l.label }}</span>
+                  </div>
+                  <span style="flex:1;min-width:0;font-weight:700;font-size:13.5px;color:#2a211c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.name }}</span>
+                  <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                    <input value="{{ l.sets }}" onInput="{{ l.onSets }}" style="width:34px;height:30px;text-align:center;border:1px solid #e2ddd6;border-radius:7px;background:#fff;font-size:13px;font-weight:700;color:#2a211c">
+                    <span style="font-size:12px;color:#a8a29e">×</span>
+                    <input value="{{ l.reps }}" onInput="{{ l.onReps }}" style="width:52px;height:30px;text-align:center;border:1px solid #e2ddd6;border-radius:7px;background:#fff;font-size:13px;font-weight:700;color:#2a211c">
+                  </div>
+                  <span style="font-size:12px;color:#6f6862;width:74px;text-align:right;flex-shrink:0">{{ l.rest }}</span>
+                  <span style="font-size:15px;color:#c9c2b9;cursor:pointer;flex-shrink:0">⋯</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ s.hasSuper }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:9px 16px;font-size:11.5px;color:#a8a29e">C1 + C2 run as a superset, rest after C2 only.</div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="width:436px;flex-shrink:0;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="width:8px;height:8px;border-radius:99px;border:1.5px dashed #a8a29e"></span>
+            <span style="font-family:'Protest Strike';font-size:20px;color:#78716c">Upcoming program</span>
+            <span style="background:#f1efec;color:#78716c;font-weight:700;font-size:10px;letter-spacing:0.6px;border-radius:99px;padding:4px 9px">INVISIBLE TO MADDIE</span>
+          </div>
+
+          <div style="border:1px dashed #cfc8bf;border-radius:12px;background:#f6f3ef;padding:16px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7.5l3.2 3.2L12 4" stroke="#8a9a7c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span style="font-size:12px;color:#6f6862">{{ up.autosaveLine }}</span>
+            </div>
+
+            <sc-if value="{{ up.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:16px;text-align:center;padding:22px 10px">
+                <div style="font-weight:700;font-size:15px;color:#57534e">Nothing drafted yet</div>
+                <div style="font-size:12.5px;color:#6f6862;margin-top:6px;line-height:1.45">Start from what she's running now, then change what you want.</div>
+                <div onClick="{{ up.onCopy }}" style="margin-top:14px;display:inline-block;border-radius:10px;background:#a46a57;padding:11px 18px;cursor:pointer">
+                  <span style="font-weight:700;font-size:13px;color:#fff">Copy current program</span>
+                </div>
+                <div style="font-size:12px;color:#8a5140;font-weight:600;margin-top:12px;cursor:pointer">or build from blank</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ up.filled }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:11px;margin-top:14px">
+                <sc-for list="{{ upcoming }}" as="s" hint-placeholder-count="2">
+                  <div style="background:#fdfcfa;border:1px solid #e6e1da;border-radius:11px;overflow:hidden">
+                    <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid #f2efea">
+                      <span style="font-weight:700;font-size:14px;color:#44403c">{{ s.title }}</span>
+                      <span style="font-size:11.5px;color:#a8a29e">{{ s.meta }}</span>
+                      <div style="flex:1"></div>
+                      <span style="font-weight:600;font-size:12px;color:#8a5140;cursor:pointer">Edit</span>
+                    </div>
+                    <sc-for list="{{ s.lifts }}" as="l" hint-placeholder-count="5">
+                      <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid #f7f4f0">
+                        <span style="font-weight:700;font-size:10.5px;color:#a8a29e;width:16px">{{ l.label }}</span>
+                        <span style="flex:1;min-width:0;font-weight:600;font-size:12.5px;color:#44403c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.name }}</span>
+                        <span style="font-size:12px;color:#6f6862;flex-shrink:0">{{ l.setsReps }}</span>
+                        <span style="font-size:11.5px;color:#a8a29e;width:56px;text-align:right;flex-shrink:0">{{ l.rest }}</span>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ s.changed }}" hint-placeholder-val="{{ false }}">
+                      <div style="padding:8px 14px;font-size:11.5px;color:#8a6320;background:#fdf9f0">{{ s.changedNote }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+                <div style="display:flex;align-items:center;gap:10px;padding:2px 2px">
+                  <span style="font-weight:600;font-size:12.5px;color:#8a5140;cursor:pointer">+ Add session</span>
+                  <div style="flex:1"></div>
+                  <span style="font-size:12px;color:#6f6862">2 sessions · matches her 2× / week</span>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div onClick="{{ openPush }}" style="display:flex;align-items:center;justify-content:center;gap:9px;border-radius:12px;background:#33251f;padding:14px 0px;cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 11.5V2.5M3.4 6L7 2.4 10.6 6" stroke="#f7f3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span style="font-weight:700;font-size:14px;color:#f7f3ee">Publish</span>
+          </div>
+          <div style="font-size:12px;color:#6f6862;text-align:center;line-height:1.45">You pick the Monday it starts and how many weeks it runs. Her current program closes into History that day.</div>
+        </div>
+      </div>
+
+      <sc-if value="{{ dirty }}" hint-placeholder-val="{{ true }}">
+        <div style="position:sticky;bottom:0px;left:0px;right:0px;background:#33251f;padding:14px 28px;display:flex;align-items:center;gap:16px;animation:kv-rise 240ms ease-out">
+          <span style="width:8px;height:8px;border-radius:99px;background:#c58a3a;flex-shrink:0"></span>
+          <span style="font-weight:700;font-size:13.5px;color:#f7f3ee">{{ dirtyCount }}</span>
+          <span style="font-size:12.5px;color:#a89a92">Changes go live to Maddie immediately.</span>
+          <div style="flex:1"></div>
+          <div onClick="{{ onDiscard }}" style="padding:9px 14px;cursor:pointer">
+            <span style="font-weight:600;font-size:13px;color:#a89a92">Discard</span>
+          </div>
+          <div onClick="{{ onUpdate }}" style="border-radius:9px;background:#8fb473;padding:10px 20px;cursor:pointer">
+            <span style="font-weight:700;font-size:13.5px;color:#23331a">Update</span>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ saved }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#e3ead9;padding:13px 28px;display:flex;align-items:center;gap:10px">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7.5l3.2 3.2L12 4" stroke="#4d6142" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span style="font-weight:700;font-size:13px;color:#4d6142">Updated. Maddie sees this now.</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ pushOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center">
+          <div onClick="{{ closePush }}" style="position:absolute;inset:0;background:rgba(42,33,28,0.42)"></div>
+          <div style="position:relative;width:520px;background:#faf8f6;border-radius:16px;overflow:hidden;box-shadow:0 24px 60px rgba(42,33,28,0.32)">
+            <div style="padding:22px 24px 0px 24px">
+              <div style="font-family:'Protest Strike';font-size:24px;color:#2a211c">Publish to Maddie</div>
+              <div style="font-size:13px;color:#6f6862;margin-top:6px;line-height:1.5">She sees it the morning it starts. Nothing changes for her before then.</div>
+            </div>
+            <div style="padding:20px 24px 0px 24px">
+              <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:9px">STARTS MONDAY</div>
+              <div style="display:flex;gap:8px">
+                <sc-for list="{{ mondays }}" as="m" hint-placeholder-count="3">
+                  <div onClick="{{ m.onPick }}" style="flex:1;text-align:center;border:1.5px solid {{ m.bd }};background:{{ m.bg }};border-radius:10px;padding:11px 0px;cursor:pointer">
+                    <div style="font-weight:700;font-size:13.5px;color:{{ m.fg }}">{{ m.label }}</div>
+                    <div style="font-size:11px;color:{{ m.subFg }};margin-top:2px">{{ m.sub }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin:20px 0px 9px 0px">HOW MANY WEEKS</div>
+              <div style="display:flex;gap:8px">
+                <sc-for list="{{ weekOpts }}" as="w" hint-placeholder-count="4">
+                  <div onClick="{{ w.onPick }}" style="flex:1;text-align:center;border:1.5px solid {{ w.bd }};background:{{ w.bg }};border-radius:10px;padding:11px 0px;cursor:pointer">
+                    <span style="font-weight:700;font-size:14px;color:{{ w.fg }}">{{ w.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="margin-top:20px;background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:15px 16px">
+                <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">NEW PROGRAM</div>
+                <div style="font-weight:700;font-size:18px;color:#2a211c;margin-top:6px">{{ push.range }}</div>
+                <div style="font-size:12.5px;color:#6f6862;margin-top:8px;line-height:1.5">{{ push.closes }}</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;padding:20px 24px 22px 24px">
+              <div onClick="{{ closePush }}" style="flex:1;text-align:center;border:1px solid #d9d4cd;border-radius:11px;background:#fff;padding:13px 0px;cursor:pointer">
+                <span style="font-weight:600;font-size:13.5px;color:#44403c">Cancel</span>
+              </div>
+              <div onClick="{{ closePush }}" style="flex:1.5;text-align:center;border-radius:11px;background:#33251f;padding:13px 0px;cursor:pointer">
+                <span style="font-weight:700;font-size:13.5px;color:#f7f3ee">{{ push.cta }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+      <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1c</span>
+      <span style="font-weight:700;font-size:14px;color:#2a211c">Publish modal</span>
+      <span style="font-size:12.5px;color:#6f6862">Same state as the frame above, the pills are live</span>
+    </div>
+
+    <div data-screen-label="1c Publish modal" style="width:1280px;background:#a29e9b;border:1px solid #ded8d0;border-radius:16px;padding:40px 0px;display:flex;justify-content:center;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+      <div style="width:520px;background:#faf8f6;border-radius:16px;overflow:hidden;box-shadow:0 24px 60px rgba(42,33,28,0.32)">
+        <div style="padding:22px 24px 0px 24px">
+          <div style="font-family:'Protest Strike';font-size:24px;color:#2a211c">Publish to Maddie</div>
+          <div style="font-size:13px;color:#6f6862;margin-top:6px;line-height:1.5">She sees it the morning it starts. Nothing changes for her before then.</div>
+        </div>
+        <div style="padding:20px 24px 0px 24px">
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin-bottom:9px">STARTS MONDAY</div>
+          <div style="display:flex;gap:8px">
+            <sc-for list="{{ mondays }}" as="m" hint-placeholder-count="3">
+              <div onClick="{{ m.onPick }}" style="flex:1;text-align:center;border:1.5px solid {{ m.bd }};background:{{ m.bg }};border-radius:10px;padding:11px 0px;cursor:pointer">
+                <div style="font-weight:700;font-size:13.5px;color:{{ m.fg }}">{{ m.label }}</div>
+                <div style="font-size:11px;color:{{ m.subFg }};margin-top:2px">{{ m.sub }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e;margin:20px 0px 9px 0px">HOW MANY WEEKS</div>
+          <div style="display:flex;gap:8px">
+            <sc-for list="{{ weekOpts }}" as="w" hint-placeholder-count="4">
+              <div onClick="{{ w.onPick }}" style="flex:1;text-align:center;border:1.5px solid {{ w.bd }};background:{{ w.bg }};border-radius:10px;padding:11px 0px;cursor:pointer">
+                <span style="font-weight:700;font-size:14px;color:{{ w.fg }}">{{ w.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top:20px;background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:15px 16px">
+            <div style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">NEW PROGRAM</div>
+            <div style="font-weight:700;font-size:18px;color:#2a211c;margin-top:6px">{{ push.range }}</div>
+            <div style="font-size:12.5px;color:#6f6862;margin-top:8px;line-height:1.5">{{ push.closes }}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:20px 24px 22px 24px">
+          <div style="flex:1;text-align:center;border:1px solid #d9d4cd;border-radius:11px;background:#fff;padding:13px 0px;cursor:pointer">
+            <span style="font-weight:600;font-size:13.5px;color:#44403c">Cancel</span>
+          </div>
+          <div style="flex:1.5;text-align:center;border-radius:11px;background:#33251f;padding:13px 0px;cursor:pointer">
+            <span style="font-weight:700;font-size:13.5px;color:#f7f3ee">{{ push.cta }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="1d" style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1d</span>
+      <span style="font-weight:700;font-size:14px;color:#2a211c">Sessions tab</span>
+      <span style="font-size:12.5px;color:#6f6862">Phone 390 · Current / Upcoming sub-tabs</span>
+    </div>
+
+    <div data-screen-label="1d Sessions (phone)" style="width:390px;height:844px;background:#faf8f6;border:1px solid #ded8d0;border-radius:20px;overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+      <div style="padding:18px 18px 0px 18px;border-bottom:1px solid #ece7e1">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-weight:600;font-size:12.5px;color:#8a5140;cursor:pointer">‹ Maddie Kerr</span>
+          <span style="font-size:12px;color:#6f6862">2× / week</span>
+        </div>
+        <div style="display:flex;gap:22px;margin-top:12px">
+          <div style="padding-bottom:11px;border-bottom:2px solid transparent"><span style="font-weight:600;font-size:13.5px;color:#a8a29e">Overview</span></div>
+          <div style="padding-bottom:11px;border-bottom:2px solid #a46a57"><span style="font-weight:700;font-size:13.5px;color:#2a211c">Sessions</span></div>
+          <div style="padding-bottom:11px;border-bottom:2px solid transparent"><span style="font-weight:600;font-size:13.5px;color:#a8a29e">History</span></div>
+          <div style="padding-bottom:11px;border-bottom:2px solid transparent"><span style="font-weight:600;font-size:13.5px;color:#a8a29e">Print</span></div>
+        </div>
+      </div>
+
+      <div style="padding:14px 18px 0px 18px">
+        <div style="display:flex;background:#efe9e2;border-radius:11px;padding:3px">
+          <sc-for list="{{ a4tabs }}" as="t" hint-placeholder-count="2">
+            <div onClick="{{ t.onPick }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 0px;border-radius:9px;background:{{ t.bg }};box-shadow:{{ t.shadow }};cursor:pointer">
+              <span style="width:7px;height:7px;border-radius:99px;background:{{ t.dot }}"></span>
+              <span style="font-weight:700;font-size:13px;color:{{ t.fg }}">{{ t.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <sc-if value="{{ a4Current }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;overflow-y:auto;padding:14px 18px 26px 18px">
+          <div style="display:flex;align-items:center;gap:8px;background:#e3ead9;border-radius:10px;padding:9px 12px">
+            <span style="width:7px;height:7px;border-radius:99px;background:#4d6142"></span>
+            <span style="font-weight:700;font-size:11.5px;color:#4d6142">Live to Maddie, edits show up right away</span>
+          </div>
+
+          <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;padding:13px 14px;margin-top:12px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">DATES</span>
+              <span style="font-weight:600;font-size:13px;color:#2a211c">Mon Aug 3</span>
+              <span style="font-size:12px;color:#c9c2b9">→</span>
+              <div onClick="{{ onEndDate }}" style="display:flex;align-items:center;gap:6px;border:1px solid #e2ddd6;border-radius:8px;padding:5px 9px;cursor:pointer">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><rect x="1.2" y="2.4" width="11.6" height="10.4" rx="2" stroke="#8a5140" stroke-width="1.3"></rect><path d="M1.2 5.6h11.6M4.6 1.2v2.4M9.4 1.2v2.4" stroke="#8a5140" stroke-width="1.3" stroke-linecap="round"></path></svg>
+                <span style="font-weight:700;font-size:13px;color:#2a211c">{{ run.endLabel }}</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:10px">
+              <span style="font-size:12px;color:#6f6862;flex:1">{{ run.phoneLine }}</span>
+              <sc-if value="{{ run.canAddWeek }}" hint-placeholder-val="{{ true }}">
+                <div onClick="{{ onAddWeek }}" style="border:1px dashed #cbb9ae;border-radius:8px;padding:6px 11px;cursor:pointer">
+                  <span style="font-weight:600;font-size:12px;color:#8a5140">+ Add a week</span>
+                </div>
+              </sc-if>
+              <div onClick="{{ onToggleOngoing }}" style="display:flex;align-items:center;gap:7px;border:1px solid {{ run.ongoingBd }};background:{{ run.ongoingBg }};border-radius:8px;padding:6px 10px;cursor:pointer">
+                <span style="width:24px;height:14px;border-radius:99px;background:{{ run.ongoingTrack }};display:flex;align-items:center;justify-content:{{ run.ongoingJustify }};padding:2px">
+                  <span style="width:10px;height:10px;border-radius:99px;background:#fff"></span>
+                </span>
+                <span style="font-weight:600;font-size:12px;color:{{ run.ongoingFg }}">Ongoing</span>
+              </div>
+            </div>
+          </div>
+
+          <sc-for list="{{ current }}" as="s" hint-placeholder-count="2">
+            <div style="background:#fff;border:1px solid #ece7e1;border-radius:12px;overflow:hidden;margin-top:12px">
+              <div style="display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid #f4f1ec">
+                <span style="font-weight:700;font-size:14.5px;color:#2a211c">{{ s.title }}</span>
+                <span style="font-size:11.5px;color:#a8a29e">{{ s.meta }}</span>
+                <div style="flex:1"></div>
+                <span style="font-weight:600;font-size:12px;color:#8a5140;cursor:pointer">+ Add lift</span>
+              </div>
+              <sc-for list="{{ s.lifts }}" as="l" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f7f4f0;border-left:{{ l.superBd }}">
+                  <span style="font-weight:700;font-size:11px;color:#8a5140;width:17px;flex-shrink:0">{{ l.label }}</span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:700;font-size:13px;color:#2a211c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.name }}</div>
+                    <div style="font-size:11px;color:#a8a29e;margin-top:1px">{{ l.rest }}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+                    <input value="{{ l.sets }}" onInput="{{ l.onSets }}" style="width:32px;height:32px;text-align:center;border:1px solid #e2ddd6;border-radius:7px;background:#fff;font-size:13px;font-weight:700;color:#2a211c">
+                    <span style="font-size:11.5px;color:#a8a29e">×</span>
+                    <input value="{{ l.reps }}" onInput="{{ l.onReps }}" style="width:54px;height:32px;text-align:center;border:1px solid #e2ddd6;border-radius:7px;background:#fff;font-size:13px;font-weight:700;color:#2a211c">
+                  </div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ s.hasSuper }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:9px 14px;font-size:11px;color:#a8a29e">C1 + C2 superset, rest after C2 only.</div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <div style="height:74px"></div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ a4Upcoming }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow-y:auto;padding:14px 18px 26px 18px">
+          <div style="display:flex;align-items:center;gap:8px;background:#f1efec;border-radius:10px;padding:9px 12px">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M1 7s2.2-3.8 6-3.8S13 7 13 7s-2.2 3.8-6 3.8S1 7 1 7z" stroke="#78716c" stroke-width="1.2"></path><path d="M2 12L12 2" stroke="#78716c" stroke-width="1.2" stroke-linecap="round"></path></svg>
+            <span style="font-weight:700;font-size:11.5px;color:#57534e">Invisible to Maddie until you publish it</span>
+          </div>
+
+          <div style="border:1px dashed #cfc8bf;border-radius:12px;background:#f6f3ef;padding:14px;margin-top:12px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7.5l3.2 3.2L12 4" stroke="#8a9a7c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span style="font-size:11.5px;color:#6f6862">{{ up4.autosaveLine }}</span>
+            </div>
+
+            <sc-if value="{{ up4.empty }}" hint-placeholder-val="{{ true }}">
+              <div style="text-align:center;padding:26px 6px 12px 6px">
+                <div style="font-weight:700;font-size:15px;color:#57534e">Nothing drafted yet</div>
+                <div style="font-size:12.5px;color:#6f6862;margin-top:6px;line-height:1.45">Start from what she's running now, then change what you want.</div>
+                <div onClick="{{ up4.onCopy }}" style="margin-top:14px;border-radius:10px;background:#a46a57;padding:12px 0px;cursor:pointer">
+                  <span style="font-weight:700;font-size:13px;color:#fff">Copy current program</span>
+                </div>
+                <div style="font-size:12px;color:#8a5140;font-weight:600;margin-top:12px;cursor:pointer">or build from blank</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ up4.filled }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:11px;margin-top:12px">
+                <sc-for list="{{ upcoming }}" as="s" hint-placeholder-count="2">
+                  <div style="background:#fdfcfa;border:1px solid #e6e1da;border-radius:11px;overflow:hidden">
+                    <div style="display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid #f2efea">
+                      <span style="font-weight:700;font-size:13.5px;color:#44403c">{{ s.title }}</span>
+                      <span style="font-size:11px;color:#a8a29e">{{ s.meta }}</span>
+                      <div style="flex:1"></div>
+                      <span style="font-weight:600;font-size:12px;color:#8a5140;cursor:pointer">Edit</span>
+                    </div>
+                    <sc-for list="{{ s.lifts }}" as="l" hint-placeholder-count="5">
+                      <div style="display:flex;align-items:center;gap:9px;padding:8px 13px;border-bottom:1px solid #f7f4f0">
+                        <span style="font-weight:700;font-size:10.5px;color:#a8a29e;width:15px">{{ l.label }}</span>
+                        <span style="flex:1;min-width:0;font-weight:600;font-size:12.5px;color:#44403c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.name }}</span>
+                        <span style="font-size:11.5px;color:#6f6862">{{ l.setsReps }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+                <span style="font-weight:600;font-size:12.5px;color:#8a5140;cursor:pointer">+ Add session</span>
+              </div>
+            </sc-if>
+          </div>
+          <div style="height:74px"></div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ a4ShowUpdate }}" hint-placeholder-val="{{ true }}">
+        <div style="position:absolute;bottom:0px;left:0px;right:0px;background:#33251f;padding:12px 16px 16px 16px;animation:kv-rise 240ms ease-out">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="width:7px;height:7px;border-radius:99px;background:#c58a3a"></span>
+            <span style="font-weight:700;font-size:12.5px;color:#f7f3ee">{{ dirtyCount }}</span>
+            <div style="flex:1"></div>
+            <span onClick="{{ onDiscard }}" style="font-weight:600;font-size:12.5px;color:#a89a92;cursor:pointer">Discard</span>
+          </div>
+          <div onClick="{{ onUpdate }}" style="margin-top:10px;text-align:center;border-radius:10px;background:#8fb473;padding:12px 0px;cursor:pointer">
+            <span style="font-weight:700;font-size:13.5px;color:#23331a">Update · changes go live to Maddie</span>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ a4ShowPush }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ openPush }}" style="position:absolute;bottom:0px;left:0px;right:0px;background:#faf8f6;border-top:1px solid #ece7e1;padding:12px 16px 16px 16px">
+          <div style="display:flex;align-items:center;justify-content:center;gap:9px;border-radius:11px;background:#33251f;padding:13px 0px;cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 11.5V2.5M3.4 6L7 2.4 10.6 6" stroke="#f7f3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span style="font-weight:700;font-size:13.5px;color:#f7f3ee">Publish</span>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <div id="1e" style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1e</span>
+      <span style="font-weight:700;font-size:14px;color:#2a211c">Roster statuses</span>
+      <span style="font-size:12.5px;color:#6f6862">Phone 390 · all four pills in context</span>
+    </div>
+
+    <div data-screen-label="1e Roster statuses (phone)" style="width:390px;background:#faf8f6;border:1px solid #ded8d0;border-radius:20px;overflow:hidden;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+      <div style="padding:20px 18px 12px 18px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span style="font-family:'Protest Strike';font-size:26px;color:#a46a57">SPC</span>
+          <span style="font-weight:600;font-size:12.5px;color:#8a5140;cursor:pointer">Templates ›</span>
+        </div>
+        <div style="font-size:12px;color:#6f6862;margin-top:4px">9 clients · 2 need programming</div>
+      </div>
+      <div style="padding:0px 18px 20px 18px">
+        <div style="background:#fff;border:1px solid #ece7e1;border-radius:14px;overflow:hidden">
+          <sc-for list="{{ roster }}" as="r" hint-placeholder-count="5">
+            <div style="display:flex;align-items:flex-start;gap:11px;padding:14px 14px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+              <div style="width:36px;height:36px;border-radius:99px;background:{{ r.avBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+                <span style="font-weight:700;font-size:12px;color:{{ r.avFg }}">{{ r.initials }}</span>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-weight:700;font-size:14px;color:#2a211c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span>
+                  <div style="display:flex;align-items:center;gap:5px;background:{{ r.pillBg }};border-radius:99px;padding:3px 9px;flex-shrink:0">
+                    <span style="width:6px;height:6px;border-radius:99px;background:{{ r.pillFg }}"></span>
+                    <span style="font-weight:700;font-size:10.5px;color:{{ r.pillFg }};white-space:nowrap">{{ r.status }}</span>
+                  </div>
+                </div>
+                <div style="font-size:11.5px;color:{{ r.whenFg }};margin-top:4px">{{ r.when }}</div>
+                <div style="font-size:11.5px;color:#6f6862;margin-top:3px;line-height:1.4;text-wrap:pretty">{{ r.hint }}</div>
+              </div>
+              <span style="font-size:16px;color:#c9c2b9;margin-top:8px">›</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:11.5px;color:#6f6862;margin-top:12px;line-height:1.5;padding:0px 2px">Status comes from the current program's end date. No one sets it by hand.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="1f" style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1f</span>
+      <span style="font-weight:700;font-size:14px;color:#2a211c">Member make-up sheet</span>
+      <span style="font-size:12.5px;color:#6f6862">Phone 390 · member side</span>
+    </div>
+
+    <div data-screen-label="1f Member make-up sheet (phone)" style="width:390px;height:844px;background:#eceae6;border:1px solid #ded8d0;border-radius:20px;overflow:hidden;position:relative;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+      <div style="padding:22px 18px 0px 18px;filter:saturate(0.9)">
+        <div style="font-family:'Protest Strike';font-size:26px;color:#2a211c">This week</div>
+        <div style="font-size:12.5px;color:#6f6862;margin-top:4px">Aug 24 – 30 · 2 sessions</div>
+        <div style="background:#fff;border:1px solid #e2ddd6;border-radius:14px;padding:15px 16px;margin-top:16px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:34px;height:34px;border-radius:99px;background:#e3ead9;display:flex;align-items:center;justify-content:center">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7.5l3.2 3.2L12 4" stroke="#4d6142" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:15px;color:#2a211c">Session 1</div>
+              <div style="font-size:12px;color:#4d6142;margin-top:2px">Logged Wed · 5 lifts</div>
+            </div>
+            <span style="font-size:17px;color:#c9c2b9">›</span>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #e2ddd6;border-radius:14px;padding:15px 16px;margin-top:11px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:34px;height:34px;border-radius:99px;border:1.5px dashed #d6d1ca"></div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:15px;color:#2a211c">Session 2</div>
+              <div style="font-size:12px;color:#6f6862;margin-top:2px">Not logged yet</div>
+            </div>
+            <span style="font-size:17px;color:#c9c2b9">›</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="position:absolute;inset:0;background:rgba(42,33,28,0.34)"></div>
+
+      <div data-screen-label="Make-up bottom sheet" style="position:absolute;bottom:0px;left:0px;right:0px;background:#eceae6;border-radius:22px 22px 0px 0px;padding:10px 20px 26px 20px;animation:kv-rise 260ms ease-out">
+        <div style="width:38px;height:4px;border-radius:99px;background:#d6d1ca;margin:4px auto 18px auto"></div>
+        <div style="font-family:'Protest Strike';font-size:23px;color:#2a211c;line-height:1.2;text-wrap:pretty">You already logged Session 1 this week</div>
+        <div style="font-size:13px;color:#57534e;margin-top:8px;line-height:1.5;text-wrap:pretty">Both of these are normal. Pick whichever fits what you did today.</div>
+
+        <div style="background:#fff;border:1px solid #e2ddd6;border-radius:16px;padding:16px;margin-top:18px;cursor:pointer">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:38px;height:38px;border-radius:11px;background:#f4f1ec;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10.5 2.5l3 3-7.5 7.5H3v-3l7.5-7.5z" stroke="#57534e" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:15.5px;color:#2a211c">Update that session</div>
+              <div style="font-size:12.5px;color:#6f6862;margin-top:3px;line-height:1.4">Opens Wed Aug 26. Add a set, fix a weight.</div>
+            </div>
+            <span style="font-size:18px;color:#c9c2b9">›</span>
+          </div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #e2ddd6;border-radius:16px;padding:16px;margin-top:11px;cursor:pointer">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:38px;height:38px;border-radius:11px;background:#e3ead9;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="#4d6142" stroke-width="1.7" stroke-linecap="round"></path></svg>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:15.5px;color:#2a211c">Start a new one</div>
+              <div style="font-size:12.5px;color:#6f6862;margin-top:3px;line-height:1.4">A fresh copy to log, good for making up a week you missed.</div>
+            </div>
+            <span style="font-size:18px;color:#c9c2b9">›</span>
+          </div>
+        </div>
+
+        <div style="text-align:center;margin-top:18px;padding:6px 0px;cursor:pointer">
+          <span style="font-weight:600;font-size:13.5px;color:#8a5140">Never mind</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="1g" style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1g</span>
+      <span style="font-weight:700;font-size:14px;color:#2a211c">Roster statuses, desktop table</span>
+      <span style="font-size:12.5px;color:#6f6862">Desktop 1280 · search + chips filter the table · sorted A–Z by default, click STATUS to sort by urgency</span>
+    </div>
+
+    <div data-screen-label="1g Roster statuses (desktop)" style="width:1280px;background:#faf8f6;border:1px solid #ded8d0;border-radius:16px;padding:26px;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+        <div style="flex:1;min-width:240px">
+          <div style="font-family:'Protest Strike';font-size:30px;color:#8a5140">SPC</div>
+          <div style="font-size:13px;color:#78716c;margin-top:2px">5 clients · 2 run out this week</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="border:1px solid #d9d4cd;border-radius:9px;background:#fff;padding:9px 16px;cursor:pointer">
+            <span style="font-weight:600;font-size:13px;color:#44403c">Live sessions</span>
+          </div>
+          <div style="border:1px solid #d9d4cd;border-radius:9px;background:#fff;padding:9px 16px;cursor:pointer">
+            <span style="font-weight:600;font-size:13px;color:#44403c">Templates</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px;width:262px;height:38px;border:1px solid #e2ddd6;border-radius:10px;background:#fff;padding:0px 12px">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="6" cy="6" r="4.3" stroke="#a8a29e" stroke-width="1.4"></circle><path d="M9.3 9.3L12.5 12.5" stroke="#a8a29e" stroke-width="1.4" stroke-linecap="round"></path></svg>
+          <input value="{{ deskSearch }}" onInput="{{ onDeskSearch }}" placeholder="Search clients" style="flex:1;min-width:0;border:0px;background:transparent;font-size:13px;color:#2a211c">
+        </div>
+        <sc-for list="{{ deskChips }}" as="c" hint-placeholder-count="5">
+          <div onClick="{{ c.onPick }}" style="display:flex;align-items:center;gap:7px;border-radius:99px;background:{{ c.bg }};border:1px solid {{ c.bd }};padding:8px 14px;cursor:pointer">
+            <span style="font-weight:600;font-size:12.5px;color:{{ c.fg }}">{{ c.label }}</span>
+            <span style="font-weight:700;font-size:12.5px;color:{{ c.fg }};opacity:0.75">{{ c.count }}</span>
+          </div>
+        </sc-for>
+        <div style="width:1px;height:26px;background:#e7e2db;margin:0px 4px"></div>
+        <span style="font-weight:600;font-size:12.5px;color:#78716c">Coach:</span>
+        <div style="display:flex;align-items:center;gap:10px;border:1px solid #d9d4cd;border-radius:8px;background:#fff;padding:7px 10px;cursor:pointer">
+          <span style="font-weight:600;font-size:13px;color:#44403c">All</span>
+          <span style="font-size:10px;color:#78716c">▾</span>
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #ece7e1;border-radius:14px;overflow:hidden">
+        <div style="display:flex;align-items:center;padding:11px 0px;background:#faf8f6;border-bottom:1px solid #ece7e1">
+          <div onClick="{{ deskSortName.onPick }}" style="flex:1.6;padding:0px 10px;cursor:pointer"><span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:{{ deskSortName.fg }}">CLIENT{{ deskSortName.arrow }}</span></div>
+          <div style="flex:1.3;padding:0px 10px"><span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">CURRENT PROGRAM</span></div>
+          <div onClick="{{ deskSortStatus.onPick }}" style="flex:1.7;padding:0px 10px;cursor:pointer"><span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:{{ deskSortStatus.fg }}">STATUS{{ deskSortStatus.arrow }}</span></div>
+          <div style="width:116px;padding:0px 10px"><span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">LAST SESSION</span></div>
+          <div style="width:180px;padding:0px 10px;text-align:right"><span style="font-weight:700;font-size:10px;letter-spacing:1.1px;color:#a8a29e">NEXT STEP</span></div>
+        </div>
+
+        <sc-for list="{{ rosterDesk }}" as="r" hint-placeholder-count="5">
+          <div style="display:flex;align-items:center;padding:14px 0px;border-bottom:1px solid #f4f1ec;cursor:pointer">
+            <div style="flex:1.6;display:flex;align-items:center;gap:11px;padding:0px 10px;min-width:0">
+              <div style="width:34px;height:34px;border-radius:99px;background:{{ r.pillBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <span style="font-weight:700;font-size:12px;color:{{ r.pillFg }}">{{ r.initials }}</span>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:14px;color:#2a211c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</div>
+                <div style="font-size:11.5px;color:#6f6862;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.coachLine }}</div>
+              </div>
+            </div>
+
+            <div style="flex:1.3;padding:0px 10px;min-width:0">
+              <div style="font-weight:600;font-size:13px;color:{{ r.programFg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.programLine }}</div>
+              <div style="font-size:11.5px;color:#6f6862">{{ r.programSub }}</div>
+            </div>
+
+            <div style="flex:1.7;padding:0px 10px;min-width:0">
+              <div style="display:flex;align-items:center;gap:9px">
+                <div style="display:flex;align-items:center;gap:5px;background:{{ r.pillBg }};border-radius:99px;padding:4px 10px;flex-shrink:0">
+                  <span style="width:6px;height:6px;border-radius:99px;background:{{ r.pillFg }}"></span>
+                  <span style="font-weight:700;font-size:10.5px;color:{{ r.pillFg }};white-space:nowrap">{{ r.status }}</span>
+                </div>
+                <span style="flex:1;font-size:11.5px;color:#78716c;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.reason }}</span>
+              </div>
+            </div>
+
+            <div style="width:116px;padding:0px 10px">
+              <span style="font-size:12.5px;color:{{ r.lastFg }}">{{ r.lastSession }}</span>
+            </div>
+
+            <div style="width:180px;padding:0px 10px;display:flex;justify-content:flex-end">
+              <div style="background:{{ r.stepBg }};border:1px solid {{ r.stepBd }};border-radius:9px;padding:8px 13px;cursor:pointer">
+                <span style="font-weight:600;font-size:12.5px;color:{{ r.stepFg }};white-space:nowrap">{{ r.stepLabel }}</span>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ deskEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:34px;text-align:center;font-size:13.5px;color:#a8a29e">No clients match your search or filters.</div>
+        </sc-if>
+      </div>
+
+      <div style="font-size:11.5px;color:#6f6862;margin-top:12px;line-height:1.5">Coverage is gone: with no per-week authoring there is no draft or empty session to count. Status and the next step carry what the bar used to.</div>
+    </div>
+  </div>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;overviewStatus&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Good to go&quot;,&quot;options&quot;:[&quot;Good to go&quot;,&quot;Due soon&quot;,&quot;Due now&quot;,&quot;Paused&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Overview tab (1b)&quot;},&quot;upcomingDrafted&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sessions tab (1c)&quot;}}">
+class Component extends DCLogic {
+  state = {
+    a1tab: "overview",
+    a4tab: "current",
+    edits: {},
+    saved: false,
+    extraWeeks: 0,
+    a4copied: false,
+    ongoing: false,
+    deskChip: null,
+    deskSearch: "",
+    deskSort: "name",
+    deskDir: 1,
+    enroll: "Active",
+    freq: 2,
+    pushOpen: false,
+    pushStart: 0,
+    pushWeeks: 6,
+  };
+
+  SESSIONS = [
+    {
+      title: "Session 1", meta: "Lower · squat focus",
+      lifts: [
+        { label: "A", name: "Back Squat", sets: "4", reps: "5", rest: "rest 2:30" },
+        { label: "B", name: "Romanian Deadlift", sets: "3", reps: "8", rest: "rest 1:30" },
+        { label: "C1", name: "Walking Lunge", sets: "3", reps: "10/leg", rest: "superset", sup: true },
+        { label: "C2", name: "Hanging Knee Raise", sets: "3", reps: "12", rest: "rest 1:00", sup: true },
+        { label: "D", name: "Sled Push", sets: "4", reps: "40 yd", rest: "rest 1:00" },
+      ],
+    },
+    {
+      title: "Session 2", meta: "Upper · press + pull",
+      lifts: [
+        { label: "A", name: "Bench Press", sets: "4", reps: "6", rest: "rest 2:00" },
+        { label: "B", name: "One-arm DB Row", sets: "3", reps: "10", rest: "rest 1:30" },
+        { label: "C1", name: "Seated DB Press", sets: "3", reps: "10", rest: "superset", sup: true },
+        { label: "C2", name: "Lat Pulldown", sets: "3", reps: "12", rest: "rest 1:00", sup: true },
+        { label: "D", name: "Farmer Carry", sets: "3", reps: "50 yd", rest: "rest 1:00" },
+      ],
+    },
+  ];
+
+  UPCOMING = [
+    {
+      title: "Session 1", meta: "Lower", changed: "Front squat swapped in for weeks 1–2.",
+      lifts: [
+        { label: "A", name: "Front Squat", setsReps: "4 × 5", rest: "2:30" },
+        { label: "B", name: "Romanian Deadlift", setsReps: "3 × 8", rest: "1:30" },
+        { label: "C1", name: "Split Squat", setsReps: "3 × 8/leg", rest: "superset" },
+        { label: "C2", name: "Hanging Knee Raise", setsReps: "3 × 12", rest: "1:00" },
+        { label: "D", name: "Sled Push", setsReps: "4 × 40 yd", rest: "1:00" },
+      ],
+    },
+    {
+      title: "Session 2", meta: "Upper", changed: null,
+      lifts: [
+        { label: "A", name: "Bench Press", setsReps: "4 × 5", rest: "2:00" },
+        { label: "B", name: "Chest-supported Row", setsReps: "3 × 10", rest: "1:30" },
+        { label: "C1", name: "Seated DB Press", setsReps: "3 × 10", rest: "superset" },
+        { label: "C2", name: "Lat Pulldown", setsReps: "3 × 12", rest: "1:00" },
+        { label: "D", name: "Farmer Carry", setsReps: "3 × 50 yd", rest: "1:00" },
+      ],
+    },
+  ];
+
+  STATUS = {
+    "Good to go": {
+      fg: "#4d6142", bg: "#eef1e7", bannerBg: "#eef1e7", bannerBd: "#d6dfc8", ctaBg: "#4d6142",
+      step: "Nothing needed until Sep 14",
+      sub: "Her next program is queued and starts Mon Sep 14. She's on week 4 of 6.",
+      cta: "See what's queued", upcoming: true,
+    },
+    "Due soon": {
+      fg: "#8a5a2e", bg: "#f4ede3", bannerBg: "#f4ede3", bannerBd: "#e4d6c2", ctaBg: "#a46a57",
+      step: "Publish her next program",
+      sub: "Final week of her program, ends Sun Sep 13. Nothing queued yet.",
+      cta: "Build next program", upcoming: false,
+    },
+    "Due now": {
+      fg: "#b23a22", bg: "#fdece5", bannerBg: "#fdece5", bannerBd: "#f3cfc2", ctaBg: "#b23a22",
+      step: "Program her now",
+      sub: "Her program ended Sun Aug 30 and she has nothing to train from.",
+      cta: "Build next program", upcoming: false,
+    },
+    "Paused": {
+      fg: "#78716c", bg: "#f1efed", bannerBg: "#f1efed", bannerBd: "#e0dbd4", ctaBg: "#57534e",
+      step: "Paused since Aug 10",
+      sub: "Nothing needed. Her last program closed into History when she paused.",
+      cta: "Resume SPC", upcoming: false,
+    },
+  };
+
+  // First box is the clean hand-off — the Monday after her current run ends.
+  // The other two deliberately interrupt it.
+  MONDAYS = [
+    { label: "Sep 14", sub: "when her program ends" },
+    { label: "Aug 31", sub: "next Monday" },
+    { label: "Sep 7", sub: "in 2 weeks" },
+  ];
+
+  END_DATES = ["Sun Sep 13", "Sun Sep 20", "Sun Sep 27", "Sun Oct 4"];
+
+  addMonths(startLabel, weeks) {
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const parts = startLabel.split(" ");
+    const d = new Date(2026, MON.indexOf(parts[0]), Number(parts[1]));
+    d.setDate(d.getDate() + weeks * 7 - 1);
+    return `${MON[d.getMonth()]} ${d.getDate()}`;
+  }
+
+  mkLifts(sessIdx, lifts) {
+    return lifts.map((l, i) => {
+      const key = `${sessIdx}-${l.label}`;
+      const e = this.state.edits[key] ?? {};
+      return {
+        label: l.label, name: l.name, rest: l.rest,
+        sets: e.sets ?? l.sets,
+        reps: e.reps ?? l.reps,
+        superBd: l.sup ? "2px solid #cfdcc1" : "2px solid transparent",
+        onSets: (ev) => this.edit(key, "sets", ev.target.value),
+        onReps: (ev) => this.edit(key, "reps", ev.target.value),
+      };
+    });
+  }
+
+  edit(key, field, value) {
+    this.setState((s) => ({
+      saved: false,
+      edits: Object.assign({}, s.edits, { [key]: Object.assign({}, s.edits[key], { [field]: value }) }),
+    }));
+  }
+
+  renderVals() {
+    const s = this.state;
+    const statusKey = this.props.overviewStatus ?? "Good to go";
+    const st = this.STATUS[statusKey] ?? this.STATUS["Good to go"];
+    const upcomingFilled = this.props.upcomingDrafted ?? true;
+
+    const a1tabs = [
+      { key: "overview", label: "Overview" },
+      { key: "sessions", label: "Sessions" },
+      { key: "history", label: "History" },
+      { key: "print", label: "Print" },
+    ].map((t) => ({
+      label: t.label,
+      fg: s.a1tab === t.key ? "#2a211c" : "#a8a29e",
+      bd: s.a1tab === t.key ? "#a46a57" : "transparent",
+      onPick: () => this.setState({ a1tab: t.key }),
+    }));
+
+    const logged = [2, 2, 2, 1, null, null];
+    const dates = ["Aug 3", "Aug 10", "Aug 17", "Aug 24", "Aug 31", "Sep 7"];
+    const weeks = logged.map((n, i) => {
+      const now = i === 3;
+      const future = n == null;
+      return {
+        label: `W${i + 1}`,
+        date: dates[i],
+        labelFg: now ? "#4d6142" : future ? "#a8a29e" : "#57534e",
+        colBg: now ? "#eef1e7" : future ? "transparent" : "#fbfaf8",
+        colBd: now ? "#d6dfc8" : future ? "#d9d4cd" : "#f0ece6",
+        colBs: future ? "dashed" : "solid",
+        count: future ? "–" : `${n}/2`,
+        countFg: future ? "#a8a29e" : n === 2 ? "#4d6142" : "#8a5a2e",
+        dots: [0, 1].map((k) => ({
+          bg: future ? "transparent" : k < n ? "#8fb473" : "transparent",
+          bd: future ? "#d9d4cd" : k < n ? "#8fb473" : "#d6d1ca",
+        })),
+      };
+    });
+
+    const dirtyKeys = Object.keys(s.edits);
+    const dirty = dirtyKeys.length > 0;
+    const dirtyCount = `Update · ${dirtyKeys.length} unsaved ${dirtyKeys.length === 1 ? "change" : "changes"}`;
+
+    const endIdx = Math.min(s.extraWeeks, this.END_DATES.length - 1);
+    const weeksNum = 6 + endIdx;
+
+    const startLabel = this.MONDAYS[s.pushStart].label;
+    const pushEnd = this.addMonths(startLabel, s.pushWeeks);
+
+    const roster = [
+      { name: "Ben Fischer", status: "Good to go", when: "Terra · 2×/wk · 13d left", hint: "Nothing needed, next program starts Sep 14." },
+      { name: "Jess Alvarado", status: "Due soon", when: "Terra · 3×/wk · 7d left · ends Sep 6", hint: "Final week, nothing queued. Build her next program." },
+      { name: "Colin Reyes", status: "Due now", when: "Dustin · 2×/wk · ends today", hint: "Final week's sessions all logged. Publish something new." },
+      { name: "Sarah Otte", status: "Due now", when: "Dustin · 2×/wk · no program yet", hint: "Enrolled Aug 24, never programmed. Build her first one, or pause her to silence this." },
+      { name: "Marcus Lee", status: "Paused", when: "Dustin · 1×/wk · paused Aug 10", hint: "Travel through August. Check in Sep 1 about resuming." },
+    ].map((r) => {
+      const t = this.STATUS[r.status];
+      return {
+        name: r.name,
+        initials: r.name.split(" ").map((p) => p[0]).join(""),
+        status: r.status,
+        pillBg: t.bg, pillFg: t.fg,
+        avBg: t.bg, avFg: t.fg,
+        when: r.when,
+        whenFg: r.status === "Due now" ? "#b23a22" : "#6f6862",
+        hint: r.hint,
+      };
+    });
+
+    // Desktop table: same 4 pills, plus the reason + next-step button the real
+    // roster renders. NEXT_STEP tones from spcState.js: urgent = filled clay,
+    // needsAction = outlined, quiet = muted.
+    const STEP_TONES = {
+      urgent: { bg: "#a46a57", bd: "#a46a57", fg: "#fff" },
+      needsAction: { bg: "#fff", bd: "#d9d4cd", fg: "#44403c" },
+      quiet: { bg: "#fff", bd: "#d9d4cd", fg: "#78716c" },
+      none: { bg: "transparent", bd: "transparent", fg: "#c9c2b9" },
+    };
+    const DESK = [
+      { name: "Ben Fischer", status: "Good to go", coachLine: "Coach: Terra · 2× a week", programLine: "Aug 3 – Sep 12", programSub: "week 5 of 6", reason: "Next program starts Sep 14", lastSession: "2 days ago", step: "Nothing due", tone: "none" },
+      { name: "Jess Alvarado", status: "Due soon", coachLine: "Coach: Terra · 3× a week", programLine: "Jul 27 – Sep 6", programSub: "final week", reason: "7 days left, nothing queued", lastSession: "Yesterday", step: "Build next program", tone: "urgent" },
+      { name: "Colin Reyes", status: "Due now", coachLine: "Coach: Dustin · 2× a week", programLine: "Jul 20 – Aug 30", programSub: "ends today", reason: "Final week complete, nothing queued", lastSession: "Today", step: "Build next program", tone: "urgent" },
+      { name: "Sarah Otte", status: "Due now", coachLine: "Coach: Dustin · 2× a week", programLine: "None", programSub: "enrolled Aug 24", reason: "Enrolled, not programmed yet", lastSession: "Never", step: "Build first program", tone: "quiet" },
+      { name: "Marcus Lee", status: "Paused", coachLine: "Coach: Dustin · 1× a week", programLine: "Paused", programSub: "since Aug 10", reason: "Travel through August", lastSession: "3 weeks ago", step: "Resume", tone: "quiet" },
+    ];
+    const deskQ = s.deskSearch.trim().toLowerCase();
+    const STATUS_RANK = { "Due now": 0, "Due soon": 1, "Good to go": 2, "Paused": 3 };
+    const rosterDesk = DESK.filter((r) => !s.deskChip || r.status === s.deskChip)
+      .filter((r) => !deskQ || r.name.toLowerCase().includes(deskQ))
+      .sort((a, b) => {
+        let cmp;
+        if (s.deskSort === "name") cmp = a.name.localeCompare(b.name);
+        else {
+          cmp = STATUS_RANK[a.status] - STATUS_RANK[b.status];
+          if (cmp === 0) cmp = a.name.localeCompare(b.name);
+        }
+        return cmp * s.deskDir;
+      })
+      .map((r) => {
+      const t = this.STATUS[r.status];
+      const st = STEP_TONES[r.tone];
+      return {
+        name: r.name,
+        initials: r.name.split(" ").map((p) => p[0]).join(""),
+        coachLine: r.coachLine,
+        status: r.status,
+        pillBg: t.bg, pillFg: t.fg,
+        programLine: r.programLine,
+        programFg: r.programLine === "None" || r.programLine === "Paused" ? "#78716c" : "#2a211c",
+        programSub: r.programSub,
+        reason: r.reason,
+        lastSession: r.lastSession,
+        lastFg: r.lastSession === "Never" ? "#c9c4bd" : "#57534e",
+        stepLabel: r.step, stepBg: st.bg, stepBd: st.bd, stepFg: st.fg,
+      };
+    });
+    // Default sort is A–Z; clicking STATUS switches to urgency order, clicking
+    // the active header flips direction (same toggle as the phone roster).
+    const deskSorts = {};
+    for (const key of ["name", "status"]) {
+      const on = s.deskSort === key;
+      deskSorts[key] = {
+        fg: on ? "#2a211c" : "#a8a29e",
+        arrow: on ? (s.deskDir === 1 ? " ↓" : " ↑") : "",
+        onPick: () => (on ? this.setState({ deskDir: -s.deskDir }) : this.setState({ deskSort: key, deskDir: 1 })),
+      };
+    }
+
+    const deskCounts = { "Good to go": 1, "Due soon": 1, "Due now": 2, "Paused": 1 };
+    const deskChips = [{ key: null, label: "All", count: "5" }]
+      .concat(["Due now", "Due soon", "Good to go", "Paused"].map((k) => ({ key: k, label: k, count: String(deskCounts[k]) })))
+      .map((c) => {
+        const on = s.deskChip === c.key;
+        const t = c.key ? this.STATUS[c.key] : { bg: "#f1efed", fg: "#78716c" };
+        return {
+          label: c.label, count: c.count,
+          bg: on ? "#33251f" : t.bg,
+          bd: on ? "#33251f" : "transparent",
+          fg: on ? "#f7f3ee" : t.fg,
+          onPick: () => this.setState({ deskChip: on ? null : c.key }),
+        };
+      });
+
+    return {
+      a1tabs,      a1Overview: s.a1tab === "overview",
+      a1Sessions: s.a1tab === "sessions",
+      a1History: s.a1tab === "history",
+      a1Print: s.a1tab === "print",
+
+      ov: {
+        statusLabel: statusKey,
+        statusUpper: statusKey.toUpperCase(),
+        pillBg: st.bg, pillFg: st.fg,
+        bannerBg: st.bannerBg, bannerBd: st.bannerBd,
+        nextStep: st.step, nextSub: st.sub,
+        ctaBg: st.ctaBg, ctaLabel: st.cta,
+        hasUpcoming: st.upcoming,
+      },
+      weeks,
+      prs: [
+        { name: "Back Squat", value: "195 × 5", when: "Aug 26" },
+        { name: "Romanian Deadlift", value: "170 × 8", when: "Aug 19" },
+        { name: "Bench Press", value: "125 × 6", when: "Aug 13" },
+      ],
+      history: [
+        { range: "Jun 22 – Aug 2", weeks: "6 weeks · 2 sessions", logged: "11 / 12", note: "Squat 175 → 190. Low back flared in week 3, pulled RDL volume back." },
+        { range: "May 11 – Jun 21", weeks: "6 weeks · 2 sessions", logged: "12 / 12", note: "First program after her deload. Added sled work, she liked it and kept it." },
+        { range: "Mar 30 – May 10", weeks: "6 weeks · 2 sessions", logged: "10 / 12", note: "Travel week 4. Bench stalled at 115, changed grip width after." },
+      ],
+      printRows: [
+        { title: "Session 1 · Lower", sub: "5 lifts · cues included" },
+        { title: "Session 2 · Upper", sub: "5 lifts · cues included" },
+      ],
+      thread: [
+        { text: "Ski trip Dec 18–27. Work back from that when you build the fall runs.", meta: "Terra · Aug 12" },
+        { text: "Prefers Tue/Thu. Don't put her on a Monday.", meta: "Dustin · Jun 22" },
+      ],
+      clientNotes: [
+        { text: "Depth felt way better at the heavier weight, knee was quiet.", meta: "Aug 26 · Back Squat" },
+        { text: "Grip went before my legs did on the last set.", meta: "Aug 19 · Romanian Deadlift" },
+        { text: "Jump from 90 felt big.", meta: "Aug 12 · Sled Push" },
+      ],
+      statusSeg: ["Active", "Paused"].map((k) => ({
+        label: k,
+        bg: s.enroll === k ? "#fff" : "transparent",
+        fg: s.enroll === k ? "#2a211c" : "#78716c",
+        shadow: s.enroll === k ? "0 1px 3px rgba(42,33,28,0.12)" : "none",
+        onPick: () => this.setState({ enroll: k }),
+      })),
+      freqSeg: [1, 2, 3, 4].map((n) => ({
+        label: `${n}×`,
+        bg: s.freq === n ? "#fff" : "transparent",
+        fg: s.freq === n ? "#2a211c" : "#78716c",
+        shadow: s.freq === n ? "0 1px 3px rgba(42,33,28,0.12)" : "none",
+        onPick: () => this.setState({ freq: n }),
+      })),
+
+      run: {
+        endLabel: s.ongoing ? "No end date" : this.END_DATES[endIdx],
+        weeksLabel: s.ongoing ? "ongoing" : `${weeksNum} weeks`,
+        weeksNum: String(weeksNum),
+        canAddWeek: !s.ongoing,
+        progressLine: s.ongoing
+          ? "Week 4 · runs until you set an end date · she's logged 7 of 8 so far"
+          : `Week 4 of ${weeksNum} · she's logged 7 of 8 so far`,
+        phoneLine: s.ongoing ? "Ongoing · week 4" : `${weeksNum} weeks · week 4`,
+        ongoingBd: s.ongoing ? "#a46a57" : "#e2ddd6",
+        ongoingBg: s.ongoing ? "#fdf6f2" : "#fff",
+        ongoingTrack: s.ongoing ? "#a46a57" : "#d6d1ca",
+        ongoingJustify: s.ongoing ? "flex-end" : "flex-start",
+        ongoingFg: s.ongoing ? "#8a5140" : "#44403c",
+      },
+      onToggleOngoing: () =>
+        this.setState((p) => ({
+          ongoing: !p.ongoing,
+          saved: false,
+          edits: Object.assign({}, p.edits, { run: { sets: "d" } }),
+        })),
+      onEndDate: () => this.setState((p) => ({ extraWeeks: Math.min(p.extraWeeks + 1, 3), edits: Object.assign({}, p.edits, { run: { sets: "d" } }), saved: false })),
+      onAddWeek: () => this.setState((p) => ({ extraWeeks: Math.min(p.extraWeeks + 1, 3), edits: Object.assign({}, p.edits, { run: { sets: "d" } }), saved: false })),
+
+      current: this.SESSIONS.map((sess, i) => ({
+        title: sess.title, meta: sess.meta,
+        lifts: this.mkLifts(i, sess.lifts),
+        hasSuper: true,
+      })),
+      upcoming: this.UPCOMING.map((sess) => ({
+        title: sess.title, meta: sess.meta,
+        lifts: sess.lifts,
+        changed: Boolean(sess.changed),
+        changedNote: sess.changed ?? "",
+      })),
+
+      up: {
+        empty: !upcomingFilled,
+        filled: upcomingFilled,
+        autosaveLine: upcomingFilled ? "Autosaves · last edit 2 min ago" : "Autosaves as you build",
+        onCopy: () => {},
+      },
+      up4: {
+        empty: !s.a4copied,
+        filled: s.a4copied,
+        autosaveLine: s.a4copied ? "Autosaves · copied just now" : "Autosaves as you build",
+        onCopy: () => this.setState({ a4copied: true }),
+      },
+
+      dirty, dirtyCount, saved: s.saved && !dirty,
+      onUpdate: () => this.setState({ edits: {}, saved: true }),
+      onDiscard: () => this.setState({ edits: {}, saved: false, extraWeeks: 0 }),
+
+      a4tabs: [
+        { key: "current", label: "Current", dot: "#4d6142" },
+        { key: "upcoming", label: "Upcoming", dot: "#c9c2b9" },
+      ].map((t) => ({
+        label: t.label, dot: t.dot,
+        bg: s.a4tab === t.key ? "#fff" : "transparent",
+        fg: s.a4tab === t.key ? "#2a211c" : "#78716c",
+        shadow: s.a4tab === t.key ? "0 1px 3px rgba(42,33,28,0.12)" : "none",
+        onPick: () => this.setState({ a4tab: t.key }),
+      })),
+      a4Current: s.a4tab === "current",
+      a4Upcoming: s.a4tab === "upcoming",
+      a4ShowUpdate: s.a4tab === "current" && dirty,
+      a4ShowPush: s.a4tab === "upcoming" && s.a4copied,
+
+      pushOpen: s.pushOpen,
+      openPush: () => this.setState({ pushOpen: true }),
+      closePush: () => this.setState({ pushOpen: false }),
+      mondays: this.MONDAYS.map((m, i) => {
+        const on = i === s.pushStart;
+        return {
+          label: m.label, sub: m.sub,
+          bd: on ? "#a46a57" : "#e2ddd6",
+          bg: on ? "#fdf6f2" : "#fff",
+          fg: on ? "#8a5140" : "#44403c",
+          subFg: on ? "#b08968" : "#a8a29e",
+          onPick: () => this.setState({ pushStart: i }),
+        };
+      }),
+      weekOpts: [4, 5, 6, 8].map((n) => {
+        const on = n === s.pushWeeks;
+        return {
+          label: `${n} wk`,
+          bd: on ? "#a46a57" : "#e2ddd6",
+          bg: on ? "#fdf6f2" : "#fff",
+          fg: on ? "#8a5140" : "#44403c",
+          onPick: () => this.setState({ pushWeeks: n }),
+        };
+      }),
+      push: {
+        range: `${startLabel} – ${pushEnd} · ${s.pushWeeks} weeks`,
+        closes: `Her current program stays live until Sun ${this.addMonths(startLabel, 0)} and closes into History on ${startLabel}.`,
+        cta: `Publish · starts ${startLabel}`,
+      },
+
+      roster,
+      deskChips,
+      rosterDesk,
+      deskEmpty: rosterDesk.length === 0,
+      deskSearch: s.deskSearch,
+      onDeskSearch: (e) => this.setState({ deskSearch: e.target.value }),
+      deskSortName: deskSorts.name,
+      deskSortStatus: deskSorts.status,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

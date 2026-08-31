@@ -1,39 +1,33 @@
 import { useCallback, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { getSpcRosterDetail, describeLastSession } from "../../../lib/programming/spcRoster";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { SpcRosterMobile } from "../../../components/coach/SpcRosterMobile";
 import { PressFade } from "../../../components/PressFade";
-import { fonts, colors } from "../../../lib/theme";
-import { SPC_STATES, SPC_STATE_ORDER } from "../../../lib/programming/spcState";
-import { formatDateMD } from "../../../lib/formatDate";
+import { fonts, colors, statusColors } from "../../../lib/theme";
+import { SPC_STATES, SPC_STATE_ORDER, monthDay } from "../../../lib/programming/spcState";
+import { formatDateRange } from "../../../lib/formatDate";
 
-// SPC roster, coach web (design_handoff_coach_web_v2, screen 14).
+// SPC roster, coach web (design_handoff_spc_rework_v1, 1g).
 //
-// Sorted by time remaining, because that's the only ordering that puts the
-// client you have to act on today at the top. The previous version defaulted
-// to a flat grid with a sort dropdown and status-tile filters, which meant
-// the answer to "who runs out first" was always one interaction away.
+// Four derived statuses, A–Z by name by default — replacing the old
+// sort-by-time-remaining default, which Terra asked to drop. CLIENT and
+// STATUS are the two sortable headers; STATUS sorts by urgency (Due now →
+// Due soon → Good to go → Paused, name as the tiebreak) and clicking the
+// active header flips direction, same toggle the phone roster uses.
 //
-// The coverage column is the real change: a status pill says what state a
-// coach last set by hand, and coverage says what is actually in the block.
-// Those disagree often enough — a block marked Printed & Ready with two
-// empty sessions in it — that showing only the pill was hiding work.
+// The COVERAGE column is gone: with no per-week authoring there is no draft
+// or empty session to count, so the stacked bar had nothing left to measure.
+// Status + reason take its place. Colors read from theme.statusColors — the
+// drifted local TONE_STYLES copy this file used to carry is deleted.
 //
-// Coach filter defaults to All for everyone, per the handoff: any coach can
-// see the whole roster (covering for someone shouldn't need an admin). It's
-// the alerts that stay scoped, not the visibility.
+// Coach filter defaults to All for everyone: any coach can see the whole
+// roster (covering for someone shouldn't need an admin). Search matches on
+// name only, and search + chips + coach compose (search first, then filter).
 
 const CARD_BORDER = "#ece7e1";
 const CANVAS = "#faf8f6";
-
-const TONE_STYLES = {
-  urgent: { bg: "#fdece5", text: "#b23a22", bar: "#b23a22" },
-  needsAction: { bg: "#fdf3e3", text: "#8a6320", bar: "#8a6320" },
-  onTrack: { bg: "#e3ead9", text: "#4d6142", bar: "#4d6142" },
-  paused: { bg: "#f1efec", text: "#78716c", bar: "#c9c4bd" },
-};
 
 const NEXT_STEP_STYLES = {
   urgent: { bg: colors.primary, border: colors.primary, text: "#fff" },
@@ -58,28 +52,8 @@ function Eyebrow({ children, style }) {
   );
 }
 
-// One stacked bar per client: how much of the current block is actually
-// finished. Same mutually-exclusive buckets as the Group Programs block
-// band, so the two screens can't disagree about what "covered" means.
-function CoverageBar({ coverage, tone }) {
-  const total = coverage.total || 1;
-  const seg = (n, color) =>
-    n > 0 ? <View key={color} style={{ width: `${(n / total) * 100}%`, height: 6, backgroundColor: color }} /> : null;
-
-  if (coverage.total === 0) {
-    return <View style={{ height: 6, borderRadius: 99, backgroundColor: "#ece7e1" }} />;
-  }
-  return (
-    <View style={{ flexDirection: "row", height: 6, borderRadius: 99, overflow: "hidden", backgroundColor: "#ece7e1" }}>
-      {seg(coverage.published, TONE_STYLES[tone]?.bar ?? "#4d6142")}
-      {seg(coverage.draft, "#d8c9a8")}
-      {seg(coverage.empty, "#efe9e2")}
-    </View>
-  );
-}
-
 function StatusChip({ label, count, active, tone, onPress }) {
-  const style = TONE_STYLES[tone] ?? TONE_STYLES.paused;
+  const style = statusColors[tone] ?? statusColors.paused;
   return (
     <PressFade
       onPress={onPress}
@@ -103,18 +77,42 @@ function StatusChip({ label, count, active, tone, onPress }) {
   );
 }
 
-function HeaderCell({ children, width, flex, align = "left" }) {
+function HeaderCell({ children, width, flex, align = "left", sortable = false, active = false, dir = 1, onPress }) {
+  const label = (
+    <Eyebrow style={{ textAlign: align, color: active ? "#57534e" : "#a8a29e" }}>
+      {children}
+      {active ? (dir === 1 ? " ↓" : " ↑") : ""}
+    </Eyebrow>
+  );
+  if (!sortable) return <View style={{ width, flex, paddingHorizontal: 10 }}>{label}</View>;
   return (
-    <View style={{ width, flex, paddingHorizontal: 10 }}>
-      <Eyebrow style={{ textAlign: align }}>{children}</Eyebrow>
-    </View>
+    <PressFade onPress={onPress} style={{ width, flex, paddingHorizontal: 10 }}>
+      {label}
+    </PressFade>
   );
 }
 
+// "Aug 3 – Sep 12" over "week 5 of 6" — the CURRENT PROGRAM cell. The
+// sub-line names where in the program she is; ends-today and final-week get
+// called out in words because that's exactly when a coach is scanning for
+// them.
+function programCell(row) {
+  if (row.status === "paused") return { main: "Paused", sub: null, mainMuted: true };
+  if (!row.block) return { main: "None", sub: row.enrolledAt ? `enrolled ${monthDay(row.enrolledAt)}` : null, mainMuted: true };
+  if (row.ongoing) return { main: `Since ${monthDay(row.block.block_start_date)}`, sub: "ongoing", mainMuted: false };
+  const main = formatDateRange(row.block.block_start_date, row.block.block_end_date);
+  let sub;
+  if (row.daysLeft != null && row.daysLeft < 0) sub = `ended ${monthDay(row.block.block_end_date)}`;
+  else if (row.daysLeft === 0) sub = "ends today";
+  else if (row.daysLeft != null && row.daysLeft <= 6) sub = "final week";
+  else sub = `week ${row.weekNumber} of ${row.blockLengthWeeks}`;
+  return { main, sub, mainMuted: false };
+}
+
 function ClientRow({ row, onOpen, onNextStep, last }) {
-  const tone = row.tone ?? "paused";
-  const toneStyle = TONE_STYLES[tone];
+  const toneStyle = statusColors[row.tone] ?? statusColors.paused;
   const step = row.nextStep;
+  const program = programCell(row);
 
   return (
     <PressFade
@@ -151,37 +149,40 @@ function ClientRow({ row, onOpen, onNextStep, last }) {
         </View>
       </View>
 
-      {/* Current block */}
+      {/* Current program */}
       <View style={{ flex: 1.2, paddingHorizontal: 10, minWidth: 0 }}>
-        {row.status === "paused" ? (
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#a8a29e" }}>Paused</Text>
-        ) : row.block ? (
-          <>
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c" }} numberOfLines={1}>
-              {row.blockLabel} · wk {row.weekNumber} of {row.blockLengthWeeks}
-            </Text>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-              Ends {formatDateMD(row.block.block_end_date)}
-            </Text>
-          </>
-        ) : (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e" }}>—</Text>
-        )}
+        <Text
+          style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: program.mainMuted ? "#a8a29e" : "#2a211c" }}
+          numberOfLines={1}
+        >
+          {program.main}
+        </Text>
+        {program.sub ? (
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }} numberOfLines={1}>
+            {program.sub}
+          </Text>
+        ) : null}
       </View>
 
-      {/* Coverage */}
-      <View style={{ flex: 1.9, paddingHorizontal: 10, minWidth: 0 }}>
-        <CoverageBar coverage={row.coverage} tone={tone} />
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
-          <View style={{ backgroundColor: toneStyle.bg, borderRadius: 99, paddingVertical: 3, paddingHorizontal: 9 }}>
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.6, color: toneStyle.text }}>
-              {(row.label ?? row.state).toUpperCase()}
-            </Text>
-          </View>
-          <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", minWidth: 0 }} numberOfLines={1}>
-            {row.reason}
-          </Text>
+      {/* Status: pill + the derived reason */}
+      <View style={{ flex: 1.9, paddingHorizontal: 10, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            backgroundColor: toneStyle.bg,
+            borderRadius: 99,
+            paddingVertical: 4,
+            paddingHorizontal: 11,
+          }}
+        >
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: toneStyle.text }} />
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: toneStyle.text }}>{row.label}</Text>
         </View>
+        <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", minWidth: 0 }} numberOfLines={1}>
+          {row.reason}
+        </Text>
       </View>
 
       {/* Last session */}
@@ -199,7 +200,7 @@ function ClientRow({ row, onOpen, onNextStep, last }) {
       </View>
 
       {/* Next step */}
-      <View style={{ width: 172, paddingHorizontal: 10, alignItems: "flex-end" }}>
+      <View style={{ width: 186, paddingHorizontal: 10, alignItems: "flex-end" }}>
         {step ? (
           <PressFade
             onPress={() => onNextStep(row)}
@@ -217,7 +218,7 @@ function ClientRow({ row, onOpen, onNextStep, last }) {
             </Text>
           </PressFade>
         ) : (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#d6d1ca" }}>—</Text>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#c9c4bd" }}>Nothing due</Text>
         )}
       </View>
     </PressFade>
@@ -230,8 +231,15 @@ function SpcRosterDesktop() {
   const [rows, setRows] = useState([]);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState(params.status ?? null);
+  // Old dashboard links can carry retired state keys — an unknown key would
+  // filter everything to zero, so only a current state name is accepted.
+  const [statusFilter, setStatusFilter] = useState(
+    typeof params.status === "string" && SPC_STATES[params.status] ? params.status : null
+  );
   const [coachFilter, setCoachFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("name");
+  const [dir, setDir] = useState(1);
 
   const load = useCallback(async () => {
     try {
@@ -256,33 +264,50 @@ function SpcRosterDesktop() {
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [rows]);
 
-  const byCoach = useMemo(
-    () => (coachFilter === "all" ? rows : rows.filter((r) => r.coachId === coachFilter)),
-    [rows, coachFilter]
-  );
+  // Search narrows first, then coach, then the status chips — every count
+  // describes the set a coach is actually looking at.
+  const searched = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const byCoach = coachFilter === "all" ? rows : rows.filter((r) => r.coachId === coachFilter);
+    if (!q) return byCoach;
+    return byCoach.filter((r) => (r.name ?? "").toLowerCase().includes(q));
+  }, [rows, coachFilter, search]);
 
-  // Counts are of the coach-filtered set, so the chips always describe what
-  // you're actually looking at rather than the whole gym.
   const counts = useMemo(() => {
     const c = {};
-    for (const r of byCoach) c[r.state] = (c[r.state] ?? 0) + 1;
+    for (const r of searched) c[r.state] = (c[r.state] ?? 0) + 1;
     return c;
-  }, [byCoach]);
+  }, [searched]);
 
-  const visible = useMemo(
-    () => (statusFilter ? byCoach.filter((r) => r.state === statusFilter) : byCoach),
-    [byCoach, statusFilter]
-  );
+  const visible = useMemo(() => {
+    const filtered = statusFilter ? searched.filter((r) => r.state === statusFilter) : searched;
+    const byName = (a, b) => (a.name ?? "").localeCompare(b.name ?? "");
+    const sorted = [...filtered].sort((a, b) => {
+      if (sort === "name") return byName(a, b);
+      const rank = SPC_STATE_ORDER.indexOf(a.state) - SPC_STATE_ORDER.indexOf(b.state);
+      if (rank !== 0) return rank;
+      return byName(a, b);
+    });
+    return dir === 1 ? sorted : sorted.reverse();
+  }, [searched, statusFilter, sort, dir]);
 
   const runningOutThisWeek = useMemo(
-    () => byCoach.filter((r) => r.status !== "paused" && r.daysLeft != null && r.daysLeft <= 7).length,
-    [byCoach]
+    () => searched.filter((r) => r.status !== "paused" && r.daysLeft != null && r.daysLeft >= 0 && r.daysLeft <= 6 && !r.nextQueued).length,
+    [searched]
   );
 
+  const toggleSort = (key) => {
+    if (sort === key) setDir((d) => -d);
+    else {
+      setSort(key);
+      setDir(1);
+    }
+  };
+
   const handleNextStep = (row) => {
-    // Every next step lands on the client's own block page — that's where
-    // building, finishing a draft and resuming all actually happen. The
-    // button names the job; the page is where it gets done.
+    // Every next step lands on the client's own page — that's where building
+    // and resuming actually happen. The button names the job; the page is
+    // where it gets done.
     router.push(`/(coach)/spc/${row.userId}`);
   };
 
@@ -318,7 +343,7 @@ function SpcRosterDesktop() {
           <View style={{ flex: 1, minWidth: 240 }}>
             <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primaryOnWhite }}>SPC</Text>
             <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#78716c", marginTop: 2 }}>
-              {byCoach.length} client{byCoach.length === 1 ? "" : "s"}
+              {searched.length} client{searched.length === 1 ? "" : "s"}
               {runningOutThisWeek > 0 ? ` · ${runningOutThisWeek} run out this week` : ""}
             </Text>
           </View>
@@ -338,14 +363,31 @@ function SpcRosterDesktop() {
           </View>
         </View>
 
-        {/* State chips — All first, then the derived states in urgency
-            order. Nothing here is stored: every count is computed from the
-            client's own blocks (lib/programming/spcState.js). Clicking the
-            active one clears the filter. */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {/* Toolbar: search + state chips + coach dropdown, all narrowing the
+            same set. Nothing here is stored — every count is computed from
+            the client's own programs (lib/programming/spcState.js). */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search clients"
+            placeholderTextColor={colors.hint}
+            style={{
+              width: 210,
+              height: 38,
+              backgroundColor: "#fff",
+              borderWidth: 1,
+              borderColor: "#e2ddd6",
+              borderRadius: 99,
+              paddingHorizontal: 15,
+              fontFamily: fonts.sans,
+              fontSize: 13,
+              color: "#2a211c",
+            }}
+          />
           <StatusChip
             label="All"
-            count={byCoach.length}
+            count={searched.length}
             active={statusFilter === null}
             tone="paused"
             onPress={() => setStatusFilter(null)}
@@ -399,11 +441,15 @@ function SpcRosterDesktop() {
               borderBottomColor: CARD_BORDER,
             }}
           >
-            <HeaderCell flex={1.6}>CLIENT</HeaderCell>
-            <HeaderCell flex={1.2}>CURRENT BLOCK</HeaderCell>
-            <HeaderCell flex={1.9}>COVERAGE</HeaderCell>
+            <HeaderCell flex={1.6} sortable active={sort === "name"} dir={dir} onPress={() => toggleSort("name")}>
+              CLIENT
+            </HeaderCell>
+            <HeaderCell flex={1.2}>CURRENT PROGRAM</HeaderCell>
+            <HeaderCell flex={1.9} sortable active={sort === "status"} dir={dir} onPress={() => toggleSort("status")}>
+              STATUS
+            </HeaderCell>
             <HeaderCell width={116}>LAST SESSION</HeaderCell>
-            <HeaderCell width={172} align="right">
+            <HeaderCell width={186} align="right">
               NEXT STEP
             </HeaderCell>
           </View>
@@ -413,7 +459,7 @@ function SpcRosterDesktop() {
               <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#a8a29e", textAlign: "center" }}>
                 {rows.length === 0
                   ? "Nobody is on SPC yet. Turn it on from a client's profile to get started."
-                  : "No clients match these filters."}
+                  : "No clients match your search or filters."}
               </Text>
             </View>
           ) : (
@@ -428,6 +474,10 @@ function SpcRosterDesktop() {
             ))
           )}
         </View>
+
+        <Text style={{ marginTop: 12, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
+          Status comes from the current program's end date. No one sets it by hand.
+        </Text>
       </ScrollView>
     </CoachShell>
   );

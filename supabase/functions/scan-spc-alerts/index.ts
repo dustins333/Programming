@@ -97,6 +97,15 @@ Deno.serve(async (req) => {
       if (latestError) throw latestError;
       if (!latest) continue;
 
+      // Sessions-format runs (0102, the SPC simplification) are NOT this
+      // scan's business: their upcoming program is built on the client
+      // page's own pane, a lapsed run keeps showing to the member by design,
+      // and the roster's derived Due soon / Due now is the alarm. Drafting a
+      // weekly-format grid behind one would also flip the client's page back
+      // to the legacy view — the exact regression the format split prevents.
+      // An ongoing run additionally has no end date to measure against.
+      if (latest.format === "sessions" || latest.block_end_date == null) continue;
+
       const daysUntilEnd = daysBetween(today, latest.block_end_date);
       if (daysUntilEnd > leadTimeDays) continue;
 

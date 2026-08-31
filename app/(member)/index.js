@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { readSections, writeSection, SCREEN_MY_WEEK } from "../../lib/screenCache";
 import { todayInBoise, dayOfWeekInBoise, dateInBoise, addDays } from "../../lib/boiseDate";
-import { currentWeekNumber, sessionNumberForDate, formatSessionDays, blockLengthWeeks } from "../../lib/programming/schedule";
+import { currentWeekNumber, calendarWeekNumber, sessionNumberForDate, formatSessionDays, blockLengthWeeks } from "../../lib/programming/schedule";
 import { listMyAssignments, getCurrentBlock, listWorkoutsForWeek, listLogsForSession } from "../../lib/programming/memberPlan";
 import { getNextBlockPreview, isFinalWeekOfBlock, nextBlockPreviewIsDue } from "../../lib/programming/nextBlockPreview";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
@@ -20,6 +20,7 @@ import {
   getGroupCompletion,
   getSpcCompletion,
   getOneOffCompletion,
+  startNewSpcSessionInstance,
 } from "../../lib/programming/sessionCompletions";
 import { listWeekOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
 import { hasUnreadMessages } from "../../lib/programming/messages";
@@ -30,6 +31,7 @@ import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { retryOnce } from "../../lib/retry";
 import { formatDateMDY } from "../../lib/formatDate";
 import { SessionSheet } from "../../components/SessionSheet";
+import { MakeupSessionSheet } from "../../components/session/MakeupSessionSheet";
 import { NextBlockSheet } from "../../components/NextBlockSheet";
 import { ProgressRing } from "../../components/ProgressRing";
 import { PressFade } from "../../components/PressFade";
@@ -772,6 +774,10 @@ export default function MemberHome() {
   // Which group membership's next block is open in the look-ahead sheet.
   const [nextBlockFor, setNextBlockFor] = useState(null);
   const [savingBacklog, setSavingBacklog] = useState(false);
+  // The make-up chooser (design_handoff_spc_rework_v1, 1f) — set when an
+  // already-logged sessions-format SPC session is tapped.
+  const [makeup, setMakeup] = useState(null);
+  const [makeupBusy, setMakeupBusy] = useState(false);
 
   // Tabs stay mounted, and useFocusEffect below re-runs load() on every
   // focus — flipping tabs quickly (or any slow network response) can leave
@@ -984,8 +990,16 @@ export default function MemberHome() {
             const block = await getCurrentSpcBlock(profile.id, today);
             if (!block) return { status: "no_block" };
 
-            const weekNumber = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
-            const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber);
+            // Sessions-format runs (0102) have no authored week grid: the week
+            // is uncapped calendar arithmetic — a lapsed or ongoing run keeps
+            // counting, and completions file under that same uncapped number,
+            // so the clamped legacy math would stop matching them the week the
+            // run outlived its planned length.
+            const weekNumber =
+              block.format === "sessions"
+                ? calendarWeekNumber(block.block_start_date, today)
+                : currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+            const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber, block);
             if (workouts.length === 0) return { status: "not_published" };
 
             const sessionsPerWeek = spcClient.sessions_per_week;
@@ -1007,7 +1021,7 @@ export default function MemberHome() {
               };
             });
 
-            return { status: "ready", weekNumber, blockLengthWeeks: block.block_length_weeks, sessionsPerWeek, rows };
+            return { status: "ready", weekNumber, blockLengthWeeks: block.block_length_weeks, sessionsPerWeek, rows, block };
           });
           if (!isStale()) {
             const value = spcResult.status === "inactive" ? null : spcResult;
@@ -1392,8 +1406,17 @@ export default function MemberHome() {
     }
   };
 
-  const openSpcPreview = async (spcEntry, row) => {
+  const openSpcPreview = async (spcEntry, row, { skipMakeup = false } = {}) => {
     if (!row.workout) return;
+    // A session she already logged this calendar week, on a sessions-format
+    // run (0102): asking "update it, or start a new one?" first is what makes
+    // a make-up representable at all — a second real instance of the same
+    // session, for making up a week she missed. Weekly-format blocks keep the
+    // old open-the-logged-session behavior.
+    if (!skipMakeup && row.completed && spcEntry.block?.format === "sessions") {
+      setMakeup({ spcEntry, row });
+      return;
+    }
     setPreview({
       visible: true,
       loading: true,
@@ -1759,6 +1782,37 @@ export default function MemberHome() {
         onClose={() => setNextBlockFor(null)}
         programName={nextBlockFor?.programName}
         preview={nextBlockFor?.nextBlock}
+      />
+
+      <MakeupSessionSheet
+        visible={!!makeup}
+        onClose={() => setMakeup(null)}
+        sessionLabel={makeup?.row?.label ?? "this session"}
+        loggedDateLabel={makeup?.row?.completedAt ? formatDateMDY(dateInBoise(new Date(makeup.row.completedAt))) : null}
+        busy={makeupBusy}
+        onUpdate={() => {
+          const target = makeup;
+          setMakeup(null);
+          if (target) openSpcPreview(target.spcEntry, target.row, { skipMakeup: true });
+        }}
+        onStartNew={async () => {
+          if (!makeup) return;
+          setMakeupBusy(true);
+          try {
+            // The fresh instance exists the moment she chooses it — her week
+            // counts it right away, and the logging screen's own date then
+            // derives from its completed_at (today).
+            await startNewSpcSessionInstance(profile.id, makeup.row.workout.id);
+            const params = { session: "spc", weekNumber: String(makeup.spcEntry.weekNumber), sessionNumber: String(makeup.row.sessionNumber) };
+            setMakeup(null);
+            router.push({ pathname: "/(member)/plan", params });
+          } catch (err) {
+            console.error("My Week: couldn't start a make-up session", err);
+            showToast("Couldn't start a new one — try again.");
+          } finally {
+            setMakeupBusy(false);
+          }
+        }}
       />
     </ScrollView>
   );

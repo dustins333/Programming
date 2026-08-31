@@ -31,6 +31,7 @@ import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
 import { CommentThread } from "../../../components/CommentThread";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { CoachSpcOverview } from "../../../components/coach/CoachSpcOverview";
+import { SpcClientPage } from "../../../components/coach/spc/SpcClientPage";
 import { MoveSpcBlockModal } from "../../../components/MoveSpcBlockModal";
 import { PressFade } from "../../../components/PressFade";
 import { ClientGoalCard } from "../../../components/ClientGoalCard";
@@ -1366,7 +1367,53 @@ function SpcClientMobileWeb() {
   );
 }
 
+// Which model is this client on? The SPC simplification's tabbed page
+// (components/coach/spc/SpcClientPage.js) is the page for everyone EXCEPT a
+// client still riding the legacy weekly world — a live or queued
+// weekly-format block, or a weekly draft mid-write. Those keep this file's
+// original page until the cutover migration converts them; a client with
+// only PAST weekly blocks starts fresh in the new model (her history still
+// shows them as finished runs). On a failed check, legacy wins — that page
+// has its own full error handling.
+function hasLiveWeeklyWorld(blockRows, today) {
+  return blockRows.some((b) => {
+    if (b.format !== "weekly") return false;
+    if (b.status === "draft") return true;
+    if (!b.block_start_date) return false;
+    return b.block_start_date > today || (b.block_end_date != null && b.block_end_date >= today);
+  });
+}
+
 export default function SpcClientDetailWeb() {
   const { width } = useWindowDimensions();
+  const { userId } = useLocalSearchParams();
+  const [model, setModel] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      listBlocksForSpcClient(userId)
+        .then((rows) => {
+          if (!cancelled) setModel(hasLiveWeeklyWorld(rows, todayInBoise()) ? "legacy" : "new");
+        })
+        .catch(() => {
+          if (!cancelled) setModel("legacy");
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [userId])
+  );
+
+  if (model == null) {
+    return (
+      <CoachShell>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: CANVAS }}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </CoachShell>
+    );
+  }
+  if (model === "new") return <SpcClientPage userId={userId} />;
   return width < MOBILE_BREAKPOINT ? <SpcClientMobileWeb /> : <SpcClientDesktop />;
 }
