@@ -11,6 +11,9 @@ import {
   publishSpcBlock,
   setSpcProgramEnd,
   addSpcSessionSlot,
+  rescheduleSpcProgram,
+  unpublishSpcProgram,
+  publishReadySessions,
   deleteSpcBlock,
 } from "../../../lib/programming/spcBlocks";
 import {
@@ -26,7 +29,12 @@ import { liftLabelsFor } from "../../../lib/programming/sessionLabels";
 import { monthDay } from "../../../lib/programming/spcState";
 import { calendarWeekNumber } from "../../../lib/programming/schedule";
 import { listSpcCompletionDetailsForWorkouts } from "../../../lib/programming/sessionCompletions";
-import { confirmRemoveLift, confirmOpenLiveEditor, confirmDeleteDraftBlock } from "../../../lib/confirmDialog";
+import {
+  confirmRemoveLift,
+  confirmOpenLiveEditor,
+  confirmDeleteDraftBlock,
+  confirmCancelQueuedProgram,
+} from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
 
 // The Sessions tab — the whole SPC programming workflow
@@ -258,33 +266,59 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
 
 /* ---------------------------------------------------------- publish modal */
 
-export function PublishProgramModal({ visible, onClose, current, spcClient, onPublish, busy }) {
+// Does double duty: publishing a draft, and changing the dates of one already
+// published for a future Monday. Same question either way — which Monday, how
+// long, and what that does to whatever is running — so a second modal would
+// only be a second place for those rules to drift.
+export function PublishProgramModal({ visible, onClose, current, spcClient, onPublish, busy, mode = "publish", block = null }) {
+  const rescheduling = mode === "reschedule";
   const today = todayInBoise();
   const thisMonday = mondayOnOrBefore(today);
   const nextMonday = addDays(thisMonday, 7);
   // Terra's three (2026-08-30 follow-up): now / next Monday / in 2 weeks.
   // "Now" is this week's Monday — live to her the moment it publishes — so a
   // client whose program runs out Friday can walk in Monday with a new one.
-  const options = useMemo(
-    () => [
+  //
+  // When rescheduling, the Monday it is CURRENTLY set to joins the list if it
+  // isn't already one of the three: a program queued a month out would
+  // otherwise offer no way back to where it started after a stray tap.
+  const options = useMemo(() => {
+    const base = [
       { date: thisMonday, note: "now", now: true },
       { date: nextMonday, note: "next Monday" },
       { date: addDays(nextMonday, 7), note: "in 2 weeks" },
-    ],
-    [thisMonday, nextMonday]
-  );
+    ];
+    const scheduled = rescheduling ? block?.block_start_date : null;
+    if (scheduled && !base.some((o) => o.date === scheduled)) {
+      base.push({ date: scheduled, note: "where it is now" });
+      base.sort((a, b) => (a.date < b.date ? -1 : 1));
+    }
+    return base;
+  }, [thisMonday, nextMonday, rescheduling, block?.block_start_date]);
 
   const [startDate, setStartDate] = useState(null);
   const [weeks, setWeeks] = useState(null);
   useEffect(() => {
-    if (visible) {
-      // No current program → default to Now, so publishing visibly takes
-      // effect instead of sitting queued until Monday looking unpublished
-      // (Terra's item 4). With one running, next Monday is the safer default
-      // and Now is one tap away.
-      setStartDate(current ? nextMonday : thisMonday);
-      setWeeks([4, 5, 6, 8].includes(current?.block_length_weeks) ? current.block_length_weeks : 6);
+    if (!visible) return;
+    if (rescheduling && block) {
+      // Seeded from where it actually is, so the modal opens showing the
+      // truth and any change is a deliberate one.
+      setStartDate(block.block_start_date);
+      setWeeks(
+        block.block_end_date == null
+          ? "ongoing"
+          : [4, 5, 6, 8].includes(block.block_length_weeks)
+            ? block.block_length_weeks
+            : 6
+      );
+      return;
     }
+    // No current program → default to Now, so publishing visibly takes
+    // effect instead of sitting queued until Monday looking unpublished
+    // (Terra's item 4). With one running, next Monday is the safer default
+    // and Now is one tap away.
+    setStartDate(current ? nextMonday : thisMonday);
+    setWeeks([4, 5, 6, 8].includes(current?.block_length_weeks) ? current.block_length_weeks : 6);
     // Derived values are stable while the modal is open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -310,7 +344,9 @@ export function PublishProgramModal({ visible, onClose, current, spcClient, onPu
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <PressFade onPress={onClose} pressedOpacity={1} style={{ flex: 1, backgroundColor: "rgba(42,33,28,0.4)", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <PressFade onPress={() => {}} pressedOpacity={1} style={{ width: "100%", maxWidth: 480, backgroundColor: "#fff", borderRadius: 16, padding: 22 }}>
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, color: "#2a211c" }}>Publish this program</Text>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, color: "#2a211c" }}>
+            {rescheduling ? "Change when this program runs" : "Publish this program"}
+          </Text>
 
           <Eyebrow style={{ marginTop: 18, marginBottom: 8 }}>STARTS MONDAY</Eyebrow>
           <View style={{ gap: 8 }}>
@@ -346,7 +382,7 @@ export function PublishProgramModal({ visible, onClose, current, spcClient, onPu
           ) : null}
 
           <View style={{ backgroundColor: "#faf8f6", borderRadius: 10, padding: 13, marginTop: 18 }}>
-            <Eyebrow style={{ marginBottom: 5 }}>NEW PROGRAM</Eyebrow>
+            <Eyebrow style={{ marginBottom: 5 }}>{rescheduling ? "THIS PROGRAM" : "NEW PROGRAM"}</Eyebrow>
             <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: "#2a211c" }}>
               {startDate
                 ? ongoing
@@ -362,7 +398,9 @@ export function PublishProgramModal({ visible, onClose, current, spcClient, onPu
                   : current?.block_end_date && startDate > current.block_end_date
                     ? `Her current program stays live until ${sunFmt(current.block_end_date)} and closes into History on ${monthDay(startDate)}.`
                     : startDate === thisMonday
-                      ? "It goes live to her the moment you publish."
+                      ? rescheduling
+                        ? "It goes live to her as soon as you save."
+                        : "It goes live to her the moment you publish."
                       : "It goes live to her that Monday."}
             </Text>
           </View>
@@ -378,10 +416,16 @@ export function PublishProgramModal({ visible, onClose, current, spcClient, onPu
             >
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#f7f3ee" }}>
                 {busy
-                  ? "Publishing…"
-                  : startDate === thisMonday
-                    ? "Publish · live now"
-                    : `Publish · starts ${startDate ? monthDay(startDate) : ""}`}
+                  ? rescheduling
+                    ? "Saving…"
+                    : "Publishing…"
+                  : rescheduling
+                    ? startDate === thisMonday
+                      ? "Save · live now"
+                      : `Save · starts ${startDate ? monthDay(startDate) : ""}`
+                    : startDate === thisMonday
+                      ? "Publish · live now"
+                      : `Publish · starts ${startDate ? monthDay(startDate) : ""}`}
               </Text>
             </PressFade>
           </View>
@@ -404,6 +448,7 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
   const [drafts, setDrafts] = useState({});
   const [pickerFor, setPickerFor] = useState(null);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loggedCount, setLoggedCount] = useState(0);
   const [pane, setPane] = useState("current");
@@ -633,6 +678,61 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
     }
   };
 
+  const handleReschedule = async (startDate, { lengthWeeks = null, ongoing = false } = {}) => {
+    setBusy(true);
+    try {
+      const result = await rescheduleSpcProgram(upcoming.id, { startDate, lengthWeeks, ongoing });
+      setRescheduleOpen(false);
+      toastSuccess(
+        result.startDate <= today
+          ? `Saved. Live to ${clientFirst} now.`
+          : `Saved. Goes live to ${clientFirst} ${monFmt(result.startDate)}.`
+      );
+      onChanged();
+    } catch (err) {
+      toastError("Couldn't change the dates", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancelUpcoming = async () => {
+    if (!(await confirmCancelQueuedProgram(clientFirst, monFmt(upcoming.block_start_date)))) return;
+    setBusy(true);
+    try {
+      await unpublishSpcProgram(upcoming.id);
+      toastSuccess("Cancelled. It's back in your build space as a draft.");
+      onChanged();
+    } catch (err) {
+      toastError("Couldn't cancel it", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // A session added AFTER publishing is created as a draft (addSpcSessionSlot),
+  // and nothing was ever going to publish it — so it sat invisible to her with
+  // the pane saying "Published" above it. Same deliberate press as the current
+  // program's Update.
+  const handlePublishAdded = async () => {
+    setBusy(true);
+    try {
+      const { published } = await publishReadySessions(upcoming.id);
+      toastSuccess(
+        published === 0
+          ? "Nothing new to send yet."
+          : upcoming.block_start_date <= today
+            ? `Sent. ${clientFirst} sees ${published === 1 ? "it" : "them"} now.`
+            : `Sent. ${clientFirst} sees ${published === 1 ? "it" : "them"} ${monFmt(upcoming.block_start_date)}.`
+      );
+      onChanged();
+    } catch (err) {
+      toastError("Couldn't send it", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /* ------------------------------- render ------------------------------- */
 
   const weekNumber = current?.block_start_date ? calendarWeekNumber(current.block_start_date, today) : null;
@@ -640,6 +740,11 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
   const expected = weekNumber ? weekNumber * (spcClient?.sessions_per_week ?? 1) : 0;
   const targetSessions = spcClient?.sessions_per_week ?? 1;
   const upcomingQueued = Boolean(upcoming && upcoming.status === "active");
+  // Sessions built after it was published: they hold lifts but are still
+  // drafts, so she cannot see them and nothing on screen said so.
+  const unsentUpcoming = upcomingQueued
+    ? (upcomingSessions ?? []).filter((s) => s.exercises.length > 0 && s.workout.status !== "published").length
+    : 0;
 
   const missingCurrentSlots = useMemo(() => {
     if (!current || !currentSessions) return [];
@@ -847,8 +952,25 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
                 ✓ Published · goes live to {clientFirst} {monFmt(upcoming.block_start_date)}
               </Text>
               <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#57534e", marginTop: 2 }}>
-                Edits keep flowing into it until then.
+                {upcoming.block_end_date == null
+                  ? "Ongoing, no end date. Edits keep flowing into it until then."
+                  : `Runs to ${sunFmt(upcoming.block_end_date)}. Edits keep flowing into it until then.`}
               </Text>
+              {/* Published is not final. Nothing here is visible to her yet
+                  (0102 gates her reads on the start date), so both of these
+                  are safe right up until the Monday it starts. */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
+                <PressFade onPress={() => setRescheduleOpen(true)} disabled={busy} hitSlop={6}>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#4d6142", opacity: busy ? 0.5 : 1 }}>
+                    Change dates
+                  </Text>
+                </PressFade>
+                <PressFade onPress={handleCancelUpcoming} disabled={busy} hitSlop={6}>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#b23a22", opacity: busy ? 0.5 : 1 }}>
+                    Cancel program
+                  </Text>
+                </PressFade>
+              </View>
             </View>
           ) : (
             <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
@@ -881,6 +1003,31 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
               {upcomingSessions.length === targetSessions ? ` · matches her ${targetSessions}× / week` : ` · her target is ${targetSessions}× / week`}
             </Text>
           </View>
+
+          {upcomingQueued && unsentUpcoming > 0 ? (
+            <>
+              <PressFade
+                onPress={handlePublishAdded}
+                disabled={busy}
+                style={{
+                  backgroundColor: "#33251f",
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                  marginTop: 14,
+                  opacity: busy ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: "#f7f3ee" }}>
+                  {`↑ Send ${unsentUpcoming} new session${unsentUpcoming === 1 ? "" : "s"}`}
+                </Text>
+              </PressFade>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", textAlign: "center", marginTop: 8 }}>
+                {unsentUpcoming === 1 ? "This one was" : "These were"} built after you published, so {clientFirst} can't see{" "}
+                {unsentUpcoming === 1 ? "it" : "them"} yet.
+              </Text>
+            </>
+          ) : null}
 
           {!upcomingQueued ? (
             <>
@@ -975,6 +1122,16 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, up
         spcClient={spcClient}
         onPublish={handlePublish}
         busy={busy}
+      />
+      <PublishProgramModal
+        visible={rescheduleOpen}
+        onClose={() => setRescheduleOpen(false)}
+        current={current}
+        spcClient={spcClient}
+        onPublish={handleReschedule}
+        busy={busy}
+        mode="reschedule"
+        block={upcoming}
       />
     </View>
   );
