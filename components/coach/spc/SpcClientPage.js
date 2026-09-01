@@ -22,6 +22,7 @@ import { CoachMessageBubble } from "../../CoachMessageBubble";
 import { SegmentedControl } from "../../SegmentedControl";
 import { PressFade } from "../../PressFade";
 import { SpcSessionsTab } from "./SpcSessionsTab";
+import { LiftHistory } from "./LiftHistory";
 import { statusColors, fonts, colors } from "../../../lib/theme";
 import { toastError, toastSuccess } from "../../../lib/toast";
 
@@ -348,7 +349,33 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
 
 /* -------------------------------------------------------------- history */
 
-function HistoryTab({ userId, blocks, today }) {
+// Two things a coach means by "history", and only one of them was here.
+// Lifts leads because it is the one looked up mid-session ("what did she
+// pull last time?"); finished programs are a record you go looking for,
+// so they keep their list behind the second segment.
+const HISTORY_SEGMENTS = [
+  { key: "lifts", label: "Lifts" },
+  { key: "programs", label: "Programs" },
+];
+
+// Exported for the visual harness, same as OverviewTab.
+export function HistoryTab({ userId, blocks, today, stats, statsError, onRetryStats, isDesktop }) {
+  const [view, setView] = useState("lifts");
+  return (
+    <View>
+      <View style={{ maxWidth: 320 }}>
+        <SegmentedControl segments={HISTORY_SEGMENTS} activeKey={view} onSelect={setView} dense />
+      </View>
+      {view === "lifts" ? (
+        <LiftHistory userId={userId} stats={stats} statsError={statsError} onRetry={onRetryStats} isDesktop={isDesktop} />
+      ) : (
+        <ProgramRuns userId={userId} blocks={blocks} today={today} />
+      )}
+    </View>
+  );
+}
+
+function ProgramRuns({ userId, blocks, today }) {
   const [runs, setRuns] = useState(null);
 
   useEffect(() => {
@@ -468,6 +495,9 @@ export function SpcClientPage({ userId }) {
   const [goalRow, setGoalRow] = useState(null);
   const [nutritionClient, setNutritionClient] = useState(null);
   const [stats, setStats] = useState(null);
+  // Distinct from stats === null, which also means "still loading" — without
+  // it a failed fetch leaves the Lifts tab on a spinner that never resolves.
+  const [statsError, setStatsError] = useState(null);
   const [sessionWorkouts, setSessionWorkouts] = useState([]);
   const [completionKeys, setCompletionKeys] = useState(new Map());
   const [lastSessionAt, setLastSessionAt] = useState(null);
@@ -475,6 +505,16 @@ export function SpcClientPage({ userId }) {
   const [tab, setTab] = useState("Overview");
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
+
+  const loadStats = useCallback(() => {
+    setStatsError(null);
+    // Deliberately does NOT clear stats first: load() re-runs on every focus,
+    // and blanking the list to a spinner each time is worse than showing the
+    // previous answer for the half second the refetch takes.
+    getExerciseStats(userId)
+      .then(setStats)
+      .catch((err) => setStatsError(err.message ?? String(err)));
+  }, [userId]);
 
   const load = useCallback(async () => {
     try {
@@ -493,7 +533,7 @@ export function SpcClientPage({ userId }) {
       setGoalRow(goal);
       setNotesDraft(clientRow?.notes_goals_feedback ?? "");
 
-      getExerciseStats(userId).then(setStats).catch(() => setStats(null));
+      loadStats();
       getNutritionClient(userId).then(setNutritionClient).catch(() => setNutritionClient(null));
 
       // The current run's sessions + her completions, for the Overview's
@@ -526,7 +566,7 @@ export function SpcClientPage({ userId }) {
     } finally {
       setReady(true);
     }
-  }, [userId, today]);
+  }, [userId, today, loadStats]);
 
   useFocusEffect(
     useCallback(() => {
@@ -650,7 +690,17 @@ export function SpcClientPage({ userId }) {
           isDesktop={isDesktop}
         />
       ) : null}
-      {tab === "History" ? <HistoryTab userId={userId} blocks={blocks} today={today} /> : null}
+      {tab === "History" ? (
+        <HistoryTab
+          userId={userId}
+          blocks={blocks}
+          today={today}
+          stats={stats}
+          statsError={statsError}
+          onRetryStats={loadStats}
+          isDesktop={isDesktop}
+        />
+      ) : null}
       {tab === "Print" ? <PrintTab current={current} sessionWorkouts={sessionWorkouts} /> : null}
     </View>
   );

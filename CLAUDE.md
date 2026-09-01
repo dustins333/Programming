@@ -5485,6 +5485,61 @@ as 12/135 and 10/95. `npm run build` + `check:routes` clean, Babel parse and
 unresolved-identifier pass clean. **Not verified behind a real login**, and not
 on the wall display itself — worth Terra confirming on the actual board.
 
+## SPC History: lifts, not just finished programs (2026-08-31)
+
+Reported as "the History page only shows completed programs... i need to be
+able to see the history of each lift." Both readings of "history" are real
+and only one was there, so the tab is a two-way segment now: **Lifts**
+(default) and **Programs** (the previous list, unchanged). No migration, no
+new query on page load.
+
+New `components/coach/spc/LiftHistory.js`. Every lift she has logged,
+newest-logged first, with search, PR count, last set, best and session
+count; tapping one expands **in place** into the trend chart, the best set,
+and every session set by set with its note. A summary line would hide
+exactly the case a coach is looking for, where the last set dropped off.
+
+- **It costs no extra fetch on load.** The page already calls
+  `getExerciseStats` for the Overview's PR strip, so the list is that data
+  rendered a second way; only the per-lift detail is fetched, lazily, on
+  first expand (`listLogsForExercise`, the same read the member's own
+  history screen does) and cached per lift so flipping between two lifts
+  does not refetch.
+- **Nothing here is SPC-scoped, deliberately.** `programming.logs` carries
+  no program reference, and a coach asking how a lift has moved wants every
+  rep of it, not the slice inside one program.
+- **`statsError` is now its own state.** It was `.catch(() => setStats(null))`,
+  and null also means "still loading" - a failed fetch would have left the
+  Lifts tab on a spinner that never resolved. `loadStats` also no longer
+  clears `stats` first: `load()` re-runs on every focus, and blanking the
+  list to a spinner each time is worse than showing the previous answer.
+- **Husk rows are filtered out** (`reps` and `weight` both null). `logResult`
+  updates an existing row even to null on purpose, so a set she typed into
+  and cleared leaves a real row behind; a date with nothing real in it drops
+  out entirely rather than rendering as a session of dashes. Same guard
+  `ExerciseHistoryModal` and My History already apply, applied here too.
+- **`LiftProgressSection` gained an optional `width`.** Its window-derived
+  default (`min(windowWidth - 40, 560)`) overflowed the panel at phone width
+  and clipped the last x-axis label. It is measured with `onLayout` now,
+  behind a fallback sized to the narrowest real container - which is also
+  the only value a preview browser ever sees, since react-native-web
+  implements `onLayout` with a ResizeObserver and **ResizeObserver never
+  fires in the sandboxed Browser pane** (re-confirmed this session: 0
+  callbacks in 900ms). Verify the fallback, not the measured path.
+
+`HistoryTab` is exported for the harness, same as `OverviewTab`.
+
+**Verified**: `npm run build` + `check:routes` clean, a Babel parse /
+unresolved-identifier / unused-import pass over all three touched files, and
+the whole thing driven for real at 1280 and 390 through a throwaway
+`app/zz-lifthist.js` route (deleted; `listLogsForExercise` was stubbed for
+it and the file restored md5-identical afterwards) - expand, accordion
+close, search including its no-match state, "Show all 12 sessions", the
+reps-only lift dropping its weight column and its chart, the husk set
+dropped from a session of three rows, both segments, and the error state
+retrying back to a real list. **Not verified behind a real login** -
+standing limitation.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

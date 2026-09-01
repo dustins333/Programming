@@ -32,12 +32,15 @@ export function computeLiftProgress(logs) {
 // (ExerciseHistoryModal) and My History's per-exercise screen. Renders
 // nothing chart-wise until there are 2+ dates with a logged weight; the
 // best-set line shows from the first weighted set.
-export function LiftProgressSection({ logs }) {
+// `width` overrides the window-derived default for a caller that renders
+// this inside a narrower container than the page (the coach's per-lift
+// history panel sits in a bordered card inside a column, not on the page).
+export function LiftProgressSection({ logs, width }) {
   const { width: windowWidth } = useWindowDimensions();
   const { points, best } = computeLiftProgress(logs);
   if (!best) return null;
 
-  const chartWidth = Math.min(windowWidth - 40, 560);
+  const chartWidth = width ?? Math.min(windowWidth - 40, 560);
 
   return (
     <View className="mb-3">
