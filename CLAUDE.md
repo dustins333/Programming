@@ -5540,6 +5540,48 @@ dropped from a session of three rows, both segments, and the error state
 retrying back to a real list. **Not verified behind a real login** -
 standing limitation.
 
+## The weight calculator's specialty bars were invisible to members (2026-08-31)
+
+Reported as the calculator saying there were no specialty bars and to ask a
+coach to add some. The bars were there — seven of them, configured and correct.
+**Members could not read the key at all.**
+
+`specialty_bars` lives in `core.settings`, and 0047 gave members a read policy
+on that table deliberately scoped to a **whitelist of keys**, because it is a
+shared bag (messaging kill switch, payroll anchor, notification copy) and a
+blanket member read would expose all of it. That whitelist was messaging-only,
+and when the Specialty bar picker landed it read from the same table without
+the whitelist being widened. Migration `0109` adds the key and renames the
+policy, since "messaging settings" had stopped describing it.
+
+**The failure is silent by construction, and that is the part worth
+remembering: RLS filters rows, it does not error.** `getSetting` saw zero rows,
+returned its `[]` fallback, and the picker rendered its empty state. Nothing
+threw, so the component's own `.catch` never ran, the console stayed clean, and
+a clean bundle proved nothing. Staff read the same key through
+`core.is_staff()` and saw the real list — which is why it only ever surfaced as
+a member report and never reproduced for Terra.
+
+`specialty_bars` was the only member-facing key affected; every other
+`getSetting` call site is a coach or admin surface (checked, not assumed).
+
+**Second fix, because the message named a cause it could not actually
+distinguish**: a fetch failure and a genuinely empty list both rendered "a coach
+can add some in Settings → Equipment", which sends a member chasing a setting
+that is already there. `WeightCalculator` now tracks a load error separately and
+shows "Couldn't load the bar list · Try again" instead. **Any empty state whose
+copy asserts *why* it is empty needs to be able to tell that from a failed
+load** — otherwise a bug reports itself as a configuration problem, which is
+exactly what happened here.
+
+**Verified**: dry-run in a rolled-back transaction with impersonation
+assertions (member sees the key, still cannot see the payroll anchor; staff
+unchanged at 19 rows; anon still 0), then applied and re-confirmed live as a
+real member — 1 row, 7 bars. All three picker states plus the retry press
+driven for real at 390px through a throwaway `app/zz-calcharness.js` (deleted;
+`SpecialtyBarPicker`'s temporary export reverted and the file diffed
+byte-identical afterwards). `npm run build` clean.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -5629,6 +5671,7 @@ sections; next number after 0080 is 0081.)
 
 - `0108_spc_inactive_status.sql` — **run**, verified live 2026-08-31 (constraint widened, 4 rows backfilled, backup table with RLS on and grants revoked, patched function body confirmed; plus a dry run that diffed `hub_startable_clients`' full output before/after in a rolled-back transaction — 61 rows, 0 lost, 0 gained). Adds `'inactive'` to `programming.spc_clients.status`: "the SPC switch on her client page is off", as against `'paused'`, which is a deliberate hold and stays on the SPC roster. **Order is the opposite of 0099** — that one narrowed the domain so the update had to run bare; this one widens it, so the constraint goes on first and the update follows. Also re-creates `hub_startable_clients` verbatim with its `<> 'paused'` predicate flipped to `= 'active'`, or a switched-off client keeps appearing on the wall display's picker. Rollback data in `programming.zz_spc_status_backup_0108`.
 
+- `0109_members_read_specialty_bars.sql` — **run**, verified live 2026-08-31 (dry-run with impersonation assertions first, then applied and re-confirmed as a real member). Adds `specialty_bars` to the member read whitelist on `core.settings` and renames the policy to "members can read whitelisted settings". The `auth.uid() is not null` guard from the 2026-08-21 audit is preserved — `to public` includes anon. Rollback SQL is in the file's own footer comment.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 

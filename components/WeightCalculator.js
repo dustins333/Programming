@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Modal, View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { fonts, colors } from "../lib/theme";
@@ -167,7 +167,7 @@ function StandardCalc({ onInsert }) {
 // Tapping "Specialty" doesn't just switch modes the way Barbell/No bar do —
 // it opens this list of coach-configured bars (Settings → Equipment) so
 // nobody has to remember "the safety squat bar is 65 lb" from memory.
-function SpecialtyBarPicker({ visible, bars, onSelect, onClose }) {
+function SpecialtyBarPicker({ visible, bars, loadError, onRetry, onSelect, onClose }) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable onPress={onClose} className="flex-1 justify-end" style={{ backgroundColor: "rgba(68,64,60,0.35)" }}>
@@ -181,7 +181,21 @@ function SpecialtyBarPicker({ visible, bars, onSelect, onClose }) {
               <Text style={{ color: "#a8a29e", fontSize: 15 }}>×</Text>
             </Pressable>
           </View>
-          {bars.length === 0 ? (
+          {loadError ? (
+            // A failed fetch and a genuinely empty list are different problems,
+            // and saying "ask a coach to add some" about the first one sends
+            // her chasing a setting that is already there.
+            <View style={{ paddingVertical: 12 }}>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#b23a22" }}>
+                Couldn't load the bar list.
+              </Text>
+              <Pressable onPress={onRetry} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} className="mt-2">
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.primaryOnWhite }}>
+                  Try again
+                </Text>
+              </Pressable>
+            </View>
+          ) : bars.length === 0 ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#a8a29e", paddingVertical: 12 }}>
               No specialty bars added yet — a coach can add some in Settings → Equipment.
             </Text>
@@ -213,17 +227,26 @@ function SpecialtyBarPicker({ visible, bars, onSelect, onClose }) {
 function PlateCalc({ onInsert }) {
   const [barMode, setBarMode] = useState("none");
   const [specialtyBars, setSpecialtyBars] = useState([]);
+  const [barsError, setBarsError] = useState(false);
   const [selectedSpecialtyBar, setSelectedSpecialtyBar] = useState(null);
   const [showSpecialtyPicker, setShowSpecialtyPicker] = useState(false);
   const [plateStack, setPlateStack] = useState([]); // one entry per plate tapped, oldest first
 
   // Fetched once, lazily, the first time the Plate tab is actually opened —
   // this list rarely changes and isn't needed at all for Standard mode.
-  useEffect(() => {
+  const loadBars = useCallback(() => {
+    setBarsError(false);
     listSpecialtyBars()
-      .then(setSpecialtyBars)
-      .catch((err) => console.error("Failed to load specialty bars:", err));
+      .then((bars) => setSpecialtyBars(bars ?? []))
+      .catch((err) => {
+        console.error("Failed to load specialty bars:", err);
+        setBarsError(true);
+      });
   }, []);
+
+  useEffect(() => {
+    loadBars();
+  }, [loadBars]);
 
   const barWeight = barMode === "barbell" ? 35 : barMode === "specialty" ? selectedSpecialtyBar?.weight ?? 0 : 0;
 
@@ -281,6 +304,8 @@ function PlateCalc({ onInsert }) {
       <SpecialtyBarPicker
         visible={showSpecialtyPicker}
         bars={specialtyBars}
+        loadError={barsError}
+        onRetry={loadBars}
         onSelect={handleSelectSpecialtyBar}
         onClose={() => setShowSpecialtyPicker(false)}
       />
