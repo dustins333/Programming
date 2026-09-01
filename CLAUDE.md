@@ -5229,6 +5229,100 @@ all five files. **Not click-tested** — `live.js` needs a coach login, so the
 Edit/Delete flow is reasoned from the render path, not driven. Worth Terra's
 pass: Edit → seeded picker → Back, then Edit → Delete.
 
+## A workout id stopped meaning a week, and two screens hadn't noticed (2026-08-31)
+
+Reported as two things on the gym-floor board: a client in week 2 showed
+every lift already ticked with a COMPLETE pill, and her "last time" strip
+said *First time this block* — while her own phone showed last week's sets
+fine. Both are one bug, and the coach's own framing ("they're the only 2 gals
+I've coached on week 2") is its exact fingerprint.
+
+**The root cause, which is a CLASS and not one query.** Under the weekly model
+a `spc_workouts` row was one (block, week, session), so the workout id *was*
+the week and any read could ignore `week_number`. Since the 0105 sessions
+cutover that is false: one row spans the whole run, every row authored week 1,
+and the week lives on the completion / note / log instead. Every read still
+keyed on the workout id alone is therefore correct in week 1 and wrong from
+week 2 forever after. **Whenever something SPC reads right in week 1 and wrong
+later, this is the first thing to check.**
+
+**The writers were all fine.** `spcCompletionWeek()`,
+`listSpcExerciseCompletionsForItems`, `getCompletedSpcWorkoutIdsForWeek` and
+`listSpcCompletionDetailsForWorkouts` are all week-aware and even document why
+— which is why the member app was never affected. Swept every direct read of
+`session_completions` / `exercise_completions`: only the two surfaces below.
+
+**The live board** (`lib/programming/hub.js`, commit `40c12c8`) — green ticks,
+the COMPLETE pill and "this week's note" all matched on the workout id, so
+week 1's leaked forward. History was worse: `getLiftBlockHistory` fetched the
+block's workouts and excluded "the one on screen", which under this format is
+the only one, so it returned `[]` before ever querying a log.
+- `fetchHubBoard` now resolves a `completionWeek` from the block the way
+  `spcCompletionWeek` does and filters on it. **That wires in
+  `completionWeekFor()`, which was dead in every commit it ever existed in** —
+  this file previously claimed it was the fix for the `finalized` bug; it never
+  was. Worth distrusting a note that says a helper is wired in: `grep` for a
+  call site.
+- The tick WRITE now uses that same resolved week, not the slot's stored one,
+  so a board open past Boise midnight can't write to one week and read from
+  another.
+- `getLiftBlockHistory` groups on **(workout, week)** rather than the workout,
+  resolving each logged day to its calendar week — which also keeps two
+  sessions that share a lift apart, as the old grouping did by accident.
+- **Nobody could clear the stale state either**: un-tick and un-finalize
+  resolve the week themselves, found no week-2 row to delete, and the 3s poll
+  put the checks straight back. A "stuck" control is worth tracing to the
+  read/write week disagreeing before assuming the write is broken.
+
+**The shared note store** (`lib/programming/coachingNotes.js`, same commit) —
+`isSameSession` had the identical assumption **stated in a comment as fact**
+("the workout id alone identifies the week... matching what the hub board
+already does"). This one also reached the member's own lift card: week 1's note
+seeded this week's box, and the real "here's what was said last time" line
+never appeared. Fixed behind a `session.weekNumber == null` fallback so an
+older caller keeps its note rather than losing it.
+
+**The SPC client page** (`lib/programming/spcBlockDetail.js`, commit `4ca8e59`)
+— same cause, and the bigger visible one: it built one grid entry per workout
+row, so a four-week block drew a single **"Week 1"** line. Victoria Farrell did
+session 1 on Aug 27 and again on Aug 31 and her page reported one arbitrary
+date, **35 sets** (both weeks summed), and that session logged in every week.
+A started sessions-format block is now **expanded into one entry per calendar
+week** — the shape both screens were always built for and the shape a weekly
+block still arrives in naturally, so nothing downstream needed teaching about
+two models. That also settles the separately-known `sessionState` bug (it read
+week 1's dates for every entry, so the rest of a block turned "skipped" the
+moment week 1's window passed) and brings back **"End here"**, which needs a
+row per week to sit on.
+- A **draft** has no dates and is left unexpanded, keeping the send-a-draft
+  preview a plain list of sessions.
+- **Copy-between-tiles is withheld while expanded**: every week of a session
+  shares one prescription now, so there is nothing to copy from week 1 into
+  week 2 and the ⧉ would select every week at once. Each entry carries a `key`
+  (`workoutId:week`) because several now share an `id` — the read-out's
+  prev/next compared on `id` and would have walked back to the first week
+  every step.
+
+**Verification worth copying.** Both fixes are read-side only — no migration,
+no deploy step. Beyond a clean `npm run build` and a Babel parse/scope pass:
+every new PostgREST select was curled (200, not a PGRST200), and the real
+question — *can week-scoping hide something legitimate?* — was answered against
+live data rather than reasoned: all **159** sessions-format completion and note
+rows agree with the week their own date implies, all **13** weekly-format
+completions carry exactly their workout's own week (so the composite key can't
+miss them), and all **57** dated blocks agree on derived weeks vs
+`block_length_weeks` (so the grid and End here can't disagree). The shipped
+`weekCountFor`/`weekWindow`/`sessionState` were then extracted verbatim and
+driven against Victoria's and Emma's real blocks — 4 week rows each with its
+own date and state, and an ongoing program stopping at the week it is in rather
+than inventing a length.
+
+**Blast radius when found**: 8 clients showing stale weeks that day, 17 already
+at week 2, growing weekly. **Not click-tested behind a login** — standing
+limitation. Worth Terra's pass: a week-2 client on the board (checks clear,
+history strip shows last week), and a multi-week block's grid on the client
+page.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
