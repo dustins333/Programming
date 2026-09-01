@@ -299,9 +299,9 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
         if (next) await markGroupExerciseComplete(userId, item.id);
         else await unmarkGroupExerciseComplete(userId, item.id);
       } else if (next) {
-        await markSpcExerciseComplete(userId, item.id, entry.weekNumber);
+        await markSpcExerciseComplete(userId, item.id, entry.completionWeek ?? entry.weekNumber);
       } else {
-        await unmarkSpcExerciseComplete(userId, item.id, entry.weekNumber);
+        await unmarkSpcExerciseComplete(userId, item.id, entry.completionWeek ?? entry.weekNumber);
       }
     },
     []

@@ -397,6 +397,9 @@ export function HubClientColumn({
       blockId: entry.blockId,
       kind: entry.kind,
       excludeWorkoutId: entry.workoutId,
+      // Without the week, a sessions-format run excludes its only workout row
+      // and every past week with it.
+      excludeWeekNumber: entry.completionWeek ?? null,
     })
       .then(setHistory)
       .catch(() => setHistory([])); // history is context, never a blocker on logging

@@ -41,7 +41,7 @@ export function HubHistoryPanel({ weeks, tracksWeight = true, height = 194 }) {
     <ScrollView style={{ height }} showsVerticalScrollIndicator={false}>
       {(weeks ?? []).map((week) => (
         <View
-          key={week.workoutId}
+          key={week.key ?? week.workoutId}
           style={{
             borderRadius: 12,
             borderWidth: 1,
