@@ -1031,10 +1031,14 @@ function SpcClientDesktop() {
                           session={session}
                           onPress={handleCellPress}
                           copyRole={copyRole}
-                          onStartCopy={(src) => {
-                            setCopySource(src);
-                            setCopyTargets(new Set());
-                          }}
+                          onStartCopy={
+                            detail.expandedByWeek
+                              ? undefined
+                              : (src) => {
+                                  setCopySource(src);
+                                  setCopyTargets(new Set());
+                                }
+                          }
                         />
                       ) : (
                         <View key={n} style={{ flex: 1, minWidth: 190 }} />
@@ -1272,13 +1276,13 @@ function SpcClientDesktop() {
         onPrev={(() => {
           if (!detail || !readoutSession) return null;
           const logged = detail.sessions.filter((s) => s.state === "logged");
-          const i = logged.findIndex((s) => s.id === readoutSession.id);
+          const i = logged.findIndex((s) => s.key === readoutSession.key);
           return i > 0 ? () => setReadoutSession(logged[i - 1]) : null;
         })()}
         onNext={(() => {
           if (!detail || !readoutSession) return null;
           const logged = detail.sessions.filter((s) => s.state === "logged");
-          const i = logged.findIndex((s) => s.id === readoutSession.id);
+          const i = logged.findIndex((s) => s.key === readoutSession.key);
           return i >= 0 && i < logged.length - 1 ? () => setReadoutSession(logged[i + 1]) : null;
         })()}
       />
