@@ -5440,6 +5440,51 @@ standing limitation. Worth Terra's pass: Addyson gone from the SPC list, the
 dashboard down to the six real SPC rows with no LLYL row, and the ongoing
 note on LLYL.
 
+## The hub takes the keyboard next to the touchscreen (2026-08-31)
+
+The gym floor screen has a real keyboard beside it and the girls use whichever
+is closer, but only the note field accepted it — the set boxes are `PressFade`
+tap targets driven by the docked keypad, not inputs. Now a hardware keyboard
+types into the SAME active cell: digits and `.`, Backspace/Delete, Enter or Tab
+for the dock's Next, and arrows to walk the grid. Touch is untouched and the
+two compose (type 6 on the keyboard, tap 7 on the pad, the box reads 67).
+
+**Deliberately a document-level listener (`lib/hubKeyboard.js`), not real
+`<input>`s.** Focusing an input on the coach's phone pops the soft keyboard
+over the card she is typing into, and a browser focus ring would be a second,
+parallel idea of "which box is live" that could disagree with the active cell
+already driving the dock's label. Web only; native is not wired up.
+
+**Up to four columns can be expanded at once, so exactly one owns the
+keyboard** — whichever was touched last. Each expanded column registers a
+dispatcher and claims on expand, on every field tap, and on `+ Add set`. If the
+owner collapses while one other column is still open, that one takes over
+rather than the keys going nowhere. With nothing expanded, nothing is
+`preventDefault`ed, so kiosk/browser shortcuts are unaffected. A keystroke
+aimed at a real field (the note box, a search box) is left to that field via an
+`activeElement` check.
+
+**The real bug this pass found, and it is the file's own established
+hazard:** `active` was read out of the render closure, so ArrowRight followed
+by a digit inside one tick moved the caret and then typed into the box it had
+just left — the arrows looked broken, and Tab-then-digit is genuinely reachable
+with fast typing or key repeat. Fixed with an `activeRef` advanced by hand,
+exactly the pattern `rowsRef`/`commitRows` already uses and for exactly the
+same reason. `handleKey`/`handleNext` were switched to `rowsRef` in the same
+pass — the touch keypad never exposed this because taps are slow.
+
+**Verification note worth reusing: a fake `onSaveSets` will silently wipe what
+you just typed.** The column's merge effect adopts the board's logs whenever
+nothing is pending, so a harness whose save resolves without echoing the rows
+back into `logsByExerciseId` looks exactly like "the keystroke didn't stick",
+about 700ms later. It cost a round of wrong diagnosis; the harness has to
+mimic the poll. Everything above was then driven for real at 1920x1080 through
+a throwaway `app/zz-hubkbd.js` (deleted; `git status` confirmed clean) —
+including the fast synchronous burst `1 2 Tab 1 3 5 Enter 1 0 Tab 9 5` landing
+as 12/135 and 10/95. `npm run build` + `check:routes` clean, Babel parse and
+unresolved-identifier pass clean. **Not verified behind a real login**, and not
+on the wall display itself — worth Terra confirming on the actual board.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

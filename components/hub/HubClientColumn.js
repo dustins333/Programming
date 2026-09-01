@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Platform, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { PressFade } from "../PressFade";
@@ -14,6 +14,7 @@ import { schemeLabel } from "../builder/SessionBuilderParts";
 import { supersetLettersFor } from "../../lib/programming/spcBlockDetail";
 import { getLiftBlockHistory } from "../../lib/programming/hub";
 import { confirmDropFromBoard } from "../../lib/confirmDialog";
+import { registerHubKeyboard, focusHubKeyboard } from "../../lib/hubKeyboard";
 import { fonts, colors, type } from "../../lib/theme";
 
 // One client's live session — a vertical "phone screen" on the wall display
@@ -309,6 +310,16 @@ export function HubClientColumn({
   const noteSeed = useRef("");
   const rowsRef = useRef([]);
   rowsRef.current = rows;
+  // The active cell needs the same hand-advanced ref as the rows, and for the
+  // same reason: a hardware keyboard can deliver Tab-then-digit inside one
+  // tick, and a handler reading `active` out of its render closure would move
+  // the caret and then type into the box it just left.
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const applyActive = (next) => {
+    activeRef.current = next;
+    setActive(next);
+  };
   // A draft counts as dirty from the keystroke until the WRITE LANDS, not
   // until the debounce merely fires. Those are different moments, and
   // treating them as one is what let the poll adopt pre-edit logs over
@@ -384,7 +395,7 @@ export function HubClientColumn({
       }
       if (i === seeded.length - 1) focus = { set: i, field: wantsWeight ? "weight" : "reps" };
     }
-    setActive(focus);
+    applyActive(focus);
     editSeq.current = 0;
     savedSeq.current = 0;
     inFlightSeq.current = -1;
@@ -522,27 +533,65 @@ export function HubClientColumn({
 
   const tracksWeight = expandedItem?.exercise?.tracks_weight !== false;
 
+  // rowsRef, not rows: a hardware keyboard can deliver two keystrokes inside
+  // one tick, and reading state there would make the second overwrite the
+  // first instead of appending to it. commitRows advances the ref by hand for
+  // exactly this reason.
   const handleKey = (key) => {
-    const current = rows[active.set]?.[active.field] ?? "";
+    const cell = activeRef.current;
+    const current = rowsRef.current[cell.set]?.[cell.field] ?? "";
     if (key === "back") {
-      setValue(active.set, active.field, current.slice(0, -1));
+      setValue(cell.set, cell.field, current.slice(0, -1));
       return;
     }
-    if (key === "." && (current.includes(".") || active.field === "reps")) return;
+    if (key === "." && (current.includes(".") || cell.field === "reps")) return;
     if (current.length >= 6) return;
-    setValue(active.set, active.field, current + key);
+    setValue(cell.set, cell.field, current + key);
   };
 
   const handleNext = () => {
-    if (tracksWeight && active.field === "reps") setActive({ set: active.set, field: "weight" });
-    else if (active.set + 1 < rows.length) setActive({ set: active.set + 1, field: "reps" });
+    const cell = activeRef.current;
+    if (tracksWeight && cell.field === "reps") applyActive({ set: cell.set, field: "weight" });
+    else if (cell.set + 1 < rowsRef.current.length) applyActive({ set: cell.set + 1, field: "reps" });
   };
 
+  // Arrow keys walk the grid. Reps <-> weight sideways, set to set vertically,
+  // clamped at the edges rather than wrapping — wrapping from the last set
+  // back to the first is how a number ends up on the wrong row.
+  const handleMove = (dir) => {
+    const cell = activeRef.current;
+    if (dir === "left" && cell.field === "weight") applyActive({ set: cell.set, field: "reps" });
+    else if (dir === "right" && tracksWeight && cell.field === "reps") applyActive({ set: cell.set, field: "weight" });
+    else if (dir === "up" && cell.set > 0) applyActive({ set: cell.set - 1, field: cell.field });
+    else if (dir === "down" && cell.set + 1 < rowsRef.current.length) applyActive({ set: cell.set + 1, field: cell.field });
+  };
+
+  // The keyboard next to the touchscreen types into whichever box the dock's
+  // keypad would. Held in a ref because the handlers close over the current
+  // rows and active cell, while the registration itself must survive every
+  // render of the open card.
+  const keyboardApi = useRef(null);
+  keyboardApi.current = { handleKey, handleNext, handleMove };
+  useEffect(() => {
+    if (Platform.OS !== "web") return undefined;
+    if (!expandedId) return undefined;
+    const unregister = registerHubKeyboard(userId, (action) => {
+      const api = keyboardApi.current;
+      if (!api) return;
+      if (action.type === "digit") api.handleKey(action.key);
+      else if (action.type === "next") api.handleNext();
+      else if (action.type === "move") api.handleMove(action.dir);
+    });
+    focusHubKeyboard(userId);
+    return unregister;
+  }, [expandedId, userId]);
+
   const handleAddSet = () => {
+    focusHubKeyboard(userId);
     const next = [...rowsRef.current, { reps: "", weight: "" }];
     rowsRef.current = next;
     setRows(next);
-    setActive({ set: next.length - 1, field: "reps" });
+    applyActive({ set: next.length - 1, field: "reps" });
   };
 
   // One place that decides whether a pending draft is worth writing.
@@ -555,13 +604,15 @@ export function HubClientColumn({
   };
 
   const handleSameAsLast = () => {
-    if (active.set === 0) return;
+    const cell = activeRef.current;
+    if (cell.set === 0) return;
     const prev = rowsRef.current;
-    commitRows(prev.map((r, i) => (i === active.set ? { ...prev[active.set - 1] } : r)));
+    commitRows(prev.map((r, i) => (i === cell.set ? { ...prev[cell.set - 1] } : r)));
   };
 
   const handleInsertWeight = (total) => {
-    setValue(active.set, "weight", String(total));
+    const cell = activeRef.current;
+    setValue(cell.set, "weight", String(total));
     setDock("keypad");
   };
 
@@ -647,7 +698,10 @@ export function HubClientColumn({
           weekCount={history?.length ?? 0}
           historyLoading={history === undefined}
           compact={compact}
-          onSetActive={setActive}
+          onSetActive={(next) => {
+            focusHubKeyboard(userId);
+            applyActive(next);
+          }}
           onSwitchItem={switchSibling}
           onAddSet={handleAddSet}
           onSameAsLast={handleSameAsLast}
