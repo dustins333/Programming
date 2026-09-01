@@ -10,7 +10,7 @@ import { currentWeekNumber, blockLengthWeeks } from "../../../lib/programming/sc
 import { getMissedSessionFlagsByUser } from "../../../lib/programming/flags";
 import { getClientGoal } from "../../../lib/programming/clientGoals";
 import { ClientGoalCard } from "../../../components/ClientGoalCard";
-import { getSpcClient, assignSpcClient, setSpcStatus, updateSpcClient } from "../../../lib/programming/spcClients";
+import { getSpcClient, assignSpcClient, setSpcStatus, updateSpcClient, isSpcActive, isSpcEnrolled } from "../../../lib/programming/spcClients";
 import { getCurrentSpcBlock } from "../../../lib/programming/spcBlocks";
 import { getClient as getNutritionClient, createOrReactivateClient, setClientStatus as setNutritionStatus } from "../../../lib/nutrition/clients";
 import { listTemplates } from "../../../lib/programming/templates";
@@ -499,11 +499,20 @@ export default function ClientProfile() {
     }
   };
 
-  const spcActive = Boolean(spcClient && spcClient.status !== "paused");
+  // Two different questions, and conflating them is what put switched-off
+  // clients on the SPC roster labelled "Paused" (0108). `spcEnrolled` drives
+  // the switch and everything under it — a paused client is still an SPC
+  // client. `spcActive` is "training right now", which is what the membership
+  // pill, the block row and the weekly target should count.
+  const spcEnrolled = isSpcEnrolled(spcClient);
+  const spcActive = isSpcActive(spcClient);
   const handleSpcToggle = async (enrolled) => {
     try {
       if (!enrolled) {
-        await setSpcStatus(userId, "paused");
+        // 'inactive', not 'paused': switching SPC off here means she is no
+        // longer an SPC client and should leave the SPC list. Pausing is a
+        // deliberate, separate choice made on her SPC page.
+        await setSpcStatus(userId, "inactive");
       } else if (spcClient) {
         await setSpcStatus(userId, "active");
       } else {
@@ -951,7 +960,7 @@ export default function ClientProfile() {
             <SettingsCard
               icon="clipboard-outline"
               title="SPC"
-              headerRight={spcClient ? <StatusBadge tone={SPC_ENROLLMENT_TONES[spcClient.status]} label={SPC_ENROLLMENT_LABELS[spcClient.status]} /> : null}
+              headerRight={spcEnrolled ? <StatusBadge tone={SPC_ENROLLMENT_TONES[spcClient.status]} label={SPC_ENROLLMENT_LABELS[spcClient.status]} /> : null}
             >
               {spcError ? (
                 <Text className="text-red-600" style={{ fontFamily: fonts.sans }}>
@@ -961,16 +970,16 @@ export default function ClientProfile() {
                 <>
                   <View className="flex-row items-center gap-3">
                     <Switch
-                      value={spcActive}
+                      value={spcEnrolled}
                       onValueChange={handleSpcToggle}
                       trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
                       thumbColor="#ffffff"
                     />
                     <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
-                      {spcClient ? "Enrolled" : "Not enrolled"}
+                      {spcEnrolled ? "Enrolled" : "Not enrolled"}
                     </Text>
                   </View>
-                  {spcActive ? (
+                  {spcEnrolled ? (
                     <View className="mt-3 rounded-lg px-3.5 py-3" style={{ backgroundColor: "#faf8f6" }}>
                       <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
                         Frequency
@@ -984,7 +993,7 @@ export default function ClientProfile() {
                       </View>
                     </View>
                   ) : null}
-                  {spcClient ? <ViewLink label="View SPC program ›" onPress={() => router.push(`/(coach)/spc/${userId}`)} /> : null}
+                  {spcEnrolled ? <ViewLink label="View SPC program ›" onPress={() => router.push(`/(coach)/spc/${userId}`)} /> : null}
                 </>
               )}
             </SettingsCard>

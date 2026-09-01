@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { listAssignmentsForUser, addGroupMembership, removeGroupMembership, setMembershipSessionsPerWeek } from "../../lib/programming/clients";
 import { listGroupPrograms } from "../../lib/programming/blocks";
-import { getSpcClient, assignSpcClient, setSpcStatus, updateSpcClient } from "../../lib/programming/spcClients";
+import { getSpcClient, assignSpcClient, setSpcStatus, updateSpcClient, isSpcEnrolled } from "../../lib/programming/spcClients";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { StatusBadge } from "../../components/StatusBadge";
 import { SegmentedControl } from "../../components/SegmentedControl";
@@ -105,10 +105,13 @@ export default function MyTrainingScreen() {
     }
   };
 
-  const spcActive = Boolean(spcClient && spcClient.status !== "paused");
+  // Enrolment, not "training right now" — see the same pair on the coach's
+  // client detail page. Switching off writes 'inactive' (0108) so it drops
+  // off the SPC roster; pausing stays a separate, deliberate choice.
+  const spcActive = isSpcEnrolled(spcClient);
   const handleSpcToggle = async (enrolled) => {
     try {
-      if (!enrolled) await setSpcStatus(userId, "paused");
+      if (!enrolled) await setSpcStatus(userId, "inactive");
       else if (spcClient) await setSpcStatus(userId, "active");
       // A coach enrolling themself is also, by default, their own SPC
       // coach — reassignable from the SPC page like anyone else's.
@@ -211,7 +214,7 @@ export default function MyTrainingScreen() {
             <SettingsCard
               icon="clipboard-outline"
               title="SPC"
-              headerRight={spcClient ? <StatusBadge tone={SPC_ENROLLMENT_TONES[spcClient.status]} label={SPC_ENROLLMENT_LABELS[spcClient.status]} /> : null}
+              headerRight={spcActive ? <StatusBadge tone={SPC_ENROLLMENT_TONES[spcClient.status]} label={SPC_ENROLLMENT_LABELS[spcClient.status]} /> : null}
             >
               <View className="flex-row items-center gap-3">
                 <Switch value={spcActive} onValueChange={handleSpcToggle} trackColor={{ false: "#e7e5e4", true: "#4d6142" }} thumbColor="#ffffff" />

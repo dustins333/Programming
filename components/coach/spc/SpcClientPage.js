@@ -790,6 +790,15 @@ export function SpcClientPage({ userId }) {
             <Eyebrow style={{ marginBottom: 10 }}>CLIENT SETTINGS</Eyebrow>
             <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 12, padding: 15 }}>
               <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginBottom: 5 }}>Enrolment</Text>
+              {spcClient?.status === "inactive" ? (
+                // Reachable only by a direct link — she is off the SPC roster
+                // (0108). The select's two options don't include this state on
+                // purpose: turning SPC back on happens on her client page,
+                // where it was turned off.
+                <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#b23a22", marginBottom: 12 }}>
+                  SPC is switched off for this client. Turn it back on from her client page.
+                </Text>
+              ) : (
               <select
                 value={spcClient?.status ?? ""}
                 onChange={async (e) => {
@@ -809,6 +818,7 @@ export function SpcClientPage({ userId }) {
                   </option>
                 ))}
               </select>
+              )}
 
               <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginBottom: 5 }}>Assigned coach</Text>
               <select

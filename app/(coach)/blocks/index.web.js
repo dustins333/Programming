@@ -142,6 +142,73 @@ function ReadinessBar({ published, draft, empty, total }) {
   );
 }
 
+// The stretch of grid an ongoing block hasn't grown into yet.
+//
+// This used to be the same dashed empty box a real gap gets, with a grey
+// sentence in it — so the one program deliberately set to run forever looked
+// exactly like the one nobody had scheduled anything for. It is the opposite
+// of a gap: nothing is missing, and there is nothing to do. Olive, filled,
+// and stated outright.
+function OngoingGapPanel({ width, minHeight, programName, onManage }) {
+  return (
+    <View
+      style={{
+        width,
+        minHeight,
+        borderWidth: 1.5,
+        borderColor: "#cfdac0",
+        backgroundColor: "#eef1e7",
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        overflow: "hidden",
+      }}
+    >
+      {/* Same bleeding circle the dark heroes use, so this reads as one of
+          the app's deliberate surfaces rather than a tinted box. */}
+      <View
+        pointerEvents="none"
+        style={{ position: "absolute", right: -74, top: -86, width: 214, height: 214, borderRadius: 107, backgroundColor: "rgba(77,97,66,0.05)" }}
+      />
+      <View style={{ alignItems: "center", maxWidth: 620 }}>
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: "#4d6142",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 13,
+          }}
+        >
+          <Ionicons name="infinite" size={23} color="#eef1e7" />
+        </View>
+
+        <Text style={{ fontFamily: fonts.display, fontSize: 21, color: "#3d5033", textAlign: "center" }}>
+          {programName} is ongoing
+        </Text>
+        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 18, color: "#5f6d55", textAlign: "center", marginTop: 6 }}>
+          No end date. A new week is added automatically as the current one runs out, so nothing needs scheduling here.
+        </Text>
+
+        {/* The Ongoing switch itself lives on Block history, which is the
+            "pretty buried" this whole pass is about — so say where it is
+            rather than leaving a coach to hunt for the way to stop it. */}
+        <PressFade
+          onPress={onManage}
+          style={{ marginTop: 16, borderWidth: 1, borderColor: "#b9c9a9", borderRadius: 9, paddingVertical: 8, paddingHorizontal: 15 }}
+        >
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#4d6142" }}>
+            Turn it off in Block history ›
+          </Text>
+        </PressFade>
+      </View>
+    </View>
+  );
+}
+
 function BlockBand({ program, block, blockLabel, workouts, summaries, today, onFinalize, onNewBlock }) {
   if (!block) {
     return (
@@ -166,6 +233,12 @@ function BlockBand({ program, block, blockLabel, workouts, summaries, today, onF
   const empty = states.filter((s) => s === "empty").length;
   const daysLeft = daysBetween(block.block_end_date, today);
   const weeks = blockLengthWeeks(block, program);
+  // auto_extend (0049): the nightly scan adds a week as this one runs out, so
+  // its end date is a rolling horizon rather than a finish line. Said out
+  // loud here because it was only visible inside the Extend controls further
+  // down the page — a coach opening the program to look at it had no way to
+  // tell an ongoing program from one about to run out.
+  const ongoing = Boolean(block.auto_extend);
 
   return (
     <View
@@ -187,12 +260,16 @@ function BlockBand({ program, block, blockLabel, workouts, summaries, today, onF
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Text style={{ fontFamily: fonts.display, fontSize: 21, color: "#2a211c" }}>{blockLabel}</Text>
           <View style={{ backgroundColor: "#e3ead9", borderRadius: 99, paddingVertical: 3, paddingHorizontal: 9 }}>
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.8, color: "#4d6142" }}>RUNNING</Text>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.8, color: "#4d6142" }}>
+              {ongoing ? "ONGOING" : "RUNNING"}
+            </Text>
           </View>
         </View>
         <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c", marginTop: 5 }}>
-          {formatDateMD(block.block_start_date)} → {formatDateMD(block.block_end_date)} · {weeks} weeks ·{" "}
-          {program.sessions_per_week} session{program.sessions_per_week === 1 ? "" : "s"} a week
+          {/* No "N sessions a week" — the SESSION 1 / SESSION 2 column headers
+              directly below already say it. */}
+          {formatDateMD(block.block_start_date)} → {ongoing ? "no end date" : formatDateMD(block.block_end_date)} · {weeks}{" "}
+          {ongoing ? "weeks so far" : "weeks"}
         </Text>
       </View>
 
@@ -201,8 +278,12 @@ function BlockBand({ program, block, blockLabel, workouts, summaries, today, onF
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c" }}>
             {published} of {workouts.length} sessions published
           </Text>
-          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-            {daysLeft >= 0 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left in block` : "Block has ended"}
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: ongoing ? "#4d6142" : "#a8a29e" }}>
+            {ongoing
+              ? "Ongoing · a week is added automatically"
+              : daysLeft >= 0
+                ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left in block`
+                : "Block has ended"}
           </Text>
         </View>
         <ReadinessBar published={published} draft={draft} empty={empty} total={workouts.length} />
@@ -777,42 +858,46 @@ function BlocksDesktop() {
                 {groupRows(selected.rows).map((group, idx) => {
                   if (group.type === "gap") {
                     const rolling = Boolean(blockPrecedingGap(selected.allBlocks, group.rows)?.auto_extend);
+                    const gapHeight = CELL_MIN_HEIGHT * Math.min(group.rows.length, 2);
                     return (
                       <View key={`gap-${idx}`} style={{ flexDirection: "row", gap: 14, marginBottom: 12 }}>
                         <View style={{ width: ROW_LABEL_WIDTH }} />
-                        <View
-                          style={{
-                            width: gridWidth,
-                            minHeight: CELL_MIN_HEIGHT * Math.min(group.rows.length, 2),
-                            borderWidth: 1,
-                            borderStyle: "dashed",
-                            borderColor: "#d6d1ca",
-                            borderRadius: 14,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            padding: 18,
-                          }}
-                        >
-                          {rolling ? (
-                            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e", textAlign: "center" }}>
-                              This block rolls forward on its own — it'll fill these weeks a week at a time.
+                        {rolling ? (
+                          <OngoingGapPanel
+                            width={gridWidth}
+                            minHeight={gapHeight}
+                            programName={selected.program.name}
+                            onManage={() =>
+                              selectedProgramId && router.push(`/(coach)/blocks/history?program=${selectedProgramId}`)
+                            }
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: gridWidth,
+                              minHeight: gapHeight,
+                              borderWidth: 1,
+                              borderStyle: "dashed",
+                              borderColor: "#d6d1ca",
+                              borderRadius: 14,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 18,
+                            }}
+                          >
+                            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
+                              Nothing scheduled for {group.rows.length} week{group.rows.length === 1 ? "" : "s"}
                             </Text>
-                          ) : (
-                            <>
-                              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
-                                Nothing scheduled for {group.rows.length} week{group.rows.length === 1 ? "" : "s"}
+                            <PressFade
+                              onPress={handleStartGapBlock}
+                              style={{ marginTop: 10, backgroundColor: colors.primary, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 18 }}
+                            >
+                              <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#fff" }}>
+                                Start new block
                               </Text>
-                              <PressFade
-                                onPress={handleStartGapBlock}
-                                style={{ marginTop: 10, backgroundColor: colors.primary, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 18 }}
-                              >
-                                <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#fff" }}>
-                                  Start new block
-                                </Text>
-                              </PressFade>
-                            </>
-                          )}
-                        </View>
+                            </PressFade>
+                          </View>
+                        )}
                       </View>
                     );
                   }

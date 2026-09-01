@@ -29,6 +29,35 @@ const CANVAS = "#faf8f6";
 // week by. Every week reads plain and only the current one is marked. (SPC is
 // the opposite — it's one client, so that view keeps the real member states;
 // see app/(coach)/spc/[userId].js.)
+// "This one doesn't stop." One component so the two placements below can't
+// drift apart on wording.
+function OngoingNote() {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        // The week card above carries marginBottom: 11 — pull up slightly so
+        // the note reads as attached to it, then restore the gap below.
+        marginTop: -2,
+        marginBottom: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        backgroundColor: "#eef1e7",
+        borderWidth: 1,
+        borderColor: "#cfdac0",
+      }}
+    >
+      <Ionicons name="infinite-outline" size={16} color="#4d6142" />
+      <Text style={{ flex: 1, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#4d6142" }}>
+        This program is set to ongoing. A new week is added automatically, so it won't run out.
+      </Text>
+    </View>
+  );
+}
+
 function prescriptionLine(ex) {
   const reps = Array.isArray(ex.rep_scheme) && new Set(ex.rep_scheme).size > 1 ? ex.rep_scheme.join(", ") : ex.reps;
   return `${ex.sets ?? "–"} × ${reps ?? "–"}`;
@@ -119,7 +148,17 @@ export function CoachBlockOverview({ initialProgramId = null, showBack = false, 
         };
       })
       .filter(Boolean);
-    return { weeks, slots, published: workouts.filter((w) => w.status === "published").length, total: workouts.length };
+    return {
+      weeks,
+      slots,
+      published: workouts.filter((w) => w.status === "published").length,
+      total: workouts.length,
+      // auto_extend (0049) — the nightly scan grows this block a week at a
+      // time instead of letting it end. Read straight off the block so the
+      // note below can only ever say it about the block being looked at.
+      ongoing: Boolean(block.auto_extend),
+      isCurrentBlock,
+    };
   }, [state]);
 
   const openSession = async (workout) => {
@@ -255,19 +294,29 @@ export function CoachBlockOverview({ initialProgramId = null, showBack = false, 
           />
 
           {blockView.weeks.map((week) => (
-            <BlockWeekCard
-              key={week.week}
-              weekNumber={week.week}
-              status={week.status}
-              slots={blockView.slots}
-              sessions={week.sessions.map((s) => ({
-                key: s.workout.id,
-                label: `Session ${s.workout.session_number}`,
-                state: s.state,
-                onPress: () => openSession(s.workout),
-              }))}
-            />
+            <View key={week.week}>
+              <BlockWeekCard
+                weekNumber={week.week}
+                status={week.status}
+                slots={blockView.slots}
+                sessions={week.sessions.map((s) => ({
+                  key: s.workout.id,
+                  label: `Session ${s.workout.session_number}`,
+                  state: s.state,
+                  onPress: () => openSession(s.workout),
+                }))}
+              />
+              {/* Directly under the current week, because that's where a coach
+                  is looking when the question "does this stop soon?" comes up.
+                  The setting itself lives in the Extend controls on the web
+                  Group Programs page, which is nowhere near here. */}
+              {blockView.ongoing && week.status === "current" ? <OngoingNote /> : null}
+            </View>
           ))}
+
+          {/* A finished or not-yet-started block has no current week to hang
+              the note under, so say it once at the end instead. */}
+          {blockView.ongoing && !blockView.isCurrentBlock ? <OngoingNote /> : null}
 
           {blockView.weeks.length === 0 ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>Nothing written in this block yet.</Text>

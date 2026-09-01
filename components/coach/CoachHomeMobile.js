@@ -632,7 +632,7 @@ export function CoachHomeMobile() {
               label="SPC"
               count={spcIssues.length}
               caption={spcIssues.length === 0 ? "Everyone covered" : "need attention"}
-              tone={spcIssues.some((i) => i.severity <= 1) ? "urgent" : spcIssues.length ? "warn" : "ok"}
+              tone={spcIssues.some((i) => i.severity === 0) ? "urgent" : spcIssues.length ? "warn" : "ok"}
               countIsIssue
               onPress={() => setSheet("spc")}
             />
@@ -782,7 +782,7 @@ export function CoachHomeMobile() {
           spcIssues.map((c) => (
             <SheetRow
               key={c.userId}
-              tone={c.severity <= 1 ? "urgent" : "warn"}
+              tone={c.severity === 0 ? "urgent" : "warn"}
               title={c.name}
               detail={c.coachName ? `${c.reason} · ${c.coachName}` : c.reason}
               onPress={() => go(`/(coach)/spc/${c.userId}`)}

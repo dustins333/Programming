@@ -8,8 +8,11 @@ import { fonts, colors } from "../lib/theme";
 //
 // Two separate answers to the same problem, deliberately kept apart:
 //   Extend  — add weeks right now, once. Predictable, no background magic.
-//   Rolling — keep adding a week automatically as the end approaches,
-//             until it's switched off.
+//   Ongoing — keep adding a week automatically as the end approaches, until
+//             it's switched off. Stored as auto_extend (0049) and grown by
+//             scan-spc-alerts nightly. Labelled "Ongoing" rather than
+//             "Rolling" so it reads the same as SPC's own ongoing programs,
+//             which is what coaches already call it.
 //
 // Both carry the block's last week forward by default, which is the whole
 // point for a client repeating the same work; "Blank weeks" is there for
@@ -68,7 +71,7 @@ export function BlockExtendControls({ block, onExtend, onToggleAutoExtend }) {
 
         <View className="flex-row items-center gap-2">
           <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: block.auto_extend ? "#4d6142" : "#78716c" }}>
-            Rolling
+            Ongoing
           </Text>
           {rollingBusy ? (
             <ActivityIndicator size="small" color={colors.primary} />
@@ -77,7 +80,7 @@ export function BlockExtendControls({ block, onExtend, onToggleAutoExtend }) {
               value={Boolean(block.auto_extend)}
               onValueChange={handleToggleRolling}
               trackColor={{ true: "#4d6142" }}
-              accessibilityLabel="Keep this block rolling"
+              accessibilityLabel="Keep this block going"
             />
           )}
         </View>
@@ -85,7 +88,7 @@ export function BlockExtendControls({ block, onExtend, onToggleAutoExtend }) {
 
       {block.auto_extend && !open ? (
         <Text className="mt-1.5" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#4d6142" }}>
-          Adds a week automatically as this one nears its end. Switch off to let it finish.
+          No end date. A week is added automatically as this one runs out. Switch off to let it finish.
         </Text>
       ) : null}
 

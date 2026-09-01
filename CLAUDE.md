@@ -5323,6 +5323,123 @@ limitation. Worth Terra's pass: a week-2 client on the board (checks clear,
 history strip shows last week), and a multi-week block's grid on the client
 page.
 
+
+## "Off" stops meaning "paused"; the dashboard stops crying wolf (2026-08-31)
+
+Three reports, one migration (`0108`, applied and verified live).
+
+**The SPC switch on a client's detail page wrote `status='paused'`, and
+paused clients belong on the SPC roster.** So switching someone off left her
+sitting there indefinitely, labelled as though she were coming back — which
+is the opposite of what paused is for ("on hold, don't program her right
+now" is a reminder a coach *wants*). A third value, **`inactive`**, splits
+them: `getSpcRoster` and `getSpcRosterDetail` both exclude it at the query,
+so it can't be forgotten per screen.
+
+- The row is kept rather than deleted, and that is load-bearing:
+  `spc_blocks.spc_client_id` references `spc_clients(user_id)` **on delete
+  cascade**, so deleting the row would take every program she has ever been
+  written with it.
+- `isSpcActive()` (the member-facing gate) becomes `status === 'active'` —
+  the same answer it gave before for both existing values. New
+  `isSpcEnrolled()` is the coach-facing question, and the two are used
+  deliberately differently on the client detail page: enrolment drives the
+  switch, the frequency control and the SPC link; **active** drives the
+  membership pill, the current-block row and the weekly session target.
+- `SPC_ENROLLMENT_LABELS` deliberately still holds only active/paused — that
+  select is the choice a coach makes *between*, once someone is an SPC
+  client. Turning SPC off entirely is the switch on her client page, and
+  offering it in two places is how a third half-state appears. The SPC page
+  does handle arriving at an inactive client by direct link (a line, not a
+  blank select), and `deriveSpcState` maps `inactive` to the paused shape so
+  it can't shout "Due now" about someone nobody signed up.
+- **Backfill: all four paused clients became inactive** (Terra's call). Until
+  0108 the client-detail switch was the only way most people reached
+  'paused', so the existing data means "switched off" far more often than
+  "on hold". Prior values in `programming.zz_spc_status_backup_0108` (RLS on,
+  grants revoked — the 0099 lesson).
+- **The wall display's picker asked "not paused"**, which lets an inactive
+  client straight through. `hub_startable_clients` is re-created verbatim
+  from `pg_get_functiondef` with that one predicate flipped to
+  `c.status = 'active'`, and the dry run diffed its full output before and
+  after inside a rolled-back transaction: **61 rows, 0 lost, 0 gained.**
+
+**Dashboard attention rows: 7 SPC alarms where 1 was real, and the cause was
+a second definition of SPC state.** `coachDashboard.js` rolled its own —
+"an unsent draft row exists" plus a days-until-end-vs-lead-time reckoning —
+which had drifted hard from `deriveSpcState`. It fired for a client on an
+**ongoing** program, for a **paused** client, and 26 days ahead of a program
+with a month left, all on the strength of stale drafts left behind by
+programs since published. Now `getSpcRosterDetail()` feeds it and the whole
+predicate is **`nextStep === NEXT_STEP.publish`** — paused resolves to
+`resume`, ongoing and queued-next both resolve to `none`, never-programmed
+resolves to `start` (still excluded, same call 0084 made for the hub
+picker). `spcNeedsNewProgram` and `spcIssues` are the same array now; they
+were two overlapping ones, so a client could appear twice. A started draft
+became context in the subtitle rather than the trigger. Verified by
+extracting the shipped `deriveSpcState`/`resolveClientPrograms` and running
+them against all 73 real roster rows: **6 rows, every one genuinely inside
+its final week with nothing queued** — and it now catches those six, which
+the draft-keyed version missed entirely. This closes the follow-up the SPC
+rework left open ("align spcIssues with deriveSpcState v2").
+
+**"LLYL is ongoing but still appearing" — `getGroupProgramDashboard` never
+read `auto_extend`.** A rolling group block is grown a week at a time by
+`scan-spc-alerts` nightly (it handles group rolling blocks in the same pass,
+deliberately — group has no scan of its own), so "block ends in 6 days,
+nothing queued to start after it" was the setting working, raised as an
+alarm every day forever. It now returns `rolling` and the gap row filters on
+it. **Group "ongoing" is `auto_extend`; SPC "ongoing" is a null
+`block_end_date` (0103) — two different mechanisms, one word.** Coaches call
+both ongoing, so the group control is relabelled from "Rolling" to
+"Ongoing".
+
+**And it was invisible.** The only place a coach could tell was the Ongoing
+switch — which does not even live on this page; it is on **Block history**
+(`blocks/history.js`, which lists every block, not just retired ones). Three
+changes:
+
+- The desktop block band carries an `ONGOING` pill instead of `RUNNING`,
+  reads "07/27 → no end date · 6 weeks so far", and swaps "N days left in
+  block" for "Ongoing — a week is added automatically".
+- `CoachBlockOverview` (the phone/preview view) renders an olive note
+  **directly under the current week card**, which is where a coach is
+  looking when the question comes up, with a fallback at the end for a block
+  that has no current week to hang it under.
+- **The weeks an ongoing block hasn't grown into yet get a real panel**
+  (`OngoingGapPanel`), not the dashed empty box a genuine gap gets. Those two
+  were rendering identically, so the one program deliberately set to run
+  forever looked exactly like the one nobody had scheduled anything for. It
+  is the opposite of a gap: nothing is missing and there is nothing to do.
+  Filled olive, infinity mark, the program named, and a link to Block history
+  because that is where the switch to stop it actually is. A first pass also
+  listed the upcoming weeks as ghost chips; Terra had them removed, so the
+  panel is the statement alone.
+- **The band no longer repeats "N sessions a week"** in its subtitle. The
+  SESSION 1 / SESSION 2 column headers sit directly below it and already say
+  so.
+
+**Standing copy rule from this session: no em dashes, anywhere she reads.**
+Her words: *"I never want em dashes. total ai sign."* Split the sentence, use
+"so"/"and", or use the separators this app already has (`|` on member
+screens, `·` on coach screens; `–` for an empty value). Saved as
+[[feedback_never_use_em_dashes]]. There are ~306 pre-existing em dashes in
+user-facing strings across ~137 files, flagged to her and not swept, since a
+bare "—" placeholder needs a different fix from prose.
+
+**Verified**: migration dry-run in a rolled-back transaction (plus the hub
+function output diff above) before applying, then constraint/counts/backup
+RLS/function body all confirmed by query; `npm run build` + `check:routes`
+clean; a Babel parse + unresolved-identifier + unused-import pass over all
+12 touched files; the attention rows simulated against real data; and all three
+ongoing surfaces driven and screenshotted at 1280px through a throwaway
+`app/zz-harness.js`, the gap panel at both a wide and a narrow grid width
+(deleted afterwards, the `BlockBand`/`OngoingNote`/`OngoingGapPanel` exports
+reverted, `git status` confirmed clean). **Not verified behind a real login** —
+standing limitation. Worth Terra's pass: Addyson gone from the SPC list, the
+dashboard down to the six real SPC rows with no LLYL row, and the ongoing
+note on LLYL.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -5409,6 +5526,8 @@ sections; next number after 0080 is 0081.)
 - `0093_document_rich_text.sql` — **run**, verified live 2026-08-25. Adds `body_format` (`text`/`html`, default `text`) to `documents` and `document_versions`, so a pasted document keeps its formatting. Defaulting to `text` means every pre-existing row renders exactly as before with no backfill — a document only becomes `html` the next time someone edits it.
 
 - `0107_hub_client_removed_at.sql` — **run**, verified live 2026-08-30 (both columns, both partial indexes, both old constraints gone, all five functions and the display policy scoped; plus an 8-assertion dry-run as a real coach in a rolled-back transaction first). Taking a client off the live board is a **soft delete** now — `hub_session_clients.removed_at` — because coaches run back-to-back groups on one board and a hard DELETE erased whoever had just trained on it. `added_at` is added nullable with the default set afterwards, so pre-existing rows stay null rather than claiming a made-up join time. **Both UNIQUE constraints have to become partial** (`where removed_at is null`), each for its own reason: `(hub_session_id, position)` or a vacated slot stays occupied and four swaps fill the four-client cap with people who went home; `(hub_session_id, user_id)` or a client who stepped out can never be swapped back in. `hub_active_client` and the two group predicates gate every display policy on logs/completions/notes, so they exclude removed rows — **access has to evaporate on removal exactly as it does when the session ends**. ⚠ Past removals are gone for good; nothing recorded them.
+
+- `0108_spc_inactive_status.sql` — **run**, verified live 2026-08-31 (constraint widened, 4 rows backfilled, backup table with RLS on and grants revoked, patched function body confirmed; plus a dry run that diffed `hub_startable_clients`' full output before/after in a rolled-back transaction — 61 rows, 0 lost, 0 gained). Adds `'inactive'` to `programming.spc_clients.status`: "the SPC switch on her client page is off", as against `'paused'`, which is a deliberate hold and stays on the SPC roster. **Order is the opposite of 0099** — that one narrowed the domain so the update had to run bare; this one widens it, so the constraint goes on first and the update follows. Also re-creates `hub_startable_clients` verbatim with its `<> 'paused'` predicate flipped to `= 'active'`, or a switched-off client keeps appearing on the wall display's picker. Rollback data in `programming.zz_spc_status_backup_0108`.
 
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
