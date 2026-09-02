@@ -5582,6 +5582,117 @@ driven for real at 390px through a throwaway `app/zz-calcharness.js` (deleted;
 `SpecialtyBarPicker`'s temporary export reverted and the file diffed
 byte-identical afterwards). `npm run build` clean.
 
+## Alternate programming: one session, or sessions across weeks (2026-09-01)
+
+Away/travel programming, asked for as "assign a week at a time". The design
+turned on one thing worth not relitigating: **what a template is FOR and how
+it gets assigned are two different axes.** Terra's own objection to the first
+framing was that a trial session and a "welcome week" are not away
+programming and must not be labelled as such, and a welcome week turned out
+to be a **single session** despite the name. So a template's CATEGORY names
+the purpose and the assign SHAPE is chosen separately. Buttons named
+"one-off" and "away" would have meant assigning a welcome week through Away,
+which is the same naming problem one level down.
+
+**One-offs (0008) are completely unchanged. This is an addition.**
+
+**Migration `0110` (run and verified).** `programming.template_categories`
+replaces `workout_templates.category`'s two-value CHECK (the old text column
+is left populated as the rollback path, per the 0095 convention);
+`alternate_programs` / `alternate_sessions` / `alternate_warmups` /
+`alternate_exercises`; and the completion tables widen from three session
+types to four. **ONE alternate_sessions row per session for the whole run,
+not one per (session, week)** - a week is a repeat, which is the shape SPC's
+sessions format landed on in 0105, and it is why alternate completions carry
+`week_number` where one-off completions don't.
+
+**Migration `0112` is NOT run and must not be until the app deploys.** See
+the index lesson below.
+
+### The production break, and the lesson
+
+0110 originally widened `logs_unique_set_idx` to include the new column. It
+had to: two different away sessions logged on one day for the same lift and
+set would otherwise collide. **Applying that broke production immediately.**
+`logResult()` is a hybrid - a hand-rolled select-then-update, and on the
+insert branch a real `ON CONFLICT` upsert **naming that index's nine columns
+explicitly**. Postgres resolves a conflict column list against an index with
+exactly those columns, so a ten-column index makes every already-loaded
+browser tab fail `42P10` on its next new set. Confirmed by running the old
+spec against the new index (it raised 42P10) rather than reasoning about it.
+The index was restored within about eight minutes.
+
+Three durable consequences:
+1. **`logResult` is index-agnostic now.** Plain insert; a 23505 falls back to
+   re-reading with the same session-scoped lookup and updating. The race
+   guard 0073 added is preserved without naming a column list, so the index
+   can change again with no coordinated deploy.
+2. The widening moved to its own migration (`0112`) whose header states the
+   ordering requirement.
+3. **General rule: never widen a unique index that an `ON CONFLICT` column
+   list names, in the same step as anything else.** A CLAUDE.md note claiming
+   `logResult` was "hand-rolled, not ON CONFLICT" was stale and is what made
+   this look safe. Grep the actual write before trusting a note about it.
+
+### Decisions, all taken with Terra explicitly
+
+- **Both programs show.** Her normal Flagship/SPC tile stays the whole time;
+  it just cannot be reported missed. Not a replace.
+- **The name is the coach's**, defaulting from the category, so a run reads
+  "Italy trip" or "Welcome week" and never says away unless she typed it.
+- **Missed-flag pausing is a checkbox per assignment**, ticked by default,
+  not a property of the category (a deload happens while she is still in the
+  gym).
+- Away sessions themselves never flag, in either direction.
+- Same sessions and same numbers every week; unfinished sessions stop showing
+  on the end date; any client, not just SPC.
+- **Start snaps to a Monday.** My Week renders Mon-Sun, so an offset run would
+  straddle two of them and "Week 2 of 3" would disagree with her own screen.
+  Enforced by a CHECK, same style as 0063.
+
+### Where the shield lives
+
+`lib/programming/flags.js` is the single place missed sessions are computed
+for group and SPC, feeding the Clients roster Needs column, the flag pills
+and the client detail's Current/Behind. Each flag now carries a **`checkDate`**
+and `dropFlagsShieldedByAlternatePrograms` matches **per flag, not per
+client** - the group scan is about this week, the SPC scan about the week
+that just ended, so a client back on Monday must lose last week's SPC flag
+while keeping this week's group one. The member's own block page
+(`plan-block.js` + `BlockWeekCard`) has its own separate count; an away week
+gets a **new quiet `away` tone naming the run**, deliberately NOT relabelled
+"Complete" - she genuinely did not do those sessions.
+
+### Files and surfaces
+
+Library moved `app/(coach)/spc/templates/*` to `app/(coach)/templates/*` with
+its own `_layout.js` Stack (the exercises/merge lesson: a folder with several
+routes leaks as native tabs without one) and its own nav item; `vercel.json`
+rewrite updated, `check:routes` gates it. `components/AssignOneOffModal.js`
+deleted, superseded by `components/coach/AssignAlternateModal.js`.
+`useFitnessAccess`, `plan.js`'s not-assigned early returns and My Week's
+`hasTraining` all had to learn about away runs, or a member whose only
+training is a travel week is told she has no program.
+
+### Verification
+
+13 RLS/constraint assertions in a rolled-back transaction then applied; 17
+date-helper cases against the shipped source; 9 shield cases against the
+shipped `dropFlagsShieldedByAlternatePrograms` with its query stubbed; and
+**17 end-to-end assertions driving the real `assignAlternateProgram` against
+real templates on the live database** (content copied verbatim, overlap
+refused by name, per-week completions independent, delete cascades), cleaned
+up after and confirmed zero rows left. Assign modal and all three week states
+driven in a browser at 390px. `npm run build` clean. **Not verified behind a
+real login.**
+
+**Worth reusing: driving the shipped lib against the live DB with the service
+role key** (`supabase projects api-keys`, pick `service_role`) by loading the
+module source and injecting its `programming` client. That is what proved the
+template copy is correct rather than assuming it. Run the script from the
+repo root so `@supabase/supabase-js` resolves.
+
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -5672,6 +5783,9 @@ sections; next number after 0080 is 0081.)
 - `0108_spc_inactive_status.sql` — **run**, verified live 2026-08-31 (constraint widened, 4 rows backfilled, backup table with RLS on and grants revoked, patched function body confirmed; plus a dry run that diffed `hub_startable_clients`' full output before/after in a rolled-back transaction — 61 rows, 0 lost, 0 gained). Adds `'inactive'` to `programming.spc_clients.status`: "the SPC switch on her client page is off", as against `'paused'`, which is a deliberate hold and stays on the SPC roster. **Order is the opposite of 0099** — that one narrowed the domain so the update had to run bare; this one widens it, so the constraint goes on first and the update follows. Also re-creates `hub_startable_clients` verbatim with its `<> 'paused'` predicate flipped to `= 'active'`, or a switched-off client keeps appearing on the wall display's picker. Rollback data in `programming.zz_spc_status_backup_0108`.
 
 - `0109_members_read_specialty_bars.sql` — **run**, verified live 2026-08-31 (dry-run with impersonation assertions first, then applied and re-confirmed as a real member). Adds `specialty_bars` to the member read whitelist on `core.settings` and renames the policy to "members can read whitelisted settings". The `auth.uid() is not null` guard from the 2026-08-21 audit is preserved — `to public` includes anon. Rollback SQL is in the file's own footer comment.
+- `0110_alternate_programming.sql` — **run**, verified live 2026-09-01 (3 categories seeded, 5 templates backfilled, 8 policies on the alternate_* tables, PostgREST 200 on every new table and embed; plus 13 impersonation/constraint assertions in a rolled-back transaction first). Coach-managed `template_categories` replacing `workout_templates.category`'s two-value CHECK, the `alternate_programs`/`alternate_sessions`/`alternate_warmups`/`alternate_exercises` tables, and the widening of `session_completions`/`exercise_completions`/`logs.source` from three session types to four. `alternate_program_visible()` is a security-definer helper so the three child tables share one definition of "live" without repeating the date arithmetic. **Does NOT touch `logs_unique_set_idx`** — that is 0112, deliberately split, see its header.
+- `0112_logs_unique_set_alternate.sql` — **NOT run, and must not be until the app deploys.** Widens `logs_unique_set_idx` with `alternate_session_id`. Safe only once `logResult()` no longer names a conflict-target column list, which it doesn't as of the 0110 commit. Applying it against older deployed JS breaks every new set insert with 42P10 — this happened for real. Numbered 0112 rather than 0111 because a parallel session was holding 0111 for unrelated nutrition work.
+
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
