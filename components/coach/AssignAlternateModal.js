@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { MondayPicker } from "../MondayPicker";
@@ -113,12 +113,18 @@ export function AssignAlternateModal({ visible, templates, existingPrograms = []
     return out;
   }, [existingPrograms]);
 
-  const collides = useMemo(() => {
+  const overlapsExisting = useMemo(() => {
     for (const monday of takenMondays) {
       if (monday >= startDate && monday <= endDate) return true;
     }
     return false;
   }, [takenMondays, startDate, endDate]);
+
+  // Suppressed while submitting. The parent refreshes its roster after a
+  // successful assign, and that refresh flows straight back into
+  // existingPrograms — so the run being created counts itself as a clash
+  // for the moment between the write landing and this modal closing.
+  const collides = overlapsExisting && !busy;
 
   const reset = () => {
     setShape("single");
@@ -148,8 +154,15 @@ export function AssignAlternateModal({ visible, templates, existingPrograms = []
     });
   };
 
+  // A ref, not the `busy` state: two clicks in the same tick both read the
+  // same render's `busy`, and two concurrent assigns can each pass the
+  // overlap check before either has inserted, which would create two
+  // genuinely overlapping runs (nothing in the schema forbids that).
+  const submittingRef = useRef(false);
+
   const handleAssign = async () => {
-    if (!pickedTemplates.length || busy) return;
+    if (!pickedTemplates.length || submittingRef.current) return;
+    submittingRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -168,11 +181,12 @@ export function AssignAlternateModal({ visible, templates, existingPrograms = []
     } catch (err) {
       setError(err.message ?? String(err));
     } finally {
+      submittingRef.current = false;
       setBusy(false);
     }
   };
 
-  const canAssign = pickedTemplates.length > 0 && !(shape === "run" && collides);
+  const canAssign = pickedTemplates.length > 0 && !(shape === "run" && overlapsExisting);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>

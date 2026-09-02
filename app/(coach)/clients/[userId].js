@@ -615,7 +615,13 @@ export default function ClientProfile() {
   // overlap names the run that's in the way).
   const handleAssignRun = async (input) => {
     await assignAlternateProgram({ ...input, userId, assignedBy: profile.id });
-    await load();
+    // Deliberately NOT awaited. load() refreshes alternatePrograms, which is
+    // the modal's own existingPrograms prop — awaiting it here re-rendered
+    // the still-open modal with the run that had just been created counted
+    // as a collision, so a successful assign flashed a red "already covers
+    // part of those weeks" warning before closing. Returning first lets the
+    // modal close, and load() handles its own errors.
+    void load();
   };
 
   const handleEndAlternate = async (program) => {
