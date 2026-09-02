@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, Platform, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, Platform, ScrollView, ActivityIndicator, Switch, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { listClients } from "../../../lib/nutrition/clients";
 import { listAllPhotos, getPhotoSignedUrls } from "../../../lib/nutrition/photos";
 import { DateStepper, defaultDates } from "../../../components/nutrition/PhotoCompare";
 import { PhotoCompareBoard } from "../../../components/nutrition/PhotoCompareBoard";
-import { CoachShell } from "../../../components/CoachShell";
+import { CoachShell, MOBILE_BREAKPOINT, SIDEBAR_WIDTH } from "../../../components/CoachShell";
 import { fonts, colors } from "../../../lib/theme";
 
 const isWeb = Platform.OS === "web";
@@ -16,24 +16,29 @@ const ANGLES = [
   { key: "back", label: "Back" },
 ];
 const SLOT_COUNTS = [2, 3, 4];
-// Keep each pane roughly the width it had at the original fixed 3 slots
-// (~355px) whatever the count, rather than letting 2 panes stretch to the
-// full 1100 container — an aspect-ratio 3/4 pane at 525px wide is 700 tall
-// and pushes the board's stat footer off screen. Capped at the container's
-// own max so 4 panes narrow instead of overflowing.
-const PANE_WIDTH = 355;
-const CONTAINER_MAX = 1100;
-const boardWidthFor = (count) => Math.min(CONTAINER_MAX, count * PANE_WIDTH);
+// The board is specced against a 1080-wide card and scales from whatever
+// width it is handed, so it needs a real number rather than "100%". Working
+// it out from the window beats measuring: react-native-web implements
+// onLayout with a ResizeObserver, which is a frame late and never fires in
+// this repo's preview browser, so a measured board could not be verified
+// before shipping.
+const BOARD_MAX = 1080;
+const PAGE_PADDING = 24;
+function boardWidthFor(windowWidth) {
+  const sidebar = isWeb && windowWidth >= MOBILE_BREAKPOINT ? SIDEBAR_WIDTH : 0;
+  return Math.max(280, Math.min(BOARD_MAX, windowWidth - sidebar - PAGE_PADDING * 2));
+}
 
 // Standalone compare board — pick any client, compare their progress
 // photos, without going through their full client-detail page. The board
-// itself (PhotoCompareBoard) is a distinct branded, screenshot-ready design
-// from the plain PhotoCompare widget used elsewhere (client-detail Photos
-// tab) — date-selection controls stay outside the board as picker "chrome"
-// (design_handoff_v2_settings_nutrition, Screen 3b) so a screenshot of the
-// board alone doesn't include the pickers.
+// itself (PhotoCompareBoard) is a distinct branded, screenshot-ready poster
+// (design_handoff_photo_compare_v1, "3b Chop"), not the plain PhotoCompare
+// widget used on the client-detail Photos tab. Every control stays outside
+// the board so a screenshot of the board alone carries none of them.
 export default function NutritionPhotoCompare() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const boardWidth = boardWidthFor(windowWidth);
   const [clients, setClients] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [photos, setPhotos] = useState(null);
@@ -41,6 +46,11 @@ export default function NutritionPhotoCompare() {
   const [angle, setAngle] = useState("front");
   const [slotCount, setSlotCount] = useState(3);
   const [slotDates, setSlotDates] = useState(() => Array(3).fill(null));
+  // One switch over the date range and each photo's own date and weight.
+  // Defaults on: the board has always shown them, and a coach sharing
+  // publicly is the case that opts out. The client's name is never on the
+  // board at all, so it is deliberately not part of this.
+  const [showDetails, setShowDetails] = useState(true);
   const [urls, setUrls] = useState({});
 
   const loadClients = useCallback(() => {
@@ -140,7 +150,7 @@ export default function NutritionPhotoCompare() {
         className="flex-1"
         style={{ backgroundColor: "#faf8f6" }}
         contentContainerClassName="px-6 py-8"
-        contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: 1100 }}
+        contentContainerStyle={{ paddingTop: insets.top + 20, maxWidth: BOARD_MAX + PAGE_PADDING * 2 }}
       >
         <Link href="/(coach)/nutrition" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
           ‹ Back to Nutrition
@@ -232,6 +242,23 @@ export default function NutritionPhotoCompare() {
               ))}
             </View>
 
+            <View className="mb-5 flex-row items-center gap-3">
+              <Switch
+                value={showDetails}
+                onValueChange={setShowDetails}
+                trackColor={{ true: colors.primary, false: "#d6d3d1" }}
+                thumbColor="#fff"
+              />
+              <View>
+                <Text className="text-sm" style={{ fontFamily: fonts.sansMedium, color: "#44403c" }}>
+                  Show dates &amp; weights
+                </Text>
+                <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+                  Turn off for a public post.
+                </Text>
+              </View>
+            </View>
+
             {!photos ? (
               <ActivityIndicator color={colors.primary} />
             ) : anglePhotos.length === 0 ? (
@@ -242,16 +269,14 @@ export default function NutritionPhotoCompare() {
               <>
                 {/* Date pickers are picker "chrome" — kept outside the board
                     so a screenshot of the board alone doesn't include them. */}
-                <View className="mb-4 flex-row gap-3" style={{ width: "100%", maxWidth: boardWidthFor(slotCount) }}>
+                <View className="mb-4 flex-row gap-3" style={{ width: boardWidth }}>
                   {slotDates.map((date, i) => (
                     <View key={i} style={{ flex: 1 }}>
                       <DateStepper anglePhotos={anglePhotos} selectedDate={date} onChange={(d) => setSlotDate(i, d)} />
                     </View>
                   ))}
                 </View>
-                <View style={{ width: "100%", maxWidth: boardWidthFor(slotCount) }}>
-                  <PhotoCompareBoard clientName={clients.find((c) => c.id === selectedId)?.name ?? ""} slots={boardSlots} urls={boardUrls} />
-                </View>
+                <PhotoCompareBoard slots={boardSlots} urls={boardUrls} showDetails={showDetails} width={boardWidth} />
               </>
             )}
           </>

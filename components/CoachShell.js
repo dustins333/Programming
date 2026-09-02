@@ -132,6 +132,11 @@ function writeStoredGroupOverrides(overrides) {
 // phone, so on the installed PWA a coach gets the desktop build at any width
 // unless the screen itself branches here too.
 export const MOBILE_BREAKPOINT = 768;
+// The desktop sidebar's width. Exported so a screen that has to lay out
+// against the real content width (rather than fill it) can subtract it
+// without measuring — see the Photo Compare board, which is specced in
+// pixels against a fixed design width.
+export const SIDEBAR_WIDTH = 232;
 
 // Strips the route-group segment (e.g. "(coach)") since expo-router's
 // usePathname() resolves it out of the actual URL on web, but hrefs in this
@@ -458,7 +463,7 @@ export function CoachShell({ children }) {
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: "#f6f1ec" }}>
       <View
         style={{
-          width: 232,
+          width: SIDEBAR_WIDTH,
           borderRightWidth: 1,
           borderRightColor: "#e7e5e4",
           paddingVertical: 24,
