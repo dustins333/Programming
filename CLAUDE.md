@@ -5693,6 +5693,139 @@ template copy is correct rather than assuming it. Run the script from the
 repo root so `@supabase/supabase-js` resolves.
 
 
+## Closing out a check-in, week phases, and a real table-overflow bug (2026-09-01)
+
+Three nutrition asks in one pass. Migration `0111` — applied and verified live.
+
+**Closing out a check-in.** A client who simply doesn't check in sat on the
+roster as "Awaiting client check-in" (urgent, red) until the week rolled over
+on its own. There was no way to resolve it — a coach who already knew the
+check-in wasn't coming had to look at a red row for the rest of the cycle.
+
+`programming.nutrition_checkin_closeouts` mirrors `nutrition_checkin_reopens`
+(0028) in shape and for the same reason. **Deliberately NOT a fabricated
+`public.checkin_responses` row with empty answers**: that table is shared with
+the standalone Nutrition Tracker app, and a blank response would render there
+— and on Kova's own Check-In tab — as though she had answered.
+
+Three properties worth keeping:
+- **A real response always wins.** `deriveCheckinStatus(response, closeout)`
+  checks the response first, so a client who files late un-closes her own week
+  with nothing for the coach to undo. That is also why the close-out
+  deliberately does **not** gate the member: closing a week out early costs
+  nothing, where blocking her would turn a tidy-up into a lockout.
+- **Staff-only in every direction, no member policy at all** — same as
+  `client_notes`/`client_limitations` (0057). The member never needs to read
+  it, because it changes nothing on her side.
+- **Unique on `(user_id, week_start)`**, so the write is an idempotent upsert
+  and a double-tap can't leave two rows a later Undo only half removes.
+
+Surfaced on the Settings tab's check-in timeline (Terra's own pick), which the
+Check-In tab's week picker also renders, so both get it from one component.
+Actions are quietest-first: a missed week offers Reopen (grant a late-filing
+window) **and** Close out (resolve it); a closed-out week offers only Undo —
+"Reopen" there would mean two different things at once.
+
+New roster status `checkinClosed` ("Check-in closed out", **paused** tone, not
+onTrack — reading it as "completed" would claim a check-in happened). It slots
+into the web queue's Active group, which is a collapsible list rather than a
+fixed tile row, so a fourth status was no layout risk. **Coach Home's own
+nutrition breakdown deliberately folds it into "completed"** — those four
+buckets answer "how much is still outstanding", and a closed-out week isn't;
+a fifth tile for the one state nobody has to act on would be worse.
+
+**Week phases.** `programming.nutrition_week_phases` — which named phase a
+client is in, week by week, counted ("Diet 1", "Diet 2"), as a pill top-left
+of each row on the Weeks tab. Not the same thing as
+`nutrition_plan_phases` (0050) despite the shared word: that one is the
+coach's **undated** "what we're working on" map where `position` is the
+timeline. This is dated, counted, and the member never sees it.
+
+**One row per phase CHANGE, not per week.** A row means "from this week
+onward, the phase is X" and holds until the next row. That is what makes the
+counter free — a week's number is just how many weeks it sits after the marker
+covering it — and it means setting a phase once doesn't have to be repeated
+every Monday. A null `phase` is an explicit "no phase from here", which ends a
+run without erasing that it ran.
+
+Terra described the edit as "changes all the weeks from the week you have
+selected until the current week". The run model gives exactly that in the
+common case and stops at a later deliberate change instead of silently wiping
+it — so the popup **states its own blast radius** ("Applies to every week from
+here until 09-07-2026, where it changes again") rather than promising "from
+here on" when that would be a lie.
+
+Two guards worth keeping: a `week_start` CHECK that it's a Monday (the Weeks
+tab enumerates Mon-Sun weeks, so a marker half a week off the grid would cover
+nothing — same guard `group_blocks`/`spc_blocks` got in 0063), and
+`isRedundantPhase`, which refuses "set Diet on a week already inside a Diet
+run": a coach opening a pill that reads Diet and pressing Diet expects nothing
+to happen, not for the numbering to reset to 1.
+
+The popup is anchored to the pill via `measureInWindow` (a
+`getBoundingClientRect` on react-native-web, so it stays right on a scrolled
+page) and clamped to the viewport on every edge, falling back to centred if
+the anchor is missing.
+
+### The Weeks tab's sideways scroll: it was MAX-content, not min-content
+
+Reported as "open the current week and it fits, open an older one and it
+over-expands and you have to scroll left to right". Real bug, and the obvious
+diagnosis was wrong in a way worth remembering.
+
+The chain, measured rather than assumed: the day table lives in a horizontal
+`ScrollView` whose content container is **`flex-shrink: 0` with `flex-basis:
+auto`**, so its width is its **max-content** width, not the scroller's. A
+row's max-content is the sum of its cells', and a note cell's is the note on
+one unbroken line (`numberOfLines={1}` compiles to `white-space: nowrap`). One
+200-character client note therefore asked for **1726px inside a 1066px card —
+660px of sideways scroll** — while a note-free row asked for 676. That is
+exactly why the current week looked fine (nobody has written a note in it yet)
+and older weeks did not.
+
+**`minWidth: 0` does NOT fix this**, despite being the usual flex-overflow
+remedy — and it was the first fix tried. It lets a flex item shrink *under
+pressure*, and nothing is applying pressure when the container is being sized
+BY its content. Measured directly: with `min-width: 0px` on the note text, the
+row's min-content dropped to 676 and the table was still 1726, because
+max-content was the operative constraint all along.
+
+Fixed with a `maxWidth` on the note cell, applied in **both** the collapsed and
+expanded states — lifting it while the note is open put the overflow straight
+back, and expanding is about reading every line, not widening the column.
+Result: the table now caps at 846px regardless of note length (526 for the
+other columns + the 320 cap), so it never scrolls on a card ≥866px and
+degrades by a bounded, predictable amount below that instead of by however
+long somebody's note happened to be.
+
+**Generalisable: when a table inside a horizontal ScrollView is too wide, check
+max-content, not just min-content**, and reach for a cap on the unbounded cell
+rather than `minWidth: 0`. `el.style.width = 'min-content'` / `'max-content'`
+around a `getBoundingClientRect()` is the measurement that tells them apart.
+
+**Verification.** Migration dry-run in a rolled-back transaction (Monday CHECK
+bites, unique bites, both inserts land), then an 8-assertion RLS impersonation
+test as a real coach and a real member (coach reads/writes/deletes; member sees
+0 rows and is refused 42501 on insert) — also rolled back — before applying for
+real; tables, policies, RLS and a live PostgREST 200 confirmed afterwards. 21
+unit cases against the **shipped** `weekPhases.js` source (run counting, a
+second run restarting at 1, null markers ending a run, unsorted input, the
+redundancy guard, the year boundary and a DST fall-back). And all three were
+driven for real in a browser through throwaway `app/zz-wkharness.js` /
+`app/zz-ciharness.js` routes (both deleted, `git status` confirmed clean): the
+overflow reproduced at 660px and re-measured at 0 with the fix, both collapsed
+and expanded; the phase popup opened from a pill, applied, renumbered the run,
+refused a redundant name with Apply dimmed to 0.45, printed the "until" copy
+once a later marker existed, and cleared a run from a chosen week; and the
+timeline rendered every row state at once (Not due yet + Close out on the
+current week, Completed with no actions, Closed out + Undo, Missed + Reopen +
+Close out). `npm run build` + `check:routes` clean, plus a Babel parse /
+unresolved-identifier / unused-import pass over all 16 touched files.
+
+**Not verified behind a real login** — standing limitation. Worth Terra's pass:
+close out a real week and confirm the client leaves the red group on the
+roster, then set a phase on Reviewer and page back through the weeks.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -5786,6 +5919,7 @@ sections; next number after 0080 is 0081.)
 - `0110_alternate_programming.sql` — **run**, verified live 2026-09-01 (3 categories seeded, 5 templates backfilled, 8 policies on the alternate_* tables, PostgREST 200 on every new table and embed; plus 13 impersonation/constraint assertions in a rolled-back transaction first). Coach-managed `template_categories` replacing `workout_templates.category`'s two-value CHECK, the `alternate_programs`/`alternate_sessions`/`alternate_warmups`/`alternate_exercises` tables, and the widening of `session_completions`/`exercise_completions`/`logs.source` from three session types to four. `alternate_program_visible()` is a security-definer helper so the three child tables share one definition of "live" without repeating the date arithmetic. **Does NOT touch `logs_unique_set_idx`** — that is 0112, deliberately split, see its header.
 - `0112_logs_unique_set_alternate.sql` — **NOT run, and must not be until the app deploys.** Widens `logs_unique_set_idx` with `alternate_session_id`. Safe only once `logResult()` no longer names a conflict-target column list, which it doesn't as of the 0110 commit. Applying it against older deployed JS breaks every new set insert with 42P10 — this happened for real. Numbered 0112 rather than 0111 because a parallel session was holding 0111 for unrelated nutrition work.
 
+- `0111_checkin_closeout_and_week_phases.sql` — **run**, verified live 2026-09-01 (both tables, RLS on, one staff policy each, the Monday CHECK and both unique constraints exercised in a rolled-back dry run, plus an 8-assertion impersonation test as a real coach and a real member, and a live PostgREST 200 rather than PGRST205). Adds `programming.nutrition_checkin_closeouts` (a coach resolving a week no client is going to file — deliberately not a fabricated `public.checkin_responses` row, and deliberately not a gate on the member) and `programming.nutrition_week_phases` (one row per phase CHANGE, so the Weeks tab can count "Diet 1, Diet 2, Diet 3" without a row per week; `phase` is nullable as an explicit "no phase from here"). Both staff-only in every direction. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 

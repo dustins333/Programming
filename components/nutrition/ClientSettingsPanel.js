@@ -98,7 +98,7 @@ const inputStyle = {
   backgroundColor: "white",
 };
 
-export function ClientSettingsPanel({ userId, coachId, coaches = [], client, checkins = [], reopens = [], photos = [], today, isWide, questionnaireSubmittedAt = null, onSaved }) {
+export function ClientSettingsPanel({ userId, coachId, coaches = [], client, checkins = [], reopens = [], closeouts = [], photos = [], today, isWide, questionnaireSubmittedAt = null, onSaved }) {
   const [startDate, setStartDate] = useState(client.start_date ?? "");
   const [status, setStatus] = useState(client.status ?? "active");
   const [assignedCoachId, setAssignedCoachId] = useState(client.coach_id ?? null);
@@ -394,6 +394,7 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
               client={client}
               checkins={checkins}
               reopens={reopens}
+              closeouts={closeouts}
               photos={photos}
               today={today}
               onChanged={onSaved}

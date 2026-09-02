@@ -3,8 +3,8 @@ import { View, Text, Pressable } from "react-native";
 import { computeWeekWindows, enumerateUpcomingWeeks, deriveCheckinStatus, checkinMondayForWeek, enumerateRecentWeeks } from "../../lib/nutrition/weekCycle";
 
 import { isPhotoRequirementWeek, hasAllAngles, photosForRequirementWeek } from "../../lib/nutrition/photos";
-import { reopenCheckin } from "../../lib/nutrition/checkin";
-import { addDays, formatDateTimeInBoise } from "../../lib/boiseDate";
+import { reopenCheckin, closeOutCheckin, undoCheckinCloseout } from "../../lib/nutrition/checkin";
+import { addDays, dateInBoise, formatDateTimeInBoise } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
 import { toastError } from "../../lib/toast";
@@ -17,8 +17,20 @@ const STATUS_STYLE = {
   ready: { label: "Awaiting review", color: "#b3843a" },
   missed: { label: "Missed", color: "#b23a22" },
   reopened: { label: "Reopened", color: "#8a5a2e" },
+  closedOut: { label: "Closed out", color: "#78716c" },
   notDue: { label: "Not due yet", color: "#a8a29e" },
 };
+
+// A quiet inline action. Several can sit on one row (a missed week can be
+// both reopened and closed out), so they share a size and a separator
+// rather than each inventing its own.
+function RowAction({ label, onPress, busy, tone = colors.primaryOnWhite }) {
+  return (
+    <Pressable onPress={onPress} disabled={busy} hitSlop={6} style={{ opacity: busy ? 0.5 : 1 }}>
+      <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: tone }}>{busy ? "…" : label}</Text>
+    </Pressable>
+  );
+}
 
 // Labeled by the Monday the coach picks the check-in up and reviews it, not
 // by the Mon-Sun range it covers. That range is what's stored and what every
@@ -29,32 +41,40 @@ function weekLabel(start) {
   return `${formatDateMDY(checkinMondayForWeek(start))} check-in`;
 }
 
-function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coachId, today, reopen, onChanged, onSelect, selected }) {
-  const [busy, setBusy] = useState(false);
+function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coachId, today, reopen, closeout, onChanged, onSelect, selected }) {
+  const [busy, setBusy] = useState(null);
   const required = isPhotoRequirementWeek(client, week.start);
   const weekPhotos = photosForRequirementWeek(photos, week);
   const photosOk = required ? hasAllAngles(weekPhotos) : null;
   const isMissed = !isCurrent && !isUpcoming && !checkin;
   const reopenActive = !!reopen && reopen.expires_at >= today;
+  // A real submission always wins over a close-out, so a client who files
+  // late un-closes her own week with nothing for the coach to undo.
+  const closedOut = !checkin && !!closeout;
 
   let status = null;
   if (!isUpcoming) {
     if (checkin) status = STATUS_STYLE[deriveCheckinStatus(checkin) === "ready" ? "ready" : "completed"];
+    else if (closedOut) status = STATUS_STYLE.closedOut;
     else if (isCurrent) status = STATUS_STYLE.notDue;
     else status = reopenActive ? STATUS_STYLE.reopened : STATUS_STYLE.missed;
   }
 
-  const handleReopen = async () => {
-    setBusy(true);
+  const run = async (key, fn, failureMessage) => {
+    setBusy(key);
     try {
-      await reopenCheckin(userId, week.start, coachId, today);
+      await fn();
       await onChanged();
     } catch (err) {
-      toastError("Failed to reopen check-in", err);
+      toastError(failureMessage, err);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
+
+  const handleReopen = () => run("reopen", () => reopenCheckin(userId, week.start, coachId, today), "Failed to reopen check-in");
+  const handleCloseOut = () => run("close", () => closeOutCheckin(userId, week.start, coachId), "Failed to close out check-in");
+  const handleUndoCloseOut = () => run("undo", () => undoCheckinCloseout(userId, week.start), "Failed to reopen this week");
 
   // Pressable only when the caller wants selection (the week picker on the
   // Check-In tab). As a plain status list — its original job on the Settings
@@ -95,16 +115,29 @@ function Row({ week, isCurrent, isUpcoming, checkin, client, photos, userId, coa
           </Text>
           {checkin?.submitted_at ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e" }}>{formatDateTimeInBoise(checkin.submitted_at)}</Text>
+          ) : closedOut ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e" }}>by you {formatDateMDY(dateInBoise(new Date(closeout.closed_at)))}</Text>
           ) : reopenActive ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "#a8a29e" }}>until {formatDateMDY(reopen.expires_at)}</Text>
           ) : null}
         </View>
       ) : null}
 
-      {isMissed && !reopenActive ? (
-        <Pressable onPress={handleReopen} disabled={busy} hitSlop={6}>
-          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: colors.primaryOnWhite }}>{busy ? "…" : "Reopen"}</Text>
-        </Pressable>
+      {/* Actions, quietest-first. A week that's been closed out offers only
+          the way back out of it — "Reopen" there would mean two different
+          things at once (undo the close-out, or grant a late-filing window),
+          and the close-out is what's actually on screen. */}
+      {!isUpcoming && !checkin ? (
+        <View className="flex-row items-center" style={{ gap: 10 }}>
+          {closedOut ? (
+            <RowAction label="Undo" onPress={handleUndoCloseOut} busy={busy === "undo"} />
+          ) : (
+            <>
+              {isMissed && !reopenActive ? <RowAction label="Reopen" onPress={handleReopen} busy={busy === "reopen"} /> : null}
+              <RowAction label="Close out" onPress={handleCloseOut} busy={busy === "close"} tone="#78716c" />
+            </>
+          )}
+        </View>
       ) : null}
     </Wrapper>
   );
@@ -145,6 +178,11 @@ function OnboardingRow({ onSelect, selected, submittedAt }) {
 // (last 5) — enumerateRecentWeeks includes the current week as its own
 // index 0, so it's split off from the rest here.
 //
+// A week nobody is going to file can be CLOSED OUT from here (migration
+// 0111) — the roster stops reading it as an outstanding check-in, without
+// fabricating a response that never happened. It's undoable, and a real
+// submission supersedes it on its own.
+//
 // Doubles as the week picker on the Check-In tab: pass onSelectWeek to make
 // the rows navigable, selectedWeekStart to mark where the coach currently
 // is, and onboardingEntry to hang her onboarding off the end of the list.
@@ -155,6 +193,7 @@ export function CheckinWeekTimeline({
   client,
   checkins,
   reopens = [],
+  closeouts = [],
   photos,
   today,
   onChanged,
@@ -185,6 +224,7 @@ export function CheckinWeekTimeline({
   // matching listCheckinReopensSince's own newest-first ordering.
   const reopensByWeek = {};
   for (const r of reopens) if (!(r.week_start in reopensByWeek)) reopensByWeek[r.week_start] = r;
+  const closeoutsByWeek = Object.fromEntries((closeouts ?? []).map((c) => [c.week_start, c]));
 
   const rowProps = (week, isCurrent, isUpcoming) => ({
     week,
@@ -192,6 +232,7 @@ export function CheckinWeekTimeline({
     isUpcoming,
     checkin: checkinsByWeek[week.start] ?? null,
     reopen: reopensByWeek[week.start] ?? null,
+    closeout: closeoutsByWeek[week.start] ?? null,
     client,
     photos,
     userId,

@@ -87,6 +87,9 @@ const CHECKIN_COPY = {
   pending: { label: "Not submitted yet", tone: "#8a6d3b" },
   ready: { label: "Waiting on you", tone: "#b23a22" },
   completed: { label: "Reviewed", tone: "#4d6142" },
+  // Nothing came in and the coach has resolved it (migration 0111) —
+  // reads as settled, not as something still owed.
+  closed: { label: "Closed out", tone: "#78716c" },
 };
 
 export function NutritionCard({ enrolled, snapshot, error, onReview, onRetry }) {

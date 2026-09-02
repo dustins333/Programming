@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { colorForTarget, colorForStepsTarget } from "../../lib/nutrition/weekCycle";
 import { deriveCalories } from "../../lib/nutrition/targets";
 import { formatDateMD } from "../../lib/formatDate";
+import { PhasePill, PhaseEditor } from "./WeekPhasePill";
+import { resolveWeekPhase } from "../../lib/nutrition/weekPhases";
 import { fonts, colors } from "../../lib/theme";
 
 // The Weeks tab (coach web v2, screen 20): one row per week, opening into
@@ -44,6 +46,10 @@ const DAY_COLUMNS = [
 ];
 const DAY_COL_WIDTH = 52;
 const NOTE_FLEX = 2.4;
+// How wide the note column is allowed to get. This is a real constraint,
+// not a style choice — see the note cell below for why the table's width
+// depends on it.
+const NOTE_MAX_WIDTH = 320;
 // The point below which the table stops flexing and starts scrolling.
 const TABLE_MIN_WIDTH =
   DAY_COL_WIDTH + DAY_COLUMNS.reduce((sum, c) => sum + c.min, 0) + 150;
@@ -152,6 +158,8 @@ const CHECKIN_STATE = {
   waiting: { label: "Waiting on you", color: "#8a5a2e" },
   reviewed: { label: "Reviewed", color: OK },
   missed: { label: "No check-in", color: MUTED },
+  // Nothing came in and the coach has resolved it (migration 0111).
+  closed: { label: "Closed out", color: MUTED },
 };
 
 function DayTable({ week, target }) {
@@ -180,7 +188,7 @@ function DayTable({ week, target }) {
               {col.label}
             </Text>
           ))}
-          <Text style={{ flex: NOTE_FLEX, minWidth: 150, fontFamily: fonts.sansBold, fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          <Text style={{ flex: NOTE_FLEX, minWidth: 150, maxWidth: NOTE_MAX_WIDTH, fontFamily: fonts.sansBold, fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
             Note
           </Text>
         </View>
@@ -230,21 +238,43 @@ function DayTable({ week, target }) {
                   line with no press handler at all, so a long note was
                   simply unreadable from this table. */}
               {day && day.client_note ? (
+                /* maxWidth here is load-bearing, not cosmetic: without it a
+                   single long client note dragged the whole table off the
+                   right-hand edge and left it scrolling sideways.
+                   The chain, measured rather than assumed: this table lives
+                   in a horizontal ScrollView whose content container is
+                   flex-shrink: 0 with flex-basis: auto, so its width is its
+                   MAX-content width, not the scroller's. A row's max-content
+                   is the sum of its cells', and a note cell's is the note on
+                   one unbroken line. One 200-character note therefore asked
+                   for 1726px inside a 1066px card — 660px of sideways
+                   scroll — while a note-free row asked for 676px. That is
+                   exactly why the current week looked right (nobody has
+                   written a note in it yet) and older weeks did not.
+                   Note that minWidth: 0 does NOT fix this, despite looking
+                   like the usual flex-overflow remedy: it lets an item
+                   shrink under pressure, and nothing here is applying
+                   pressure — the container is being sized BY the content.
+                   Only a cap bounds the contribution.
+                   Applied in both states deliberately. Lifting it while the
+                   note is open would put the overflow straight back, and
+                   expanding is about seeing every line of the note, not
+                   about widening the column it sits in. */
                 <Pressable
                   onPress={() => setOpenNote((cur) => (cur === date ? null : date))}
                   className="flex-row items-start"
-                  style={{ flex: NOTE_FLEX, minWidth: 150, gap: 4 }}
+                  style={{ flex: NOTE_FLEX, minWidth: 150, maxWidth: NOTE_MAX_WIDTH, gap: 4 }}
                 >
                   <Text
                     numberOfLines={openNote === date ? undefined : 1}
-                    style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}
+                    style={{ flex: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}
                   >
                     {day.client_note}
                   </Text>
                   <Ionicons name={openNote === date ? "chevron-up" : "chevron-down"} size={12} color="#c9c4bd" style={{ marginTop: 2 }} />
                 </Pressable>
               ) : day ? (
-                <Text style={{ flex: NOTE_FLEX, minWidth: 150, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>—</Text>
+                <Text style={{ flex: NOTE_FLEX, minWidth: 150, maxWidth: NOTE_MAX_WIDTH, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>—</Text>
               ) : null}
             </View>
           );
@@ -272,7 +302,7 @@ function DayTable({ week, target }) {
               </Text>
             );
           })}
-          <Text style={{ flex: NOTE_FLEX, minWidth: 150, fontFamily: fonts.sans, fontSize: 11.5, color: MUTED }}>
+          <Text style={{ flex: NOTE_FLEX, minWidth: 150, maxWidth: NOTE_MAX_WIDTH, fontFamily: fonts.sans, fontSize: 11.5, color: MUTED }}>
             {week.summary.days.length} of 7 days logged
           </Text>
         </View>
@@ -282,9 +312,23 @@ function DayTable({ week, target }) {
 }
 
 // `week`: { label, start, end, dates, summary, target, checkinState, weightDelta }
-export function WeekRow({ week, expanded, onToggle }) {
+export function WeekRow({ week, expanded, onToggle, phase, onEditPhase }) {
   const target = week.target;
   const avgWeight = week.summary.averages.weight;
+  const pillRef = useRef(null);
+
+  // Hand the popup the pill's own on-screen box so it can open against it
+  // rather than in the middle of the window. measureInWindow is a
+  // getBoundingClientRect on react-native-web, so this stays correct on a
+  // scrolled page; a null anchor just centres the card.
+  const openPhaseEditor = () => {
+    if (!onEditPhase) return;
+    if (!pillRef.current?.measureInWindow) {
+      onEditPhase(week, null);
+      return;
+    }
+    pillRef.current.measureInWindow((x, y, width, height) => onEditPhase(week, { x, y, width, height }));
+  };
 
   return (
     <View
@@ -297,6 +341,15 @@ export function WeekRow({ week, expanded, onToggle }) {
     >
       <Pressable onPress={onToggle} className="flex-row flex-wrap items-center px-4 py-3" style={{ gap: 14 }}>
         <View style={{ width: 118 }}>
+          {/* Top-left of the row, above the week number: the phase reads as
+              a label on the whole week rather than another status. The
+              slot is reserved on every row whether or not a phase is set,
+              so the week numbers stay on one baseline down the list. */}
+          {onEditPhase ? (
+            <View ref={pillRef} collapsable={false} className="mb-1 self-start">
+              <PhasePill phase={phase} onPress={openPhaseEditor} />
+            </View>
+          ) : null}
           <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }}>
             {week.label}
           </Text>
@@ -372,8 +425,13 @@ export function TargetChangeDivider({ changes, date }) {
   );
 }
 
-export function WeekRows({ weeks, targetChangeByWeek }) {
+// `phaseMarkers` / `onSetPhase` are optional: without them the phase pills
+// simply don't render, which is what keeps this component usable anywhere
+// that has no phase data to hand.
+export function WeekRows({ weeks, targetChangeByWeek, phaseMarkers, phaseNames, onSetPhase, onClearPhase, onRemovePhaseMarker }) {
   const [expanded, setExpanded] = useState(() => (weeks.length > 0 ? weeks[0].start : null));
+  const [editing, setEditing] = useState(null);
+  const phasesEnabled = typeof onSetPhase === "function";
 
   if (weeks.length === 0) {
     return (
@@ -382,6 +440,15 @@ export function WeekRows({ weeks, targetChangeByWeek }) {
       </Text>
     );
   }
+
+  // Every action closes the popup first. The list re-renders off freshly
+  // loaded markers afterwards, and leaving the card open over a pill whose
+  // value is mid-flight reads as though nothing happened.
+  const runAndClose = async (fn) => {
+    const week = editing?.week;
+    setEditing(null);
+    if (week) await fn(week.start);
+  };
 
   return (
     <View>
@@ -392,10 +459,30 @@ export function WeekRows({ weeks, targetChangeByWeek }) {
             {/* Rendered above its week because the list runs newest-first,
                 so "the week the change took effect" sits directly under it. */}
             {change ? <TargetChangeDivider changes={change.changes} date={change.date} /> : null}
-            <WeekRow week={week} expanded={expanded === week.start} onToggle={() => setExpanded((cur) => (cur === week.start ? null : week.start))} />
+            <WeekRow
+              week={week}
+              expanded={expanded === week.start}
+              onToggle={() => setExpanded((cur) => (cur === week.start ? null : week.start))}
+              phase={phasesEnabled ? resolveWeekPhase(phaseMarkers, week.start) : null}
+              onEditPhase={phasesEnabled ? (w, anchor) => setEditing({ week: w, anchor }) : undefined}
+            />
           </View>
         );
       })}
+
+      {phasesEnabled ? (
+        <PhaseEditor
+          visible={!!editing}
+          anchor={editing?.anchor ?? null}
+          weekStart={editing?.week?.start ?? null}
+          markers={phaseMarkers}
+          phaseNames={phaseNames}
+          onApply={(name) => runAndClose((weekStart) => onSetPhase(weekStart, name))}
+          onClear={() => runAndClose((weekStart) => onClearPhase(weekStart))}
+          onRemove={() => runAndClose((weekStart) => onRemovePhaseMarker(weekStart))}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
     </View>
   );
 }

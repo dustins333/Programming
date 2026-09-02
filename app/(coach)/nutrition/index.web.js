@@ -31,7 +31,7 @@ const GROUPS = [
   {
     key: "active",
     title: "Active clients",
-    statuses: ["readyForCheckin", "checkinPending", "checkinCompleted"],
+    statuses: ["readyForCheckin", "checkinPending", "checkinCompleted", "checkinClosed"],
   },
   {
     key: "new",

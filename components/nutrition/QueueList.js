@@ -16,6 +16,7 @@ const STATUS_DOT = {
   readyForCheckin: "#8a5a2e",
   checkinPending: "#b23a22",
   checkinCompleted: "#4d6142",
+  checkinClosed: "#a8a29e",
   otSetup: "#8a5a2e",
   otInProgress: "#4d6142",
   readyForReview: "#8a5a2e",
@@ -46,6 +47,7 @@ function subline(client, today) {
   }
   if (client.rosterStatus === "checkinPending") return `Nothing in yet${weekPart}`;
   if (client.rosterStatus === "checkinCompleted") return `Reviewed${weekPart}`;
+  if (client.rosterStatus === "checkinClosed") return `Closed out, nothing came in${weekPart}`;
   if (client.rosterStatus === "otSetup") return "Waiting on you to send it";
   if (client.rosterStatus === "otInProgress")
     return client.trackingDatesCount

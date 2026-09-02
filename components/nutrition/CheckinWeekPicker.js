@@ -25,6 +25,7 @@ export function CheckinWeekPicker({
   client,
   checkins,
   reopens,
+  closeouts,
   photos,
   today,
   onChanged,
@@ -55,6 +56,7 @@ export function CheckinWeekPicker({
               client={client}
               checkins={checkins}
               reopens={reopens}
+              closeouts={closeouts}
               photos={photos}
               today={today}
               onChanged={onChanged}

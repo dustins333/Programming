@@ -16,12 +16,14 @@ import {
   unfinalizeCheckin,
   listCheckinsSince,
   listCheckinReopensSince,
+  listCheckinCloseoutsSince,
   listTemplateQuestions,
 } from "../../../../lib/nutrition/checkin";
 import { listFocusItems, setCheckinHighlights, setQuestionnaireHighlights } from "../../../../lib/nutrition/coachClient";
 import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
 import { listPhases } from "../../../../lib/nutrition/planPhases";
+import { listWeekPhases, listPhaseNames, setWeekPhase, removeWeekPhaseMarker } from "../../../../lib/nutrition/weekPhases";
 import { computeWeekWindows, currentCalendarWeek, summarizeWeek, deriveCheckinStatus, enumerateRecentWeeks } from "../../../../lib/nutrition/weekCycle";
 import { weekOnProgram, weekDates } from "../../../../lib/nutrition/queue";
 import { listAllPhotos, photosForRequirementWeek } from "../../../../lib/nutrition/photos";
@@ -160,6 +162,7 @@ const STATUS_PILL = {
   pending: { label: "Awaiting client check-in", bg: "#fdece5", text: "#b23a22" },
   ready: { label: "Awaiting coach check-in", bg: "#f4ede3", text: "#8a5a2e" },
   completed: { label: "Check-in completed", bg: "#eef1e7", text: "#4d6142" },
+  closed: { label: "Check-in closed out", bg: "#f1efed", text: "#78716c" },
   paused: { label: "Paused", bg: "#f1efed", text: "#78716c" },
   onboarding: { label: "Onboarding", bg: "#f4ede3", text: "#8a5a2e" },
 };
@@ -201,6 +204,9 @@ export default function NutritionClientDetail() {
   const [loadError, setLoadError] = useState(null);
   const [checkins, setCheckins] = useState([]);
   const [checkinReopens, setCheckinReopens] = useState([]);
+  const [checkinCloseouts, setCheckinCloseouts] = useState([]);
+  const [weekPhases, setWeekPhases] = useState([]);
+  const [phaseNames, setPhaseNames] = useState([]);
   const [otLogs, setOtLogs] = useState([]);
   const [bypassing, setBypassing] = useState(false);
   const [sending, setSending] = useState(false);
@@ -319,6 +325,24 @@ export default function NutritionClientDetail() {
       console.error("Failed to load check-in reopens:", err);
     }
 
+    // Same isolation, migration 0111 (check-in close-outs).
+    try {
+      setCheckinCloseouts(await listCheckinCloseoutsSince(userId, addDays(today, -7 * TIMELINE_PAST_WEEKS)));
+    } catch (err) {
+      console.error("Failed to load check-in close-outs:", err);
+    }
+
+    // Same isolation, migration 0111 (week phases). Two reads: this
+    // client's own markers, and the names already in use across the gym for
+    // the picker's quick-picks.
+    try {
+      const [markers, names] = await Promise.all([listWeekPhases(userId), listPhaseNames()]);
+      setWeekPhases(markers);
+      setPhaseNames(names);
+    } catch (err) {
+      console.error("Failed to load week phases:", err);
+    }
+
     // Same isolation, migrations 0050/0059 (plan phases and their status).
     try {
       setPhases(await listPhases(userId));
@@ -372,6 +396,35 @@ export default function NutritionClientDetail() {
       setFinalizing(false);
     }
   };
+
+  // Week phases (migration 0111). Each of these writes one marker row and
+  // then reloads, so the pills renumber themselves off the same data the
+  // Weeks tab already reads — there is no local phase state to drift.
+  //
+  // The popup closes before the write lands (see WeekRows), so a failure
+  // has to say so out loud here; there is no card left on screen to hold an
+  // inline error.
+  const runPhaseChange = async (fn, failureMessage) => {
+    try {
+      await fn();
+      await load();
+    } catch (err) {
+      toastError(failureMessage, err);
+    }
+  };
+
+  const handleSetWeekPhase = (weekStart, name) =>
+    runPhaseChange(() => setWeekPhase(userId, weekStart, name, profile.id), "Failed to set the phase");
+
+  // A null phase is an explicit "no phase from here", which ENDS a run
+  // without erasing that it happened.
+  const handleClearWeekPhase = (weekStart) =>
+    runPhaseChange(() => setWeekPhase(userId, weekStart, null, profile.id), "Failed to clear the phase");
+
+  // Deletes the marker sitting on this week, so it goes back to inheriting
+  // whatever ran before it — undoing a change, rather than making one.
+  const handleRemoveWeekPhaseMarker = (weekStart) =>
+    runPhaseChange(() => removeWeekPhaseMarker(userId, weekStart), "Failed to remove the phase change");
 
   // Goes straight into Approve & Set Targets right after bypassing, rather
   // than leaving the coach to remember to come back and set one later.
@@ -532,7 +585,13 @@ export default function NutritionClientDetail() {
         summary.averages.weight !== null && previous?.averages?.weight !== null && previous?.averages?.weight !== undefined
           ? summary.averages.weight - previous.averages.weight
           : null,
-      checkinState: weekCheckin ? (weekCheckin.finalized_at ? "reviewed" : "waiting") : "missed",
+      checkinState: weekCheckin
+        ? weekCheckin.finalized_at
+          ? "reviewed"
+          : "waiting"
+        : checkinCloseouts.some((c) => c.week_start === w.start)
+          ? "closed"
+          : "missed",
     };
   });
 
@@ -568,7 +627,11 @@ export default function NutritionClientDetail() {
         ? "onboarding"
         : !hasTargets
           ? "needsTarget"
-          : deriveCheckinStatus(currentCheckin);
+          // The close-out that matters here is the one on the live filing
+          // week, not on whichever past week the Check-In tab is paged to —
+          // this pill sits beside her name and describes where she stands
+          // right now.
+          : deriveCheckinStatus(currentCheckin, checkinCloseouts.find((c) => c.week_start === computeWeekWindows(today).currentWeek.start) ?? null);
   const pill = STATUS_PILL[pillKey] ?? STATUS_PILL.onboarding;
 
   const unchangedWeeks = currentTarget
@@ -702,7 +765,15 @@ export default function NutritionClientDetail() {
                 </Text>
               ) : null}
             </View>
-            <WeekRows weeks={weekRows} targetChangeByWeek={targetChangeByWeek} />
+            <WeekRows
+              weeks={weekRows}
+              targetChangeByWeek={targetChangeByWeek}
+              phaseMarkers={weekPhases}
+              phaseNames={phaseNames}
+              onSetPhase={handleSetWeekPhase}
+              onClearPhase={handleClearWeekPhase}
+              onRemovePhaseMarker={handleRemoveWeekPhaseMarker}
+            />
             {maxWeeks > WEEKS_SHOWN ? (
               <Pressable onPress={() => setShowAllWeeks((v) => !v)} className="mt-2 self-start">
                 <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: colors.primaryOnWhite }}>
@@ -821,6 +892,7 @@ export default function NutritionClientDetail() {
             client={client}
             checkins={checkins}
             reopens={checkinReopens}
+            closeouts={checkinCloseouts}
             photos={photos}
             today={today}
             isWide={isWide}
@@ -844,6 +916,7 @@ export default function NutritionClientDetail() {
         client={client}
         checkins={checkins}
         reopens={checkinReopens}
+        closeouts={checkinCloseouts}
         photos={photos}
         today={today}
         onChanged={load}
