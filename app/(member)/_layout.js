@@ -188,6 +188,13 @@ function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, unseenEve
           href: showEventsTab ? undefined : null,
           tabBarBadge: unseenEvents > 0 ? unseenEvents : undefined,
           tabBarBadgeStyle: EVENT_BADGE_STYLE,
+          // Events is the only tab with its own nested Stack (every other
+          // folder is flattened as href:null siblings), so it is the only one
+          // that can retain a pushed screen across a tab switch. Without this,
+          // opening an event and then coming back to the tab from another one
+          // resumes that detail instead of the list, which reads exactly like
+          // "the tab only shows me one of my two live events".
+          popToTopOnBlur: true,
         }}
       />
 
