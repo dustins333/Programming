@@ -23,6 +23,15 @@ import {
   startNewSpcSessionInstance,
 } from "../../lib/programming/sessionCompletions";
 import { listWeekOneOffWorkoutsForUser, listOneOffWarmups, listOneOffExercises } from "../../lib/programming/oneOffWorkouts";
+import {
+  getLiveAlternateProgramForUser,
+  listAlternateSessions,
+  listAlternateWarmups,
+  listAlternateExercises,
+  programWeekNumber,
+  programWeekCount,
+} from "../../lib/programming/alternatePrograms";
+import { listAlternateCompletionsForWeek, getAlternateCompletion } from "../../lib/programming/sessionCompletions";
 import { hasUnreadMessages } from "../../lib/programming/messages";
 import { listLiveEventsForUser, listMyResponses } from "../../lib/programming/events";
 import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
@@ -511,6 +520,38 @@ function OneOffsSection({ items, onNavigate }) {
   );
 }
 
+// Alternate programming (0110): a coach-assigned run of weeks — travel
+// programming, a welcome block, whatever the coach named it. Deliberately
+// the same ProgramCard shell as everything else, because it is a normal
+// part of her week, not a substitute for one. The heading is the coach's
+// own name for the run; nothing here says "away" unless she wrote it.
+function AlternateSection({ program, onNavigate, onPressSession }) {
+  return (
+    <ProgramCard
+      title={program.name}
+      rows={program.rows.map((row) => ({
+        ...row,
+        caption: row.label,
+        onPress: () => onPressSession(row),
+      }))}
+      target={program.rows.length}
+      completedCount={program.rows.filter((row) => row.completed).length}
+      onNavigate={onNavigate}
+      navigateLabel={`Go to ${program.name} in My Fitness`}
+      footer={
+        program.totalWeeks > 1 ? (
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{ fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, marginTop: 8 }}
+          >
+            Week {program.week} of {program.totalWeeks}
+          </Text>
+        ) : null
+      }
+    />
+  );
+}
+
 // Mid-onboarding version of the Nutrition card — same shell, but where the
 // 7 day circles would be there's a single button into the hub. Deliberately
 // no progress numbers and no "not set up yet" copy: nothing on My Week
@@ -752,7 +793,7 @@ function MyWeekSkeleton() {
   );
 }
 
-const CACHE_SECTIONS = ["groups", "spc", "nutrition", "oneOffs", "messaging", "events"];
+const CACHE_SECTIONS = ["groups", "spc", "nutrition", "oneOffs", "alternate", "messaging", "events"];
 
 export default function MemberHome() {
   const { profile } = useAuth();
@@ -764,6 +805,7 @@ export default function MemberHome() {
   const [nutrition, setNutrition] = useState(null);
   const [nutritionEnrolled, setNutritionEnrolled] = useState(false);
   const [oneOffs, setOneOffs] = useState([]);
+  const [alternate, setAlternate] = useState(null);
   const [hasUnread, setHasUnread] = useState(false);
   const [messagingEnabled, setMessagingEnabled] = useState(false);
   // Live events this member hasn't answered yet. The Events tab is where
@@ -831,6 +873,7 @@ export default function MemberHome() {
       setNutrition(cached.nutrition?.data ?? null);
     }
     if ("oneOffs" in cached) setOneOffs(cached.oneOffs);
+    if ("alternate" in cached) setAlternate(cached.alternate);
     if ("messaging" in cached) {
       setMessagingEnabled(cached.messaging?.enabled ?? false);
       setHasUnread(cached.messaging?.unread ?? false);
@@ -1118,6 +1161,54 @@ export default function MemberHome() {
         }
       })(),
 
+      // Alternate programming (0110) — travel weeks, a welcome block, and
+      // anything else a coach assigns across a run of weeks. Its own
+      // isolated section for the same reason as every other one here: it
+      // has nothing to do with group/SPC/nutrition and its failure must not
+      // hide them.
+      (async () => {
+        try {
+          const program = await retryOnce(() => getLiveAlternateProgramForUser(profile.id, today));
+          if (!program) {
+            if (!isStale()) {
+              setAlternate(null);
+              save("alternate", null);
+            }
+            return;
+          }
+          const sessions = await listAlternateSessions(program.id);
+          const week = programWeekNumber(program, today);
+          const completions = await listAlternateCompletionsForWeek(
+            profile.id,
+            sessions.map((session) => session.id),
+            week
+          );
+          const mapped = {
+            programId: program.id,
+            name: program.name,
+            week,
+            totalWeeks: programWeekCount(program),
+            rows: sessions.map((session) => ({
+              key: session.id,
+              sessionId: session.id,
+              label: session.title,
+              completed: completions.has(session.id),
+              // Every session in a run is real content copied at assign
+              // time, so there is no unpublished placeholder case the way
+              // there is for a group or SPC week.
+              published: true,
+            })),
+          };
+          if (!isStale()) {
+            setAlternate(mapped);
+            save("alternate", mapped);
+          }
+        } catch (err) {
+          console.error("My Week: failed to load alternate programming", err);
+          if (!isStale() && !("alternate" in cached)) setAlternate(null);
+        }
+      })(),
+
       // Admin-configurable kill switch/audience (lib/programming/
       // messagingSettings.js) — the unread check stays chained behind it
       // rather than running alongside, since both the icon and its dot are
@@ -1187,7 +1278,8 @@ export default function MemberHome() {
   );
 
   const readyGroups = useMemo(() => groups.filter((g) => g.status === "ready"), [groups]);
-  const hasTraining = readyGroups.length > 0 || spc?.status === "ready" || oneOffs.length > 0;
+  const hasTraining =
+    readyGroups.length > 0 || spc?.status === "ready" || oneOffs.length > 0 || (alternate?.rows.length ?? 0) > 0;
 
   // Hero precedence (README 1a): today's group session if incomplete → else
   // SPC's next incomplete → else a quiet state. Never mentions a second
@@ -1230,6 +1322,23 @@ export default function MemberHome() {
           logParams: { session: "spc", weekNumber: String(spc.weekNumber), sessionNumber: String(row.sessionNumber) },
         };
       }
+    }
+
+    const alternateRow = alternate?.rows.find((row) => !row.completed);
+    if (alternateRow) {
+      return {
+        kind: "session",
+        source: "alternate",
+        alternateRow,
+        // Not a workoutId — the meta-line fetch below branches on `source`,
+        // so this carries the session id under the same field name the
+        // other three sources use.
+        workoutId: alternateRow.sessionId,
+        eyebrow: alternate.totalWeeks > 1 ? `${alternate.name} | Week ${alternate.week}` : alternate.name,
+        chip: null,
+        title: alternateRow.label,
+        logParams: { session: "alternate", alternateSessionId: alternateRow.sessionId },
+      };
     }
 
     const oneOff = oneOffs.find((o) => !o.completed);
@@ -1275,8 +1384,15 @@ export default function MemberHome() {
     if (readyGroups.length === 0 && spc?.status !== "ready") {
       return {
         kind: "session_done",
-        title: oneOffs.length > 0 ? "Extras all done" : "Nothing scheduled",
-        meta: "Your coach will add more when there's more to do.",
+        title: alternate
+          ? `${alternate.name} done for this week`
+          : oneOffs.length > 0
+            ? "Extras all done"
+            : "Nothing scheduled",
+        meta:
+          alternate && alternate.week < alternate.totalWeeks
+            ? "Next week's sessions open Monday."
+            : "Your coach will add more when there's more to do.",
       };
     }
 
@@ -1311,7 +1427,7 @@ export default function MemberHome() {
     const target =
       readyGroups.reduce((sum, g) => sum + g.sessionsPerWeek, 0) + (spc?.status === "ready" ? spc.sessionsPerWeek : 0);
     return { kind: "rest_day", completed, target };
-  }, [readyGroups, spc, oneOffs, nutrition, nutritionEnrolled, hasTraining]);
+  }, [readyGroups, spc, oneOffs, alternate, nutrition, nutritionEnrolled, hasTraining]);
 
   // The hero's meta line ("6 exercises") is the one number My Week doesn't
   // already have in hand — everything else on this screen comes from the
@@ -1332,7 +1448,9 @@ export default function MemberHome() {
             ? await listSpcWorkoutExercises(heroWorkoutId)
             : heroSource === "one_off"
               ? await listOneOffExercises(heroWorkoutId)
-              : await listWorkoutExercises(heroWorkoutId);
+              : heroSource === "alternate"
+                ? await listAlternateExercises(heroWorkoutId)
+                : await listWorkoutExercises(heroWorkoutId);
         if (!cancelled) setHeroExerciseCount(rows.length);
       } catch (err) {
         console.error("My Week: failed to load hero exercise count", err);
@@ -1525,6 +1643,59 @@ export default function MemberHome() {
     }
   };
 
+  const openAlternatePreview = async (program, row) => {
+    setPreview({
+      visible: true,
+      loading: true,
+      error: null,
+      eyebrow: program.name,
+      title: row.label,
+      state: row.completed ? "logged" : "today",
+      // No day-of-week routing on these, same as SPC and one-offs.
+      pillLabel: row.completed ? null : "THIS WEEK",
+      logParams: { session: "alternate", alternateSessionId: row.sessionId },
+      retry: () => openAlternatePreview(program, row),
+      source: "alternate",
+      session: { alternateSessionId: row.sessionId },
+      warmups: [],
+      exercises: [],
+    });
+    try {
+      // Completion re-read from the network rather than trusted from the
+      // row, for the same reason the one-off opener does it: My Week can
+      // paint from cache, and opening an already-finished session in "log
+      // this" mode invites logging it twice.
+      const [warmups, exercises, logs, completion] = await Promise.all([
+        listAlternateWarmups(row.sessionId),
+        listAlternateExercises(row.sessionId),
+        listLogsForSession(profile.id, { alternateSessionId: row.sessionId }),
+        getAlternateCompletion(profile.id, row.sessionId, program.week),
+      ]);
+      const completed = !!completion;
+      setPreview((p) => ({
+        ...p,
+        loading: false,
+        state: completed ? "logged" : "today",
+        pillLabel: completed ? null : "THIS WEEK",
+        completedDateLabel: completion?.completed_at
+          ? formatDateMDY(dateInBoise(new Date(completion.completed_at)))
+          : null,
+        warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
+        exercises: exercises.map((ex) => ({
+          id: ex.id,
+          exerciseId: ex.exercises?.id ?? ex.exercise_id,
+          name: ex.exercises?.name ?? "Exercise",
+          detail: `${ex.sets ?? "–"} × ${ex.reps ?? "–"}`,
+          supersetGroupId: ex.superset_group_id,
+          targetSets: ex.sets,
+        })),
+        loggedSets: setsByExercise(completed ? logs : null, exercises),
+      }));
+    } catch (err) {
+      setPreview((p) => ({ ...p, loading: false, error: err.message ?? String(err) }));
+    }
+  };
+
   const closePreview = () => setPreview((p) => (p ? { ...p, visible: false } : p));
 
   // "Log this session" / "Update this session" hand off to My Fitness, which
@@ -1561,6 +1732,7 @@ export default function MemberHome() {
     if (hero?.kind !== "session") return;
     if (hero.source === "group") openGroupPreview(hero.group, hero.row);
     else if (hero.source === "spc") openSpcPreview(hero.spc, hero.row);
+    else if (hero.source === "alternate") openAlternatePreview(alternate, hero.alternateRow);
     else openOneOffPreview(hero.oneOff);
   };
 
@@ -1737,6 +1909,16 @@ export default function MemberHome() {
 
       {pendingEvents.length > 0 && (
         <EventsTeaser events={pendingEvents} onOpen={() => router.push("/(member)/events")} />
+      )}
+
+      {alternate && (
+        <AlternateSection
+          program={alternate}
+          onNavigate={() =>
+            router.push({ pathname: "/(member)/plan", params: { program: "alternate" } })
+          }
+          onPressSession={(row) => openAlternatePreview(alternate, row)}
+        />
       )}
 
       {oneOffs.length > 0 && (

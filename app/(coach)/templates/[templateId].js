@@ -3,8 +3,8 @@ import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Linkin
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams } from "expo-router";
 import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
-import { listExercises } from "../../../../lib/programming/exercises";
-import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../../lib/scrollToKeyboard";
+import { listExercises } from "../../../lib/programming/exercises";
+import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../../../lib/scrollToKeyboard";
 import {
   getTemplate,
   listTemplateWarmups,
@@ -15,13 +15,12 @@ import {
   updateTemplateExercise,
   removeTemplateExercise,
   reorderTemplateExercises,
-} from "../../../../lib/programming/templates";
-import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
-import { toastError } from "../../../../lib/toast";
-import { fonts, colors } from "../../../../lib/theme";
-import { nextPosition } from "../../../../lib/position";
+} from "../../../lib/programming/templates";
+import { ExercisePickerModal } from "../../../components/ExercisePickerModal";
+import { toastError } from "../../../lib/toast";
+import { fonts, colors } from "../../../lib/theme";
+import { nextPosition } from "../../../lib/position";
 
-const CATEGORY_LABELS = { away: "Away programming", trial: "Trial session" };
 
 // No draft/publish here — a template isn't itself visible to any member,
 // only the one_off_workout copied from it (which is published immediately
@@ -181,14 +180,14 @@ export default function TemplateBuilder() {
       }}
       scrollEventThrottle={16}
     >
-        <Link href="/(coach)/spc/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
+        <Link href="/(coach)/templates" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, marginBottom: 12 }}>
           ‹ Back to templates
         </Link>
         <Text className="text-xl" style={{ fontFamily: "ProtestStrike_400Regular", color: colors.primary }}>
           {template.name}
         </Text>
         <Text className="mb-6 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
-          {CATEGORY_LABELS[template.category] ?? template.category}
+          {template.template_categories?.name ?? "Uncategorised"}
         </Text>
 
         <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansSemiBold, letterSpacing: 0.4 }}>

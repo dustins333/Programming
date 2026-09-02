@@ -34,7 +34,7 @@
     { "source": "/spc/print/:blockId", "destination": "/spc/print/[blockId]" },
     { "source": "/spc/overview/:userId", "destination": "/spc/overview/[userId]" },
     { "source": "/spc/sessions/:sessionId", "destination": "/spc/sessions/[sessionId]" },
-    { "source": "/spc/templates/:templateId", "destination": "/spc/templates/[templateId]" },
+    { "source": "/templates/:templateId", "destination": "/templates/[templateId]" },
     { "source": "/spc/:userId", "destination": "/spc/[userId]" }
   ]
 }

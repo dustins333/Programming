@@ -60,6 +60,18 @@ export default function More() {
         </Text>
       </Pressable>
 
+      <Pressable
+        onPress={() => router.push("/(coach)/templates")}
+        className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+      >
+        <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+          Templates
+        </Text>
+        <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Away programming, welcome weeks, trials
+        </Text>
+      </Pressable>
+
       {isAdmin || profile?.can_view_exercise_library ? (
         <Pressable
           onPress={() => router.push("/(coach)/exercises/review")}

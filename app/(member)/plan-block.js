@@ -3,7 +3,7 @@ import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
-import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
+import { todayInBoise, dateInBoise, addDays } from "../../lib/boiseDate";
 import { currentWeekNumber, blockLengthWeeks, sessionNumberForDate, DEFAULT_SESSION_DAYS } from "../../lib/programming/schedule";
 import {
   listMyAssignments,
@@ -19,6 +19,7 @@ import { formatDateMDY } from "../../lib/formatDate";
 import { SessionSheet } from "../../components/SessionSheet";
 import { BlockProgressHero } from "../../components/BlockProgressHero";
 import { BlockWeekCard } from "../../components/BlockWeekCard";
+import { listAlternateProgramsForUser, programEndDate } from "../../lib/programming/alternatePrograms";
 import { PressFade } from "../../components/PressFade";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { fonts, colors, type } from "../../lib/theme";
@@ -131,7 +132,33 @@ export default function PlanBlock() {
           console.error("Plan block: couldn't number the block", err);
         }
 
-        return { status: "ready", program, assignment, assignments, block, blockNumber, workouts, completions, source, week };
+        // Weeks she was away for (0110). Isolated like the block number
+        // above and for the same reason: it changes a label, so a failure
+        // must not take the page down. Only runs with the pause ticked
+        // count — a deload assigned while she was still in the gym is not
+        // a reason to stop reporting a missed session.
+        let awayRuns = [];
+        try {
+          awayRuns = (await listAlternateProgramsForUser(profile.id))
+            .filter((run) => run.pause_missed_flags)
+            .map((run) => ({ name: run.name, start: run.start_date, end: programEndDate(run) }));
+        } catch (err) {
+          console.error("Plan block: couldn't load away runs", err);
+        }
+
+        return {
+          status: "ready",
+          program,
+          assignment,
+          assignments,
+          block,
+          blockNumber,
+          workouts,
+          completions,
+          source,
+          week,
+          awayRuns,
+        };
       });
       if (result.status === "ready") setCurrentWeek(result.week);
       setState(result);
@@ -162,7 +189,7 @@ export default function PlanBlock() {
   // session today maps to, and a per-week status.
   const blockView = useMemo(() => {
     if (state.status !== "ready") return null;
-    const { program, assignment, workouts, completions } = state;
+    const { program, assignment, workouts, completions, block, awayRuns } = state;
     const slots = program.sessions_per_week ?? 3;
     // The member's own weekly commitment, not the program's default — a 2×
     // member's week is complete at two even though three are published.
@@ -183,13 +210,35 @@ export default function PlanBlock() {
         const isCurrent = week === currentWeek;
         const isPast = week < currentWeek;
         const missed = Math.max(0, target - doneCount);
-        const status = isCurrent ? "current" : isPast ? (missed === 0 ? "complete" : "short") : "upcoming";
+
+        // Blocks always start on a Monday (0063), so week N is exactly the
+        // seven days from start + (N-1)*7 — the same calendar week an
+        // alternate run is measured in.
+        const weekStart = addDays(block.block_start_date, (week - 1) * 7);
+        const weekEnd = addDays(weekStart, 6);
+        const awayRun = (awayRuns ?? []).find((run) => run.start <= weekEnd && weekStart <= run.end);
+
+        // A week she was away for is never a shortfall. It is NOT relabelled
+        // "Complete" either — she genuinely didn't do these — it gets its own
+        // quiet state naming the run, so the page stays honest in both
+        // directions. A week she completed anyway keeps its Complete.
+        const isAwayWeek = !!awayRun && missed > 0;
+        const status = isCurrent
+          ? "current"
+          : isPast
+            ? missed === 0
+              ? "complete"
+              : isAwayWeek
+                ? "away"
+                : "short"
+            : "upcoming";
 
         return {
           week,
           status,
           missed,
           doneCount,
+          awayLabel: isAwayWeek ? awayRun.name : null,
           sessions: sessions.map((workout) => {
             const done = completions.has(workout.id);
             const isToday = isCurrent && workout.session_number === todaySession;
@@ -198,7 +247,9 @@ export default function PlanBlock() {
               // A logged session reads as plain white inside its week's tint
               // rather than shouting — the week container is already carrying
               // that story. Only "today" and "missed" get their own fill.
-              state: done ? "done" : isToday ? "today" : isPast ? "missed" : "upcoming",
+              // An away week's untouched tiles read as plain, not as the
+              // dashed red "missed" box — nothing was owed.
+              state: done ? "done" : isToday ? "today" : isPast && !isAwayWeek ? "missed" : "upcoming",
             };
           }),
         };
@@ -396,6 +447,7 @@ export default function PlanBlock() {
               weekNumber={week.week}
               status={week.status}
               missed={week.missed}
+              awayLabel={week.awayLabel}
               slots={blockView.slots}
               sessions={week.sessions.map((s) => ({
                 key: s.workout.id,

@@ -15,6 +15,16 @@ import { getCurrentSpcBlock } from "../../../lib/programming/spcBlocks";
 import { getClient as getNutritionClient, createOrReactivateClient, setClientStatus as setNutritionStatus } from "../../../lib/nutrition/clients";
 import { listTemplates } from "../../../lib/programming/templates";
 import { listOneOffWorkoutsForUser, createOneOffFromTemplate, deleteOneOffWorkout } from "../../../lib/programming/oneOffWorkouts";
+import {
+  listAlternateProgramsForUser,
+  assignAlternateProgram,
+  endAlternateProgram,
+  deleteAlternateProgram,
+  programEndDate,
+  isProgramLive,
+  programWeekNumber,
+  programWeekCount,
+} from "../../../lib/programming/alternatePrograms";
 import { listCompletedOneOffWorkoutIds } from "../../../lib/programming/sessionCompletions";
 import { listRecentSessionsForUser, listUpcomingSessionsForUser } from "../../../lib/programming/coachLogs";
 import { listMessages, sendStaffMessage } from "../../../lib/programming/messages";
@@ -23,7 +33,7 @@ import { sendPush } from "../../../lib/notifications/sendPush";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { SegmentedControl } from "../../../components/SegmentedControl";
-import { AssignOneOffModal } from "../../../components/AssignOneOffModal";
+import { AssignAlternateModal } from "../../../components/coach/AssignAlternateModal";
 import { RecentSessionsCard } from "../../../components/RecentSessionsCard";
 import { UpcomingSessionsCard } from "../../../components/UpcomingSessionsCard";
 import { MessageThread } from "../../../components/MessageThread";
@@ -45,7 +55,14 @@ import { getClientNutritionSnapshot } from "../../../lib/nutrition/clientSnapsho
 import { getExerciseStats } from "../../../lib/programming/exerciseStats";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { toastError } from "../../../lib/toast";
-import { confirmRemoveOneOff, confirmArchiveNutritionClient, confirmDelete, confirmRemoveGroupMembership } from "../../../lib/confirmDialog";
+import {
+  confirmRemoveOneOff,
+  confirmArchiveNutritionClient,
+  confirmDelete,
+  confirmRemoveGroupMembership,
+  confirmEndAlternateProgram,
+  confirmDeleteAlternateProgram,
+} from "../../../lib/confirmDialog";
 import { SPC_ENROLLMENT_LABELS, SPC_ENROLLMENT_TONES } from "../../../lib/programming/spcState";
 import { todayInBoise, addDays, dayOfWeekInBoise } from "../../../lib/boiseDate";
 import { fonts, colors } from "../../../lib/theme";
@@ -258,6 +275,10 @@ export default function ClientProfile() {
   const [spcError, setSpcError] = useState(null);
   const [nutritionError, setNutritionError] = useState(null);
   const [oneOffs, setOneOffs] = useState([]);
+  const [alternatePrograms, setAlternatePrograms] = useState([]);
+  // Own error slot, isolated from the page's main load: alternate
+  // programming is one card, and an unrun 0110 must not blank a profile.
+  const [alternateError, setAlternateError] = useState(null);
   const [completedOneOffIds, setCompletedOneOffIds] = useState(new Set());
   const [templates, setTemplates] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
@@ -381,6 +402,13 @@ export default function ClientProfile() {
       setPrograms(programRows);
       setOneOffs(oneOffRows);
       setCompletedOneOffIds(completedIds);
+
+      try {
+        setAlternatePrograms(await listAlternateProgramsForUser(userId));
+        setAlternateError(null);
+      } catch (err) {
+        setAlternateError(err.message ?? String(err));
+      }
       setTemplates(templateRows);
 
       const blocks = await Promise.all(assignmentRows.map((a) => getCurrentBlock(a.group_program_id)));
@@ -567,12 +595,48 @@ export default function ClientProfile() {
     }
   };
 
-  const handleAssignOneOff = async (template) => {
+  // The "single session" shape. Each pick becomes its own independent
+  // one-off, exactly as before — assigning three trial sessions at once is
+  // three assignments, not one bundle.
+  const handleAssignSingle = async (templates) => {
+    for (const template of templates) {
+      await createOneOffFromTemplate({
+        userId,
+        templateId: template.id,
+        templateName: template.name,
+        assignedBy: profile.id,
+      });
+    }
+    await load();
+  };
+
+  // The "across weeks" shape. Errors propagate to the modal, which keeps
+  // itself open with the coach's choices intact and shows the reason (an
+  // overlap names the run that's in the way).
+  const handleAssignRun = async (input) => {
+    await assignAlternateProgram({ ...input, userId, assignedBy: profile.id });
+    await load();
+  };
+
+  const handleEndAlternate = async (program) => {
+    const proceed = await confirmEndAlternateProgram(program.name);
+    if (!proceed) return;
     try {
-      await createOneOffFromTemplate({ userId, templateId: template.id, templateName: template.name, assignedBy: profile.id });
+      await endAlternateProgram(program.id);
       await load();
     } catch (err) {
-      toastError("Failed to assign one-off workout", err);
+      toastError("Couldn't end that assignment", err);
+    }
+  };
+
+  const handleDeleteAlternate = async (program) => {
+    const proceed = await confirmDeleteAlternateProgram(program.name);
+    if (!proceed) return;
+    try {
+      await deleteAlternateProgram(program.id);
+      await load();
+    } catch (err) {
+      toastError("Couldn't delete that assignment", err);
     }
   };
 
@@ -1038,42 +1102,121 @@ export default function ClientProfile() {
           </View>
         </View>
 
-        <SettingsCard icon="add-circle-outline" title="One-off workouts">
-          {oneOffs.length === 0 ? (
+        <SettingsCard icon="add-circle-outline" title="Alternate programming">
+          {alternateError ? (
+            <View className="mb-3 rounded-lg border border-stone-200 px-4 py-3">
+              <Text style={{ fontFamily: fonts.sans, color: "#b23a22" }}>
+                Couldn't load their assignments: {alternateError}
+              </Text>
+              <Pressable onPress={load} hitSlop={8} style={{ marginTop: 6 }}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {alternatePrograms.length === 0 && oneOffs.length === 0 && !alternateError ? (
             <Text className="text-stone-400" style={{ fontFamily: fonts.sans }}>
-              None assigned — away workouts or trial sessions show up here and in the client's My Fitness tab.
+              Nothing assigned. Away programming, welcome weeks and trial sessions all live here.
             </Text>
-          ) : (
-            oneOffs.map((oneOff) => {
-              const completed = completedOneOffIds.has(oneOff.id);
-              return (
-                <View key={oneOff.id} className="mb-2 flex-row items-center justify-between rounded-lg border border-stone-200 px-4 py-3">
-                  <View className="flex-1">
+          ) : null}
+
+          {alternatePrograms.map((program) => {
+            const live = isProgramLive(program);
+            const ended = program.ended_at != null;
+            const totalWeeks = programWeekCount(program);
+            const meta = live
+              ? `Week ${programWeekNumber(program)} of ${totalWeeks} · through ${formatDateMDY(programEndDate(program))}`
+              : ended
+                ? `Ended ${formatDateMDY(program.ended_at)}`
+                : program.start_date > todayInBoise()
+                  ? `Starts ${formatDateMDY(program.start_date)}`
+                  : `Finished ${formatDateMDY(programEndDate(program))}`;
+            const sessionNames = (program.alternate_sessions ?? [])
+              .slice()
+              .sort((a, b) => a.position - b.position)
+              .map((session) => session.title)
+              .join(", ");
+            return (
+              <View key={program.id} className="mb-2 rounded-lg border border-stone-200 px-4 py-3">
+                <View className="flex-row items-start justify-between">
+                  <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
-                      {oneOff.title}
+                      {program.name}
                     </Text>
-                    <Text className="text-xs" style={{ fontFamily: fonts.sans, color: completed ? "#4d6142" : "#a8a29e" }}>
-                      {completed ? "✓ Completed" : oneOff.status === "published" ? "Not yet completed" : "Draft"}
+                    <Text
+                      className="text-xs"
+                      style={{ fontFamily: fonts.sans, color: live ? "#4d6142" : colors.muted }}
+                    >
+                      {meta}
                     </Text>
+                    {sessionNames ? (
+                      <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
+                        {sessionNames}
+                      </Text>
+                    ) : null}
+                    {program.pause_missed_flags ? (
+                      <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
+                        Normal sessions not marked missed
+                      </Text>
+                    ) : null}
                   </View>
-                  <Pressable
-                    onPress={() => handleDeleteOneOff(oneOff)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    accessibilityLabel={`Remove one-off workout ${oneOff.title}`}
-                  >
-                    <Text className="text-stone-400">✕</Text>
-                  </Pressable>
+                  <View className="flex-row items-center gap-3">
+                    {live ? (
+                      <Pressable onPress={() => handleEndAlternate(program)} hitSlop={8}>
+                        <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, fontSize: 13 }}>
+                          End now
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      onPress={() => handleDeleteAlternate(program)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityLabel={`Delete assignment ${program.name}`}
+                    >
+                      <Text className="text-stone-400">✕</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              );
-            })
-          )}
+              </View>
+            );
+          })}
+
+          {oneOffs.map((oneOff) => {
+            const completed = completedOneOffIds.has(oneOff.id);
+            return (
+              <View
+                key={oneOff.id}
+                className="mb-2 flex-row items-center justify-between rounded-lg border border-stone-200 px-4 py-3"
+              >
+                <View className="flex-1" style={{ minWidth: 0 }}>
+                  <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                    {oneOff.title}
+                  </Text>
+                  <Text
+                    className="text-xs"
+                    style={{ fontFamily: fonts.sans, color: completed ? "#4d6142" : colors.muted }}
+                  >
+                    Single session · {completed ? "Completed" : oneOff.status === "published" ? "Not yet completed" : "Draft"}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => handleDeleteOneOff(oneOff)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel={`Remove one-off workout ${oneOff.title}`}
+                >
+                  <Text className="text-stone-400">✕</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+
           <Pressable
             onPress={() => setAssignModalVisible(true)}
             className="mt-3 self-start rounded-lg px-4 py-2.5"
             style={{ backgroundColor: colors.primary }}
           >
             <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-              + Assign one-off
+              + Assign
             </Text>
           </Pressable>
         </SettingsCard>
@@ -1116,11 +1259,13 @@ export default function ClientProfile() {
           </Card>
         ) : null}
 
-        <AssignOneOffModal
+        <AssignAlternateModal
           visible={assignModalVisible}
           templates={templates}
+          existingPrograms={alternatePrograms}
           onClose={() => setAssignModalVisible(false)}
-          onPick={handleAssignOneOff}
+          onAssignSingle={handleAssignSingle}
+          onAssignRun={handleAssignRun}
         />
       </ScrollView>
       <CoachMessageBubble userId={userId} clientName={member.name} />

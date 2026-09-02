@@ -3,8 +3,8 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-nati
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DndContext, PointerSensor, useSensor, useSensors, pointerWithin } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { useAuth } from "../../../../lib/auth/AuthProvider";
-import { listExercises, createExercise, isLibraryReviewer } from "../../../../lib/programming/exercises";
+import { useAuth } from "../../../lib/auth/AuthProvider";
+import { listExercises, createExercise, isLibraryReviewer } from "../../../lib/programming/exercises";
 import {
   getTemplate,
   listTemplateWarmups,
@@ -16,12 +16,12 @@ import {
   updateTemplateExercise,
   removeTemplateExercise,
   reorderTemplateExercises,
-} from "../../../../lib/programming/templates";
-import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
-import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
-import { ExerciseLibrarySidebar } from "../../../../components/ExerciseLibrarySidebar";
-import { SessionPreviewModal } from "../../../../components/SessionPreviewModal";
-import { PressFade } from "../../../../components/PressFade";
+} from "../../../lib/programming/templates";
+import { ExerciseFormModal } from "../../../components/ExerciseFormModal";
+import { ExercisePickerModal } from "../../../components/ExercisePickerModal";
+import { ExerciseLibrarySidebar } from "../../../components/ExerciseLibrarySidebar";
+import { SessionPreviewModal } from "../../../components/SessionPreviewModal";
+import { PressFade } from "../../../components/PressFade";
 import {
   BUILDER_CANVAS,
   BUILDER_CARD_BORDER,
@@ -31,11 +31,11 @@ import {
   WARMUP_SLOTS,
   SortableLift,
   schemeLabel,
-} from "../../../../components/builder/SessionBuilderParts";
-import { liftLabelsFor } from "../../../../lib/programming/sessionLabels";
-import { fonts, colors } from "../../../../lib/theme";
-import { toastError, showToast } from "../../../../lib/toast";
-import { nextPosition } from "../../../../lib/position";
+} from "../../../components/builder/SessionBuilderParts";
+import { liftLabelsFor } from "../../../lib/programming/sessionLabels";
+import { fonts, colors } from "../../../lib/theme";
+import { toastError, showToast } from "../../../lib/toast";
+import { nextPosition } from "../../../lib/position";
 
 // Template builder, coach web — the third consumer of the shared session
 // builder (design_handoff_coach_web_v2, screen 06).
@@ -56,7 +56,6 @@ import { nextPosition } from "../../../../lib/position";
 // template_warmups also has no sets/reps columns (unlike group and SPC), so
 // the warm-up grid runs with editable={false} and lists the movement alone.
 
-const CATEGORY_LABELS = { away: "Away programming", trial: "Trial session" };
 
 export default function TemplateBuilderWeb() {
   const { templateId } = useLocalSearchParams();
@@ -324,7 +323,7 @@ export default function TemplateBuilderWeb() {
           onNewExercise={() => setNewExerciseModalVisible(true)}
           onInsertLift={handleInsertExercise}
           onInsertWarmup={handleAddWarmup}
-          onBack={() => (router.canGoBack() ? router.back() : router.push("/(coach)/spc/templates"))}
+          onBack={() => (router.canGoBack() ? router.back() : router.push("/(coach)/templates"))}
         />
 
         <View style={{ flex: 1 }}>
@@ -342,7 +341,7 @@ export default function TemplateBuilderWeb() {
           >
             <View style={{ minWidth: 0 }}>
               <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-                Template · {CATEGORY_LABELS[template.category] ?? template.category}
+                Template · {template.template_categories?.name ?? "Uncategorised"}
               </Text>
               <Text style={{ fontFamily: fonts.display, fontSize: 22, color: "#2a211c" }}>{template.name}</Text>
             </View>

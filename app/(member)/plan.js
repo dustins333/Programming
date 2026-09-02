@@ -20,6 +20,14 @@ import {
   listOneOffExercises,
 } from "../../lib/programming/oneOffWorkouts";
 import {
+  getLiveAlternateProgramForUser,
+  listAlternateSessions,
+  listAlternateWarmups,
+  listAlternateExercises,
+  programWeekNumber,
+  programWeekCount,
+} from "../../lib/programming/alternatePrograms";
+import {
   getGroupCompletion,
   listGroupCompletionsForWorkouts,
   listSpcCompletionDetailsForWorkouts,
@@ -28,6 +36,9 @@ import {
   finalizeOneOffSession,
   unfinalizeGroupSession,
   unfinalizeSpcSession,
+  listAlternateCompletionsForWeek,
+  finalizeAlternateSession,
+  unfinalizeAlternateSession,
 } from "../../lib/programming/sessionCompletions";
 import { retryOnce } from "../../lib/retry";
 import { clearScreen, SCREEN_MY_WEEK } from "../../lib/screenCache";
@@ -180,6 +191,7 @@ export default function MyFitness() {
   const [spcDetailError, setSpcDetailError] = useState(null);
   const [spcDetailRetryKey, setSpcDetailRetryKey] = useState(0);
   const [oneOffs, setOneOffs] = useState([]);
+  const [alternate, setAlternate] = useState(null);
   const [goal, setGoal] = useState(null);
   const [hasNutrition, setHasNutrition] = useState(false);
   // Set once the member picks an option from ProgramPickerModal — either the
@@ -501,6 +513,61 @@ export default function MyFitness() {
       })(),
 
       (async () => {
+      // Alternate programming (0110). Isolated exactly like one-offs above:
+      // a travel run has nothing to do with group/SPC and its failure must
+      // not hide either.
+      try {
+        const program = await retryOnce(() => getLiveAlternateProgramForUser(profile.id, today));
+        if (!program) {
+          if (!isStale()) setAlternate(null);
+          return;
+        }
+        const sessions = await listAlternateSessions(program.id);
+        const week = programWeekNumber(program, today);
+        const withContent = await Promise.all(
+          sessions.map(async (session) => {
+            const [warmupRows, exerciseRows] = await Promise.all([
+              listAlternateWarmups(session.id),
+              listAlternateExercises(session.id),
+            ]);
+            return {
+              session,
+              warmups: warmupRows,
+              exercises: exerciseRows.map((ex) => ({
+                id: ex.id,
+                exercise: ex.exercises,
+                targetSets: ex.sets,
+                targetReps: ex.reps,
+                repScheme: ex.rep_scheme,
+                supersetGroupId: ex.superset_group_id,
+                tempo: ex.tempo,
+                rest: ex.rest,
+                notes: ex.notes,
+              })),
+            };
+          })
+        );
+        const completions = await listAlternateCompletionsForWeek(
+          profile.id,
+          sessions.map((session) => session.id),
+          week
+        );
+        if (!isStale()) {
+          setAlternate({
+            program,
+            week,
+            totalWeeks: programWeekCount(program),
+            sessions: withContent,
+            completions,
+          });
+        }
+      } catch (err) {
+        console.error("My Fitness: failed to load alternate programming", err);
+        if (!isStale()) setAlternate(null);
+      }
+      })(),
+
+      (async () => {
       // What their coach wrote they're working toward. Own try/catch, same as
       // every other domain on this page — and this one throws outright until
       // migration 0078 is run.
@@ -699,6 +766,29 @@ export default function MyFitness() {
     toastSuccess("Workout finalized — nice work!");
   };
 
+  // Finalize is a two-way toggle here, same as group and SPC — an
+  // accidental tap has to be undoable, and unlike a one-off (which is done
+  // for good) an away session repeats next week, so the completion is
+  // per-week and re-openable.
+  const handleFinalizeAlternate = async (sessionId) => {
+    if (!alternate) return;
+    const already = alternate.completions.has(sessionId);
+    if (already) {
+      await unfinalizeAlternateSession(profile.id, sessionId, alternate.week);
+    } else {
+      await finalizeAlternateSession(profile.id, sessionId, alternate.week);
+    }
+    void clearScreen(SCREEN_MY_WEEK, profile.id);
+    setAlternate((prev) => {
+      if (!prev) return prev;
+      const next = new Map(prev.completions);
+      if (already) next.delete(sessionId);
+      else next.set(sessionId, new Date().toISOString());
+      return { ...prev, completions: next };
+    });
+    if (!already) toastSuccess("Workout finalized — nice work!");
+  };
+
   if (groupsLoading) {
     return (
       <View className="flex-1 items-center justify-center" style={{ backgroundColor: CANVAS }}>
@@ -727,8 +817,17 @@ export default function MyFitness() {
     params.session === "one_off" && params.oneOffWorkoutId
       ? oneOffs.find((o) => o.workout.id === params.oneOffWorkoutId)
       : null;
+  const explicitAlternateTarget =
+    params.session === "alternate" && params.alternateSessionId && alternate
+      ? alternate.sessions.find((entry) => entry.session.id === params.alternateSessionId)
+      : null;
   const validProgramParam =
-    groupProgramIds.includes(params.program) || params.program === "spc" || params.program === "extras" ? params.program : null;
+    groupProgramIds.includes(params.program) ||
+    params.program === "spc" ||
+    params.program === "extras" ||
+    (params.program === "alternate" && alternate)
+      ? params.program
+      : null;
 
   const candidates = [
     ...groups
@@ -747,6 +846,17 @@ export default function MyFitness() {
           },
         ]
       : []),
+    ...(alternate
+      ? [
+          {
+            key: "alternate",
+            label: alternate.totalWeeks > 1
+              ? `${alternate.program.name} — Week ${alternate.week} of ${alternate.totalWeeks}`
+              : alternate.program.name,
+            focus: { type: "alternate" },
+          },
+        ]
+      : []),
   ];
 
   // A pick made from the hero's program chip has to outrank the params that
@@ -762,6 +872,7 @@ export default function MyFitness() {
     params.sessionNumber,
     params.weekNumber,
     params.oneOffWorkoutId,
+    params.alternateSessionId,
     params.program,
   ]
     .map((p) => p ?? "")
@@ -771,7 +882,13 @@ export default function MyFitness() {
   // change the signature and quietly throw away the pick, so coming back from
   // My Week re-asked "which session are you logging?" every time. An absence
   // of params is not a fresh choice; only a real deep link supersedes one.
-  const hasNavParams = !!(params.session || params.program || params.groupProgramId || params.oneOffWorkoutId);
+  const hasNavParams = !!(
+    params.session ||
+    params.program ||
+    params.groupProgramId ||
+    params.oneOffWorkoutId ||
+    params.alternateSessionId
+  );
   const activePick = pickedFocus && (!hasNavParams || pickedFocus.signature === paramSignature) ? pickedFocus.focus : null;
 
   let focus = null;
@@ -783,13 +900,17 @@ export default function MyFitness() {
     focus = { type: "spc" };
   } else if (explicitOneOffTarget) {
     focus = { type: "extras", oneOffWorkoutId: explicitOneOffTarget.workout.id };
+  } else if (explicitAlternateTarget) {
+    focus = { type: "alternate", alternateSessionId: explicitAlternateTarget.session.id };
   } else if (validProgramParam) {
     focus =
       validProgramParam === "spc"
         ? { type: "spc" }
         : validProgramParam === "extras"
           ? { type: "extras" }
-          : { type: "group", groupProgramId: validProgramParam };
+          : validProgramParam === "alternate"
+            ? { type: "alternate" }
+            : { type: "group", groupProgramId: validProgramParam };
   } else if (candidates.length === 1) {
     focus = candidates[0].focus;
   }
@@ -855,7 +976,10 @@ export default function MyFitness() {
     };
   }
 
-  if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && spcLoadError) {
+  // `!alternate` on both of these: a member whose only training this week is
+  // an away run has no group and no SPC, and without it she was told she
+  // isn't assigned to a program while looking at one.
+  if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && !alternate && spcLoadError) {
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
         <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
@@ -868,7 +992,7 @@ export default function MyFitness() {
     );
   }
 
-  if (groups.length === 0 && !hasSpc && oneOffs.length === 0) {
+  if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && !alternate) {
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
         {hasNutrition ? (
@@ -917,6 +1041,25 @@ export default function MyFitness() {
           tabs={activeFinalize.tabs}
           selectedTab={activeFinalize.selectedTab}
           onSelectTab={activeFinalize.onSelectTab}
+          goal={goal}
+        />
+      </View>
+    ) : focus?.type === "alternate" && alternate ? (
+      // An away run has one to three sessions with no day-of-week routing,
+      // so like Extras there is no single activeFinalize session. It still
+      // gets the same header identity — the coach's own name for the run,
+      // and which week of it she's in.
+      <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
+        <SessionHeroBar
+          programLabel={alternate.program.name}
+          onPickProgram={candidates.length > 1 ? () => setPickerOpen(true) : null}
+          eyebrowDetail={alternate.totalWeeks > 1 ? `Week ${alternate.week} of ${alternate.totalWeeks}` : null}
+          title={
+            alternate.sessions.length === 1
+              ? alternate.sessions[0].session.title
+              : `${alternate.sessions.length} sessions this week`
+          }
+          onOpenSettings={() => router.push("/(member)/settings")}
           goal={goal}
         />
       </View>
@@ -1167,6 +1310,35 @@ export default function MyFitness() {
           )}
         </>
       )}
+
+      {!needsPicker &&
+        focus?.type === "alternate" &&
+        alternate &&
+        alternate.sessions
+          .filter((entry) => !focus.alternateSessionId || entry.session.id === focus.alternateSessionId)
+          .map(({ session, warmups, exercises }) => (
+            <FitnessCard key={session.id} title={session.title}>
+              <WarmupCard warmups={warmups} />
+              <SessionLogger
+                userId={profile.id}
+                datePerformed={todayInBoise()}
+                source="alternate"
+                exercises={exercises}
+                isCompleted={alternate.completions.has(session.id)}
+                session={{ alternateSessionId: session.id }}
+                onFinalize={() => handleFinalizeAlternate(session.id)}
+                layout="session"
+                exerciseCompletionType="alternate"
+                weekNumber={alternate.week}
+                scrollViewRef={scrollViewRef}
+                scrollOffsetRef={scrollOffsetRef}
+                restReturnTo={{
+                  pathname: "/(member)/plan",
+                  params: { session: "alternate", alternateSessionId: session.id },
+                }}
+              />
+            </FitnessCard>
+          ))}
 
       {!needsPicker &&
         focus?.type === "extras" &&

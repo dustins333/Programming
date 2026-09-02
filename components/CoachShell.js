@@ -46,6 +46,11 @@ const NAV_SECTIONS = [
       // add an exercise and program it the same minute. What
       // can_view_exercise_library gates now is the review queue below.
       { key: "exercises", label: "Exercise Library", href: "/(coach)/exercises", icon: "library" },
+      // Moved out of SPC (it was buried at spc/templates) once away
+      // programming made it a second, equally important assign path. Not
+      // permission-gated for the same reason the exercise library isn't:
+      // any coach who can build a session can build a reusable one.
+      { key: "templates", label: "Templates", href: "/(coach)/templates", icon: "documents" },
       {
         key: "exercise-review",
         label: "Library Review",

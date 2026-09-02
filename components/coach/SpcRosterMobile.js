@@ -491,7 +491,7 @@ export function SpcRosterMobile() {
           <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 27, color: colors.primary }}>
             SPC
           </Text>
-          <PressFade onPress={() => router.push("/(coach)/spc/templates")} hitSlop={8}>
+          <PressFade onPress={() => router.push("/(coach)/templates")} hitSlop={8}>
             <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
               Templates ›
             </Text>

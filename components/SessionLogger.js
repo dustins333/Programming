@@ -10,6 +10,9 @@ import {
   unmarkGroupExerciseComplete,
   unmarkSpcExerciseComplete,
   unmarkOneOffExerciseComplete,
+  listAlternateExerciseCompletionsForItems,
+  markAlternateExerciseComplete,
+  unmarkAlternateExerciseComplete,
 } from "../lib/programming/exerciseCompletions";
 import { PressFade } from "./PressFade";
 import { fonts, colors, type } from "../lib/theme";
@@ -53,7 +56,8 @@ export function SessionLogger({
   exerciseCompletionType,
   weekNumber,
   // Which session's logs these are — {groupWorkoutId} | {spcWorkoutId,
-  // weekNumber} | {oneOffWorkoutId}, mirroring session_completions. Threaded
+  // weekNumber} | {oneOffWorkoutId} | {alternateSessionId}, mirroring
+  // session_completions. Threaded
   // straight to ExerciseCard, which writes it onto every set (0063).
   session,
   restReturnTo,
@@ -131,7 +135,11 @@ export function SessionLogger({
           ? await listGroupExerciseCompletionsForItems(userId, ids)
           : exerciseCompletionType === "spc"
             ? await listSpcExerciseCompletionsForItems(userId, ids, weekNumber)
-            : await listOneOffExerciseCompletionsForItems(userId, ids);
+            : exerciseCompletionType === "alternate"
+              ? // Keyed by week like SPC, not like a one-off: one alternate
+                // session row repeats across every week of the run (0110).
+                await listAlternateExerciseCompletionsForItems(userId, ids, weekNumber)
+              : await listOneOffExerciseCompletionsForItems(userId, ids);
       setCompletions(set);
       // Leaving the tab and coming back re-runs My Fitness's load(), which
       // flips it to its loading state and genuinely unmounts this whole
@@ -225,6 +233,7 @@ export function SessionLogger({
   const markCompleteFor = (item) => {
     if (exerciseCompletionType === "group") return markGroupExerciseComplete(userId, item.id);
     if (exerciseCompletionType === "spc") return markSpcExerciseComplete(userId, item.id, weekNumber);
+    if (exerciseCompletionType === "alternate") return markAlternateExerciseComplete(userId, item.id, weekNumber);
     if (exerciseCompletionType === "one_off") return markOneOffExerciseComplete(userId, item.id);
     return Promise.resolve();
   };
@@ -232,6 +241,7 @@ export function SessionLogger({
   const unmarkCompleteFor = (item) => {
     if (exerciseCompletionType === "group") return unmarkGroupExerciseComplete(userId, item.id);
     if (exerciseCompletionType === "spc") return unmarkSpcExerciseComplete(userId, item.id, weekNumber);
+    if (exerciseCompletionType === "alternate") return unmarkAlternateExerciseComplete(userId, item.id, weekNumber);
     if (exerciseCompletionType === "one_off") return unmarkOneOffExerciseComplete(userId, item.id);
     return Promise.resolve();
   };

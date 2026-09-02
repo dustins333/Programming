@@ -40,6 +40,11 @@ const WEEK_TONES = {
   // there's no one person's completion to colour it by), so every week reads
   // plain and only "this week" is marked.
   neutral: { bg: "#fdfbf8", border: "#ece7e1", borderWidth: 1, label: colors.muted, status: colors.muted, tile: "#ece7e1" },
+  // A week the member was on alternate programming (0110) with missed-flag
+  // pausing on. Deliberately its own quiet state rather than being dressed
+  // up as "complete": she didn't do these sessions, and saying she did
+  // would be a lie. It just isn't a shortfall either — she was away.
+  away: { bg: "#f6f4f1", border: "#e9e5e0", borderWidth: 1, label: colors.muted, status: colors.muted, tile: "#e9e5e0" },
 };
 
 const MISSED_BORDER = "#e3b8ac";
@@ -51,8 +56,9 @@ const MUTED = colors.muted;
 // "Complete" / "1 missed" / "This week" / "Coming up". The shortfall is
 // spelled out rather than shown as "2 of 3" — a ratio invites a 2× member to
 // read her own complete week as incomplete.
-export function weekStatusLabel(status, missed) {
+export function weekStatusLabel(status, missed, awayLabel) {
   if (status === "complete") return "Complete";
+  if (status === "away") return awayLabel || "Away";
   if (status === "short") return `${missed} missed`;
   if (status === "current") return "This week";
   if (status === "neutral") return "";
@@ -100,7 +106,7 @@ function SessionTile({ label, tone, state, onPress }) {
 // slots: how many tiles a full week of this program holds — the row is padded
 // out to it so an unpublished session leaves a gap rather than widening its
 // siblings.
-export function BlockWeekCard({ weekNumber, status, missed, sessions, slots }) {
+export function BlockWeekCard({ weekNumber, status, missed, sessions, slots, awayLabel }) {
   const tone = WEEK_TONES[status] ?? WEEK_TONES.upcoming;
   const spacers = Math.max(0, (slots ?? sessions.length) - sessions.length);
   return (
@@ -136,7 +142,7 @@ export function BlockWeekCard({ weekNumber, status, missed, sessions, slots }) {
           </View>
         ) : (
           <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: tone.status }}>
-            {weekStatusLabel(status, missed)}
+            {weekStatusLabel(status, missed, awayLabel)}
           </Text>
         )}
       </View>
