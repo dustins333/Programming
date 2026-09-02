@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#e4e0da;font-family:'Montserrat',sans-serif;-webkit-font-smoothing:antialiased}
+  *{box-sizing:border-box}
+  a{color:#8a5140;text-decoration:none}a:hover{color:#a46a57}
+</style>
+</helmet>
+
+<section style="padding:56px 56px 0 56px;display:flex;flex-direction:column;gap:26px">
+  <div style="display:flex;flex-direction:column;gap:6px;max-width:1180px">
+    <span style="font-weight:700;font-size:15px;color:#2a211c">Turn 4 — auto-align, with a manual override</span>
+    <span style="font-size:13px;color:#6f6862;text-wrap:pretty;line-height:1.55">On-device pose detection returns a nose and two ankles per photo. Nose-to-ankle distance gives the scale; you translate so the crown lands on a fixed Y and the hips centre horizontally. That is exactly what I did by hand to make these three line up — it is about fifteen lines of math once you have the keypoints. It runs offline in under a second per photo, so it can happen silently at import. It also fails predictably, which is why <a href="#4b">4b</a> exists.</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <div id="4a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">4a</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">Auto-aligned</span>
+        <span style="font-size:12.5px;color:#6f6862">The happy path — nothing to do but tap Done</span>
+      </div>
+
+      <div data-screen-label="4a Align — auto" style="width:390px;background:#faf8f6;border:1px solid #ded8d0;border-radius:32px;overflow:hidden;box-shadow:0 18px 40px rgba(42,33,28,0.14)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 22px 4px 22px">
+          <span style="font-weight:600;font-size:12px;color:#2a211c">9:41</span>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="width:16px;height:9px;border:1px solid #2a211c;border-radius:2px;opacity:0.55"></span>
+            <span style="width:15px;height:9px;background:#2a211c;border-radius:2px;opacity:0.75"></span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px 14px 18px">
+          <span style="font-weight:600;font-size:13px;color:#6f6862;cursor:pointer">Cancel</span>
+          <span style="font-weight:700;font-size:15px;color:#2a211c">Align photos</span>
+          <span style="font-weight:700;font-size:13px;color:#8a5140;cursor:pointer">Done</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:9px;margin:0 18px 14px 18px;background:#e3ead9;border-radius:11px;padding:11px 14px">
+          <span style="width:7px;height:7px;border-radius:99px;background:#4d6142;flex-shrink:0"></span>
+          <span style="font-weight:600;font-size:12.5px;color:#4d6142;text-wrap:pretty">All 3 photos aligned automatically</span>
+        </div>
+
+        <div style="position:relative;margin:0 18px;width:354px;height:498px;background:#241a15;border-radius:14px;overflow:hidden">
+          <img src="assets/n2.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.22;filter:grayscale(1)">
+          <img src="assets/n3.png" alt="August 31" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+
+          <div style="position:absolute;inset:0;pointer-events:none">
+            <div style="position:absolute;left:0;right:0;top:7.895%;height:1px;background:rgba(247,243,238,0.62);box-shadow:0 1px 0 rgba(20,13,10,0.45)"></div>
+            <div style="position:absolute;left:0;right:0;top:51%;height:1px;background:rgba(201,219,180,0.9);box-shadow:0 1px 0 rgba(20,13,10,0.45)"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:1px;background:rgba(247,243,238,0.62);box-shadow:0 -1px 0 rgba(20,13,10,0.45)"></div>
+            <span style="position:absolute;left:10px;top:7.895%;transform:translateY(-50%);background:rgba(20,13,10,0.6);border-radius:99px;padding:3px 9px;font-weight:700;font-size:9px;letter-spacing:1.2px;color:rgba(247,243,238,0.9)">CROWN</span>
+            <span style="position:absolute;left:10px;top:51%;transform:translateY(-50%);background:rgba(20,13,10,0.6);border-radius:99px;padding:3px 9px;font-weight:700;font-size:9px;letter-spacing:1.2px;color:#c9dbb4">WAIST</span>
+            <span style="position:absolute;left:10px;bottom:0;transform:translateY(-50%);background:rgba(20,13,10,0.6);border-radius:99px;padding:3px 9px;font-weight:700;font-size:9px;letter-spacing:1.2px;color:rgba(247,243,238,0.9)">FLOOR</span>
+
+            <span style="position:absolute;left:12px;top:12px;width:18px;height:18px;border-left:2px solid rgba(247,243,238,0.85);border-top:2px solid rgba(247,243,238,0.85);border-radius:3px 0 0 0"></span>
+            <span style="position:absolute;right:12px;top:12px;width:18px;height:18px;border-right:2px solid rgba(247,243,238,0.85);border-top:2px solid rgba(247,243,238,0.85);border-radius:0 3px 0 0"></span>
+            <span style="position:absolute;left:12px;bottom:12px;width:18px;height:18px;border-left:2px solid rgba(247,243,238,0.85);border-bottom:2px solid rgba(247,243,238,0.85);border-radius:0 0 0 3px"></span>
+            <span style="position:absolute;right:12px;bottom:12px;width:18px;height:18px;border-right:2px solid rgba(247,243,238,0.85);border-bottom:2px solid rgba(247,243,238,0.85);border-radius:0 0 3px 0"></span>
+          </div>
+
+          <div style="position:absolute;left:12px;bottom:34px;display:flex;align-items:center;gap:7px;background:rgba(20,13,10,0.62);border-radius:99px;padding:6px 12px">
+            <span style="width:6px;height:6px;border-radius:99px;background:#c9dbb4"></span>
+            <span style="font-weight:600;font-size:11px;color:rgba(247,243,238,0.92)">Ghost: Aug 18</span>
+          </div>
+        </div>
+
+        <div style="text-align:center;font-size:11.5px;color:#a8a29e;padding:11px 18px 0 18px">Drag to move · pinch to resize</div>
+
+        <div style="display:flex;gap:8px;padding:14px 18px 0 18px">
+          <div style="position:relative;width:74px;height:104px;border-radius:9px;overflow:hidden;background:#ece7e1;cursor:pointer">
+            <img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block;opacity:0.72">
+            <span style="position:absolute;right:5px;top:5px;width:15px;height:15px;border-radius:99px;background:#4d6142;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</span>
+          </div>
+          <div style="position:relative;width:74px;height:104px;border-radius:9px;overflow:hidden;background:#ece7e1;cursor:pointer">
+            <img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block;opacity:0.72">
+            <span style="position:absolute;right:5px;top:5px;width:15px;height:15px;border-radius:99px;background:#4d6142;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</span>
+          </div>
+          <div style="position:relative;width:74px;height:104px;border-radius:9px;overflow:hidden;background:#ece7e1;box-shadow:0 0 0 2.5px #a46a57;cursor:pointer">
+            <img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block">
+            <span style="position:absolute;right:5px;top:5px;width:15px;height:15px;border-radius:99px;background:#4d6142;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</span>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:6px;padding-left:4px">
+            <div style="text-align:center;border:1px solid #ded8d0;border-radius:9px;padding:8px 0;background:#fff;cursor:pointer">
+              <span style="font-weight:600;font-size:12px;color:#44403c">Re-detect</span>
+            </div>
+            <div style="text-align:center;border:1px solid #ded8d0;border-radius:9px;padding:8px 0;background:#fff;cursor:pointer">
+              <span style="font-weight:600;font-size:12px;color:#6f6862">Reset</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:center;padding:16px 0 10px 0">
+          <span style="width:120px;height:4px;border-radius:99px;background:#d9d4cd"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="4b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">4b</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">Detection came up short</span>
+        <span style="font-size:12.5px;color:#6f6862">Real case: her toes are at the frame edge</span>
+      </div>
+
+      <div data-screen-label="4b Align — needs a look" style="width:390px;background:#faf8f6;border:1px solid #ded8d0;border-radius:32px;overflow:hidden;box-shadow:0 18px 40px rgba(42,33,28,0.14)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 22px 4px 22px">
+          <span style="font-weight:600;font-size:12px;color:#2a211c">9:41</span>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="width:16px;height:9px;border:1px solid #2a211c;border-radius:2px;opacity:0.55"></span>
+            <span style="width:15px;height:9px;background:#2a211c;border-radius:2px;opacity:0.75"></span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px 14px 18px">
+          <span style="font-weight:600;font-size:13px;color:#6f6862;cursor:pointer">Cancel</span>
+          <span style="font-weight:700;font-size:15px;color:#2a211c">Align photos</span>
+          <span style="font-weight:700;font-size:13px;color:#a8a29e">Done</span>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:9px;margin:0 18px 14px 18px;background:#f4ede3;border-radius:11px;padding:11px 14px">
+          <span style="width:7px;height:7px;border-radius:99px;background:#8a5a2e;flex-shrink:0;margin-top:5px"></span>
+          <span style="font-weight:600;font-size:12.5px;color:#8a5a2e;text-wrap:pretty;line-height:1.45">Her feet are cut off in this one. Drag the floor line to where the floor should be.</span>
+        </div>
+
+        <div style="position:relative;margin:0 18px;width:354px;height:498px;background:#241a15;border-radius:14px;overflow:hidden">
+          <img src="assets/n3.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.22;filter:grayscale(1)">
+          <img src="assets/photo2.png" alt="August 18" style="position:absolute;left:-4%;top:-6%;width:112%;height:112%;object-fit:cover">
+
+          <div style="position:absolute;inset:0;pointer-events:none">
+            <div style="position:absolute;left:0;right:0;top:7.895%;height:1px;background:rgba(247,243,238,0.62);box-shadow:0 1px 0 rgba(20,13,10,0.45)"></div>
+            <div style="position:absolute;left:0;right:0;top:51%;height:1px;background:rgba(201,219,180,0.9);box-shadow:0 1px 0 rgba(20,13,10,0.45)"></div>
+            <span style="position:absolute;left:10px;top:7.895%;transform:translateY(-50%);background:rgba(20,13,10,0.6);border-radius:99px;padding:3px 9px;font-weight:700;font-size:9px;letter-spacing:1.2px;color:rgba(247,243,238,0.9)">CROWN</span>
+            <span style="position:absolute;left:10px;top:51%;transform:translateY(-50%);background:rgba(20,13,10,0.6);border-radius:99px;padding:3px 9px;font-weight:700;font-size:9px;letter-spacing:1.2px;color:#c9dbb4">WAIST</span>
+          </div>
+
+          <div style="position:absolute;left:0;right:0;bottom:22px;height:2px;background:#c58a3a;box-shadow:0 0 10px rgba(197,138,58,0.5)"></div>
+          <span style="position:absolute;left:10px;bottom:22px;transform:translateY(50%);background:#c58a3a;border-radius:99px;padding:4px 10px;font-weight:700;font-size:9px;letter-spacing:1.2px;color:#2a1a08">FLOOR — DRAG ME</span>
+          <span style="position:absolute;right:14px;bottom:22px;transform:translate(0,50%);width:26px;height:26px;border-radius:99px;background:#c58a3a;box-shadow:0 2px 8px rgba(20,13,10,0.5);display:flex;align-items:center;justify-content:center">
+            <span style="font-size:13px;font-weight:700;color:#2a1a08;line-height:1">⇅</span>
+          </span>
+
+          <div style="position:absolute;left:12px;bottom:52px;display:flex;align-items:center;gap:7px;background:rgba(20,13,10,0.62);border-radius:99px;padding:6px 12px">
+            <span style="width:6px;height:6px;border-radius:99px;background:#c9dbb4"></span>
+            <span style="font-weight:600;font-size:11px;color:rgba(247,243,238,0.92)">Ghost: Aug 31</span>
+          </div>
+        </div>
+
+        <div style="text-align:center;font-size:11.5px;color:#a8a29e;padding:11px 18px 0 18px">Crown and waist found · floor estimated</div>
+
+        <div style="display:flex;gap:8px;padding:14px 18px 0 18px">
+          <div style="position:relative;width:74px;height:104px;border-radius:9px;overflow:hidden;background:#ece7e1;cursor:pointer">
+            <img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block;opacity:0.72">
+            <span style="position:absolute;right:5px;top:5px;width:15px;height:15px;border-radius:99px;background:#4d6142;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</span>
+          </div>
+          <div style="position:relative;width:74px;height:104px;border-radius:9px;overflow:hidden;background:#ece7e1;box-shadow:0 0 0 2.5px #c58a3a;cursor:pointer">
+            <img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block">
+            <span style="position:absolute;right:5px;top:5px;width:15px;height:15px;border-radius:99px;background:#c58a3a;color:#2a1a08;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">!</span>
+          </div>
+          <div style="position:relative;width:74px;height:104px;border-radius:9px;overflow:hidden;background:#ece7e1;cursor:pointer">
+            <img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block;opacity:0.72">
+            <span style="position:absolute;right:5px;top:5px;width:15px;height:15px;border-radius:99px;background:#4d6142;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</span>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:6px;padding-left:4px">
+            <div style="text-align:center;border:1px solid #ded8d0;border-radius:9px;padding:8px 0;background:#fff;cursor:pointer">
+              <span style="font-weight:600;font-size:12px;color:#44403c">Re-detect</span>
+            </div>
+            <div style="text-align:center;border:1px solid #ded8d0;border-radius:9px;padding:8px 0;background:#fff;cursor:pointer">
+              <span style="font-weight:600;font-size:12px;color:#6f6862">Skip this one</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:center;padding:16px 0 10px 0">
+          <span style="width:120px;height:4px;border-radius:99px;background:#d9d4cd"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="4c" style="display:flex;flex-direction:column;gap:12px;width:400px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">4c</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">How it works</span>
+      </div>
+
+      <div style="background:#fff;border:1px solid #ece7e1;border-radius:16px;padding:26px 28px;display:flex;flex-direction:column;gap:20px">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <span style="font-weight:700;font-size:10px;letter-spacing:1.5px;color:#a8a29e">AT IMPORT</span>
+          <span style="font-size:13px;color:#44403c;line-height:1.6;text-wrap:pretty">Run pose detection on the photo. You need three landmarks: nose, and both ankles. MoveNet Lightning or MediaPipe Pose Landmarker, both on-device, both free.</span>
+        </div>
+        <div style="height:1px;background:#f4f1ec"></div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <span style="font-weight:700;font-size:10px;letter-spacing:1.5px;color:#a8a29e">THE MATH</span>
+          <span style="font-size:13px;color:#44403c;line-height:1.6;text-wrap:pretty">Scale = target height ÷ (ankle Y − nose Y). Then translate so nose Y lands on the crown line and hip X lands on centre. Store scale, dx, dy per photo. Never touch the original file.</span>
+        </div>
+        <div style="height:1px;background:#f4f1ec"></div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <span style="font-weight:700;font-size:10px;letter-spacing:1.5px;color:#a8a29e">WHEN IT FAILS</span>
+          <span style="font-size:13px;color:#44403c;line-height:1.6;text-wrap:pretty">Ankles below the frame, ankle confidence under about 0.4, or a side view where one ankle occludes the other. Fall back to the crown line plus an estimated floor, flag the photo amber, let her drag. Never silently ship a bad alignment.</span>
+        </div>
+        <div style="height:1px;background:#f4f1ec"></div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <span style="font-weight:700;font-size:10px;letter-spacing:1.5px;color:#a8a29e">ONE CATCH</span>
+          <span style="font-size:13px;color:#44403c;line-height:1.6;text-wrap:pretty">Aligning by nose-to-ankle normalises her <em>apparent</em> height, which also cancels out camera distance. That is the point. But it means the card can no longer honestly claim to show height change — only shape change. Worth knowing before someone asks.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="padding:56px 56px 0 56px;display:flex;flex-direction:column;gap:26px">
+  <div style="display:flex;align-items:baseline;gap:12px;max-width:1100px">
+    <span style="font-weight:700;font-size:15px;color:#2a211c">Turn 3 — gallery + overlaid mark + guides</span>
+    <span style="font-size:13px;color:#6f6862;text-wrap:pretty">Same card, three ways to put the mark on the photos. Guides are a toggle — flip <strong>Alignment guides</strong> in Tweaks to see all three without them.</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <div id="3a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">3a</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">Seal</span>
+        <span style="font-size:12.5px;color:#6f6862">Centred, low opacity, straddles the seams</span>
+      </div>
+
+      <div data-screen-label="3a Seal" style="width:1080px;height:1080px;display:flex;flex-direction:column;background:#241a15;background-image:radial-gradient(118% 76% at 50% 0%,#3d2a21 0%,#241a15 64%);border-radius:18px;overflow:hidden;box-shadow:0 22px 50px rgba(36,26,21,0.3)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:46px 44px 32px 44px">
+          <span style="font-weight:700;font-size:22px;letter-spacing:4px;color:rgba(247,243,238,0.8)">MADDIE K.</span>
+          <span style="font-weight:700;font-size:15px;letter-spacing:3px;color:rgba(247,243,238,0.5)">JUL 27 → AUG 31 · 2026</span>
+        </div>
+        <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+
+        <div style="position:relative">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+            <div style="position:relative;aspect-ratio:356/676;background:#1b120f;overflow:hidden">
+              <img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;inset:auto 0 0 0;padding:104px 24px 24px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0.34) 55%,rgba(20,13,10,0) 100%)">
+                <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Jul 27</div>
+                <div style="font-size:21px;color:rgba(247,243,238,0.55);margin-top:2px">week 1</div>
+              </div>
+            </div>
+            <div style="position:relative;aspect-ratio:356/676;background:#1b120f;overflow:hidden">
+              <img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;inset:auto 0 0 0;padding:104px 24px 24px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0.34) 55%,rgba(20,13,10,0) 100%)">
+                <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 18</div>
+                <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">183.2 lb</div>
+              </div>
+            </div>
+            <div style="position:relative;aspect-ratio:356/676;background:#1b120f;overflow:hidden">
+              <img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;inset:auto 0 0 0;padding:104px 24px 24px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0.34) 55%,rgba(20,13,10,0) 100%)">
+                <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 31</div>
+                <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">179.2 lb</div>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{ showGuides }}" hint-placeholder-val="{{ true }}">
+            <div style="position:absolute;inset:0;pointer-events:none">
+              <div style="position:absolute;left:0;right:0;top:7.895%;height:1px;background:rgba(247,243,238,0.5);box-shadow:0 1px 0 rgba(20,13,10,0.4)"></div>
+              <div style="position:absolute;left:0;right:0;top:51%;height:1px;background:rgba(201,219,180,0.85);box-shadow:0 1px 0 rgba(20,13,10,0.4)"></div>
+              <div style="position:absolute;left:0;right:0;bottom:0;height:1px;background:rgba(247,243,238,0.5);box-shadow:0 -1px 0 rgba(20,13,10,0.4)"></div>
+              <span style="position:absolute;left:20px;top:7.895%;transform:translateY(-50%);background:rgba(20,13,10,0.55);border-radius:99px;padding:5px 13px;font-weight:700;font-size:14px;letter-spacing:1.6px;color:rgba(247,243,238,0.85)">CROWN</span>
+              <span style="position:absolute;left:20px;top:51%;transform:translateY(-50%);background:rgba(20,13,10,0.55);border-radius:99px;padding:5px 13px;font-weight:700;font-size:14px;letter-spacing:1.6px;color:#c9dbb4">WAIST</span>
+              <span style="position:absolute;left:20px;bottom:0;transform:translateY(50%);background:rgba(20,13,10,0.55);border-radius:99px;padding:5px 13px;font-weight:700;font-size:14px;letter-spacing:1.6px;color:rgba(247,243,238,0.85)">FLOOR</span>
+            </div>
+          </sc-if>
+
+          <img src="assets/kova-mark-cream.png" alt="Kova Strength" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:300px;height:300px;opacity:0.32;pointer-events:none">
+        </div>
+
+        <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+        <div style="flex:1;display:flex;align-items:flex-end;justify-content:space-between;gap:40px;padding:26px 44px 34px 44px">
+          <div>
+            <div style="display:flex;align-items:baseline;gap:14px">
+              <span style="font-family:'Protest Strike';font-size:132px;color:#c9dbb4;line-height:0.86;letter-spacing:-2px">−4.0</span>
+              <span style="font-family:'Protest Strike';font-size:38px;color:rgba(201,219,180,0.6);line-height:1">LB</span>
+            </div>
+            <div style="font-weight:700;font-size:16px;letter-spacing:2.6px;color:rgba(247,243,238,0.45);margin-top:14px">183.2 → 179.2 LB</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">5</div>
+            <div style="font-weight:700;font-size:14px;letter-spacing:2.2px;color:rgba(247,243,238,0.38);margin-top:2px">WEEKS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="3b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">3b</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">Chop</span>
+        <span style="font-size:12.5px;color:#6f6862">Small, solid, bottom-right — signed like a print</span>
+      </div>
+
+      <div data-screen-label="3b Chop" style="width:1080px;height:1080px;display:flex;flex-direction:column;background:#241a15;background-image:radial-gradient(118% 76% at 50% 0%,#3d2a21 0%,#241a15 64%);border-radius:18px;overflow:hidden;box-shadow:0 22px 50px rgba(36,26,21,0.3)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:46px 44px 32px 44px">
+          <span style="font-weight:700;font-size:22px;letter-spacing:4px;color:rgba(247,243,238,0.8)">MADDIE K.</span>
+          <span style="font-weight:700;font-size:15px;letter-spacing:3px;color:rgba(247,243,238,0.5)">JUL 27 → AUG 31 · 2026</span>
+        </div>
+        <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+
+        <div style="position:relative">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+            <div style="position:relative;aspect-ratio:356/676;background:#1b120f;overflow:hidden">
+              <img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;inset:auto 0 0 0;padding:104px 24px 24px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0.34) 55%,rgba(20,13,10,0) 100%)">
+                <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Jul 27</div>
+                <div style="font-size:21px;color:rgba(247,243,238,0.55);margin-top:2px">week 1</div>
+              </div>
+            </div>
+            <div style="position:relative;aspect-ratio:356/676;background:#1b120f;overflow:hidden">
+              <img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;inset:auto 0 0 0;padding:104px 24px 24px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0.34) 55%,rgba(20,13,10,0) 100%)">
+                <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 18</div>
+                <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">183.2 lb</div>
+              </div>
+            </div>
+            <div style="position:relative;aspect-ratio:356/676;background:#1b120f;overflow:hidden">
+              <img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;inset:auto 0 0 0;padding:104px 24px 24px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0.34) 55%,rgba(20,13,10,0) 100%)">
+                <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 31</div>
+                <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">179.2 lb</div>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{ showGuides }}" hint-placeholder-val="{{ true }}">
+            <div style="position:absolute;inset:0;pointer-events:none">
+              <div style="position:absolute;left:0;right:0;top:7.895%;height:1px;background:rgba(247,243,238,0.5);box-shadow:0 1px 0 rgba(20,13,10,0.4)"></div>
+              <div style="position:absolute;left:0;right:0;top:51%;height:1px;background:rgba(201,219,180,0.85);box-shadow:0 1px 0 rgba(20,13,10,0.4)"></div>
+              <div style="position:absolute;left:0;right:0;bottom:0;height:1px;background:rgba(247,243,238,0.5);box-shadow:0 -1px 0 rgba(20,13,10,0.4)"></div>
+              <span style="position:absolute;left:20px;top:7.895%;transform:translateY(-50%);background:rgba(20,13,10,0.55);border-radius:99px;padding:5px 13px;font-weight:700;font-size:14px;letter-spacing:1.6px;color:rgba(247,243,238,0.85)">CROWN</span>
+              <span style="position:absolute;left:20px;top:51%;transform:translateY(-50%);background:rgba(20,13,10,0.55);border-radius:99px;padding:5px 13px;font-weight:700;font-size:14px;letter-spacing:1.6px;color:#c9dbb4">WAIST</span>
+              <span style="position:absolute;left:20px;bottom:0;transform:translateY(50%);background:rgba(20,13,10,0.55);border-radius:99px;padding:5px 13px;font-weight:700;font-size:14px;letter-spacing:1.6px;color:rgba(247,243,238,0.85)">FLOOR</span>
+            </div>
+          </sc-if>
+
+          <div style="position:absolute;right:24px;bottom:24px;width:150px;height:150px;border-radius:99px;background:rgba(20,13,10,0.34);box-shadow:0 3px 16px rgba(20,13,10,0.34);display:flex;align-items:center;justify-content:center;pointer-events:none">
+            <img src="assets/kova-mark-cream.png" alt="Kova Strength" style="width:124px;height:124px;display:block">
+          </div>
+        </div>
+
+        <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+        <div style="flex:1;display:flex;align-items:flex-end;justify-content:space-between;gap:40px;padding:26px 44px 34px 44px">
+          <div>
+            <div style="display:flex;align-items:baseline;gap:14px">
+              <span style="font-family:'Protest Strike';font-size:132px;color:#c9dbb4;line-height:0.86;letter-spacing:-2px">−4.0</span>
+              <span style="font-family:'Protest Strike';font-size:38px;color:rgba(201,219,180,0.6);line-height:1">LB</span>
+            </div>
+            <div style="font-weight:700;font-size:16px;letter-spacing:2.6px;color:rgba(247,243,238,0.45);margin-top:14px">183.2 → 179.2 LB</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">5</div>
+            <div style="font-weight:700;font-size:14px;letter-spacing:2.2px;color:rgba(247,243,238,0.38);margin-top:2px">WEEKS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="3c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">3c</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">Breaking the line</span>
+        <span style="font-size:12.5px;color:#6f6862">Full strength, straddling the header rule</span>
+      </div>
+
+      <div data-screen-label="3c Breaking the line" style="width:1080px;height:1080px;display:flex;flex-direction:column;background:#241a15;background-image:radial-gradient(118% 76% at 50% 0%,#3d2a21 0%,#241a15 64%);border-radius:18px;overflow:hidden;box-shadow:0 22px 50px rgba(36,26,21,0.3)">
+        <div style="display:flex;align-items:center;justify-content:flex-end;padding:46px 44px 32px 44px">
+          <span style="font-weight:700;font-size:15px;letter-spacing:3px;color:rgba(247,243,238,0.5)">JUL 27 → AUG 31 · 2026</span>
+        </div>
+        <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+
+        <div style="position:relative">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+            <div style="position:relative;aspect-ratio:356/676;background:#1b120f;overflow:hidden">
+              <img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;inset:auto 0 0 0;padding:104px 24px 24px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0.34) 55%,rgba(20,13,10,0) 100%)">
+                <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Jul 27</div>
+                <div style="font-size:21px;color:rgba(247,243,238,0.55);margin-top:2px">week 1</div>
+              </div>
+            </div>
+            <div style="position:relative;aspect-ratio:356/676;background:#1b120f;overflow:hidden">
+              <img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;inset:auto 0 0 0;padding:104px 24px 24px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0.34) 55%,rgba(20,13,10,0) 100%)">
+                <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 18</div>
+                <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">183.2 lb</div>
+              </div>
+            </div>
+            <div style="position:relative;aspect-ratio:356/676;background:#1b120f;overflow:hidden">
+              <img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;inset:auto 0 0 0;padding:104px 24px 24px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0.34) 55%,rgba(20,13,10,0) 100%)">
+                <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 31</div>
+                <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">179.2 lb</div>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{ showGuides }}" hint-placeholder-val="{{ true }}">
+            <div style="position:absolute;inset:0;pointer-events:none">
+              <div style="position:absolute;left:0;right:0;top:7.895%;height:1px;background:rgba(247,243,238,0.5);box-shadow:0 1px 0 rgba(20,13,10,0.4)"></div>
+              <div style="position:absolute;left:0;right:0;top:51%;height:1px;background:rgba(201,219,180,0.85);box-shadow:0 1px 0 rgba(20,13,10,0.4)"></div>
+              <div style="position:absolute;left:0;right:0;bottom:0;height:1px;background:rgba(247,243,238,0.5);box-shadow:0 -1px 0 rgba(20,13,10,0.4)"></div>
+              <span style="position:absolute;right:20px;top:7.895%;transform:translateY(-50%);background:rgba(20,13,10,0.55);border-radius:99px;padding:5px 13px;font-weight:700;font-size:14px;letter-spacing:1.6px;color:rgba(247,243,238,0.85)">CROWN</span>
+              <span style="position:absolute;right:20px;top:51%;transform:translateY(-50%);background:rgba(20,13,10,0.55);border-radius:99px;padding:5px 13px;font-weight:700;font-size:14px;letter-spacing:1.6px;color:#c9dbb4">WAIST</span>
+              <span style="position:absolute;right:20px;bottom:0;transform:translateY(50%);background:rgba(20,13,10,0.55);border-radius:99px;padding:5px 13px;font-weight:700;font-size:14px;letter-spacing:1.6px;color:rgba(247,243,238,0.85)">FLOOR</span>
+            </div>
+          </sc-if>
+
+          <img src="assets/kova-mark-cream.png" alt="Kova Strength" style="position:absolute;left:38px;top:-72px;width:196px;height:196px;pointer-events:none;filter:drop-shadow(0 4px 14px rgba(20,13,10,0.6))">
+        </div>
+
+        <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+        <div style="flex:1;display:flex;align-items:flex-end;justify-content:space-between;gap:40px;padding:26px 44px 34px 44px">
+          <div>
+            <div style="display:flex;align-items:baseline;gap:14px">
+              <span style="font-family:'Protest Strike';font-size:132px;color:#c9dbb4;line-height:0.86;letter-spacing:-2px">−4.0</span>
+              <span style="font-family:'Protest Strike';font-size:38px;color:rgba(201,219,180,0.6);line-height:1">LB</span>
+            </div>
+            <div style="font-weight:700;font-size:16px;letter-spacing:2.6px;color:rgba(247,243,238,0.45);margin-top:14px">MADDIE K. · 183.2 → 179.2 LB</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">5</div>
+            <div style="font-weight:700;font-size:14px;letter-spacing:2.2px;color:rgba(247,243,238,0.38);margin-top:2px">WEEKS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="padding:56px;display:flex;flex-direction:column;gap:26px">
+  <div style="display:flex;align-items:baseline;gap:12px;max-width:1100px">
+    <span style="font-weight:700;font-size:15px;color:#2a211c">Turn 2 — built for the screenshot</span>
+    <span style="font-size:13px;color:#6f6862;text-wrap:pretty">Photos stay raw. The order comes from identical frames plus <code>object-fit:cover</code>, so any source crop drops in clean. Espresso ground instead of peach: warm hallway light glows against it, where peach turned it muddy. And the number is the hero, not a footnote.</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <div id="2a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">2a</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">In-app screen</span>
+        <span style="font-size:12.5px;color:#6f6862">The card is exactly 1:1 so a screenshot crops perfectly</span>
+      </div>
+
+      <div data-screen-label="2a Progress screen" style="width:390px;background:#faf8f6;border:1px solid #ded8d0;border-radius:32px;overflow:hidden;box-shadow:0 18px 40px rgba(42,33,28,0.14)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 22px 4px 22px">
+          <span style="font-weight:600;font-size:12px;color:#2a211c">9:41</span>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="width:16px;height:9px;border:1px solid #2a211c;border-radius:2px;opacity:0.55"></span>
+            <span style="width:15px;height:9px;background:#2a211c;border-radius:2px;opacity:0.75"></span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px 14px 18px">
+          <span style="font-size:22px;color:#6f6862;line-height:1">‹</span>
+          <span style="font-weight:700;font-size:15px;color:#2a211c">Progress photos</span>
+          <span style="font-weight:600;font-size:13px;color:#8a5140">Share</span>
+        </div>
+
+        <div style="display:flex;gap:4px;margin:0 18px;padding:4px;background:#f1ede8;border-radius:11px">
+          <div style="flex:1;text-align:center;padding:8px 0;background:#33251f;border-radius:8px">
+            <span style="font-weight:700;font-size:12.5px;color:#f7f3ee">Front</span>
+          </div>
+          <div style="flex:1;text-align:center;padding:8px 0;cursor:pointer">
+            <span style="font-weight:600;font-size:12.5px;color:#6f6862">Side</span>
+          </div>
+          <div style="flex:1;text-align:center;padding:8px 0;cursor:pointer">
+            <span style="font-weight:600;font-size:12.5px;color:#6f6862">Back</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 18px 10px 18px">
+          <span style="font-weight:700;font-size:10px;letter-spacing:1.4px;color:#a8a29e">3 PHOTOS SELECTED</span>
+          <span style="font-weight:600;font-size:12px;color:#8a5140">Edit selection</span>
+        </div>
+
+        <div style="margin:0 18px;width:354px;height:354px;overflow:hidden;border-radius:16px;box-shadow:0 8px 20px rgba(36,26,21,0.24)">
+          <div style="width:1080px;height:1080px;transform:scale(0.327778);transform-origin:top left;display:flex;flex-direction:column;background:#241a15;background-image:radial-gradient(118% 76% at 50% 0%,#3d2a21 0%,#241a15 64%)">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:44px 44px 30px 44px">
+              <img src="assets/kova-mark-cream.png" alt="Kova Strength" style="width:76px;height:76px;display:block">
+              <span style="font-weight:700;font-size:15px;letter-spacing:3px;color:rgba(247,243,238,0.5)">JUL 27 → AUG 31 · 2026</span>
+            </div>
+            <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+              <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+                <img src="assets/n1.png" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:110px 24px 22px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Jul 27</div>
+                  <div style="font-size:21px;color:rgba(247,243,238,0.55);margin-top:2px">week 1</div>
+                </div>
+              </div>
+              <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+                <img src="assets/n2.png" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:110px 24px 22px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 18</div>
+                  <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">183.2 lb</div>
+                </div>
+              </div>
+              <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+                <img src="assets/n3.png" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:110px 24px 22px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 31</div>
+                  <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">179.2 lb</div>
+                </div>
+              </div>
+            </div>
+            <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+            <div style="flex:1;display:flex;align-items:flex-end;justify-content:space-between;gap:40px;padding:40px 44px 48px 44px">
+              <div>
+                <div style="display:flex;align-items:baseline;gap:14px">
+                  <span style="font-family:'Protest Strike';font-size:132px;color:#c9dbb4;line-height:0.86;letter-spacing:-2px">−4.0</span>
+                  <span style="font-family:'Protest Strike';font-size:38px;color:rgba(201,219,180,0.6);line-height:1">LB</span>
+                </div>
+                <div style="font-weight:700;font-size:16px;letter-spacing:2.6px;color:rgba(247,243,238,0.45);margin-top:14px">SINCE FIRST WEIGH-IN</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:14px;text-align:right">
+                <div>
+                  <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">5</div>
+                  <div style="font-weight:700;font-size:14px;letter-spacing:2.2px;color:rgba(247,243,238,0.38);margin-top:2px">WEEKS</div>
+                </div>
+                <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+                <div>
+                  <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">18</div>
+                  <div style="font-weight:700;font-size:14px;letter-spacing:2.2px;color:rgba(247,243,238,0.38);margin-top:2px">SESSIONS</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px;padding:18px 18px 10px 18px">
+          <div style="text-align:center;background:#a46a57;border-radius:12px;padding:14px 0;cursor:pointer">
+            <span style="font-weight:700;font-size:14.5px;color:#fff">Save image</span>
+          </div>
+          <div style="text-align:center;border:1px solid #ded8d0;border-radius:12px;padding:13px 0;cursor:pointer">
+            <span style="font-weight:600;font-size:14px;color:#44403c">Add a photo</span>
+          </div>
+          <div style="text-align:center;font-size:11.5px;color:#a8a29e;padding-top:2px">Saves at 1080 × 1080 — ready for a feed post</div>
+        </div>
+
+        <div style="display:flex;justify-content:center;padding:12px 0 10px 0">
+          <span style="width:120px;height:4px;border-radius:99px;background:#d9d4cd"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="2b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">2b</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">The card, actual size</span>
+        <span style="font-size:12.5px;color:#6f6862">1080 × 1080</span>
+      </div>
+
+      <div data-screen-label="2b Share card 1080" style="width:1080px;height:1080px;display:flex;flex-direction:column;background:#241a15;background-image:radial-gradient(118% 76% at 50% 0%,#3d2a21 0%,#241a15 64%);border-radius:18px;overflow:hidden;box-shadow:0 22px 50px rgba(36,26,21,0.3)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:44px 44px 30px 44px">
+          <img src="assets/kova-mark-cream.png" alt="Kova Strength" style="width:76px;height:76px;display:block">
+          <span style="font-weight:700;font-size:15px;letter-spacing:3px;color:rgba(247,243,238,0.5)">JUL 27 → AUG 31 · 2026</span>
+        </div>
+        <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+          <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+            <img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block">
+            <div style="position:absolute;inset:auto 0 0 0;padding:110px 24px 22px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+              <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Jul 27</div>
+              <div style="font-size:21px;color:rgba(247,243,238,0.55);margin-top:2px">week 1</div>
+            </div>
+          </div>
+          <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+            <img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block">
+            <div style="position:absolute;inset:auto 0 0 0;padding:110px 24px 22px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+              <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 18</div>
+              <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">183.2 lb</div>
+            </div>
+          </div>
+          <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+            <img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block">
+            <div style="position:absolute;inset:auto 0 0 0;padding:110px 24px 22px 24px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+              <div style="font-weight:700;font-size:29px;color:#f7f3ee;line-height:1.1">Aug 31</div>
+              <div style="font-size:21px;color:rgba(247,243,238,0.68);margin-top:2px">179.2 lb</div>
+            </div>
+          </div>
+        </div>
+        <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+        <div style="flex:1;display:flex;align-items:flex-end;justify-content:space-between;gap:40px;padding:40px 44px 48px 44px">
+          <div>
+            <div style="display:flex;align-items:baseline;gap:14px">
+              <span style="font-family:'Protest Strike';font-size:132px;color:#c9dbb4;line-height:0.86;letter-spacing:-2px">−4.0</span>
+              <span style="font-family:'Protest Strike';font-size:38px;color:rgba(201,219,180,0.6);line-height:1">LB</span>
+            </div>
+            <div style="font-weight:700;font-size:16px;letter-spacing:2.6px;color:rgba(247,243,238,0.45);margin-top:14px">SINCE FIRST WEIGH-IN</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px;text-align:right">
+            <div>
+              <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">5</div>
+              <div style="font-weight:700;font-size:14px;letter-spacing:2.2px;color:rgba(247,243,238,0.38);margin-top:2px">WEEKS</div>
+            </div>
+            <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+            <div>
+              <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">18</div>
+              <div style="font-weight:700;font-size:14px;letter-spacing:2.2px;color:rgba(247,243,238,0.38);margin-top:2px">SESSIONS</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="2c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">2c</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">2 photos and 6 photos</span>
+        <span style="font-size:12.5px;color:#6f6862">Cells stay portrait; the grid reflows and the card height follows</span>
+      </div>
+
+      <div style="display:flex;gap:26px;align-items:flex-start">
+
+        <div style="width:340px;height:425px;overflow:hidden;border-radius:14px;box-shadow:0 14px 34px rgba(36,26,21,0.26)">
+          <div style="width:1080px;height:1350px;transform:scale(0.314815);transform-origin:top left;display:flex;flex-direction:column;background:#241a15;background-image:radial-gradient(118% 66% at 50% 0%,#3d2a21 0%,#241a15 64%)">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:44px 44px 30px 44px">
+              <img src="assets/kova-mark-cream.png" alt="Kova Strength" style="width:76px;height:76px;display:block">
+              <span style="font-weight:700;font-size:15px;letter-spacing:3px;color:rgba(247,243,238,0.5)">JUL 27 → AUG 31 · 2026</span>
+            </div>
+            <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px">
+              <div style="position:relative;aspect-ratio:538/766;background:#1b120f;overflow:hidden">
+                <img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:130px 30px 26px 30px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:34px;color:#f7f3ee;line-height:1.1">Jul 27</div>
+                  <div style="font-size:23px;color:rgba(247,243,238,0.55);margin-top:3px">week 1</div>
+                </div>
+              </div>
+              <div style="position:relative;aspect-ratio:538/766;background:#1b120f;overflow:hidden">
+                <img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:130px 30px 26px 30px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:34px;color:#f7f3ee;line-height:1.1">Aug 31</div>
+                  <div style="font-size:23px;color:rgba(247,243,238,0.68);margin-top:3px">179.2 lb</div>
+                </div>
+              </div>
+            </div>
+            <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+            <div style="flex:1;display:flex;align-items:flex-end;justify-content:space-between;gap:40px;padding:40px 44px 48px 44px">
+              <div>
+                <div style="display:flex;align-items:baseline;gap:14px">
+                  <span style="font-family:'Protest Strike';font-size:132px;color:#c9dbb4;line-height:0.86;letter-spacing:-2px">−4.0</span>
+                  <span style="font-family:'Protest Strike';font-size:38px;color:rgba(201,219,180,0.6);line-height:1">LB</span>
+                </div>
+                <div style="font-weight:700;font-size:16px;letter-spacing:2.6px;color:rgba(247,243,238,0.45);margin-top:14px">SINCE FIRST WEIGH-IN</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">5</div>
+                <div style="font-weight:700;font-size:14px;letter-spacing:2.2px;color:rgba(247,243,238,0.38);margin-top:2px">WEEKS</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="width:340px;height:480px;overflow:hidden;border-radius:14px;box-shadow:0 14px 34px rgba(36,26,21,0.26)">
+          <div style="width:1080px;height:1526px;transform:scale(0.314815);transform-origin:top left;display:flex;flex-direction:column;background:#241a15;background-image:radial-gradient(118% 58% at 50% 0%,#3d2a21 0%,#241a15 64%)">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:44px 44px 30px 44px">
+              <img src="assets/kova-mark-cream.png" alt="Kova Strength" style="width:76px;height:76px;display:block">
+              <span style="font-weight:700;font-size:15px;letter-spacing:3px;color:rgba(247,243,238,0.5)">JUN 22 → AUG 31 · 2026</span>
+            </div>
+            <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+              <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+                <img src="assets/n2.png" alt="June 22" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:100px 22px 20px 22px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:27px;color:#f7f3ee;line-height:1.1">Jun 22</div>
+                </div>
+              </div>
+              <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+                <img src="assets/n1.png" alt="July 6" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:100px 22px 20px 22px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:27px;color:#f7f3ee;line-height:1.1">Jul 6</div>
+                </div>
+              </div>
+              <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+                <img src="assets/n3.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:100px 22px 20px 22px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:27px;color:#f7f3ee;line-height:1.1">Jul 27</div>
+                </div>
+              </div>
+              <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+                <img src="assets/n1.png" alt="August 10" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:100px 22px 20px 22px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:27px;color:#f7f3ee;line-height:1.1">Aug 10</div>
+                </div>
+              </div>
+              <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+                <img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:100px 22px 20px 22px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:27px;color:#f7f3ee;line-height:1.1">Aug 18</div>
+                </div>
+              </div>
+              <div style="position:relative;aspect-ratio:356/509;background:#1b120f;overflow:hidden">
+                <img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block">
+                <div style="position:absolute;inset:auto 0 0 0;padding:100px 22px 20px 22px;background:linear-gradient(to top,rgba(20,13,10,0.9),rgba(20,13,10,0))">
+                  <div style="font-weight:700;font-size:27px;color:#f7f3ee;line-height:1.1">Aug 31</div>
+                </div>
+              </div>
+            </div>
+            <div style="height:1px;background:rgba(247,243,238,0.13)"></div>
+            <div style="flex:1;display:flex;align-items:flex-end;justify-content:space-between;gap:40px;padding:36px 44px 44px 44px">
+              <div>
+                <div style="display:flex;align-items:baseline;gap:14px">
+                  <span style="font-family:'Protest Strike';font-size:116px;color:#c9dbb4;line-height:0.86;letter-spacing:-2px">−9.8</span>
+                  <span style="font-family:'Protest Strike';font-size:34px;color:rgba(201,219,180,0.6);line-height:1">LB</span>
+                </div>
+                <div style="font-weight:700;font-size:16px;letter-spacing:2.6px;color:rgba(247,243,238,0.45);margin-top:12px">SINCE FIRST WEIGH-IN</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">10</div>
+                <div style="font-weight:700;font-size:14px;letter-spacing:2.2px;color:rgba(247,243,238,0.38);margin-top:2px">WEEKS</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="padding:0 56px 56px 56px;display:flex;flex-direction:column;gap:26px">
+  <div style="display:flex;align-items:baseline;gap:12px">
+    <span style="font-weight:700;font-size:15px;color:#2a211c">Turn 1 — earlier explorations</span>
+    <span style="font-size:13px;color:#6f6862">All three use the same normalized photos: subject scaled and anchored so head and floor lines match across the set. That alone is most of the fix.</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <div id="1a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1a</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">Editorial</span>
+        <span style="font-size:12.5px;color:#6f6862">Canvas, clay accents, the number leads</span>
+      </div>
+
+      <div data-screen-label="1a Editorial" style="width:1080px;background:#faf8f6;border:1px solid #ded8d0;border-radius:18px;overflow:hidden;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:32px;padding:36px 40px 26px 40px">
+          <div style="display:flex;align-items:center;gap:18px">
+            <img src="assets/kova-mark-espresso.png" alt="Kova Strength" style="width:62px;height:62px;display:block;flex-shrink:0">
+            <div>
+              <div style="font-weight:700;font-size:10.5px;letter-spacing:1.6px;color:#a8a29e">PROGRESS</div>
+              <div style="font-family:'Protest Strike';font-size:34px;color:#2a211c;line-height:1.08;margin-top:4px">Five weeks</div>
+              <div style="font-size:13.5px;color:#6f6862;margin-top:3px">July 27 → August 31, 2026</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:26px;padding-bottom:4px">
+            <div style="text-align:right">
+              <div style="font-family:'Protest Strike';font-size:42px;color:#4d6142;line-height:1">−4.0 lb</div>
+              <div style="font-size:11.5px;color:#6f6862;margin-top:2px">since first weigh-in</div>
+            </div>
+            <div style="width:1px;height:44px;background:#ece7e1"></div>
+            <div style="text-align:right">
+              <div style="font-family:'Protest Strike';font-size:42px;color:#2a211c;line-height:1">3</div>
+              <div style="font-size:11.5px;color:#6f6862;margin-top:2px">check-ins</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:0 40px">
+          <div style="border-radius:10px;overflow:hidden;background:#ece7e1;aspect-ratio:540/760"><img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+          <div style="border-radius:10px;overflow:hidden;background:#ece7e1;aspect-ratio:540/760"><img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+          <div style="border-radius:10px;overflow:hidden;background:#ece7e1;aspect-ratio:540/760"><img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:16px 40px 0 40px">
+          <div style="border-top:2px solid #33251f;padding-top:10px">
+            <div style="font-weight:700;font-size:14px;color:#2a211c">Jul 27</div>
+            <div style="font-size:12.5px;color:#9a9187;margin-top:2px">photo only</div>
+          </div>
+          <div style="border-top:2px solid #33251f;padding-top:10px">
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span style="font-weight:700;font-size:14px;color:#2a211c">Aug 18</span>
+              <span style="font-weight:600;font-size:13px;color:#6f6862">183.2 lb</span>
+            </div>
+            <div style="font-size:12.5px;color:#9a9187;margin-top:2px">first weigh-in</div>
+          </div>
+          <div style="border-top:2px solid #a46a57;padding-top:10px">
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span style="font-weight:700;font-size:14px;color:#2a211c">Aug 31</span>
+              <span style="font-weight:600;font-size:13px;color:#8a5140">179.2 lb</span>
+            </div>
+            <div style="font-size:12.5px;color:#4d6142;margin-top:2px;font-weight:600">−4.0 lb in 13 days</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:26px 40px 30px 40px">
+          <span style="font-weight:600;font-size:11.5px;letter-spacing:0.8px;color:#a8a29e">KOVA STRENGTH · IDAHO FALLS, ID</span>
+          <span style="font-size:11.5px;color:#a8a29e">Photos scaled to a common height</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="1b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1b</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">Gallery</span>
+        <span style="font-size:12.5px;color:#6f6862">Espresso ground, photos flush, share-ready</span>
+      </div>
+
+      <div data-screen-label="1b Gallery" style="width:1080px;background:#33251f;border-radius:18px;overflow:hidden;box-shadow:0 18px 40px rgba(42,33,28,0.22)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:32px 34px 24px 34px">
+          <div>
+            <div style="font-weight:700;font-size:10.5px;letter-spacing:1.6px;color:rgba(247,243,238,0.45)">JULY 27 → AUGUST 31, 2026</div>
+            <div style="font-family:'Protest Strike';font-size:33px;color:#f7f3ee;line-height:1.1;margin-top:5px">Maddie · five weeks</div>
+          </div>
+          <img src="assets/kova-mark-cream.png" alt="Kova Strength" style="width:58px;height:58px;display:block;opacity:0.9;flex-shrink:0">
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+          <div style="position:relative;background:#241a16;aspect-ratio:540/760">
+            <img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block">
+            <div style="position:absolute;left:0;bottom:0;right:0;padding:44px 16px 14px 16px;background:linear-gradient(to top,rgba(24,16,13,0.88),rgba(24,16,13,0))">
+              <div style="font-weight:700;font-size:15px;color:#f7f3ee">Jul 27</div>
+              <div style="font-size:12px;color:rgba(247,243,238,0.55);margin-top:1px">no weigh-in</div>
+            </div>
+          </div>
+          <div style="position:relative;background:#241a16;aspect-ratio:540/760">
+            <img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block">
+            <div style="position:absolute;left:0;bottom:0;right:0;padding:44px 16px 14px 16px;background:linear-gradient(to top,rgba(24,16,13,0.88),rgba(24,16,13,0))">
+              <div style="font-weight:700;font-size:15px;color:#f7f3ee">Aug 18</div>
+              <div style="font-size:12px;color:rgba(247,243,238,0.72);margin-top:1px">183.2 lb</div>
+            </div>
+          </div>
+          <div style="position:relative;background:#241a16;aspect-ratio:540/760">
+            <img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block">
+            <div style="position:absolute;left:0;bottom:0;right:0;padding:44px 16px 14px 16px;background:linear-gradient(to top,rgba(24,16,13,0.88),rgba(24,16,13,0))">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-weight:700;font-size:15px;color:#f7f3ee">Aug 31</span>
+                <span style="font-weight:600;font-size:11px;color:#c9dbb4;background:rgba(141,173,112,0.22);border-radius:99px;padding:2px 8px">−4.0 lb</span>
+              </div>
+              <div style="font-size:12px;color:rgba(247,243,238,0.72);margin-top:1px">179.2 lb</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:30px;padding:26px 34px 30px 34px">
+          <div>
+            <div style="font-family:'Protest Strike';font-size:40px;color:#c9dbb4;line-height:1">−4.0 lb</div>
+            <div style="font-weight:600;font-size:10.5px;letter-spacing:1.4px;color:rgba(247,243,238,0.42);margin-top:3px">SINCE FIRST WEIGH-IN</div>
+          </div>
+          <div style="width:1px;height:46px;background:rgba(247,243,238,0.16)"></div>
+          <div>
+            <div style="font-family:'Protest Strike';font-size:40px;color:#f7f3ee;line-height:1">5</div>
+            <div style="font-weight:600;font-size:10.5px;letter-spacing:1.4px;color:rgba(247,243,238,0.42);margin-top:3px">WEEKS OF PHOTOS</div>
+          </div>
+          <div style="flex:1"></div>
+          <span style="font-weight:600;font-size:11px;letter-spacing:1.2px;color:rgba(247,243,238,0.32)">IDAHO FALLS, ID</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="1c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:#33251f;color:#f7f3ee;font-weight:700;font-size:11px;letter-spacing:0.8px;border-radius:99px;padding:4px 10px">1c</span>
+        <span style="font-weight:700;font-size:14px;color:#2a211c">Aligned</span>
+        <span style="font-size:12.5px;color:#6f6862">Shared reference lines you can actually read change against</span>
+      </div>
+
+      <div data-screen-label="1c Aligned" style="width:1080px;background:#faf8f6;border:1px solid #ded8d0;border-radius:18px;overflow:hidden;box-shadow:0 18px 40px rgba(42,33,28,0.10)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:32px 40px 22px 40px;border-bottom:1px solid #ece7e1">
+          <div style="display:flex;align-items:center;gap:16px">
+            <img src="assets/kova-mark-espresso.png" alt="Kova Strength" style="width:52px;height:52px;display:block;flex-shrink:0">
+            <div>
+              <div style="font-weight:700;font-size:17px;color:#2a211c">Maddie Kerr</div>
+              <div style="font-size:12.5px;color:#6f6862;margin-top:1px">Front view · July 27 → August 31, 2026</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;background:#e3ead9;border-radius:99px;padding:7px 15px">
+            <span style="width:7px;height:7px;border-radius:99px;background:#4d6142"></span>
+            <span style="font-weight:700;font-size:13px;color:#4d6142">−4.0 lb since first weigh-in</span>
+          </div>
+        </div>
+
+        <div style="padding:24px 40px 0 114px">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;position:relative">
+            <div style="border-radius:8px;overflow:hidden;background:#ece7e1;aspect-ratio:540/760"><img src="assets/n1.png" alt="July 27" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+            <div style="border-radius:8px;overflow:hidden;background:#ece7e1;aspect-ratio:540/760"><img src="assets/n2.png" alt="August 18" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+            <div style="border-radius:8px;overflow:hidden;background:#ece7e1;aspect-ratio:540/760"><img src="assets/n3.png" alt="August 31" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+
+            <div style="position:absolute;left:0;right:0;top:7.895%;height:1px;background:rgba(42,33,28,0.5);box-shadow:0 1px 0 rgba(250,248,246,0.5);pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;top:51%;height:1px;background:rgba(164,106,87,0.9);box-shadow:0 1px 0 rgba(250,248,246,0.45);pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:1px;background:rgba(42,33,28,0.5);box-shadow:0 -1px 0 rgba(250,248,246,0.5);pointer-events:none"></div>
+
+            <div style="position:absolute;left:-74px;width:66px;top:7.895%;transform:translateY(-50%);display:flex;align-items:center;justify-content:flex-end;gap:7px;pointer-events:none">
+              <span style="font-weight:600;font-size:10px;letter-spacing:0.8px;color:#a8a29e">CROWN</span>
+              <span style="width:8px;height:1px;background:#d9d4cd"></span>
+            </div>
+            <div style="position:absolute;left:-74px;width:66px;top:51%;transform:translateY(-50%);display:flex;align-items:center;justify-content:flex-end;gap:7px;pointer-events:none">
+              <span style="font-weight:600;font-size:10px;letter-spacing:0.8px;color:#8a5140">WAIST</span>
+              <span style="width:8px;height:1px;background:#e0cbc2"></span>
+            </div>
+            <div style="position:absolute;left:-74px;width:66px;bottom:0;transform:translateY(50%);display:flex;align-items:center;justify-content:flex-end;gap:7px;pointer-events:none">
+              <span style="font-weight:600;font-size:10px;letter-spacing:0.8px;color:#a8a29e">FLOOR</span>
+              <span style="width:8px;height:1px;background:#d9d4cd"></span>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:14px 40px 0 114px">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <span style="font-weight:700;font-size:13.5px;color:#2a211c">Jul 27</span>
+                <span style="font-size:12.5px;color:#9a9187">—</span>
+              </div>
+              <div style="height:4px;border-radius:99px;background:#ece7e1"></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <span style="font-weight:700;font-size:13.5px;color:#2a211c">Aug 18</span>
+                <span style="font-weight:600;font-size:12.5px;color:#6f6862">183.2 lb</span>
+              </div>
+              <div style="height:4px;border-radius:99px;background:#ddd6cd"></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <span style="font-weight:700;font-size:13.5px;color:#2a211c">Aug 31</span>
+                <span style="font-weight:700;font-size:12.5px;color:#4d6142">179.2 lb</span>
+              </div>
+              <div style="height:4px;border-radius:99px;background:#8fb473"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:24px 40px 28px 40px">
+          <span style="font-weight:600;font-size:11.5px;letter-spacing:0.8px;color:#a8a29e">KOVA STRENGTH</span>
+          <span style="font-size:11.5px;color:#a8a29e">Same camera distance, same standing spot, same scale</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showGuides&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Share card&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { showGuides: this.props.showGuides ?? true };
+  }
+}
+</script>
+</body>
+</html>
