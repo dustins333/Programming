@@ -104,8 +104,15 @@ function OwnRequestRow({ request, onCancel }) {
         <Text className="flex-1 pr-3" style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
           {request.description}
         </Text>
+        {/* A blank-amount request stores 0, and "$0.00" next to a pending
+            row reads as "you are getting nothing" rather than "an admin
+            still has to set this". */}
         <Text style={{ fontFamily: fonts.sansBold, color: approved ? "#4d6142" : colors.primaryOnWhite }}>
-          {money(approved ? request.approved_amount : request.amount_requested)}
+          {approved
+            ? money(request.approved_amount)
+            : Number(request.amount_requested) === 0
+              ? "amount TBD"
+              : money(request.amount_requested)}
         </Text>
       </View>
       <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
@@ -260,10 +267,27 @@ export default function PayrollExtraPay() {
     return openSections[key] ?? defaultOpen[key] ?? false;
   }
 
+  // Only the description is required. The amount is deliberately optional
+  // and may be zero: for some request types (holiday pay, say) the real
+  // figure is one only an admin can work out, and a coach who cannot file
+  // without guessing a number would either guess wrong or not file at all.
+  // Blank means zero, and an admin has to type a real amount before the
+  // approve button on their side will fire.
+  const amountTrimmed = amount.trim();
+  const requestAmount = amountTrimmed === "" ? 0 : Number(amountTrimmed);
+  const amountUsable = Number.isFinite(requestAmount) && requestAmount >= 0;
+  // Deliberately not a hard `disabled` on the button \u2014 the button dims but
+  // still presses, so tapping it says what is missing instead of doing nothing.
+  const requestReady = Boolean(description.trim()) && amountUsable;
+
   const handleSubmit = async () => {
-    const amt = Number(amount);
-    if (!description.trim() || !Number.isFinite(amt) || amt <= 0) {
-      toastError("A description and a positive amount are both required");
+    const amt = requestAmount;
+    if (!description.trim()) {
+      toastError("A description is required");
+      return;
+    }
+    if (!amountUsable) {
+      toastError("Leave the amount blank, or enter $0 or more");
       return;
     }
     setSubmitting(true);
@@ -275,7 +299,16 @@ export default function PayrollExtraPay() {
       setOpenSections((s) => ({ ...s, new: false, pending: true }));
       await loadRequests();
     } catch (err) {
-      toastError("Failed to submit request", err);
+      // custom_requests_dedup_idx is (staff_email, pay_period_start,
+      // description, amount_requested). Two blank-amount requests both land
+      // at 0, so an identical description in the same period now collides
+      // far more easily than it did when every request carried its own
+      // number \u2014 say what to do about it instead of surfacing a raw 23505.
+      if (err?.code === "23505") {
+        toastError("You already have a request with that exact description this period \u2014 add the date or a detail to tell them apart");
+      } else {
+        toastError("Failed to submit request", err);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -448,23 +481,26 @@ export default function PayrollExtraPay() {
                         style={{ fontFamily: fonts.sans }}
                       />
                       <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                        Amount ($)
+                        Amount ($) <Text style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>optional</Text>
                       </Text>
                       <TextInput
                         value={amount}
                         onChangeText={setAmount}
                         onFocus={() => scrollFieldIntoView(requestCardRef.current)}
-                        placeholder="0.00"
+                        placeholder="Leave blank if an admin works it out"
                         keyboardType="decimal-pad"
                         inputAccessoryViewID={NUMERIC_DONE_ID}
-                        className="mb-4 rounded-lg border border-stone-300 px-3 py-2.5"
+                        className="mb-1.5 rounded-lg border border-stone-300 px-3 py-2.5"
                         style={{ fontFamily: fonts.sans }}
                       />
+                      <Text className="mb-4 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
+                        Leave it blank for something like holiday pay, where an admin sets the figure when they approve it.
+                      </Text>
                       <Pressable
                         onPress={handleSubmit}
                         disabled={submitting}
                         className="items-center rounded-lg px-5 py-3"
-                        style={{ backgroundColor: colors.primary, opacity: submitting ? 0.6 : 1 }}
+                        style={{ backgroundColor: colors.primary, opacity: submitting || !requestReady ? 0.5 : 1 }}
                       >
                         <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
                           {submitting ? "Submitting…" : "Submit request"}

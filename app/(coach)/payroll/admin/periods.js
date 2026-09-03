@@ -26,16 +26,17 @@ import {
   REVIEW_NOT_SUBMITTED,
 } from "../../../../lib/payroll/finalizations";
 import { listPendingRequestsForPeriod } from "../../../../lib/payroll/requests";
-import { listEntriesForPeriodAllStaff } from "../../../../lib/payroll/entries";
+import { listEntriesForPeriodAllStaff, createAdminEntry, deleteEntry } from "../../../../lib/payroll/entries";
 import { computeTotals, formatMoney, formatQuantity } from "../../../../lib/payroll/calc";
 import { buildPeriodCsv, downloadCsv } from "../../../../lib/payroll/csvExport";
 import { formatDateMDY, formatDateRange } from "../../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../../lib/toast";
 import { sendPush } from "../../../../lib/notifications/sendPush";
-import { confirmClosePayPeriod } from "../../../../lib/confirmDialog";
+import { confirmClosePayPeriod, confirmDeletePayrollEntry } from "../../../../lib/confirmDialog";
 import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
 import { AdminPayrollTabBar } from "../../../../components/AdminPayrollTabBar";
+import { AddPayeeModal } from "../../../../components/payroll/AddPayeeModal";
 import {
   StaffReviewRow,
   REVIEW_COLUMNS,
@@ -168,6 +169,7 @@ export default function AdminPayrollPeriods() {
   const [closing, setClosing] = useState(false);
   const [expandedUserId, setExpandedUserId] = useState(null);
   const [busyUserId, setBusyUserId] = useState(null);
+  const [addPayeeOpen, setAddPayeeOpen] = useState(false);
 
   // Read inside the focus effect rather than closed over — a mount-only
   // closure would silently snap a hand-picked period back to the current
@@ -316,6 +318,30 @@ export default function AdminPayrollPeriods() {
     setExpandedUserId(null);
     setLoading(true);
     load();
+  };
+
+  // Pay for someone with no app account. Reloads entries only — nothing
+  // about finalizations changes, since this person has none to submit.
+  const refreshEntries = async () => {
+    setEntries(await listEntriesForPeriodAllStaff(selectedPeriod));
+  };
+
+  const handleAddPayee = async (payee, fields) => {
+    await createAdminEntry(selectedPeriod, payee, fields, profile.id);
+    await refreshEntries();
+    toastSuccess(`${payee.name} added to this period.`);
+  };
+
+  const handleRemoveEntry = async (entry) => {
+    const label = [entry.staff_name, entry.custom_description].filter(Boolean).join(" \u2014 ");
+    if (!(await confirmDeletePayrollEntry(label))) return;
+    try {
+      await deleteEntry(entry.id);
+      await refreshEntries();
+      toastSuccess("Removed.");
+    } catch (err) {
+      toastError("Failed to remove the line", err);
+    }
   };
 
   const withBusy = async (userId, fn, successMessage) => {
@@ -471,6 +497,25 @@ export default function AdminPayrollPeriods() {
                 on every page load was noise; the confirm dialog names them
                 at the one moment it matters. */}
 
+            {/* Sits above the table rather than inside it: someone with no
+                app account has no row of their own until they are paid, so
+                there is nowhere in the table for this to hang off. Hidden
+                on a closed period, where RLS blocks the write anyway. */}
+            {!closed ? (
+              <View className="mb-3 flex-row justify-end">
+                <Pressable
+                  onPress={() => setAddPayeeOpen(true)}
+                  className="flex-row items-center rounded-full border px-3.5 py-2"
+                  style={{ borderColor: "#e7e5e4", backgroundColor: "white", gap: 6 }}
+                >
+                  <Ionicons name="add" size={14} color={colors.primaryOnWhite} />
+                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: colors.primaryOnWhite }}>
+                    Pay someone not in the app
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             {/* flexGrow on the content container lets the table fill a wide
                 window; minWidth is what makes it scroll instead of squashing
                 on a narrow one. All the extra width lands in the staff
@@ -524,6 +569,8 @@ export default function AdminPayrollPeriods() {
                         expanded={expandedUserId === row.staff.id}
                         busy={busyUserId === row.staff.id}
                         periodClosed={closed}
+                        noAccount={row.unlinked}
+                        onRemoveEntry={handleRemoveEntry}
                         onToggleExpand={() => setExpandedUserId((id) => (id === row.staff.id ? null : row.staff.id))}
                         onApprove={() => withBusy(row.staff.id, () => approveFinalization(row.finalization.id, profile.id), `Approved ${row.staff.name}.`)}
                         onUnapprove={() => withBusy(row.staff.id, () => unapproveFinalization(row.finalization.id))}
@@ -572,6 +619,14 @@ export default function AdminPayrollPeriods() {
           </>
         )}
       </ScrollView>
+      {selectedPeriod ? (
+        <AddPayeeModal
+          visible={addPayeeOpen}
+          periodStart={selectedPeriod}
+          onClose={() => setAddPayeeOpen(false)}
+          onSubmit={handleAddPayee}
+        />
+      ) : null}
     </CoachShell>
   );
 }

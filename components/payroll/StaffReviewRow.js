@@ -141,7 +141,7 @@ function Num({ value, money, muted }) {
 // flat and chronological rather than grouped by category — the admin is
 // scanning for "did anything odd happen this fortnight", and an outlier is
 // easier to spot against its own neighbours in time.
-function EntryDetail({ entries, rateMaps, totals }) {
+function EntryDetail({ entries, rateMaps, totals, onRemoveEntry }) {
   const items = REVIEW_COLUMNS.concat({ key: "custom" })
     .flatMap((col) => entriesForCategory(entries, col.key, rateMaps).map((it) => ({ ...it, category: col.key })))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -226,6 +226,16 @@ function EntryDetail({ entries, rateMaps, totals }) {
             <Text className="text-right" style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c", width: 84 }}>
               {formatMoney(item.amount)}
             </Text>
+            {/* Only ever offered on a line an admin keyed in by hand, and
+                only while the period is open. A coach's own logged entries
+                are theirs to fix on their own screen; a hand-keyed total
+                has no other undo, so a typo would otherwise mean paying the
+                wrong amount with no way back. */}
+            {onRemoveEntry && item.entry?.source === "admin_entry" ? (
+              <Pressable onPress={() => onRemoveEntry(item.entry)} hitSlop={8} className="pl-2">
+                <Ionicons name="trash-outline" size={14} color="#b23a22" />
+              </Pressable>
+            ) : null}
           </View>
         );
       })}
@@ -249,6 +259,11 @@ export function StaffReviewRow({
   expanded,
   busy,
   periodClosed,
+  // No app account behind this row — a cleaner or contractor paid through
+  // it, or a departed coach's imported entries. There is no finalization
+  // to wait for, so the rail must not say there is.
+  noAccount = false,
+  onRemoveEntry,
   onToggleExpand,
   onApprove,
   onUnapprove,
@@ -258,7 +273,11 @@ export function StaffReviewRow({
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteShown, setNoteShown] = useState(false);
   const [note, setNote] = useState("");
-  const tone = STATE_STYLE[state];
+  // A payee with no app account has no finalization to be waiting on, so
+  // the usual "Not finalized yet" would be permanently, misleadingly true
+  // of them. Same reason the action rail says "Not an app user" rather than
+  // "Waiting on Callie".
+  const tone = noAccount ? { ...STATE_STYLE[REVIEW_NOT_SUBMITTED], label: "Paid outside the app" } : STATE_STYLE[state];
   const needsReview = state === REVIEW_SUBMITTED;
   const firstName = (staff.name ?? "").split(/\s+/)[0] || "them";
 
@@ -325,6 +344,10 @@ export function StaffReviewRow({
               width={ACTION_WIDTH}
               onPress={finalization?.send_back_note ? () => setNoteShown((v) => !v) : undefined}
             />
+          </ReviewRail>
+        ) : noAccount ? (
+          <ReviewRail>
+            <RailButton label="Not an app user" width={ACTION_WIDTH} tone="muted" />
           </ReviewRail>
         ) : (
           <ReviewRail>
@@ -397,7 +420,16 @@ export function StaffReviewRow({
         </View>
       ) : null}
 
-      {expanded ? <View className="px-5 pb-4">{<EntryDetail entries={entries} rateMaps={rateMaps} totals={totals} />}</View> : null}
+      {expanded ? (
+        <View className="px-5 pb-4">
+          <EntryDetail
+            entries={entries}
+            rateMaps={rateMaps}
+            totals={totals}
+            onRemoveEntry={periodClosed ? null : onRemoveEntry}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
