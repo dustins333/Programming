@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import { View, Text, TextInput, ScrollView, ActivityIndicator, Modal, useWindowDimensions } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
@@ -12,6 +12,11 @@ import { getClient as getNutritionClient } from "../../../lib/nutrition/clients"
 import { getClientGoal } from "../../../lib/programming/clientGoals";
 import { deriveSpcState, resolveClientPrograms, monthDay, SPC_ENROLLMENT_LABELS } from "../../../lib/programming/spcState";
 import { calendarWeekNumber } from "../../../lib/programming/schedule";
+import { listSpcSessionActivity, sessionActivityState, activityKey } from "../../../lib/programming/spcSessionActivity";
+import { getSpcBlockDetail } from "../../../lib/programming/spcBlockDetail";
+import { finalizeSpcSession, unfinalizeSpcSession } from "../../../lib/programming/sessionCompletions";
+import { boiseInstantFrom } from "../../../lib/boiseDate";
+import { SpcSessionReadout } from "../../SpcSessionReadout";
 import { describeLastSession } from "../../../lib/programming/spcRoster";
 import { todayInBoise, daysBetween, dateInBoise, addDays } from "../../../lib/boiseDate";
 import { formatDateRange } from "../../../lib/formatDate";
@@ -82,11 +87,140 @@ function weekdayOf(iso) {
   return WEEKDAY[new Date(`${iso}T12:00:00`).getDay()];
 }
 
+/* ----------------------------------------------------- session pills */
+
+// Until this, these pills were a tally: `target` slots with the first N
+// filled, N being how many completions that week had. So pill 1 was not
+// Session 1, it was the first of three slots — which is why nothing could be
+// clicked (there was no session behind it to open) and why a week where she
+// did sessions 2 and 3 drew as though she had done 1 and 2.
+//
+// Three states, three shapes. Solid means she said she was done. An olive
+// outline means the sets are there and the tap never happened. Grey means
+// nothing. Deliberately no partial fill: a half-filled pill implies a ratio,
+// and the real numbers are one tap away in the expansion.
+function SessionPill({ state, future }) {
+  const finalized = state === "finalized";
+  const started = state === "started";
+  return (
+    <View
+      style={{
+        width: 34,
+        height: 13,
+        borderRadius: 6,
+        backgroundColor: finalized ? "#8fb473" : "transparent",
+        borderWidth: finalized ? 0 : started ? 2 : 1,
+        borderStyle: future ? "dashed" : "solid",
+        borderColor: started ? "#8fb473" : "#d9d4cd",
+      }}
+    />
+  );
+}
+
+function sessionLine(entry, notStarted, startDate) {
+  if (entry.state === "finalized" && entry.completedAt) {
+    const d = dateInBoise(new Date(entry.completedAt));
+    return `Finalized ${weekdayOf(d)} ${monthDay(d)}`;
+  }
+  if (entry.state === "started") {
+    return `${entry.loggedSets} sets logged${entry.lastLoggedDate ? ` ${weekdayOf(entry.lastLoggedDate)}` : ""} · not finalized`;
+  }
+  if (entry.loggedSets > 0) return `${entry.loggedSets} set${entry.loggedSets === 1 ? "" : "s"} logged`;
+  if (notStarted) return `Starts Mon ${monthDay(startDate)}`;
+  return "Nothing logged";
+}
+
+// Tapping the WEEK opens it, not the pill. A pill is 34x13, well under the
+// 44pt target this app holds everywhere else, and SpcClientPage is one file
+// for both widths so whatever it becomes lands on a phone too. Expanding also
+// makes room for the session title and the real set count, and it handles a
+// week holding more sessions than the weekly target.
+function WeekRow({ week, weekStart, future, current, entries, expanded, onToggle, onOpenSession, notStarted, startDate }) {
+  const target = entries.length;
+  const done = entries.filter((e) => e.state !== "untouched").length;
+  const anyStarted = entries.some((e) => e.state === "started");
+  return (
+    <View style={{ borderTopWidth: week === 1 ? 0 : 1, borderTopColor: "#f4f1ec" }}>
+      <PressFade
+        onPress={onToggle}
+        style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11 }}
+      >
+        <Text style={{ width: 30, fontFamily: fonts.sansBold, fontSize: 12.5, color: current ? colors.primaryOnWhite : "#78716c" }}>
+          W{week}
+        </Text>
+        <Text style={{ width: 56, fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>{monthDay(weekStart)}</Text>
+        <View style={{ flex: 1, flexDirection: "row", gap: 5, flexWrap: "wrap" }}>
+          {entries.map((e) => (
+            <SessionPill key={e.key} state={e.state} future={future} />
+          ))}
+        </View>
+        <Text
+          style={{
+            fontFamily: fonts.sansSemiBold,
+            fontSize: 12,
+            color: future ? "#c9c4bd" : done >= target ? "#4d6142" : "#c58a3a",
+          }}
+        >
+          {future ? "–" : `${done}/${target}`}
+        </Text>
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={15} color="#a8a29e" />
+      </PressFade>
+
+      {expanded ? (
+        <View style={{ paddingBottom: 8, gap: 6 }}>
+          {anyStarted ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#7d6a60", paddingLeft: 42 }}>
+              An olive outline means she logged the work and never tapped Finalize. Open it to settle it.
+            </Text>
+          ) : null}
+          {entries.map((e) => (
+            <PressFade
+              key={e.key}
+              onPress={() => onOpenSession(e)}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                marginLeft: 42,
+                paddingVertical: 9,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: e.state === "started" ? "#c9dab6" : "#f0ece6",
+                backgroundColor: e.state === "finalized" ? "#f3f6ef" : "#fff",
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#2a211c" }} numberOfLines={1}>
+                  Session {e.workout.session_number}
+                  {e.workout.title ? <Text style={{ fontFamily: fonts.sans, color: "#78716c" }}> · {e.workout.title}</Text> : null}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: fonts.sans,
+                    fontSize: 11.5,
+                    marginTop: 1,
+                    color: e.state === "finalized" ? "#4d6142" : e.state === "started" ? "#5c7a4a" : "#a8a29e",
+                  }}
+                >
+                  {sessionLine(e, notStarted, startDate)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={15} color="#c9c4bd" />
+            </PressFade>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 /* ------------------------------------------------------------- overview */
 
 // Exported for the visual harness — a real component boundary, not a test seam.
-export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, member, completionKeys, sessionWorkouts, stats, lastSessionAt, onGoSessions, onGoPrint }) {
+export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, member, completionKeys, activity = new Map(), sessionWorkouts, stats, lastSessionAt, onOpenSession, onGoSessions, onGoPrint }) {
   const router = useRouter();
+  const [openWeek, setOpenWeek] = useState(null);
   const clientFirst = firstNameOf(member?.name);
   const target = spcClient?.sessions_per_week ?? 1;
   const tone = statusColors[derived.tone] ?? statusColors.paused;
@@ -140,12 +274,28 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
       : Math.max(weekNumber ?? 1, 1)
     : 0;
 
-  const countForWeek = (w) => {
-    let n = 0;
-    // .keys(), not the Map itself — iterating a Map yields [key, value] pairs.
-    for (const key of completionKeys.keys()) if (Number(key.split(":")[1]) === w) n += 1;
-    return n;
-  };
+  // One entry per real session, in programmed order — not a tally. This is
+  // what makes a pill clickable: it carries the session it stands for.
+  const entriesForWeek = (w) =>
+    sessionWorkouts.map((workout) => {
+      const key = activityKey(workout.id, w);
+      const completedAt = completionKeys.get(key) ?? null;
+      const act = activity.get(key);
+      const loggedSets = act?.loggedSets ?? 0;
+      return {
+        key,
+        week: w,
+        workout,
+        completedAt,
+        loggedSets,
+        lastLoggedDate: act?.lastLoggedDate ?? null,
+        state: sessionActivityState({ completedAt, loggedSets }),
+      };
+    });
+
+  // Counts a started session as done. The sets are the evidence she trained;
+  // Finalize is her confirmation, not the event.
+  const countForWeek = (w) => entriesForWeek(w).filter((e) => e.state !== "untouched").length;
 
   // personalRecords comes back date-descending already (exerciseStats.js).
   const prs = (stats?.personalRecords ?? []).slice(0, 3);
@@ -194,34 +344,45 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
             </Text>
           )}
           <View style={{ flexDirection: "row", gap: 9, marginTop: 11, flexWrap: "wrap" }}>
-            {sessionWorkouts.map((w) => {
-              const done = completionKeys.has(`${w.id}:${weekNumber}`);
-              const completedAt = done ? completionKeys.get(`${w.id}:${weekNumber}`) : null;
+            {(weekNumber ? entriesForWeek(weekNumber) : []).map((e) => {
+              const done = e.state === "finalized";
+              const started = e.state === "started";
               return (
-                <View
-                  key={w.id}
+                <PressFade
+                  key={e.key}
+                  onPress={() => onOpenSession?.(e)}
                   style={{
                     flex: 1,
                     minWidth: 130,
                     borderRadius: 10,
                     padding: 12,
                     backgroundColor: done ? "#dbe8cf" : "#fff",
-                    borderWidth: done ? 0 : 1.5,
-                    borderStyle: done ? "solid" : "dashed",
-                    borderColor: "#d9d4cd",
+                    borderWidth: done ? 0 : started ? 2 : 1.5,
+                    borderStyle: done || started ? "solid" : "dashed",
+                    borderColor: started ? "#8fb473" : "#d9d4cd",
                   }}
                 >
-                  <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: done ? "#3d5036" : "#2a211c" }}>
-                    Session {w.session_number}
+                  <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: done ? "#3d5036" : "#2a211c" }} numberOfLines={1}>
+                    Session {e.workout.session_number}
+                    {e.workout.title ? <Text style={{ fontFamily: fonts.sans, color: "#78716c" }}> · {e.workout.title}</Text> : null}
                   </Text>
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: done ? "#4d6142" : "#78716c", marginTop: 2 }}>
-                    {done && completedAt
-                      ? `Logged ${weekdayOf(dateInBoise(new Date(completedAt)))}`
-                      : notStarted
-                        ? "Starts Mon " + monthDay(current.block_start_date)
-                        : "Not yet"}
+                  <Text
+                    style={{
+                      fontFamily: fonts.sans,
+                      fontSize: 11.5,
+                      marginTop: 2,
+                      color: done ? "#4d6142" : started ? "#5c7a4a" : "#78716c",
+                    }}
+                  >
+                    {done && e.completedAt
+                      ? `Logged ${weekdayOf(dateInBoise(new Date(e.completedAt)))}`
+                      : started
+                        ? `${e.loggedSets} sets · not finalized`
+                        : notStarted
+                          ? "Starts Mon " + monthDay(current.block_start_date)
+                          : "Not yet"}
                   </Text>
-                </View>
+                </PressFade>
               );
             })}
           </View>
@@ -238,41 +399,21 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
               : `Since ${monthDay(current.block_start_date)} · ongoing`}
           </Text>
           <View style={{ marginTop: 10 }}>
-            {Array.from({ length: weeksToShow }, (_, i) => i + 1).map((w) => {
-              const weekStart = addDays(current.block_start_date, (w - 1) * 7);
-              const future = weekNumber != null && w > weekNumber;
-              const count = countForWeek(w);
-              return (
-                <View
-                  key={w}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8, borderTopWidth: w === 1 ? 0 : 1, borderTopColor: "#f4f1ec" }}
-                >
-                  <Text style={{ width: 30, fontFamily: fonts.sansBold, fontSize: 12.5, color: w === weekNumber ? colors.primaryOnWhite : "#78716c" }}>
-                    W{w}
-                  </Text>
-                  <Text style={{ width: 56, fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>{monthDay(weekStart)}</Text>
-                  <View style={{ flex: 1, flexDirection: "row", gap: 5 }}>
-                    {Array.from({ length: target }, (_, i) => i).map((i) => (
-                      <View
-                        key={i}
-                        style={{
-                          width: 34,
-                          height: 13,
-                          borderRadius: 6,
-                          backgroundColor: i < count ? "#8fb473" : "transparent",
-                          borderWidth: i < count ? 0 : 1,
-                          borderStyle: future ? "dashed" : "solid",
-                          borderColor: "#d9d4cd",
-                        }}
-                      />
-                    ))}
-                  </View>
-                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: future ? "#c9c4bd" : count >= target ? "#4d6142" : "#c58a3a" }}>
-                    {future ? "–" : `${count}/${target}`}
-                  </Text>
-                </View>
-              );
-            })}
+            {Array.from({ length: weeksToShow }, (_, i) => i + 1).map((w) => (
+              <WeekRow
+                key={w}
+                week={w}
+                weekStart={addDays(current.block_start_date, (w - 1) * 7)}
+                future={weekNumber != null && w > weekNumber}
+                current={w === weekNumber}
+                entries={entriesForWeek(w)}
+                expanded={openWeek === w}
+                onToggle={() => setOpenWeek((v) => (v === w ? null : w))}
+                onOpenSession={(e) => onOpenSession?.(e)}
+                notStarted={notStarted}
+                startDate={current.block_start_date}
+              />
+            ))}
           </View>
 
           {upcoming ? (
@@ -500,6 +641,15 @@ export function SpcClientPage({ userId }) {
   const [statsError, setStatsError] = useState(null);
   const [sessionWorkouts, setSessionWorkouts] = useState([]);
   const [completionKeys, setCompletionKeys] = useState(new Map());
+  // Map<`${workoutId}:${week}`, {loggedSets, lastLoggedDate}> — what she
+  // actually logged, whether or not she ever tapped Finalize.
+  const [activity, setActivity] = useState(new Map());
+  // getSpcBlockDetail is only fetched when a session is opened, and cached
+  // per block: it pulls prescriptions, notes and every log in the run, which
+  // is far more than the Overview itself needs.
+  const [detail, setDetail] = useState(null);
+  const [readoutKey, setReadoutKey] = useState(null);
+  const [openingSession, setOpeningSession] = useState(false);
   const [lastSessionAt, setLastSessionAt] = useState(null);
   const [notesDraft, setNotesDraft] = useState("");
   const [tab, setTab] = useState("Overview");
@@ -547,18 +697,26 @@ export function SpcClientPage({ userId }) {
           const workouts = await listSpcWorkoutsForBlock(cur.id);
           const sorted = workouts.sort((a, b) => a.session_number - b.session_number);
           setSessionWorkouts(sorted);
-          const details = await listSpcCompletionDetailsForWorkouts(userId, sorted.map((w) => w.id));
+          const [details, acts] = await Promise.all([
+            listSpcCompletionDetailsForWorkouts(userId, sorted.map((w) => w.id)),
+            // Isolated from the completions fetch: an activity failure should
+            // cost the started state, never the whole card.
+            listSpcSessionActivity({ userId, block: cur, workouts: sorted }).catch(() => new Map()),
+          ]);
           setCompletionKeys(details);
+          setActivity(acts);
           let latest = null;
           for (const at of details.values()) if (!latest || at > latest) latest = at;
           setLastSessionAt(latest);
         } catch {
           setSessionWorkouts([]);
           setCompletionKeys(new Map());
+          setActivity(new Map());
         }
       } else {
         setSessionWorkouts([]);
         setCompletionKeys(new Map());
+        setActivity(new Map());
         setLastSessionAt(null);
       }
     } catch (err) {
@@ -587,12 +745,23 @@ export function SpcClientPage({ userId }) {
   const weekNumber = current ? calendarWeekNumber(current.block_start_date, today) : null;
   const ongoing = Boolean(current && current.block_end_date == null);
   const daysLeft = current?.block_end_date ? daysBetween(current.block_end_date, today) : null;
+  // Counts a session she logged but never finalized. deriveSpcState reads
+  // this as finalWeekDone, so without it a client who trained her whole final
+  // week and forgot to tap Finalize reads as still working, and the prompt to
+  // write her next program never fires.
   const thisWeekCount = useMemo(() => {
     if (!weekNumber) return 0;
     let n = 0;
-    for (const key of completionKeys.keys()) if (Number(key.split(":")[1]) === weekNumber) n += 1;
+    for (const w of sessionWorkouts) {
+      const key = activityKey(w.id, weekNumber);
+      const state = sessionActivityState({
+        completedAt: completionKeys.get(key) ?? null,
+        loggedSets: activity.get(key)?.loggedSets ?? 0,
+      });
+      if (state !== "untouched") n += 1;
+    }
     return n;
-  }, [completionKeys, weekNumber]);
+  }, [completionKeys, activity, sessionWorkouts, weekNumber]);
 
   const derived = deriveSpcState({
     status: spcClient?.status,
@@ -606,6 +775,62 @@ export function SpcClientPage({ userId }) {
     notStarted,
     notes: spcClient?.notes_goals_feedback,
   });
+
+  // Opening a session is what pulls the heavy read. Cached per block, so
+  // walking a run session by session fetches once.
+  const openSession = useCallback(
+    async (entry) => {
+      if (!current) return;
+      setOpeningSession(true);
+      try {
+        const d = detail?.block?.id === current.id ? detail : await getSpcBlockDetail(userId, current.id, today);
+        setDetail(d);
+        setReadoutKey(entry.key);
+      } catch (err) {
+        toastError("Couldn't open that session", err);
+      } finally {
+        setOpeningSession(false);
+      }
+    },
+    [current, detail, userId, today]
+  );
+
+  const readoutSession = useMemo(
+    () => (readoutKey ? (detail?.sessions ?? []).find((x) => x.key === readoutKey) ?? null : null),
+    [detail, readoutKey]
+  );
+
+  // After settling a session the completion has moved, so everything keyed on
+  // it is stale: the pills, the week counts, and deriveSpcState's finalWeekDone.
+  // load() re-reads all of it; the block detail is dropped so the read-out
+  // re-fetches rather than showing the state it was opened in.
+  const afterSettle = useCallback(async () => {
+    setDetail(null);
+    setReadoutKey(null);
+    await load();
+  }, [load]);
+
+  const handleFinalize = useCallback(
+    async (dateString) => {
+      if (!readoutSession) return;
+      // Noon Boise on the day she trained, never today — finalizeSpcSession
+      // resolves the completion's week from this timestamp, so today's date
+      // would file a week-2 session under whatever week today falls in. A bare
+      // YYYY-MM-DD would be stored as UTC midnight and read back as the
+      // previous evening in Boise, which is the .slice(0,10) bug class.
+      await finalizeSpcSession(userId, readoutSession.id, boiseInstantFrom(dateString, "12:00"));
+      toastSuccess("Marked finalized");
+      await afterSettle();
+    },
+    [readoutSession, userId, afterSettle]
+  );
+
+  const handleUnfinalize = useCallback(async () => {
+    if (!readoutSession) return;
+    await unfinalizeSpcSession(userId, readoutSession.id, { completedAt: readoutSession.completedAt });
+    toastSuccess("Session reopened");
+    await afterSettle();
+  }, [readoutSession, userId, afterSettle]);
 
   const patch = async (fields, message) => {
     try {
@@ -670,9 +895,11 @@ export function SpcClientPage({ userId }) {
           spcClient={spcClient}
           member={member}
           completionKeys={completionKeys}
+          activity={activity}
           sessionWorkouts={sessionWorkouts}
           stats={stats}
           lastSessionAt={lastSessionAt}
+          onOpenSession={openSession}
           onGoSessions={() => setTab("Sessions")}
           onGoPrint={() => setTab("Print")}
         />
@@ -702,6 +929,39 @@ export function SpcClientPage({ userId }) {
         />
       ) : null}
       {tab === "Print" ? <PrintTab current={current} sessionWorkouts={sessionWorkouts} /> : null}
+
+      {/* Opening a session pulls the whole block, which is not instant. Said
+          out loud rather than leaving a tap look like it did nothing. */}
+      <Modal visible={openingSession} transparent animationType="none">
+        <View style={{ flex: 1, backgroundColor: "rgba(68,64,60,0.2)", alignItems: "center", justifyContent: "center" }}>
+          <View style={{ backgroundColor: "#fff", borderRadius: 14, paddingVertical: 20, paddingHorizontal: 28, alignItems: "center", gap: 10 }}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#78716c" }}>Opening session…</Text>
+          </View>
+        </View>
+      </Modal>
+
+      <SpcSessionReadout
+        visible={Boolean(readoutSession)}
+        session={readoutSession}
+        logsByDate={detail?.logsByDate ?? new Map()}
+        personalRecords={stats?.personalRecords ?? []}
+        memberName={member?.name}
+        blockLabel={current?.block_end_date ? formatDateRange(current.block_start_date, current.block_end_date) : null}
+        onClose={() => setReadoutKey(null)}
+        onFinalize={handleFinalize}
+        onUnfinalize={handleUnfinalize}
+        onPrev={(() => {
+          const all = detail?.sessions ?? [];
+          const i = all.findIndex((x) => x.key === readoutKey);
+          return i > 0 ? () => setReadoutKey(all[i - 1].key) : null;
+        })()}
+        onNext={(() => {
+          const all = detail?.sessions ?? [];
+          const i = all.findIndex((x) => x.key === readoutKey);
+          return i >= 0 && i < all.length - 1 ? () => setReadoutKey(all[i + 1].key) : null;
+        })()}
+      />
     </View>
   );
 

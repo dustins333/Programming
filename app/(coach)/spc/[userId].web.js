@@ -62,6 +62,9 @@ const CARD_BORDER = "#ece7e1";
 
 const CELL_STATES = {
   logged: { border: "#4d6142", bg: "#fff", dot: "#4d6142", label: "logged" },
+  // Sets logged, Finalize never tapped. Olive because she trained, dashed
+  // because she hasn't said she's done.
+  started: { border: "#8fb473", bg: "#fff", dot: "#8fb473", label: "started", dashed: true },
   due: { border: colors.primary, bg: "#fff", dot: "#c58a3a", label: "due" },
   upcoming: { border: CARD_BORDER, bg: "#fff", dot: "#d6d1ca", label: "upcoming" },
   skipped: { border: CARD_BORDER, bg: "#faf8f6", dot: "#c9c4bd", label: "skipped" },
@@ -245,6 +248,7 @@ function SessionCell({ session, onPress, copyRole, onStartCopy }) {
   const detail = (() => {
     switch (session.state) {
       case "logged":
+      case "started":
         return `${session.loggedSets} of ${session.programmedSets} sets`;
       case "skipped":
         return "Skipped";
@@ -262,6 +266,9 @@ function SessionCell({ session, onPress, copyRole, onStartCopy }) {
 
   const when = (() => {
     if (session.state === "logged" && session.loggedDate) return `Logged ${formatDateMD(session.loggedDate)}`;
+    if (session.state === "started") {
+      return session.lastLoggedDate ? `Started ${formatDateMD(session.lastLoggedDate)} · not finalized` : "Not finalized";
+    }
     if (session.state === "due") return "Published · due this week";
     if (session.state === "skipped") return "Not logged";
     if (session.state === "upcoming") return "Published";
@@ -576,7 +583,7 @@ function SpcClientDesktop() {
     // A logged session opens the read-out; anything else opens the builder,
     // because the only useful thing to do with an unlogged session is write
     // or finish it.
-    if (session.state === "logged") setReadoutSession(session);
+    if (session.state === "logged" || session.state === "started") setReadoutSession(session);
     else router.push(`/(coach)/spc/builder/${session.id}`);
   };
 
@@ -1275,13 +1282,13 @@ function SpcClientDesktop() {
         onClose={() => setReadoutSession(null)}
         onPrev={(() => {
           if (!detail || !readoutSession) return null;
-          const logged = detail.sessions.filter((s) => s.state === "logged");
+          const logged = detail.sessions.filter((s) => s.state === "logged" || s.state === "started");
           const i = logged.findIndex((s) => s.key === readoutSession.key);
           return i > 0 ? () => setReadoutSession(logged[i - 1]) : null;
         })()}
         onNext={(() => {
           if (!detail || !readoutSession) return null;
-          const logged = detail.sessions.filter((s) => s.state === "logged");
+          const logged = detail.sessions.filter((s) => s.state === "logged" || s.state === "started");
           const i = logged.findIndex((s) => s.key === readoutSession.key);
           return i >= 0 && i < logged.length - 1 ? () => setReadoutSession(logged[i + 1]) : null;
         })()}

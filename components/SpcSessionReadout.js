@@ -1,9 +1,13 @@
-import { useMemo } from "react";
-import { View, Text, Pressable, ScrollView, Modal } from "react-native";
+import { useMemo, useState } from "react";
+import { View, Text, Pressable, ScrollView, Modal, useWindowDimensions } from "react-native";
 import { buildSessionReadout, supersetLettersFor } from "../lib/programming/spcBlockDetail";
 import { formatDateTimeInBoise } from "../lib/boiseDate";
+import { formatDateMDY } from "../lib/formatDate";
+import { confirmUnfinalizeSession } from "../lib/confirmDialog";
+import { toastError } from "../lib/toast";
 import { formatRest } from "./builder/SessionBuilderParts";
 import { fonts } from "../lib/theme";
+import { MOBILE_BREAKPOINT } from "./CoachShell";
 
 // SPC session read-out (design_handoff_coach_web_v2, screen 16).
 //
@@ -93,7 +97,54 @@ function ResultBadge({ row }) {
   );
 }
 
-function ExerciseRow({ row, supersetLetter, showSupersetHeader, inSuperset }) {
+// Four columns need ~700px to breathe. This read-out was desktop-only until
+// the client page started opening it, and at phone width the EXERCISE column
+// squeezed to about 40px — "Back Squat" rendered as "Bac k …" and a coach note
+// came out one letter per line. Narrow stacks instead: name and verdict on one
+// line, then what was asked, then what she did.
+function ExerciseRow({ row, supersetLetter, showSupersetHeader, inSuperset, narrow }) {
+  if (narrow) {
+    return (
+      <View
+        style={{
+          paddingVertical: 12,
+          paddingHorizontal: inSuperset ? 12 : 0,
+          borderTopWidth: showSupersetHeader ? 0 : 1,
+          borderTopColor: "#f4f1ec",
+          gap: 7,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+          <Text style={{ flex: 1, minWidth: 0, fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }} numberOfLines={2}>
+            {row.name}
+          </Text>
+          <ResultBadge row={row} />
+        </View>
+        <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
+          {[
+            `Asked for ${row.programmed}`,
+            supersetLetter ? `SS ${supersetLetter}` : null,
+            row.lift.tempo ? `tempo ${row.lift.tempo}` : null,
+            row.lift.rest ? `rest ${formatRest(row.lift.rest)}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+          {row.sets.map((set) => (
+            <SetChip key={set.setNumber} set={set} />
+          ))}
+        </View>
+        {row.note ? (
+          <View style={{ backgroundColor: "#faf8f6", borderRadius: 8, paddingVertical: 7, paddingHorizontal: 10 }}>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#57534e", fontStyle: "italic" }}>
+              “{row.note}”
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
   return (
     <View
       style={{
@@ -148,7 +199,25 @@ function ExerciseRow({ row, supersetLetter, showSupersetHeader, inSuperset }) {
   );
 }
 
-export function SpcSessionReadout({ visible, onClose, session, logsByDate, personalRecords, memberName, blockLabel, onPrev, onNext }) {
+export function SpcSessionReadout({
+  visible,
+  onClose,
+  session,
+  logsByDate,
+  personalRecords,
+  memberName,
+  blockLabel,
+  onPrev,
+  onNext,
+  // Optional. Given both, the coach can settle a session she knows happened:
+  // finalize is one tap (it corrects a forgotten tap on the member's side),
+  // reopening is confirm-gated. A caller that passes neither renders no bar.
+  onFinalize,
+  onUnfinalize,
+}) {
+  const [busy, setBusy] = useState(false);
+  const { width } = useWindowDimensions();
+  const narrow = width < MOBILE_BREAKPOINT;
   const readout = useMemo(
     () => (session ? buildSessionReadout({ session, logsByDate, personalRecords }) : null),
     [session, logsByDate, personalRecords]
@@ -158,10 +227,14 @@ export function SpcSessionReadout({ visible, onClose, session, logsByDate, perso
   if (!session || !readout) return null;
 
   const prCount = readout.rows.filter((r) => r.result === "pr").length;
+  const sessionLabel = session.title || `Session ${session.session_number}`;
+  // Finalizing needs a day to file the completion against, so a session with
+  // no attributed sets offers nothing — there is no honest date to use.
+  const showBar = session.completedAt ? Boolean(onUnfinalize) : Boolean(onFinalize && session.lastLoggedDate);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(68,64,60,0.35)", alignItems: "center", justifyContent: "center", padding: 28 }}>
+      <View style={{ flex: 1, backgroundColor: "rgba(68,64,60,0.35)", alignItems: "center", justifyContent: "center", padding: narrow ? 10 : 28 }}>
         <View
           style={{
             width: "100%",
@@ -177,15 +250,15 @@ export function SpcSessionReadout({ visible, onClose, session, logsByDate, perso
               flexDirection: "row",
               alignItems: "flex-start",
               gap: 14,
-              paddingHorizontal: 24,
-              paddingVertical: 18,
+              paddingHorizontal: narrow ? 16 : 24,
+              paddingVertical: narrow ? 14 : 18,
               borderBottomWidth: 1,
               borderBottomColor: CARD_BORDER,
             }}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
               <Eyebrow>
-                {[memberName, blockLabel, `WEEK ${session.week_number}`, `SESSION ${session.session_number}`]
+                {[narrow ? null : memberName, narrow ? null : blockLabel, `WEEK ${session.week_number}`, `SESSION ${session.session_number}`]
                   .filter(Boolean)
                   .join(" · ")
                   .toUpperCase()}
@@ -195,7 +268,11 @@ export function SpcSessionReadout({ visible, onClose, session, logsByDate, perso
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 9, marginTop: 4, flexWrap: "wrap" }}>
                 <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
-                  {session.completedAt ? `Logged ${formatDateTimeInBoise(session.completedAt)}` : "Not logged"}
+                  {session.completedAt
+                    ? `Logged ${formatDateTimeInBoise(session.completedAt)}`
+                    : session.lastLoggedDate
+                      ? `Trained ${formatDateMDY(session.lastLoggedDate)} · not finalized`
+                      : "Not logged"}
                 </Text>
                 {prCount > 0 ? (
                   <View style={{ backgroundColor: "#e3ead9", borderRadius: 99, paddingVertical: 3, paddingHorizontal: 9 }}>
@@ -233,7 +310,7 @@ export function SpcSessionReadout({ visible, onClose, session, logsByDate, perso
             </View>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 30 }}>
+          <ScrollView contentContainerStyle={{ padding: narrow ? 16 : 24, paddingBottom: 30 }}>
             <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
               <StatTile
                 label="SETS COMPLETED"
@@ -250,7 +327,7 @@ export function SpcSessionReadout({ visible, onClose, session, logsByDate, perso
               />
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingBottom: 9 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingBottom: 9, display: narrow ? "none" : "flex" }}>
               <View style={{ flex: 1.5 }}>
                 <Eyebrow>EXERCISE</Eyebrow>
               </View>
@@ -315,15 +392,99 @@ export function SpcSessionReadout({ visible, onClose, session, logsByDate, perso
                     ) : null}
                     <ExerciseRow
                       row={row}
-                      supersetLetter={null}
+                      supersetLetter={narrow ? letters[row.supersetGroupId] : null}
                       showSupersetHeader={startsSuperset}
                       inSuperset={inSuperset}
+                      narrow={narrow}
                     />
                   </View>
                 );
               })
             )}
           </ScrollView>
+
+          {/* Settling the session. A coach standing in front of the sets knows
+              whether they were a workout; nothing else in the app does, which
+              is why this is a human tap and not an auto-finalize or a nightly
+              scan. It finalizes onto the day she TRAINED, not today, or the
+              completion files into the wrong week. */}
+          {showBar ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+                paddingHorizontal: narrow ? 16 : 24,
+                paddingVertical: 14,
+                borderTopWidth: 1,
+                borderTopColor: CARD_BORDER,
+                backgroundColor: "#faf8f6",
+              }}
+            >
+              <Text style={{ flex: 1, minWidth: 180, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
+                {session.completedAt
+                  ? "She marked this finished."
+                  : `${readout.setsCompleted} set${readout.setsCompleted === 1 ? "" : "s"} logged, never finalized. Mark it if she trained.`}
+              </Text>
+              {session.completedAt ? (
+                <Pressable
+                  onPress={async () => {
+                    if (busy) return;
+                    if (!(await confirmUnfinalizeSession(sessionLabel))) return;
+                    setBusy(true);
+                    try {
+                      await onUnfinalize();
+                    } catch (err) {
+                      toastError("Couldn't reopen it", err);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  disabled={busy}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: CARD_BORDER,
+                    borderRadius: 9,
+                    paddingVertical: 9,
+                    paddingHorizontal: 15,
+                    backgroundColor: "#fff",
+                    opacity: busy ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#57534e" }}>
+                    {busy ? "Reopening…" : "Reopen session"}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={async () => {
+                    if (busy) return;
+                    setBusy(true);
+                    try {
+                      await onFinalize(session.lastLoggedDate);
+                    } catch (err) {
+                      toastError("Couldn't finalize it", err);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  disabled={busy}
+                  style={{
+                    borderRadius: 9,
+                    paddingVertical: 9,
+                    paddingHorizontal: 15,
+                    backgroundColor: "#4d6142",
+                    opacity: busy ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#fff" }}>
+                    {busy ? "Marking…" : `Mark finalized · ${formatDateMDY(session.lastLoggedDate)}`}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          ) : null}
         </View>
       </View>
     </Modal>
