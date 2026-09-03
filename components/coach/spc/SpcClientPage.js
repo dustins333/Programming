@@ -117,6 +117,29 @@ function SessionPill({ state, future }) {
   );
 }
 
+// One entry per real session in a given week, in programmed order. A
+// sessions-format run has one workout row spanning every week (0105), so all
+// of them apply; a legacy weekly block already has a row per week, so only
+// that week's do.
+function buildWeekEntries({ block, workouts, completionKeys, activity, week }) {
+  const forWeek = block?.format === "weekly" ? workouts.filter((w) => w.week_number === week) : workouts;
+  return forWeek.map((workout) => {
+    const key = activityKey(workout.id, week);
+    const completedAt = completionKeys.get(key) ?? null;
+    const act = activity.get(key);
+    const loggedSets = act?.loggedSets ?? 0;
+    return {
+      key,
+      week,
+      workout,
+      completedAt,
+      loggedSets,
+      lastLoggedDate: act?.lastLoggedDate ?? null,
+      state: sessionActivityState({ completedAt, loggedSets }),
+    };
+  });
+}
+
 function sessionLine(entry, notStarted, startDate) {
   if (entry.state === "finalized" && entry.completedAt) {
     const d = dateInBoise(new Date(entry.completedAt));
@@ -274,24 +297,10 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
       : Math.max(weekNumber ?? 1, 1)
     : 0;
 
-  // One entry per real session, in programmed order — not a tally. This is
-  // what makes a pill clickable: it carries the session it stands for.
+  // Not a tally: each entry carries the session it stands for, which is what
+  // makes a pill openable.
   const entriesForWeek = (w) =>
-    sessionWorkouts.map((workout) => {
-      const key = activityKey(workout.id, w);
-      const completedAt = completionKeys.get(key) ?? null;
-      const act = activity.get(key);
-      const loggedSets = act?.loggedSets ?? 0;
-      return {
-        key,
-        week: w,
-        workout,
-        completedAt,
-        loggedSets,
-        lastLoggedDate: act?.lastLoggedDate ?? null,
-        state: sessionActivityState({ completedAt, loggedSets }),
-      };
-    });
+    buildWeekEntries({ block: current, workouts: sessionWorkouts, completionKeys, activity, week: w });
 
   // Counts a started session as done. The sets are the evidence she trained;
   // Finalize is her confirmation, not the event.
@@ -500,7 +509,7 @@ const HISTORY_SEGMENTS = [
 ];
 
 // Exported for the visual harness, same as OverviewTab.
-export function HistoryTab({ userId, blocks, today, stats, statsError, onRetryStats, isDesktop }) {
+export function HistoryTab({ userId, blocks, today, stats, statsError, onRetryStats, isDesktop, onOpenSession }) {
   const [view, setView] = useState("lifts");
   return (
     <View>
@@ -510,14 +519,20 @@ export function HistoryTab({ userId, blocks, today, stats, statsError, onRetrySt
       {view === "lifts" ? (
         <LiftHistory userId={userId} stats={stats} statsError={statsError} onRetry={onRetryStats} isDesktop={isDesktop} />
       ) : (
-        <ProgramRuns userId={userId} blocks={blocks} today={today} />
+        <ProgramRuns userId={userId} blocks={blocks} today={today} onOpenSession={onOpenSession} />
       )}
     </View>
   );
 }
 
-function ProgramRuns({ userId, blocks, today }) {
+function ProgramRuns({ userId, blocks, today, onOpenSession }) {
   const [runs, setRuns] = useState(null);
+  const [openBlock, setOpenBlock] = useState(null);
+  const [openWeek, setOpenWeek] = useState(null);
+  // Per-block, fetched the first time a run is opened. A coach opens one run,
+  // not fourteen, so pulling every finished block's sessions up front would be
+  // most of a page load thrown away.
+  const [inner, setInner] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -550,6 +565,27 @@ function ProgramRuns({ userId, blocks, today }) {
     };
   }, [userId, blocks, today]);
 
+  const toggleBlock = async (block) => {
+    setOpenWeek(null);
+    if (openBlock === block.id) {
+      setOpenBlock(null);
+      return;
+    }
+    setOpenBlock(block.id);
+    if (inner[block.id]) return;
+    try {
+      const workouts = (await listSpcWorkoutsForBlock(block.id)).sort((a, b) => a.session_number - b.session_number);
+      const [completions, activity] = await Promise.all([
+        listSpcCompletionDetailsForWorkouts(userId, workouts.map((w) => w.id)).catch(() => new Map()),
+        listSpcSessionActivity({ userId, block, workouts }).catch(() => new Map()),
+      ]);
+      setInner((m) => ({ ...m, [block.id]: { workouts, completions, activity } }));
+    } catch (err) {
+      toastError("Couldn't open that program", err);
+      setOpenBlock(null);
+    }
+  };
+
   if (runs == null) return <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />;
   if (runs.length === 0) {
     return (
@@ -562,25 +598,62 @@ function ProgramRuns({ userId, blocks, today }) {
   }
   return (
     <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, overflow: "hidden" }}>
-      {runs.map(({ block, logged }, i) => (
-        <View
-          key={block.id}
-          style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13, paddingHorizontal: 16, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: "#f4f1ec" }}
-        >
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }}>
-              {formatDateRange(block.block_start_date, block.block_end_date)}
-            </Text>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
-              {block.block_length_weeks} week{block.block_length_weeks === 1 ? "" : "s"}
-              {block.format === "weekly" ? " · built week by week" : ""}
-            </Text>
+      {runs.map(({ block, logged }, i) => {
+        const expanded = openBlock === block.id;
+        const data = inner[block.id];
+        return (
+          <View key={block.id} style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: "#f4f1ec" }}>
+            <PressFade
+              onPress={() => toggleBlock(block)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13, paddingHorizontal: 16 }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }}>
+                  {formatDateRange(block.block_start_date, block.block_end_date)}
+                </Text>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
+                  {block.block_length_weeks} week{block.block_length_weeks === 1 ? "" : "s"}
+                  {block.format === "weekly" ? " · built week by week" : ""}
+                </Text>
+              </View>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: logged > 0 ? "#4d6142" : "#a8a29e" }}>
+                {logged} session{logged === 1 ? "" : "s"} logged
+              </Text>
+              <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={15} color="#a8a29e" />
+            </PressFade>
+
+            {expanded ? (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 6, backgroundColor: "#fdfcfa" }}>
+                {!data ? (
+                  <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+                ) : (
+                  Array.from({ length: block.block_length_weeks ?? 0 }, (_, k) => k + 1).map((w) => (
+                    <WeekRow
+                      key={w}
+                      week={w}
+                      weekStart={addDays(block.block_start_date, (w - 1) * 7)}
+                      future={false}
+                      current={false}
+                      entries={buildWeekEntries({
+                        block,
+                        workouts: data.workouts,
+                        completionKeys: data.completions,
+                        activity: data.activity,
+                        week: w,
+                      })}
+                      expanded={openWeek === `${block.id}:${w}`}
+                      onToggle={() => setOpenWeek((v) => (v === `${block.id}:${w}` ? null : `${block.id}:${w}`))}
+                      onOpenSession={(e) => onOpenSession?.(e, block.id)}
+                      notStarted={false}
+                      startDate={block.block_start_date}
+                    />
+                  ))
+                )}
+              </View>
+            ) : null}
           </View>
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: logged > 0 ? "#4d6142" : "#a8a29e" }}>
-            {logged} session{logged === 1 ? "" : "s"} logged
-          </Text>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -778,12 +851,17 @@ export function SpcClientPage({ userId }) {
 
   // Opening a session is what pulls the heavy read. Cached per block, so
   // walking a run session by session fetches once.
+  // blockId is optional so the Overview can just say "this entry"; History
+  // passes the finished run the row belongs to. One read-out, reached from
+  // both, so "what did she do in this session" has one answer wherever a coach
+  // asks it.
   const openSession = useCallback(
-    async (entry) => {
-      if (!current) return;
+    async (entry, blockId = null) => {
+      const targetId = blockId ?? current?.id;
+      if (!targetId) return;
       setOpeningSession(true);
       try {
-        const d = detail?.block?.id === current.id ? detail : await getSpcBlockDetail(userId, current.id, today);
+        const d = detail?.block?.id === targetId ? detail : await getSpcBlockDetail(userId, targetId, today);
         setDetail(d);
         setReadoutKey(entry.key);
       } catch (err) {
@@ -926,6 +1004,7 @@ export function SpcClientPage({ userId }) {
           statsError={statsError}
           onRetryStats={loadStats}
           isDesktop={isDesktop}
+          onOpenSession={openSession}
         />
       ) : null}
       {tab === "Print" ? <PrintTab current={current} sessionWorkouts={sessionWorkouts} /> : null}
@@ -947,7 +1026,11 @@ export function SpcClientPage({ userId }) {
         logsByDate={detail?.logsByDate ?? new Map()}
         personalRecords={stats?.personalRecords ?? []}
         memberName={member?.name}
-        blockLabel={current?.block_end_date ? formatDateRange(current.block_start_date, current.block_end_date) : null}
+        blockLabel={
+          detail?.block?.block_end_date
+            ? formatDateRange(detail.block.block_start_date, detail.block.block_end_date)
+            : null
+        }
         onClose={() => setReadoutKey(null)}
         onFinalize={handleFinalize}
         onUnfinalize={handleUnfinalize}
