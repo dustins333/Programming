@@ -5891,6 +5891,91 @@ unresolved-identifier / unused-import pass over all 16 touched files.
 close out a real week and confirm the client leaves the red group on the
 roster, then set a phase on Reviewer and page back through the weeks.
 
+## A logged session that was never finalized (2026-09-02)
+
+Terra: "I am struggling without being able to see a client's sessions... if
+someone forgets to finalize, I can't see how many they have done." Four
+commits, **no migration** — every fact needed already existed.
+
+**The premise to keep**: `programming.logs` has carried `spc_workout_id` +
+`week_number` since **0063**, stamped from the first keystroke, and that
+migration's own header says why it is not a reference to
+`session_completions`: *"a completion row only exists once the member taps
+Finalize, but autosave writes logs continuously."* So the log row IS the
+record and the completion is the confirmation. Nothing read the logs back as
+evidence, so every coach surface treated a forgotten tap as a no-show. On the
+day this was built, four clients had 14-18 sets against a session their page
+drew as empty.
+
+**Do not "fix" this with an auto-finalize or a nightly scan.** Both were
+considered and rejected: neither can tell a finished session from an
+abandoned one, and a coach looking at the sets can. Auto-finalize also
+collides with the celebratory finalize on the live board (`c5bc2fa`) — it
+would fire confetti mid-keystroke and then un-fire on a typo fix.
+
+- **`lib/programming/spcSessionActivity.js`** is the single definition:
+  `STARTED_SET_FLOOR = 2`, `isLoggedSet`, `sessionActivityState`,
+  `activityKey`, `listSpcSessionActivity`. Three surfaces ask "has she
+  started this"; three copies would drift the way five copies of `daysBetween`
+  ended up with three rounding rules. **Two sets in the SESSION, not on one
+  lift** — per-lift misses someone who did one set each on three lifts. Husk
+  rows (`logResult` updates even to null) never count.
+- **The pills on the client page were a tally, not sessions** — `target`
+  slots with the first N filled. That is the whole reason nothing was
+  clickable: there was no session behind a pill. It also drew a week where she
+  did sessions 2 and 3 as though she had done 1 and 2. Now one entry per real
+  session; **tapping the WEEK expands it**, not the pill (34x13 is far under
+  44pt, and this file serves both widths). Every session is reachable
+  whatever its state, so the floor only changes what a pill *claims*.
+- **Finalizing on her behalf must use the day she TRAINED.**
+  `finalizeSpcSession` resolves the completion's week from the timestamp it is
+  given, so today's date files a week-2 session into today's week. Use
+  `boiseInstantFrom(date, "12:00")`, never a bare `YYYY-MM-DD` (stored as UTC
+  midnight, reads back as the previous evening).
+  `unfinalizeSpcSession` gained the same optional `completedAt` — it resolved
+  against today and so could not reopen a past week at all. Still a date, not
+  a week number, so the rule that no caller supplies a raw week holds.
+- **`SpcSessionReadout` had been unreachable since the 0105 cutover** — only
+  ever wired to the legacy `[userId].web.js`, which `hasLiveWeeklyWorld` now
+  returns false for on every client. It is the single destination from the
+  Overview timeline, the History tab and (already) the legacy grid.
+- **It was never only cosmetic**: `deriveSpcState`'s `finalWeekDone` counts
+  completions, so a client who trained her whole final week and forgot to tap
+  Finalize read as still working and the prompt to write her next program
+  never fired.
+
+**Three separate stale-model bugs found while doing it, all the same shape —
+0105 made one `spc_workouts` row span a whole run, and code written against
+0016's row-per-(block, week, session) is still out there:**
+1. `buildSpcCalendar` placed each row in exactly one week, so **55 of 61 live
+   sessions-format blocks** drew "not written yet" for every week after the
+   first. `getSpcBlockDetail` got this expansion on 2026-08-31; the calendar
+   never did. Expanding also means a bar's key must be `workoutId:week`, an
+   expanded bar is **not** a moved bar (the authored week is always 1), and it
+   is not movable (a move would shift every week's copy).
+2. `describeCompletion` preferred the workout row's week, labelling every SPC
+   session "Week 1" — wrong for **8 of 38** live completions. The completion's
+   own `week_number` is resolved by `spcCompletionWeek` and is right under
+   both models, so it leads now.
+3. The readout's PR matching keyed on `loggedDate`, which is
+   completion-derived and null for exactly the sessions this makes openable.
+
+**Also**: the read-out was desktop-only until the client page started opening
+it, and at phone width its four columns squeezed EXERCISE to ~40px — "Back
+Squat" rendered "Bac k …" and a note came out one letter per line. It stacks
+below `MOBILE_BREAKPOINT` now.
+
+**Verification worth copying**: the SQL simulation of the feed's grouping
+against the live database is what proved the blast radius (names, dates and
+set counts for ~20 real sessions), and curling each new PostgREST select
+confirmed it parses rather than 400s. **A `grep -E '"name"' | paste - - -` on
+the CLI's JSON beats a clever regex** — a non-greedy `\[.*?\]` parser
+reported "0 rows" for a query that had twenty, and nearly sent me chasing a
+bug that did not exist.
+
+**Not done, deliberately**: `listRecentSessionsForUser` (the "Recent sessions"
+card on the group client profile) still reads completions only.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
