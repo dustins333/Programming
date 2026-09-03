@@ -6052,6 +6052,90 @@ identifier pass over all five touched files. **Not verified behind a real
 login** — standing limitation. Worth Terra's pass on a real board, especially
 a client mid-block whose count should read her real week.
 
+## Payroll: adjustable approvals, non-app payees, and the Gusto backfill (2026-09-03)
+
+**Custom requests.** The admin can set the amount when approving; the amount
+is optional (and may be zero) when a coach submits. `approveRequest` had
+always taken an `approvedAmount` and written it onto the pay entry, and
+`approved_amount` / the "asked $X" line / the history row's "what was
+actually paid" logic all existed — the screen just hardcoded
+`amount_requested` into the call. The driving case is holiday pay: only an
+admin can work out the figure (an average of the last four days), so a coach
+who could not file without guessing would guess wrong or not file at all.
+Blank stores 0, reads as **amount TBD** on her own row, and seeds the admin's
+field **empty** with "no amount asked" rather than a `0` to edit around. A
+note can be recorded with the decision, wired to **both** Approve and Deny —
+a field sitting above both buttons that only one honoured would be the
+surprising option — and it renders back in the Decided table. **Zero amounts
+make `custom_requests_dedup_idx` (staff, period, description,
+amount_requested) collide far more easily**, so a 23505 now explains itself.
+
+**Non-app payees** (migration `0114`). Someone can be paid without being an
+app user — Callie White cleans the gym. **Nothing structural was missing**:
+`pay_entries.user_id` is nullable, name/email are snapshotted on every row,
+`admin insert pay_entries` only ever required `core.is_admin()` (it never
+mentions `user_id`), and every reader already groups on `user_id ??
+staff_email` and renders an **unlinked** row — that machinery exists because
+of Kelsie Neidner, a departed coach whose 41 rows are keyed on email alone.
+Only a way to *create* one was missing, plus an honest `source` value.
+Two display bugs such a row hits: the action rail said "Waiting on {name}"
+and the status said "Not finalized yet", both permanently and misleadingly
+true of someone with no app. `clampToPeriod` moved from `requests.js` into
+`periods.js` so both callers share one money-dating rule.
+
+### pay_periods' three money columns mean exactly this
+
+Reverse-engineered from `2026-08-06`, the one period Terra had filled by
+hand, then confirmed against `get_payroll` — **do not re-derive these**:
+
+| column | = |
+|---|---|
+| `owner_pay` | Terra Smout's gross in that period's **regular** Gusto payroll |
+| `staff_pay` | that payroll's `gross_pay` minus Terra |
+| `taxes_paid` | that payroll's **`employer_taxes`** |
+| grand total | `owner + staff + taxes` == Gusto's **`company_debit`** (the real bank debit) |
+
+**Kova's period `start_date` equals Gusto's `pay_period.start_date` exactly**
+— no offset, still true as of 2026-09-03.
+
+That validation also explained the workaround: Kova's `2026-08-06` read
+`taxes_paid 780.23` against Gusto's `660.23`, and `staff_pay` was short by
+the same amount — **Terra had padded taxes by exactly Callie's $120** so the
+grand total still tied out. Callie is a real Gusto employee (~$60/period
+through 2025, $120 from 2026-01).
+
+All **22 closed periods are now backfilled from Gusto** and every grand total
+ties to `company_debit` to the cent (`2026-08-06` corrected in the same pass).
+Rollback and the generated SQL are in that session's scratchpad
+(`rollback_pay_periods.sql` / `backfill_pay_periods.sql`); the three open
+periods are left for the app's own close flow. **Terra does not appear in any
+2025 payroll** — owner pay is genuinely `0.00` there, not missing data; she
+starts at `2025-12-25` ($2,471.32 — the same figure the 2026-08-21 audit
+found corrupted to $247,132 on a custom request).
+
+**`get_employee_earnings_summary` scoped to one period returns only the
+REGULAR payroll** (`payrolls_analyzed: 1`), excluding off-cycle runs sharing
+those dates — verified by summing its employees to that run's `gross_pay`.
+That is why the backfill is regular-run-only and internally consistent.
+
+**Known gap, deliberately not backfilled**: three real off-cycle runs are
+represented nowhere in Kova — `2026-02-05` two Adhoc runs ($1,473.82 +
+$995.27 commissions, $126.70 + $84.39 employer taxes) and `2026-04-02` a
+Bonus run ($1,523.77, $129.21). Adding them would break the
+owner+staff+taxes==company_debit identity above unless all three columns move
+together.
+
+**Open bug, found in passing and NOT fixed**:
+`.claude/skills/payroll-to-gusto/compute_totals.mjs` computes **$34,072.46**
+for Kristan Alford on `2026-07-09`, where Gusto paid $775.45. Her 15
+`pay_entries` for that period are all normal (~$700 of real work) and the
+period's `closed_period_rate_snapshots` row is correct, so **the bug is in
+the script, not the data** — most likely string-vs-number handling, since
+`dbQuery` returns `numeric` as strings and `computeTotals` does
+`totals.groupCount += entry.group_sessions || 0`. The skill's own notes
+already flag this period as one where Kova and Gusto disagreed. Anything
+reading that script's per-staff totals is suspect until it is run down.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
