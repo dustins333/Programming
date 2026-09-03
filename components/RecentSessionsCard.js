@@ -277,9 +277,21 @@ export function SessionRow({ userId, session, title, subtitle, avatarName, onOpe
             the dashboard feed `title` is the member's name, so the session
             label moves down a line there instead. */}
         <View className="flex-1 pr-3">
-          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13.5 }} className="text-stone-700">
-            {title ?? session.label}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13.5 }} className="text-stone-700" numberOfLines={1}>
+              {title ?? session.label}
+            </Text>
+            {/* She trained; the tap never happened. Said on the row rather
+                than left to look identical to a finished session, since the
+                whole point of listing it is that it isn't one. */}
+            {session.finalized === false ? (
+              <View style={{ borderWidth: 1, borderColor: "#8fb473", borderRadius: 999, paddingHorizontal: 7, paddingVertical: 1 }}>
+                <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.6, color: "#4d6142" }}>
+                  NOT FINALIZED
+                </Text>
+              </View>
+            ) : null}
+          </View>
           <Text className="text-xs text-stone-400" style={{ fontFamily: fonts.sans }} numberOfLines={1}>
             {subtitle ??
               `${title ? `${session.label} · ${formatDateMDY(session.date)}` : formatDateMDY(session.date)}${
