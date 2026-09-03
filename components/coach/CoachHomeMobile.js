@@ -8,6 +8,7 @@ import { decorateAttentionItems, filterAttentionByPermission, CARD_TONES } from 
 import { dismissAttentionItem } from "../../lib/programming/dashboardDismissals";
 import { useCoachDashboard } from "../../lib/programming/useCoachDashboard";
 import { LiveSessionStrip, useOpenHubSession } from "./LiveSessionStrip";
+import { FinalizePrompt } from "../payroll/FinalizePrompt";
 import { listMembers } from "../../lib/programming/clients";
 import { formatDateMDY } from "../../lib/formatDate";
 import { CoachShell } from "../CoachShell";
@@ -542,7 +543,7 @@ export function CoachHomeMobile() {
     );
   }
 
-  const safeExtras = extras ?? { blocks: [], resume: null, gym: {}, coachCount: 0, payroll: null };
+  const safeExtras = extras ?? { blocks: [], resume: null, gym: {}, coachCount: 0, payroll: null, finalizePrompt: null };
   const attentionItems = decorateAttentionItems(
     filterAttentionByPermission(filterDismissedItems(computeAttentionItems(stats), dismissals, todayInBoise()), profile)
   );
@@ -588,6 +589,10 @@ export function CoachHomeMobile() {
         </View>
 
         {canSeeHub ? <LiveSessionStrip session={openHub} compact /> : null}
+
+        {/* Above the pulse band on purpose: it's the one thing on this
+            screen with a deadline attached to it. */}
+        <FinalizePrompt prompt={safeExtras.finalizePrompt} />
 
         <PulseBand gym={safeExtras.gym} onOpenSessions={() => setSessionsOpen(true)} />
 

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { useOwnReport } from "../../../lib/payroll/useOwnReport";
 import { computePeriodEnd, isPeriodClosed } from "../../../lib/payroll/periods";
@@ -19,7 +19,11 @@ import { FinalizeModal } from "../../../components/payroll/FinalizeModal";
 export default function PayrollReport() {
   const { profile } = useAuth();
   const router = useRouter();
-  const report = useOwnReport(profile);
+  // ?period= comes from the deadline-reminder push and from the finalize
+  // banner on the Log tab / dashboard — both point at the period that's
+  // actually owed, which by then is usually not the current one.
+  const params = useLocalSearchParams();
+  const report = useOwnReport(profile, typeof params.period === "string" ? params.period : null);
 
   const [finalization, setFinalization] = useState(null);
   const [finalizeOpen, setFinalizeOpen] = useState(false);

@@ -8,7 +8,7 @@ import {
   computePeriodEnd,
   isPeriodClosed,
   listPayPeriodOptions,
-  listWritablePeriods,
+  listSelectablePeriods,
 } from "../../../lib/payroll/periods";
 import { listAllRates } from "../../../lib/payroll/rates";
 import { listEntriesForPeriod } from "../../../lib/payroll/entries";
@@ -27,6 +27,8 @@ import {
   isLocked as isFinalizationLocked,
   listOwnFinalizations,
 } from "../../../lib/payroll/finalizations";
+import { getFinalizePrompt } from "../../../lib/payroll/finalizePrompt";
+import { FinalizePrompt } from "../../../components/payroll/FinalizePrompt";
 import { todayInBoise } from "../../../lib/boiseDate";
 import { formatDateMD, formatDateMDY, formatDateRange } from "../../../lib/formatDate";
 import { toastError } from "../../../lib/toast";
@@ -186,8 +188,12 @@ export default function PayrollEntries() {
   // only ever adds a way to reach a past one, and only when there genuinely
   // is one to reach.
   // Every period this coach can still write to, not just ones they finalized
-  // and had sent back — see listWritablePeriods.
+  // and had sent back — see listSelectablePeriods.
   const [writablePeriods, setWritablePeriods] = useState([]);
+  // Standing nag for an unsubmitted period, shown above the pills. Reads
+  // whichever period is actually owed, which is usually NOT the one this
+  // screen is showing.
+  const [finalizePrompt, setFinalizePrompt] = useState(null);
   const [ownFinalizations, setOwnFinalizations] = useState([]);
   const [currentPeriodStart, setCurrentPeriodStart] = useState(null);
   // Which period the screen is showing. A ref alongside the state for the
@@ -200,16 +206,18 @@ export default function PayrollEntries() {
     if (!profile?.id) return;
     setLoading(true);
     try {
-      const [current, options, finalizations] = await Promise.all([
+      const [current, options, finalizations, prompt] = await Promise.all([
         getCurrentPeriodStart(),
         listPayPeriodOptions(),
         listOwnFinalizations(profile.id),
+        // Isolated: a failed prompt lookup must not stop the screen a coach
+        // came here to log hours on.
+        getFinalizePrompt(profile).catch(() => null),
       ]);
       setCurrentPeriodStart(current);
       setOwnFinalizations(finalizations);
-      const writable = listWritablePeriods(options, finalizations).sort((a, b) =>
-        a.start_date < b.start_date ? 1 : -1
-      );
+      setFinalizePrompt(prompt);
+      const writable = listSelectablePeriods(options, current, finalizations);
       setWritablePeriods(writable);
 
       // Fall back to the current period if a previously-picked one has since
@@ -552,10 +560,14 @@ export default function PayrollEntries() {
             <ActivityIndicator color={colors.primary} />
           ) : (
             <>
-              {/* Every period still open to this coach, so a line item can be
-                  added to the period being reviewed even once today has
-                  rolled into the next one. Hidden when the current period is
-                  the only option, which is the usual case. */}
+              <FinalizePrompt prompt={finalizePrompt} style={{ marginBottom: 18 }} />
+
+              {/* The current period plus the previous one while it's still
+                  open to this coach, so a line item can be added to the
+                  period being reviewed even once today has rolled into the
+                  next one. Anything older is deliberately out of reach —
+                  see listSelectablePeriods. Hidden when the current period
+                  is the only option, which is the usual case. */}
               {writablePeriods.length > 1 ? (
                 <View className="mb-5 flex-row flex-wrap items-center" style={{ gap: 8 }}>
                   <Text className="text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>

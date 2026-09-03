@@ -202,6 +202,14 @@ Deno.serve(async (req) => {
           type: "payroll_deadline_reminder",
           stage,
           periodStart: targetPeriodStart,
+          // Tapping this used to drop the coach on the dashboard, leaving
+          // them to find Payroll -> My Pay -> step back a period themselves.
+          // Unprefixed by convention: public/sw.js hands this straight to
+          // clients.openWindow() as a real URL, and route groups don't
+          // appear in web paths. PushDeepLink adds "(coach)" back for the
+          // native router. The period matters — by the time either reminder
+          // fires, the one that's owed is not the current one.
+          url: `/payroll/report?period=${targetPeriodStart}`,
         });
         if (pushResult.sent > 0) results.reminded += 1;
       } catch (err) {

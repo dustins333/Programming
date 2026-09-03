@@ -8,6 +8,7 @@ import { buildLaunchCards, decorateAttentionItems, filterAttentionByPermission, 
 import { dismissAttentionItem } from "../../lib/programming/dashboardDismissals";
 import { useCoachDashboard } from "../../lib/programming/useCoachDashboard";
 import { LiveSessionStrip, useOpenHubSession } from "./LiveSessionStrip";
+import { FinalizePrompt } from "../payroll/FinalizePrompt";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
 import { SessionPreviewModal } from "../../components/SessionPreviewModal";
@@ -420,7 +421,7 @@ export function CoachHomeDesktop() {
     );
   }
 
-  const safeExtras = extras ?? { blocks: [], resume: null, gym: {}, coachCount: 0, payroll: null };
+  const safeExtras = extras ?? { blocks: [], resume: null, gym: {}, coachCount: 0, payroll: null, finalizePrompt: null };
   const cards = buildLaunchCards({ profile, stats, extras: safeExtras });
 
   const attentionItems = decorateAttentionItems(
@@ -459,6 +460,12 @@ export function CoachHomeDesktop() {
           {canSpc ? (
             <View style={{ marginBottom: 16 }}>
               <LiveSessionStrip session={openHub} />
+            </View>
+          ) : null}
+
+          {safeExtras.finalizePrompt ? (
+            <View style={{ marginBottom: 16 }}>
+              <FinalizePrompt prompt={safeExtras.finalizePrompt} />
             </View>
           ) : null}
 

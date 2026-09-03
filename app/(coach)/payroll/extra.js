@@ -26,8 +26,9 @@ import {
   isPeriodClosed,
   computePeriodEnd,
   listPayPeriodOptions,
-  listWritablePeriods,
+  listSelectablePeriods,
 } from "../../../lib/payroll/periods";
+import { listOwnFinalizations } from "../../../lib/payroll/finalizations";
 import { listOwnRequests, submitRequest, cancelOwnPendingRequest } from "../../../lib/payroll/requests";
 import { listClientsForCoach } from "../../../lib/nutrition/clients";
 import {
@@ -148,9 +149,14 @@ export default function PayrollExtraPay() {
 
   const [periodStart, setPeriodStart] = useState(null);
   const [period, setPeriod] = useState(null);
-  // Any open period can take a request — unlike pay entries, custom_requests
-  // has no finalization gate in RLS, only the closed check, so this is the
-  // plain open-period list with no finalizations passed.
+  // The current period, plus the previous while it's still open and this
+  // coach hasn't submitted it. custom_requests itself has no finalization
+  // gate in RLS (only the closed check), so the database would take a
+  // request against any open period — this matches the Log tab's own picker
+  // instead, so "which periods am I still working on" means one thing
+  // across payroll rather than two. A request for a period already
+  // submitted goes through the admin sending it back, same as a missed
+  // line item.
   const [writablePeriods, setWritablePeriods] = useState([]);
   const [currentPeriodStart, setCurrentPeriodStart] = useState(null);
   const [ownRequests, setOwnRequests] = useState([]);
@@ -191,13 +197,14 @@ export default function PayrollExtraPay() {
   const loadRequests = useCallback(async () => {
     if (!profile?.id) return;
     try {
-      const [current, options, mine] = await Promise.all([
+      const [current, options, mine, finalizations] = await Promise.all([
         getCurrentPeriodStart(),
         listPayPeriodOptions(),
         listOwnRequests(profile.id),
+        listOwnFinalizations(profile.id),
       ]);
       setCurrentPeriodStart(current);
-      const writable = listWritablePeriods(options).sort((a, b) => (a.start_date < b.start_date ? 1 : -1));
+      const writable = listSelectablePeriods(options, current, finalizations);
       setWritablePeriods(writable);
       // Keep whatever was picked if it is still open, so a refocus doesn't
       // silently drop the choice back to the current period.

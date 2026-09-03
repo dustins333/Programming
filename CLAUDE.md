@@ -6052,6 +6052,77 @@ identifier pass over all five touched files. **Not verified behind a real
 login** — standing limitation. Worth Terra's pass on a real board, especially
 a client mid-block whose count should read her real week.
 
+## Payroll: two live periods only, and a standing nag to finalize (2026-09-03)
+
+Three asks from one report. No migration; one Edge Function redeploy.
+
+**The mystery third period pill was not a closed period.** `listWritablePeriods`
+mirrors what the DATABASE accepts, which is every OPEN period — and a period
+that simply never gets closed stays writable forever. **2026-07-23 is still
+open while 2026-08-06 sits closed after it**, so it had been sitting in the
+Log and Extra pay pill rows for weeks with nothing to say why. Confirmed by
+querying `pay_periods` before touching anything: it was never a closed period
+leaking through.
+
+New `listSelectablePeriods(periods, currentPeriodStart, finalizations)` caps
+the picker to the current period plus the previous one while it's still open
+to that coach. `listWritablePeriods` is deliberately left alone as the honest
+RLS mirror — the cap is a UI rule and belongs under its own name. Applied to
+both tabs, which meant **Extra pay had to start fetching the coach's own
+finalizations** (it passed none before, since `custom_requests` has no
+finalization gate in RLS). That is a real narrowing: a coach who finalizes and
+then remembers a custom request can no longer file one for that period. The
+escape hatch is the same one a missed line item has — an admin sends it back.
+
+**The reminder push had no on-screen counterpart.** It fires twice and is
+gone; nothing in the app said "you still owe a submission." New
+`lib/payroll/finalizePrompt.js` + `components/payroll/FinalizePrompt.js`,
+rendered on the Log tab and both dashboards (via `getLaunchpadExtras`, so the
+two homes can't drift).
+
+- **When it shows** is a deliberate near-mirror of the push's two windows: the
+  previous period from the moment it ends until finalized or closed, and the
+  current period on its last day. The push waits for `payroll_deadline_time`
+  (20:00) that evening; the banner is up all day instead. Reading the setting
+  and comparing Boise clock time in two more places buys nothing, and "payroll
+  is due today" is more useful in the morning than at 8pm.
+- **It's gated on there being something to finalize**, matching report.js's own
+  `hasSomethingToFinalize` — including the nutrition-only case, where the
+  coach has zero `pay_entries` because the finalize step is what writes them.
+  Without that gate the banner sends someone to a disabled "Nothing to
+  finalize yet" button, which teaches them to ignore it.
+- **It links to My Pay, not the Log tab**: finalizing is a review action, and
+  the button lives behind the full breakdown.
+
+**The push landed on the dashboard because it carried no `url`.** Fixed by
+sending `/payroll/report?period=<start>` — unprefixed, since `public/sw.js`
+hands it straight to `clients.openWindow()`. `PushDeepLink` gained a
+`COACH_PATHS` list so the native router gets `(coach)` added back, plus a
+`matchesBase` helper that compares the PATH alone (a bare `startsWith` check
+against a url carrying `?period=` misses the exact-match case). A
+`payroll_deadline_reminder` TYPE_ROUTES entry covers already-delivered
+notifications, losing only the period. `useOwnReport` takes an optional
+`initialPeriodStart` — without it the coach tapping "finalize the period that
+just ended" landed on the CURRENT period with nothing to submit.
+
+**Verified**: `npm run build` + `check:routes` clean, a Babel parse /
+unresolved-identifier / unused-import pass over all 13 touched files, and both
+new rules extracted from the SHIPPED source and run against the **real live
+`pay_periods` table** — 12 assertions covering the stale-open period dropping
+out, sent-back reopening a pill, both-owed-on-the-last-day preferring the
+older, and a previous period with no row at all still nagging. The banner was
+rendered and tapped at 375px through a throwaway `app/zz-fpharness.js` route
+(deleted; `git status` confirmed clean). Function redeployed, `verify_jwt:
+false` confirmed preserved afterwards, and the day's reminder was already
+stamped in `payroll_deadline_reminder_last_sent` so the deploy could not
+refire it.
+
+**Not verified behind a real login** — standing limitation.
+
+**Open for Terra, data not code**: `2026-07-23 → 2026-08-05` is still open two
+cycles later while the period after it is closed. Nothing in the app reaches
+it now, but it also never got its owner/staff snapshot or its rate freeze.
+
 ## Payroll: adjustable approvals, non-app payees, and the Gusto backfill (2026-09-03)
 
 **Custom requests.** The admin can set the amount when approving; the amount
