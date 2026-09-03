@@ -50,6 +50,41 @@ function dbQuery(sql) {
   return parsed.rows || [];
 }
 
+// `supabase db query` serialises Postgres `numeric` as a JSON *string*
+// ("159.00"), where PostgREST — what the app itself uses — returns a real
+// JSON number. That difference is load-bearing: calc.js multiplies every
+// other field by a rate, which coerces a string silently, but `custom_amt`
+// is the one field added straight into the total. So a single custom-pay
+// row turned `1436.5 + "159.00"` into the string "1436.50159.00", and the
+// running total either exploded (Kristan Alford's $34,072.46 on the
+// 2026-07-09 period) or came back NaN. Coerce at this boundary rather than
+// in calc.js — the app is not affected and its inputs are already numbers.
+const NUMERIC_ENTRY_COLUMNS = [
+  "group_sessions",
+  "programs_written",
+  "admin_hours",
+  "welcome_sessions",
+  "strategy_sessions",
+  "ops_hours",
+  "other_qty",
+  "custom_amt",
+];
+
+function coerceEntryNumerics(rows) {
+  return rows.map((row) => {
+    const out = { ...row };
+    for (const col of NUMERIC_ENTRY_COLUMNS) {
+      if (out[col] === null || out[col] === undefined) continue;
+      const n = Number(out[col]);
+      if (!Number.isFinite(n)) {
+        throw new Error(`pay_entries.${col} is not numeric on row ${out.id}: ${JSON.stringify(out[col])}`);
+      }
+      out[col] = n;
+    }
+    return out;
+  });
+}
+
 function sqlDate(str) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) throw new Error(`Not a valid YYYY-MM-DD date: ${str}`);
   return str;
@@ -74,7 +109,9 @@ function main() {
     period = rows[0];
   }
 
-  const entries = dbQuery(`select * from payroll.pay_entries where pay_period_start = '${period.start_date}';`);
+  const entries = coerceEntryNumerics(
+    dbQuery(`select * from payroll.pay_entries where pay_period_start = '${period.start_date}';`)
+  );
 
   let rateMaps = null;
   if (period.closed) {
@@ -97,21 +134,38 @@ function main() {
   const mappedUsers = dbQuery(`select id, name, email, gusto_employee_uuid from core.users where gusto_employee_uuid is not null;`);
   const mappedById = new Map(mappedUsers.map((u) => [u.id, u]));
 
+  // Two very different reasons a payee can be unmapped, kept apart so the
+  // caller never has to re-derive which is which:
+  //   nonAppPayees   — no Kova account at all (user_id null). A real Gusto
+  //                    employee who just doesn't use the app (Callie the
+  //                    cleaner; a departed coach picking up a one-off).
+  //                    Supported deliberately since migration 0114. PAY THEM
+  //                    — resolve to Gusto by exact email, never by name.
+  //   unmappedCoaches — has a Kova account but no gusto_employee_uuid. That's
+  //                    a missing mapping to fix in core.users, not a person to
+  //                    hand-enter every period.
   const mapped = [];
-  const unmapped = [];
+  const nonAppPayees = [];
+  const unmappedCoaches = [];
   for (const staff of byStaff) {
-    const total = Math.round(staff.totals.total * 100) / 100;
+    const raw = Number(staff.totals.total);
+    if (!Number.isFinite(raw)) {
+      throw new Error(`Computed a non-numeric total for ${staff.staffName} (${staff.staffEmail}) — refusing to report a number that could be pushed to Gusto.`);
+    }
+    const total = Math.round(raw * 100) / 100;
     if (total <= 0) continue;
     const row = { userId: staff.userId, staffName: staff.staffName, staffEmail: staff.staffEmail, total };
     const user = staff.userId ? mappedById.get(staff.userId) : null;
     if (user) {
       mapped.push({ ...row, gustoEmployeeUuid: user.gusto_employee_uuid, kovaName: user.name });
+    } else if (staff.userId) {
+      unmappedCoaches.push(row);
     } else {
-      unmapped.push(row);
+      nonAppPayees.push(row);
     }
   }
 
-  console.log(JSON.stringify({ period, mapped, unmapped }, null, 2));
+  console.log(JSON.stringify({ period, mapped, nonAppPayees, unmappedCoaches }, null, 2));
 }
 
 main();
