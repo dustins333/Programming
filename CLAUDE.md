@@ -5039,8 +5039,23 @@ So this needed no schema at all, only:
   write exactly as they do live; it just stops polling for the open session
   and writes to the board's own date.
 - `lib/programming/hubHistory.js` + `app/(coach)/spc/sessions/` (list +
-  `[sessionId]`), reached from a third **History** segment on the live screen,
-  idle only. The detail screen renders the real `HubLiveSession` rather than a
+  `[sessionId]`), reached from a third **History** segment on the live screen.
+  **Originally idle-only, and that was wrong (fixed 2026-09-02).** Only one
+  board can be open gym-wide (0071's partial unique index on `ended_at is
+  null`), so the segment vanished the moment ANY coach started a board — a
+  coach who ended her 7am and went to write it up was locked out because
+  someone else had started the 8am, which is the normal shape of a morning
+  here. It is now offered in both states, which is safe because it is a
+  doorway rather than a pane: it navigates away instead of replacing the
+  board. One `handleSegment` serves both states so it cannot be wired into one
+  and silently missed in the other. Also linked as **Past boards** from the
+  SPC roster (phone and desktop), so reaching it never depends on the live
+  screen's own state.
+  **Only clients who were ON the board appear** — the review screen builds its
+  columns from the `hub_session_clients` snapshot. And the board is the only
+  coach-side place a lift note can be written at all: the sole writers of
+  `exercise_coaching_notes` are the hub and the member's own `SessionLogger`,
+  so a client who trained without being added to a board has no note path. The detail screen renders the real `HubLiveSession` rather than a
   read-only lookalike — a second lift card is a second thing to keep in step.
 
 Decisions taken with Terra: all coaches' boards with a "Just mine" filter (three
@@ -7400,6 +7415,34 @@ inside its own column with the keypad docked beneath it, on both surfaces —
 there is no modal on either any more. New: `HubLiftCard.js` (the open card),
 `HubDock.js`, `HubPlateCalc.js`, `HubLiftHistory.js`, `HubSetBubbles.js`,
 `HubIdleScreen.js`.
+
+**The keypad follows the focused box (2026-09-02).** Originally the dock
+opened with the card and `active` always held a cell. Now `active` starts
+**null** and "a cell is focused" and "the keypad is up" are one fact, not two:
+expanding a lift shows no keypad, tapping a box opens it, and `⌄` clears the
+highlight along with the dock (a lit box under no keypad claims to be the live
+cell when nothing can type into it). The `Show keypad ⌃` bar is the way back.
+Two things this had to preserve: `suggestedCell` keeps the "first box still
+needing a number" seeding that used to run on expand, so summoning the keypad
+still lands on the right box; and `ensureCell()` means a HARDWARE keystroke
+opens a box rather than going nowhere, which is what keeps the keyboard beside
+the touchscreen working as it did. Focusing the note field clears the cell too
+— safe against the layout-moved-under-my-finger hazard only because the dock
+sits BELOW the note, so nothing above it shifts. Every handler that reads
+`activeRef.current` now has to tolerate null; `fieldLabel`/`dockLabel` do too.
+
+**Real bug in the shared note box, found 2026-09-02: pressing Enter dropped to
+line two and sprang straight back up.** The merge effect's "has this coach
+started editing?" test compared `note.trim()` against the seed — which makes a
+newline *invisible* to it. Typing Enter at the end of an existing note left the
+two equal once trimmed, so the effect read the box as untouched and adopted the
+remote copy back over it, wiping the newline on the very next render (`note` is
+one of that effect's dependencies, so it fires on the keystroke). The guard now
+compares EXACTLY, and `commitNote` stores the raw text as the seed so the guard
+keeps recognising an in-progress edit. The trim in `commitNote`'s
+duplicate-row check is still right; it answers a different question. **Worth
+generalising: a "has the user edited this?" guard must never normalise, or
+every whitespace-only edit is invisible to it.**
 
 **The dock is one slot with three interchangeable occupants at the same
 footprint** — keypad, plate calculator, block history — pinned bottom-right
