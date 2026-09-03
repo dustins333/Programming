@@ -631,7 +631,9 @@ export function CoachHomeMobile() {
               icon="barbell-outline"
               label="SPC"
               count={spcIssues.length}
-              caption={spcIssues.length === 0 ? "Everyone covered" : "need attention"}
+              caption={
+                spcIssues.length === 0 ? (isAdmin ? "Everyone covered" : "Yours are covered") : "need attention"
+              }
               tone={spcIssues.some((i) => i.severity === 0) ? "urgent" : spcIssues.length ? "warn" : "ok"}
               countIsIssue
               onPress={() => setSheet("spc")}
@@ -777,7 +779,11 @@ export function CoachHomeMobile() {
         onFooterPress={() => go("/(coach)/spc")}
       >
         {spcIssues.length === 0 ? (
-          <SheetEmpty>Every SPC client has a current block. Nothing to do.</SheetEmpty>
+          <SheetEmpty>
+            {isAdmin
+              ? "Every SPC client has a current block. Nothing to do."
+              : "Every SPC client you're on has a current block. Nothing to do."}
+          </SheetEmpty>
         ) : (
           spcIssues.map((c) => (
             <SheetRow

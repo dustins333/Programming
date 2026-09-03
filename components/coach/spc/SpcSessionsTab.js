@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Modal, ActivityIndicator, Switch, Platform } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../../PressFade";
 import { ExercisePickerModal } from "../../ExercisePickerModal";
 import { fonts, colors } from "../../../lib/theme";
@@ -23,9 +24,10 @@ import {
   removeSpcWorkoutExercise,
   copySpcWorkoutContent,
   setSpcWorkoutStatus,
+  listSpcWarmupsForWorkouts,
 } from "../../../lib/programming/spcWorkouts";
 import { listExercises } from "../../../lib/programming/exercises";
-import { liftLabelsFor } from "../../../lib/programming/sessionLabels";
+import { liftLabelsFor, warmupNumbersFor } from "../../../lib/programming/sessionLabels";
 import { monthDay } from "../../../lib/programming/spcState";
 import { calendarWeekNumber } from "../../../lib/programming/schedule";
 import { listSpcCompletionDetailsForWorkouts } from "../../../lib/programming/sessionCompletions";
@@ -95,8 +97,16 @@ async function loadBlockSessions(block) {
   if (!block) return null;
   const workouts = await listSpcWorkoutsForBlock(block.id);
   const sorted = [...workouts].sort((a, b) => a.session_number - b.session_number);
+  // Warm-ups batched for the whole block rather than one query per session
+  // card, and isolated: a warm-up fetch that fails must not blank the lifts
+  // it sits above, so it degrades to "no warm-up" instead.
+  const warmupsByWorkout = await listSpcWarmupsForWorkouts(sorted.map((w) => w.id)).catch(() => new Map());
   const sessions = await Promise.all(
-    sorted.map(async (workout) => ({ workout, exercises: await listSpcWorkoutExercises(workout.id) }))
+    sorted.map(async (workout) => ({
+      workout,
+      exercises: await listSpcWorkoutExercises(workout.id),
+      warmups: warmupsByWorkout.get(workout.id) ?? [],
+    }))
   );
   return sessions;
 }
@@ -204,6 +214,75 @@ function supersetFootnote(exercises, labels) {
   return pairs.map((g) => `${g.join(" + ")} run as a superset, rest after ${g[g.length - 1]} only.`).join(" ");
 }
 
+// The warm-up, collapsed by default — the same "Warm-up · N moves" + chevron
+// row the member's own session page uses (app/(member)/plan.js's WarmupCard),
+// so the two surfaces read the same way. Not a nested card: it's a section
+// inside the session card it belongs to, sitting above the lifts exactly
+// where it does in the session itself.
+//
+// Read-only on purpose. Warm-ups are built in the full session editor, the
+// same place their supersets and ordering live; a second, thinner editor here
+// would be a second definition of how a warm-up gets written.
+function WarmupStrip({ warmups }) {
+  const [open, setOpen] = useState(false);
+  if (!warmups?.length) return null;
+  const numbers = warmupNumbersFor(warmups);
+  return (
+    <View style={{ borderTopWidth: 1, borderTopColor: "#f4f1ec" }}>
+      <PressFade
+        onPress={() => setOpen((o) => !o)}
+        accessibilityLabel={open ? "Hide the warm-up" : "Show the warm-up"}
+        style={{ flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 11, paddingHorizontal: 14 }}
+      >
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#57534e" }}>Warm-up</Text>
+        <Text style={{ flex: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
+          {warmups.length} move{warmups.length === 1 ? "" : "s"}
+        </Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={15} color="#c9c4bd" />
+      </PressFade>
+      {open
+        ? warmups.map((w, i) => {
+            // The row's own numbers first, then the library defaults — a
+            // warm-up added before its exercise had defaults still prints a
+            // prescription, same fallback the print sheet uses.
+            const sets = w.sets ?? w.exercises?.default_sets ?? null;
+            const reps = w.reps ?? w.exercises?.default_reps ?? null;
+            const rx = sets && reps ? `${sets} × ${reps}` : (reps ?? sets ?? "");
+            return (
+              <View
+                key={w.id}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingVertical: 8,
+                  paddingHorizontal: 14,
+                  borderTopWidth: 1,
+                  borderTopColor: "#f8f5f1",
+                }}
+              >
+                {/* Superset members repeat their number rather than becoming
+                    1a/1b — the shared warm-up numbering (sessionLabels.js). */}
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 11, color: "#c9c4bd", width: 16 }}>{numbers[i]}</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e" }}>
+                    {w.exercises?.name ?? w.label ?? "Warm-up"}
+                  </Text>
+                  {w.notes ? (
+                    <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", fontStyle: "italic", marginTop: 1 }}>
+                      {w.notes}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>{rx}</Text>
+              </View>
+            );
+          })
+        : null}
+    </View>
+  );
+}
+
 function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, onOpenEditor, clientFirst, editable }) {
   const { workout, exercises } = session;
   const empty = exercises.length === 0;
@@ -234,6 +313,8 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
           </PressFade>
         )}
       </View>
+
+      <WarmupStrip warmups={session.warmups} />
 
       {empty ? (
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>

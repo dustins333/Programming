@@ -1,13 +1,20 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { getSpcRosterDetail, describeLastSession } from "../../../lib/programming/spcRoster";
+import {
+  getSpcRosterDetail,
+  describeLastSession,
+  defaultCoachFilter,
+  matchesCoachFilter,
+  COACH_FILTER_MINE,
+} from "../../../lib/programming/spcRoster";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { SpcRosterMobile } from "../../../components/coach/SpcRosterMobile";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors, statusColors } from "../../../lib/theme";
 import { SPC_STATES, SPC_STATE_ORDER, monthDay } from "../../../lib/programming/spcState";
 import { formatDateRange } from "../../../lib/formatDate";
+import { useAuth } from "../../../lib/auth/AuthProvider";
 
 // SPC roster, coach web (design_handoff_spc_rework_v1, 1g).
 //
@@ -22,9 +29,15 @@ import { formatDateRange } from "../../../lib/formatDate";
 // Status + reason take its place. Colors read from theme.statusColors — the
 // drifted local TONE_STYLES copy this file used to carry is deleted.
 //
-// Coach filter defaults to All for everyone: any coach can see the whole
-// roster (covering for someone shouldn't need an admin). Search matches on
-// name only, and search + chips + coach compose (search first, then filter).
+// The coach filter OPENS on "Mine + unassigned" when any of these clients
+// are assigned to you, and on All otherwise. Unassigned rides along with
+// yours deliberately: nobody owns those, so a strictly-mine default is how
+// one of them goes unnoticed by everybody. Nothing is hidden by it either
+// way: any coach can still
+// see the whole roster (covering for someone shouldn't need an admin), the
+// dropdown names who it's filtered to, and All is one click away. Search
+// matches on name only, and search + chips + coach compose (search first,
+// then filter).
 
 const CARD_BORDER = "#ece7e1";
 const CANVAS = "#faf8f6";
@@ -227,6 +240,7 @@ function ClientRow({ row, onOpen, onNextStep, last }) {
 
 function SpcRosterDesktop() {
   const router = useRouter();
+  const { profile } = useAuth();
   const params = useLocalSearchParams();
   const [rows, setRows] = useState([]);
   const [ready, setReady] = useState(false);
@@ -237,6 +251,12 @@ function SpcRosterDesktop() {
     typeof params.status === "string" && SPC_STATES[params.status] ? params.status : null
   );
   const [coachFilter, setCoachFilter] = useState("all");
+  // Applied once, after the rows land — the default needs to know whether
+  // this coach has any SPC clients at all, and both the roster and the
+  // profile arrive async. The ref is what stops a refocus reload (this
+  // screen reloads on every focus) putting the filter back after a coach
+  // has deliberately switched to All.
+  const coachDefaultApplied = useRef(false);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("name");
   const [dir, setDir] = useState(1);
@@ -244,13 +264,19 @@ function SpcRosterDesktop() {
   const load = useCallback(async () => {
     try {
       setLoadError(null);
-      setRows(await getSpcRosterDetail());
+      const loaded = await getSpcRosterDetail();
+      setRows(loaded);
+      if (!coachDefaultApplied.current) {
+        coachDefaultApplied.current = true;
+        const mine = defaultCoachFilter(loaded, profile);
+        if (mine) setCoachFilter(mine);
+      }
     } catch (err) {
       setLoadError(err.message ?? String(err));
     } finally {
       setReady(true);
     }
-  }, []);
+  }, [profile]);
 
   useFocusEffect(
     useCallback(() => {
@@ -268,10 +294,10 @@ function SpcRosterDesktop() {
   // describes the set a coach is actually looking at.
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const byCoach = coachFilter === "all" ? rows : rows.filter((r) => r.coachId === coachFilter);
+    const byCoach = rows.filter((r) => matchesCoachFilter(r, coachFilter, profile?.id));
     if (!q) return byCoach;
     return byCoach.filter((r) => (r.name ?? "").toLowerCase().includes(q));
-  }, [rows, coachFilter, search]);
+  }, [rows, coachFilter, search, profile?.id]);
 
   const counts = useMemo(() => {
     const c = {};
@@ -421,6 +447,7 @@ function SpcRosterDesktop() {
               }}
             >
               <option value="all">All</option>
+              <option value={COACH_FILTER_MINE}>Mine + unassigned</option>
               {coaches.map(([id, name]) => (
                 <option key={id} value={id}>
                   {name}

@@ -2,13 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, TextInput, ActivityIndicator, Modal, Animated, Easing } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { getSpcRosterDetail } from "../../lib/programming/spcRoster";
+import {
+  getSpcRosterDetail,
+  defaultCoachFilter,
+  matchesCoachFilter,
+  COACH_FILTER_MINE,
+  COACH_FILTER_UNASSIGNED,
+} from "../../lib/programming/spcRoster";
 import { SPC_STATES, SPC_STATE_ORDER } from "../../lib/programming/spcState";
 import { SpcSessionPreview } from "./SpcSessionPreview";
 import { CoachShell } from "../CoachShell";
 import { PressFade } from "../PressFade";
 import { Eyebrow } from "../Eyebrow";
 import { fonts, colors, statusColors, type } from "../../lib/theme";
+import { useAuth } from "../../lib/auth/AuthProvider";
 
 // The coach's SPC page on a phone (design_handoff_spc_roster_v1).
 //
@@ -157,7 +164,7 @@ function FilterOption({ label, count, selected, tone, onPress }) {
   );
 }
 
-function FilterSheet({ visible, onClose, searched, statusFilter, coachFilter, onStatus, onCoach, onClearAll, shownCount }) {
+function FilterSheet({ visible, onClose, searched, statusFilter, coachFilter, profileId, onStatus, onCoach, onClearAll, shownCount }) {
   // Counts are computed against the SEARCHED set, not the whole roster —
   // otherwise a sheet opened after typing a name offers "Ready 6" and then
   // shows one client.
@@ -170,12 +177,20 @@ function FilterSheet({ visible, onClose, searched, statusFilter, coachFilter, on
   const coaches = useMemo(() => {
     const counts = new Map();
     for (const row of searched) {
-      const key = row.coachId ?? "__unassigned";
+      const key = row.coachId ?? COACH_FILTER_UNASSIGNED;
       if (!counts.has(key)) counts.set(key, { id: row.coachId ?? null, name: row.coachName, count: 0 });
       counts.get(key).count += 1;
     }
     return [...counts.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [searched]);
+
+  // Offered only to someone who actually has clients here — for anyone else
+  // it would just be a second, worse-named Unassigned.
+  const mineCount = useMemo(
+    () => (profileId ? searched.filter((r) => matchesCoachFilter(r, COACH_FILTER_MINE, profileId)).length : 0),
+    [searched, profileId]
+  );
+  const offerMine = Boolean(profileId) && searched.some((r) => r.coachId === profileId);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -233,14 +248,22 @@ function FilterSheet({ visible, onClose, searched, statusFilter, coachFilter, on
             <View style={{ marginTop: 18 }}>
               <Eyebrow>Coach</Eyebrow>
             </View>
+            {offerMine ? (
+              <FilterOption
+                label="Mine + unassigned"
+                count={mineCount}
+                selected={coachFilter === COACH_FILTER_MINE}
+                onPress={() => onCoach(COACH_FILTER_MINE)}
+              />
+            ) : null}
             <FilterOption label="All coaches" count={searched.length} selected={!coachFilter} onPress={() => onCoach(null)} />
             {coaches.map((c) => (
               <FilterOption
-                key={c.id ?? "__unassigned"}
+                key={c.id ?? COACH_FILTER_UNASSIGNED}
                 label={c.name}
                 count={c.count}
-                selected={coachFilter === (c.id ?? "__unassigned")}
-                onPress={() => onCoach(c.id ?? "__unassigned")}
+                selected={coachFilter === (c.id ?? COACH_FILTER_UNASSIGNED)}
+                onPress={() => onCoach(c.id ?? COACH_FILTER_UNASSIGNED)}
               />
             ))}
           </ScrollView>
@@ -353,10 +376,17 @@ export function ClientRow({ row, first, onPress }) {
 
 export function SpcRosterMobile() {
   const router = useRouter();
+  const { profile } = useAuth();
   const [roster, setRoster] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [search, setSearch] = useState("");
   const [coachFilter, setCoachFilter] = useState(null);
+  // Opens filtered to you when any of these clients are yours (the token
+  // above the list says so, and clearing it is one tap). Applied once, after
+  // the roster lands — this screen refetches on every focus, and without the
+  // ref a coach who switched to All would have it put back on their way
+  // back from a client's page.
+  const coachDefaultApplied = useRef(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sort, setSort] = useState("name");
   const [dir, setDir] = useState(1);
@@ -386,11 +416,17 @@ export function SpcRosterMobile() {
     // since the render branches on loadError alone.
     setLoadError(null);
     try {
-      setRoster(await getSpcRosterDetail());
+      const loaded = await getSpcRosterDetail();
+      setRoster(loaded);
+      if (!coachDefaultApplied.current) {
+        coachDefaultApplied.current = true;
+        const mine = defaultCoachFilter(loaded, profile);
+        if (mine) setCoachFilter(mine);
+      }
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
-  }, []);
+  }, [profile]);
 
   // SPC tab's root screen — stays mounted on native while a coach drills
   // into a client and back (see spc/_layout.js's Stack comment), so this
@@ -414,7 +450,7 @@ export function SpcRosterMobile() {
   const filtered = useMemo(() => {
     const rows = searched.filter((r) => {
       if (statusFilter && r.state !== statusFilter) return false;
-      if (coachFilter && (r.coachId ?? "__unassigned") !== coachFilter) return false;
+      if (!matchesCoachFilter(r, coachFilter, profile?.id)) return false;
       return true;
     });
     const byName = (a, b) => (a.name ?? "").localeCompare(b.name ?? "");
@@ -430,7 +466,7 @@ export function SpcRosterMobile() {
       return byName(a, b);
     });
     return dir === 1 ? sorted : sorted.reverse();
-  }, [searched, statusFilter, coachFilter, sort, dir]);
+  }, [searched, statusFilter, coachFilter, sort, dir, profile?.id]);
 
   // "2 need programming" counts clients whose PROGRAM is running out (due
   // soon/now with something currently running) — deliberately not the
@@ -445,7 +481,8 @@ export function SpcRosterMobile() {
   const activeFilterCount = (statusFilter ? 1 : 0) + (coachFilter ? 1 : 0);
   const coachFilterName = useMemo(() => {
     if (!coachFilter) return null;
-    return roster?.find((r) => (r.coachId ?? "__unassigned") === coachFilter)?.coachName ?? "Coach";
+    if (coachFilter === COACH_FILTER_MINE) return "Mine + unassigned";
+    return roster?.find((r) => (r.coachId ?? COACH_FILTER_UNASSIGNED) === coachFilter)?.coachName ?? "Coach";
   }, [coachFilter, roster]);
 
   const toggleSort = (key) => {
@@ -613,6 +650,7 @@ export function SpcRosterMobile() {
         searched={searched}
         statusFilter={statusFilter}
         coachFilter={coachFilter}
+        profileId={profile?.id}
         shownCount={filtered.length}
         onStatus={(s) => setStatusFilter((cur) => (cur === s ? null : s))}
         onCoach={(c) => setCoachFilter((cur) => (cur === c ? null : c))}
