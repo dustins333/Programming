@@ -1,4 +1,5 @@
 import { addDays, dateInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
+import { sessionActivityState } from "../../lib/programming/spcSessionActivity";
 import { formatDateShort } from "../../lib/formatDate";
 
 // The model behind the SPC block calendar — pure, no React, no RN, so it can
@@ -44,6 +45,10 @@ export function effectiveWeekFor(workout, completedAt, block) {
 // The five bar states:
 //
 //   done        a completion exists → a chip on the day she finalized
+//   started     sets logged, Finalize never tapped → a chip on the day she
+//               trained, outlined rather than filled. Ranked above the
+//               date-based states: a past week with a session's worth of sets
+//               in it is not "past & still open", it's work she did.
 //   pending     published, not done, this week or later → any day this week
 //   pastOpen    published, not done, its week has fully passed
 //   draft       a workout row exists but isn't published
@@ -51,7 +56,7 @@ export function effectiveWeekFor(workout, completedAt, block) {
 //
 // `completions` is the Map from listSpcCompletionDetailsForWorkouts, keyed
 // "workoutId:authoredWeek".
-export function buildSpcCalendar({ block, workouts = [], completions = new Map(), sessionsPerWeek = 1, today, windowWeeks = 2 }) {
+export function buildSpcCalendar({ block, workouts = [], completions = new Map(), activity = new Map(), sessionsPerWeek = 1, today, windowWeeks = 2 }) {
   const length = block?.block_length_weeks ?? 0;
   const start = block?.block_start_date ?? null;
   // A draft block has no dates at all (0089), so it has no calendar to draw.
@@ -67,16 +72,35 @@ export function buildSpcCalendar({ block, workouts = [], completions = new Map()
   const isCurrentBlock = start <= today && today <= blockEnd;
   const todayWeek = isCurrentBlock ? weekOfBlock(today, block) : null;
 
-  const placed = workouts.map((workout) => {
-    const completedAt = workout.status === "published" ? (completions.get(`${workout.id}:${workout.week_number}`) ?? null) : null;
-    const week = effectiveWeekFor(workout, completedAt, block);
+  // A sessions-format run has ONE spc_workouts row per session spanning every
+  // week (0105), so a row has to be drawn once per week or every week after
+  // the first reads "not written yet" — which is what 55 of the 61 live
+  // sessions-format blocks were doing. Same expansion getSpcBlockDetail
+  // already does for the same reason; the calendar never got it. A legacy
+  // weekly block already has a row per week and is left alone.
+  const expandedByWeek = block?.format === "sessions";
+  const pairs = expandedByWeek
+    ? workouts.flatMap((workout) => Array.from({ length }, (_, i) => ({ workout, forcedWeek: i + 1 })))
+    : workouts.map((workout) => ({ workout, forcedWeek: null }));
+
+  const placed = pairs.map(({ workout, forcedWeek }) => {
+    // The completion key is the calendar week for a sessions run and the
+    // authored week for a weekly one, matching spcCompletionWeek exactly.
+    const lookupWeek = forcedWeek ?? workout.week_number;
+    const completedAt = workout.status === "published" ? (completions.get(`${workout.id}:${lookupWeek}`) ?? null) : null;
+    const week = forcedWeek ?? effectiveWeekFor(workout, completedAt, block);
     const weekEnd = addDays(addDays(start, (week - 1) * 7), 6);
+    const act = workout.status === "published" ? activity.get(`${workout.id}:${week}`) : null;
+    const started = !completedAt && sessionActivityState({ loggedSets: act?.loggedSets ?? 0 }) === "started";
     let state;
     if (workout.status !== "published") state = "draft";
     else if (completedAt) state = "done";
+    else if (started) state = "started";
     else state = weekEnd < today ? "pastOpen" : "pending";
     return {
-      key: workout.id,
+      // Several bars now share a workout id, so the id alone is no longer a
+      // key — the same reason getSpcBlockDetail's sessions carry `key`.
+      key: `${workout.id}:${week}`,
       workout,
       sessionNumber: workout.session_number,
       authoredWeek: workout.week_number,
@@ -84,10 +108,22 @@ export function buildSpcCalendar({ block, workouts = [], completions = new Map()
       state,
       // Boise-local, never .slice(0,10) — that reads the UTC date and puts
       // every evening session on the following day.
-      day: completedAt ? mondayIndex(dateInBoise(new Date(completedAt))) : null,
+      day: completedAt
+        ? mondayIndex(dateInBoise(new Date(completedAt)))
+        : started && act?.lastLoggedDate
+          ? mondayIndex(act.lastLoggedDate)
+          : null,
+      loggedSets: act?.loggedSets ?? 0,
       title: workout.title || null,
-      movedFrom: week === workout.week_number ? null : workout.week_number,
-      movable: workout.status === "published" && !completedAt && length > 1,
+      // A sessions run authors every row at week 1 and repeats it, so drawing
+      // it in week 3 is not a move and must not be tagged as one. Only a real
+      // scheduled_week change on a weekly block is.
+      movedFrom: expandedByWeek || week === workout.week_number ? null : workout.week_number,
+      // Moving writes scheduled_week, which under a sessions run would shift
+      // every week's copy at once. Sets already logged pin it too: they file
+      // by the calendar week of the day they were logged, not by where the
+      // session is scheduled, so a move would leave them behind.
+      movable: workout.status === "published" && !completedAt && !started && !expandedByWeek && length > 1,
     };
   });
 
@@ -142,6 +178,7 @@ export function buildSpcCalendar({ block, workouts = [], completions = new Map()
 
 export function barLabel(bar) {
   const name = `S${bar.sessionNumber}`;
+  if (bar.state === "started") return `${name} — ${bar.loggedSets} sets logged, not finalized`;
   if (bar.state === "notWritten") return `${name} — not written yet`;
   if (bar.state === "draft") return bar.title ? `${name} | ${bar.title} — draft` : `${name} — draft`;
   return bar.title ? `${name} | ${bar.title}` : name;
@@ -153,7 +190,9 @@ export function barLabel(bar) {
 export function packLines(bars) {
   const lines = [];
   for (const bar of bars) {
-    if (bar.state !== "done") {
+    // A started chip packs with the done chips: both sit on a real day and
+    // both are half-width, so they share a line the same way.
+    if (bar.state !== "done" && bar.state !== "started") {
       lines.push({ kind: "bar", bar });
       continue;
     }

@@ -102,14 +102,19 @@ export function ActionPill({ label, onPress, disabled }) {
   );
 }
 
+// A started session sits on the day she trained exactly as a finalized one
+// does — the difference is the fill, not the position. Filling it would claim
+// she'd said she was done; leaving it as a plain bar would put a session's
+// worth of work back in the "nothing happened" pile.
 function DoneChip({ bar, onPress }) {
+  const started = bar.state === "started";
   const chip = (
     <View
       style={{
         borderRadius: 999,
         borderWidth: 1.5,
         borderColor: OLIVE,
-        backgroundColor: OLIVE_TINT,
+        backgroundColor: started ? "transparent" : OLIVE_TINT,
         paddingVertical: 6,
         paddingHorizontal: 8,
         minHeight: 32,
@@ -262,6 +267,7 @@ function DayHeader() {
 function LegendSwatch({ state }) {
   const common = { width: 26, height: 13, borderRadius: 999, borderWidth: 1.5 };
   if (state === "done") return <View style={{ ...common, width: 14, borderColor: OLIVE, backgroundColor: OLIVE_TINT }} />;
+  if (state === "started") return <View style={{ ...common, width: 14, borderColor: OLIVE }} />;
   if (state === "pending") return <View style={{ ...common, borderColor: colors.primary }} />;
   return <View style={{ ...common, borderColor: BORDER_STRONG, borderStyle: "dashed", opacity: state === "notWritten" ? 0.55 : 1 }} />;
 }
@@ -269,6 +275,7 @@ function LegendSwatch({ state }) {
 const LEGEND = [
   { state: "pending", label: "Pending — any day this week" },
   { state: "done", label: "Done — the day she finalized" },
+  { state: "started", label: "Logged, not finalized" },
   { state: "pastOpen", label: "Past & still open" },
   { state: "notWritten", label: "Not written yet" },
 ];

@@ -12,6 +12,7 @@ import { getSpcClient } from "../../lib/programming/spcClients";
 import { listSpcWorkoutsForBlock, listBlocksForSpcClient, labelBlocks } from "../../lib/programming/spcBlocks";
 import { listSpcWarmups, listSpcWorkoutExercises, setSpcWorkoutScheduledWeek } from "../../lib/programming/spcWorkouts";
 import { listSpcCompletionDetailsForWorkouts } from "../../lib/programming/sessionCompletions";
+import { listSpcSessionActivity } from "../../lib/programming/spcSessionActivity";
 import { SessionSheet } from "../SessionSheet";
 import { BlockProgressHero } from "../BlockProgressHero";
 import { SpcBlockCalendar } from "./SpcBlockCalendar";
@@ -90,16 +91,16 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
       // Every workout, drafts included — the one thing a coach needs here
       // that the member's own view deliberately hides.
       const workouts = await listSpcWorkoutsForBlock(block.id);
-      // Isolated: the calendar's four states degrade to "nothing is finished
-      // yet" without completions, which is wrong but readable. Letting this
+      // Both isolated: the calendar's states degrade to "nothing is finished
+      // yet" without completions, which is wrong but readable. Letting either
       // throw would blank a block that is otherwise fine.
-      const completions = await listSpcCompletionDetailsForWorkouts(
-        userId,
-        workouts.map((w) => w.id)
-      ).catch(() => new Map());
+      const [completions, activity] = await Promise.all([
+        listSpcCompletionDetailsForWorkouts(userId, workouts.map((w) => w.id)).catch(() => new Map()),
+        listSpcSessionActivity({ userId, block, workouts }).catch(() => new Map()),
+      ]);
       const week = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
 
-      setState({ status: "ready", member, spcClient, blocks, block, workouts, completions, week, today });
+      setState({ status: "ready", member, spcClient, blocks, block, workouts, completions, activity, week, today });
     } catch (err) {
       console.error("Coach SPC overview: failed to load", err);
       setState({ status: "error", message: err.message ?? String(err) });
@@ -246,6 +247,7 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
             block={state.block}
             workouts={state.workouts}
             completions={state.completions}
+            activity={state.activity}
             sessionsPerWeek={state.spcClient?.sessions_per_week ?? 1}
             today={state.today}
             meta={calendarMeta({ block: state.block, sessionsPerWeek: state.spcClient?.sessions_per_week })}
