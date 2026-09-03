@@ -4526,6 +4526,56 @@ list). Also known and deliberately not chased: the hub's *staging* path
 moved-in make-up can be started from the wall (0101 fixed that) but cannot yet
 be pre-staged the night before.
 
+## A client added mid-board got no warm-ups (2026-09-02)
+
+Two clients on the SPC board, one warm-up strip showing. Checked the data
+first: Ashley Klink was on the board when it opened at 18:05:59, **Junyao
+Chen was added 33 seconds later**, and Junyao has 5 warm-ups programmed. So
+this was the fetch, not the programming.
+
+`useHubBoard` fetched warm-ups **once per hub session, guarded on the session
+id** — the comment said "warm-ups don't change mid-session", which is true and
+is not the question. **Who is on the board does change**: a coach drops one
+client into a free slot without restarting the session, so the session id
+stays put, the guard blocks, and that client's strip is empty for the rest of
+the board. The guard is now keyed on the **workout ids already fetched**, and
+the result **merges** rather than replaces — this fetch only covers the new
+slots, so replacing would blank everyone already on the board. Steady state
+finds nothing missing and does nothing; a new session id resets the map so an
+edited warm-up list is re-read.
+
+**Worth generalising: "this data never changes" and "the set of rows I need
+never grows" are different claims, and a cache guard has to be keyed on the
+second.** Same shape as the phase-5 effect that looped by deriving "still
+needed" from the state it wrote — both are a fetch guard asking the wrong
+question.
+
+**Second bug found in the same path, fixed with it.** `refreshSession` kept
+object identity stable (so effects keyed on `hubSession` don't re-fire every
+3s) by comparing `id` and `clients.LENGTH`. A coach swapping one client for
+the next between two ticks of **another** device's poll leaves the count
+unchanged — so that device held the old roster indefinitely, showing the
+client who left and never the one who arrived, and `refreshBoard` kept reading
+the departed client's workout. Compared on a real signature now
+(`user_id:position:workoutId` per row). **A stability check on a collection
+needs a signature, never a count.**
+
+**Verified by driving the real hook**, not by reasoning: `getOpenHubSession` /
+`fetchHubBoard` / `fetchHubWarmups` temporarily stubbed off a `globalThis`
+fixture (backed up first, restored after, **md5-verified byte-identical**), a
+throwaway `app/zz-hubwarm.js` rendering the hook's `warmups` and a call log as
+JSON, then the roster stepped through five states in the browser: first load
+fetches, mid-session add fetches **only** the new client and keeps the other,
+ten seconds of steady polling adds no calls, a same-length swap updates the
+roster and fetches the newcomer, and a new session id resets to one entry.
+
+**Tooling note that cost a wrong "the poll loop died" conclusion**: the Browser
+pane runs hidden, so its tab is backgrounded and **`setTimeout` throttles to
+roughly once a minute** after a stretch of inactivity. A 3-second poll appears
+to stop entirely and the DOM goes stale. Wait a full minute before concluding
+a timer-driven loop is broken there — and note `javascript_tool` itself times
+out at 45s, so the wait has to be split across two calls.
+
 ## A blank screen can be diagnosed now, and the first one it caught (2026-08-29)
 
 A client's SPC session went blank on her phone and stayed blank. Every
