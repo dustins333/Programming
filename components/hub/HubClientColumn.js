@@ -10,6 +10,7 @@ import { HubDock, DockPill } from "./HubDock";
 import { HubNumberPad } from "./HubNumberPad";
 import { HubPlateCalcStrip, HubPlateCalcGrid, useHubPlateCalc } from "./HubPlateCalc";
 import { HubHistoryStrip, HubHistoryPanel } from "./HubLiftHistory";
+import { HubFinalizedWash, HubFinalizeConfetti, HubUndoFinalizeModal, CELEBRATION_MS } from "./HubFinalizedOverlay";
 import { schemeLabel } from "../builder/SessionBuilderParts";
 import { supersetLettersFor } from "../../lib/programming/spcBlockDetail";
 import { getLiftBlockHistory } from "../../lib/programming/hub";
@@ -307,6 +308,11 @@ export function HubClientColumn({
   const [dock, setDock] = useState(null); // keypad | calculator | history | null
   const [history, setHistory] = useState(undefined); // undefined = loading
   const [overflow, setOverflow] = useState({ scrollable: false, remaining: 0 });
+  // Two separate things: `celebrate` is the one-off confetti burst, `confirmUndo`
+  // is the second step of un-finalizing. Both live per column, since four
+  // sessions on one wall finish at four different times.
+  const [celebrate, setCelebrate] = useState(0); // 0 = idle, otherwise a run key
+  const [confirmUndo, setConfirmUndo] = useState(false);
 
   const calc = useHubPlateCalc();
   const saveTimer = useRef(null);
@@ -551,6 +557,29 @@ export function HubClientColumn({
     Promise.resolve(pending).finally(() => onEndEdit?.(userId));
   };
 
+  // Fires on the false -> true edge only, and only for a transition this
+  // column actually saw — a column that mounts already finalized (the wall
+  // reloading mid-morning, a coach opening a past board) must not throw
+  // confetti at a session somebody finished an hour ago.
+  //
+  // Deps are deliberately just `finalized`: this runs in the same commit the
+  // flag flips, so the closure's expandedId is current, and widening the deps
+  // would let an unrelated re-render clear the celebration timer early.
+  const prevFinalized = useRef(entry.finalized);
+  useEffect(() => {
+    if (entry.finalized === prevFinalized.current) return;
+    const wasFinalized = prevFinalized.current;
+    prevFinalized.current = entry.finalized;
+    if (!entry.finalized || wasFinalized) return;
+    // A lift left open under the wash reads as broken — and nothing under the
+    // wash is reachable to close it. Flush whatever is in it and shut it.
+    if (expandedId) collapse();
+    setCelebrate(Date.now());
+    const t = setTimeout(() => setCelebrate(0), CELEBRATION_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry.finalized]);
+
   const expand = (item) => {
     if (expandedId === item.id) {
       collapse();
@@ -785,7 +814,18 @@ export function HubClientColumn({
           column's entire contents 6px below its neighbours'. */}
       <View style={{ height: FINALIZED_BAR_H, backgroundColor: entry.finalized ? DONE : "transparent" }} />
 
-      <View style={{ paddingHorizontal: 14, paddingTop: 11, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: CARD_BORDER }}>
+      {/* The header tints rather than washing: the client's name and the drop
+          control both have to stay crisp and usable after finalizing. */}
+      <View
+        style={{
+          paddingHorizontal: 14,
+          paddingTop: 11,
+          paddingBottom: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: entry.finalized ? "#cfdcc2" : CARD_BORDER,
+          backgroundColor: entry.finalized ? "#eef1e7" : "transparent",
+        }}
+      >
         <View style={{ height: nameH + HEADER_META_H, flexDirection: "row", alignItems: "center" }}>
           <View style={{ flex: 1 }}>
             <Text numberOfLines={1} style={{ height: nameH, lineHeight: nameH, fontFamily: fonts.sansBold, fontSize: compact ? 17 : 20, color: "#292524" }}>
@@ -853,168 +893,181 @@ export function HubClientColumn({
         </View>
       </View>
 
-      {/* Warm-up strip — states its own count so the chevron has something to
-          promise. Expanding pushes the lift list down; the list absorbs it by
-          scrolling rather than the open card being forced shut.
-
-          The strip is drawn for every client, including one with nothing
-          programmed: skipping it entirely started that column's lifts a whole
-          band above everyone else's. Collapsed it is a fixed height, so a
-          client with eight warm-ups and a client with two still line up. */}
-      <View
-        style={{
-          height: expandWarmups ? undefined : WARMUP_H,
-          flexDirection: "row",
-          alignItems: "center",
-          paddingLeft: 14,
-          paddingRight: 10,
-          paddingVertical: 7,
-          backgroundColor: colors.canvas,
-          borderBottomWidth: 1,
-          borderBottomColor: CARD_BORDER,
-        }}
-      >
-        {hasWarmups ? (
-          <Text numberOfLines={expandWarmups ? undefined : 1} style={{ flex: 1, fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, paddingRight: 8 }}>
-            <Text style={{ fontFamily: fonts.sansSemiBold, color: "#57534e" }}>{`Warm-up · ${warmupRows.length} · `}</Text>
-            {expandWarmups
-              ? warmupRows
-                  .map((w) => {
-                    const name = w.label || w.exercises?.name || "—";
-                    const sets = w.sets || w.exercises?.default_sets || "";
-                    const reps = w.reps || w.exercises?.default_reps || "";
-                    return `${name}${sets && reps ? ` ${sets}×${reps}` : ""}`;
-                  })
-                  .join("\n")
-              : warmupRows.map((w) => w.label || w.exercises?.name || "—").join(" · ")}
-          </Text>
-        ) : (
-          <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.sans, fontSize: type.caption, color: colors.hint, paddingRight: 8 }}>
-            No warm-up programmed
-          </Text>
-        )}
-        {hasWarmups ? (
-          <PressFade
-            onPress={() => setShowWarmups((v) => !v)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: CARD_BORDER, backgroundColor: "white", alignItems: "center", justifyContent: "center" }}
-          >
-            <Ionicons name={expandWarmups ? "chevron-up" : "chevron-down"} size={16} color={colors.muted} />
-          </PressFade>
-        ) : (
-          // Keeps the text column the same width as a client who does have
-          // warm-ups, so the two strips read as the same band.
-          <View style={{ width: 30, height: 30 }} />
-        )}
-      </View>
-
-      {/* Lifts. The list scrolls INSIDE its own column — nothing in any other
-          column moves, and columns never resize or reflow. */}
+      {/* The session itself. Everything from the warm-up strip down washes
+          green once the session is finalized, and nothing under the wash is
+          tappable — editing a finished session means undoing it first. The
+          COLUMN HEADER is deliberately outside the wash: dropping a finished
+          client to make room for the next one is the very next thing that
+          happens, and that control lives up there. */}
       <View style={{ flex: scale === "tv" ? 1 : undefined, minHeight: 0 }}>
-        {scale === "tv" ? (
-          <>
-            <ScrollView
-              ref={listRef}
-              style={{ flex: 1 }}
-              contentContainerStyle={{ padding: 10, paddingBottom: 6 }}
-              showsVerticalScrollIndicator={false}
-              scrollEventThrottle={100}
-              onScroll={handleScroll}
-              onLayout={(e) => {
-                metrics.current = { ...metrics.current, viewport: e.nativeEvent.layout.height };
-                recomputeOverflow();
-              }}
-              onContentSizeChange={(w, h) => {
-                metrics.current = { ...metrics.current, content: h };
-                recomputeOverflow();
-              }}
+        {/* Warm-up strip — states its own count so the chevron has something to
+            promise. Expanding pushes the lift list down; the list absorbs it by
+            scrolling rather than the open card being forced shut.
+
+            The strip is drawn for every client, including one with nothing
+            programmed: skipping it entirely started that column's lifts a whole
+            band above everyone else's. Collapsed it is a fixed height, so a
+            client with eight warm-ups and a client with two still line up. */}
+        <View
+          style={{
+            height: expandWarmups ? undefined : WARMUP_H,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingLeft: 14,
+            paddingRight: 10,
+            paddingVertical: 7,
+            backgroundColor: colors.canvas,
+            borderBottomWidth: 1,
+            borderBottomColor: CARD_BORDER,
+          }}
+        >
+          {hasWarmups ? (
+            <Text numberOfLines={expandWarmups ? undefined : 1} style={{ flex: 1, fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted, paddingRight: 8 }}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, color: "#57534e" }}>{`Warm-up · ${warmupRows.length} · `}</Text>
+              {expandWarmups
+                ? warmupRows
+                    .map((w) => {
+                      const name = w.label || w.exercises?.name || "—";
+                      const sets = w.sets || w.exercises?.default_sets || "";
+                      const reps = w.reps || w.exercises?.default_reps || "";
+                      return `${name}${sets && reps ? ` ${sets}×${reps}` : ""}`;
+                    })
+                    .join("\n")
+                : warmupRows.map((w) => w.label || w.exercises?.name || "—").join(" · ")}
+            </Text>
+          ) : (
+            <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.sans, fontSize: type.caption, color: colors.hint, paddingRight: 8 }}>
+              No warm-up programmed
+            </Text>
+          )}
+          {hasWarmups ? (
+            <PressFade
+              onPress={() => setShowWarmups((v) => !v)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: CARD_BORDER, backgroundColor: "white", alignItems: "center", justifyContent: "center" }}
             >
+              <Ionicons name={expandWarmups ? "chevron-up" : "chevron-down"} size={16} color={colors.muted} />
+            </PressFade>
+          ) : (
+            // Keeps the text column the same width as a client who does have
+            // warm-ups, so the two strips read as the same band.
+            <View style={{ width: 30, height: 30 }} />
+          )}
+        </View>
+
+        {/* Lifts. The list scrolls INSIDE its own column — nothing in any other
+            column moves, and columns never resize or reflow. */}
+        <View style={{ flex: scale === "tv" ? 1 : undefined, minHeight: 0 }}>
+          {scale === "tv" ? (
+            <>
+              <ScrollView
+                ref={listRef}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 10, paddingBottom: 6 }}
+                showsVerticalScrollIndicator={false}
+                scrollEventThrottle={100}
+                onScroll={handleScroll}
+                onLayout={(e) => {
+                  metrics.current = { ...metrics.current, viewport: e.nativeEvent.layout.height };
+                  recomputeOverflow();
+                }}
+                onContentSizeChange={(w, h) => {
+                  metrics.current = { ...metrics.current, content: h };
+                  recomputeOverflow();
+                }}
+              >
+                {liftRows}
+                {entry.items.length === 0 ? (
+                  <Text style={{ fontFamily: fonts.sans, fontSize: type.body, lineHeight: 21, color: colors.muted, padding: 8 }}>
+                    Nothing published for this session yet. A coach can publish it from their phone and it appears here within a few seconds.
+                  </Text>
+                ) : null}
+              </ScrollView>
+              {overflow.scrollable ? <ListFade /> : null}
+            </>
+          ) : (
+            <View style={{ padding: 10, paddingBottom: 6 }}>
               {liftRows}
               {entry.items.length === 0 ? (
                 <Text style={{ fontFamily: fonts.sans, fontSize: type.body, lineHeight: 21, color: colors.muted, padding: 8 }}>
                   Nothing published for this session yet. A coach can publish it from their phone and it appears here within a few seconds.
                 </Text>
               ) : null}
-            </ScrollView>
-            {overflow.scrollable ? <ListFade /> : null}
-          </>
-        ) : (
-          <View style={{ padding: 10, paddingBottom: 6 }}>
-            {liftRows}
-            {entry.items.length === 0 ? (
-              <Text style={{ fontFamily: fonts.sans, fontSize: type.body, lineHeight: 21, color: colors.muted, padding: 8 }}>
-                Nothing published for this session yet. A coach can publish it from their phone and it appears here within a few seconds.
-              </Text>
-            ) : null}
-          </View>
-        )}
+            </View>
+          )}
+        </View>
+
+        {/* Pinned outside the scroll area so it never scrolls away. */}
+        {scale === "tv" && overflow.scrollable ? (
+          <PressFade
+            onPress={() => listRef.current?.scrollTo({ y: 100000, animated: true })}
+            style={{ paddingVertical: 7, alignItems: "center", borderTopWidth: 1, borderTopColor: CARD_BORDER, backgroundColor: colors.canvas }}
+          >
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.muted }}>
+              {overflow.remaining > 0 ? `${overflow.remaining} more ${overflow.remaining === 1 ? "lift" : "lifts"} ⌄` : "More lifts ⌄"}
+            </Text>
+          </PressFade>
+        ) : null}
+
+        {/* The dock — one slot, three occupants, all the same footprint. */}
+        {expandedItem && dock ? (
+          <HubDock
+            label={dockLabel}
+            // Whatever the dock is showing, ⌄ means "put it away" — so the
+            // highlight goes with it. A lit box under no keypad claims to be
+            // the live cell when nothing can type into it.
+            onDismiss={blurCell}
+            rightWidth={dock === "history" ? undefined : dock === "calculator" ? (compact ? 220 : 240) : padWidth}
+            strip={
+              dock === "keypad" ? (
+                <View>
+                  <View style={{ marginBottom: 8 }}>
+                    <DockPill
+                      label="Calculator"
+                      icon="calculator-outline"
+                      onPress={() => setDock("calculator")}
+                      disabled={!tracksWeight}
+                    />
+                  </View>
+                  <DockPill label="Next" tone="filled" onPress={handleNext} />
+                </View>
+              ) : dock === "calculator" ? (
+                <HubPlateCalcStrip calc={calc} onInsert={handleInsertWeight} onBackToKeypad={() => { ensureCell(); setDock("keypad"); }} />
+              ) : (
+                <HubHistoryStrip onBackToKeypad={() => { ensureCell(); setDock("keypad"); }} weekCount={history?.length ?? 0} />
+              )
+            }
+            right={
+              dock === "keypad" ? (
+                <HubNumberPad onKey={handleKey} width={padWidth} keyHeight={compact ? 46 : 44} />
+              ) : dock === "calculator" ? (
+                <HubPlateCalcGrid calc={calc} width={compact ? 220 : 240} />
+              ) : (
+                <HubHistoryPanel weeks={history ?? []} tracksWeight={tracksWeight} height={compact ? 200 : 194} />
+              )
+            }
+          />
+        ) : null}
+
+        {/* Dismissed dock leaves a way back rather than stranding the card. */}
+        {expandedItem && !dock ? (
+          <PressFade
+            onPress={() => { focusHubKeyboard(userId); ensureCell(); }}
+            style={{ paddingVertical: 9, alignItems: "center", borderTopWidth: 2, borderTopColor: colors.primary, backgroundColor: PEACH_BG }}
+          >
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Show keypad ⌃</Text>
+          </PressFade>
+        ) : null}
+        {entry.finalized ? <HubFinalizedWash compact={compact} onPress={() => setConfirmUndo(true)} /> : null}
       </View>
 
-      {/* Pinned outside the scroll area so it never scrolls away. */}
-      {scale === "tv" && overflow.scrollable ? (
-        <PressFade
-          onPress={() => listRef.current?.scrollTo({ y: 100000, animated: true })}
-          style={{ paddingVertical: 7, alignItems: "center", borderTopWidth: 1, borderTopColor: CARD_BORDER, backgroundColor: colors.canvas }}
-        >
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.muted }}>
-            {overflow.remaining > 0 ? `${overflow.remaining} more ${overflow.remaining === 1 ? "lift" : "lifts"} ⌄` : "More lifts ⌄"}
-          </Text>
-        </PressFade>
-      ) : null}
-
-      {/* The dock — one slot, three occupants, all the same footprint. */}
-      {expandedItem && dock ? (
-        <HubDock
-          label={dockLabel}
-          // Whatever the dock is showing, ⌄ means "put it away" — so the
-          // highlight goes with it. A lit box under no keypad claims to be
-          // the live cell when nothing can type into it.
-          onDismiss={blurCell}
-          rightWidth={dock === "history" ? undefined : dock === "calculator" ? (compact ? 220 : 240) : padWidth}
-          strip={
-            dock === "keypad" ? (
-              <View>
-                <View style={{ marginBottom: 8 }}>
-                  <DockPill
-                    label="Calculator"
-                    icon="calculator-outline"
-                    onPress={() => setDock("calculator")}
-                    disabled={!tracksWeight}
-                  />
-                </View>
-                <DockPill label="Next" tone="filled" onPress={handleNext} />
-              </View>
-            ) : dock === "calculator" ? (
-              <HubPlateCalcStrip calc={calc} onInsert={handleInsertWeight} onBackToKeypad={() => { ensureCell(); setDock("keypad"); }} />
-            ) : (
-              <HubHistoryStrip onBackToKeypad={() => { ensureCell(); setDock("keypad"); }} weekCount={history?.length ?? 0} />
-            )
-          }
-          right={
-            dock === "keypad" ? (
-              <HubNumberPad onKey={handleKey} width={padWidth} keyHeight={compact ? 46 : 44} />
-            ) : dock === "calculator" ? (
-              <HubPlateCalcGrid calc={calc} width={compact ? 220 : 240} />
-            ) : (
-              <HubHistoryPanel weeks={history ?? []} tracksWeight={tracksWeight} height={compact ? 200 : 194} />
-            )
-          }
-        />
-      ) : null}
-
-      {/* Dismissed dock leaves a way back rather than stranding the card. */}
-      {expandedItem && !dock ? (
-        <PressFade
-          onPress={() => { focusHubKeyboard(userId); ensureCell(); }}
-          style={{ paddingVertical: 9, alignItems: "center", borderTopWidth: 2, borderTopColor: colors.primary, backgroundColor: PEACH_BG }}
-        >
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Show keypad ⌃</Text>
-        </PressFade>
-      ) : null}
-
       <View style={{ padding: 10, paddingTop: 8 }}>
+        {/* Finalizing is one tap; undoing is two. The button on a finished
+            session says what it is FOR, and the confirm says what it will
+            actually do — a one-tap un-finalize on a wall anyone walks past is
+            a session quietly reopened by a sleeve. */}
         <PressFade
-          onPress={onToggleFinalize}
+          onPress={() => (entry.finalized ? setConfirmUndo(true) : onToggleFinalize?.())}
           style={{
             borderRadius: 12,
             paddingVertical: compact ? 11 : 13,
@@ -1025,10 +1078,25 @@ export function HubClientColumn({
           }}
         >
           <Text style={{ fontFamily: fonts.sansBold, fontSize: compact ? 14 : 15, color: entry.finalized ? DONE : "white" }}>
-            {entry.finalized ? "Un-finalize session" : "Finalize session"}
+            {entry.finalized ? "Make changes" : "Finalize session"}
           </Text>
         </PressFade>
       </View>
+
+      {/* Painted last so it falls over the whole card. pointerEvents none, so
+          it never intercepts the tap that would undo the thing it is
+          celebrating. */}
+      {celebrate ? <HubFinalizeConfetti runKey={celebrate} compact={compact} /> : null}
+
+      <HubUndoFinalizeModal
+        visible={confirmUndo}
+        clientName={(entry.clientName ?? "").split(" ")[0] || null}
+        onCancel={() => setConfirmUndo(false)}
+        onConfirm={() => {
+          setConfirmUndo(false);
+          onToggleFinalize?.();
+        }}
+      />
     </View>
   );
 }
