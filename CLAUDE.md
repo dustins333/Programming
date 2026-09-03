@@ -5976,6 +5976,82 @@ bug that did not exist.
 **Not done, deliberately**: `listRecentSessionsForUser` (the "Recent sessions"
 card on the group client profile) still reads completions only.
 
+## The mobile pulse band, and "her Nth time on this session" (2026-09-02)
+
+Two asks, no migration, no deploy step — both are reads over data that
+already exists.
+
+**Coach mobile home's pulse band is sessions today | sessions this week |
+girls this week.** Volume and new PRs are gone from it: both are outcomes of
+a day rather than a picture of one, and neither answers what a coach standing
+on the floor is actually asking, which is how the week is going. The header
+went from "TODAY IN THE GYM" to "IN THE GYM" so each figure can name its own
+window in its own label — with the old header, "sessions this week" under a
+"TODAY" heading contradicts itself and the labels have to get longer to
+compensate (measured at 390px, all three now fit on one line).
+
+`gymToday.js`'s three training figures come off **one** read of
+`session_completions` rather than three, because they are three views of the
+same rows and three queries are three chances to disagree. The week is
+Monday-to-today (`mondayOnOrBefore`), matching every other week in this app.
+`sessions` keeps its key name — the desktop launchpad and the sessions sheet
+both read it and both mean today. `volumeToday` is deleted;
+`lib/programming/volume.js` stays, it has three other callers.
+
+**Girls-this-week rather than girls-today, decided with Terra**: unique
+members today would print the same number as sessions today on almost every
+day, since virtually nobody trains twice in a day. Across a week they
+diverge, and the gap is the information — 44 sessions across 31 girls says a
+dozen came in twice.
+
+### The hub's session-run pill
+
+Each client's card on the live board now carries "4TH TIME" beside her name:
+how many times she has done THAT session in the current block. Terra's
+reason, and it is the whole design constraint — *"if it's the first, the
+coaching will look very different than if it's their 10th."*
+
+- **Counted over the block, distinct weeks — the same definition 0098 gave
+  the staging picker**, so the two surfaces cannot disagree. A fresh block
+  restarting at 1 is correct rather than a flaw: Session 1 of block B is not
+  Session 1 of block A, and a first run through new programming genuinely is
+  coached differently.
+- **The current week counts whether or not she has finalized**, so the number
+  does not jump the instant somebody taps Finalize. Before finalize she is
+  the 4th time in progress; after, she is still the 4th.
+- **Zero extra queries.** `fetchHubBoard`'s `spcSessionComp` was already
+  fetching every completion for those workout ids with no date filter, so the
+  count is a client-side reduction over rows the 3-second poll already has.
+- **SPC sessions format only** (0102), where one `spc_workouts` row IS the
+  session for the whole run and each completion carries its own week. A
+  legacy weekly row could only ever answer 0 or 1. A GROUP column is left
+  without a pill on purpose: it has one workout row per week, so counting
+  across its block needs the sibling rows and a third query wave on a 3s
+  poll — to restate the "Week 3" already in its header, since a group
+  program's weeks are a shared calendar nobody works through out of order.
+- Reviewing a past board counts it as of that day (`week_number <=
+  completionWeek`), not as of now.
+
+**The header row is a width budget, and the name has to win it.** Measured at
+the narrow 463px four-up column with "Lauren Bottelberghe": name + "12TH
+TIME" + COMPLETE + the reorder icon truncates the name, which is the one
+thing on that header that has to read from across the room. So the pill drops
+its word to a bare "12TH" once the column is finalized — exactly when COMPLETE
+needs the room — and on a phone-width column it steps aside entirely, where
+the 6px olive bar and the tint already say finalized. First time reads clay
+(`primaryOnWhite` + `#e8c4b8`), everything else neutral; white fill in both,
+because **on this board a peach fill already means pressable** (the history
+strip, the collapse circle) and this is information, not a control.
+
+**Verified** by driving a throwaway `app/zz-hubcount.js` at 1400px and 390px
+with `PulseBand` temporarily exported (harness deleted, export reverted, `git
+status` clean): every name measured `scrollWidth === clientWidth` in all six
+column variants, and the pulse band's three labels each fit one line at
+390px. `npm run build` + `check:routes` clean, Babel parse + unresolved-
+identifier pass over all five touched files. **Not verified behind a real
+login** — standing limitation. Worth Terra's pass on a real board, especially
+a client mid-block whose count should read her real week.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

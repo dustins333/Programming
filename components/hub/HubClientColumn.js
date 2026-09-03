@@ -69,6 +69,65 @@ const ROW_BUBBLES_H = 32;
 const RESTING_ROW_H = 3 + 9 + ROW_NAME_H + ROW_SCHEME_H + ROW_BUBBLES_H + 10;
 const RESTING_ROW_GAP = 8;
 
+// "4TH TIME" — how many times she has done this session in the current
+// block, the one she is standing in included. A first time and a tenth are
+// coached completely differently, which is the whole reason it is on the
+// card rather than buried in the meta line.
+//
+// The word is dropped to a bare "4TH" once the column is finalized, and only
+// then: that is exactly when the COMPLETE pill needs the room, and a long
+// name plus both pills otherwise truncates the one thing on this header that
+// has to be readable from across the room. Measured at the narrow 463px
+// four-up column with "Lauren Bottelberghe".
+//
+// The first time reads clay rather than neutral: that is the one the number
+// exists to catch, and the one where a coach has to slow down and teach.
+// White fill in both states — on this board a peach fill already means
+// pressable (the history strip, the collapse circle), and this is
+// information, not a control.
+function ordinalLabel(n) {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "TH" : ["TH", "ST", "ND", "RD"][n % 10] ?? "TH";
+  return `${n}${suffix}`;
+}
+
+function SessionRunPill({ count, compact, finalized }) {
+  if (!count) return null;
+  // A phone-width column cannot hold a full name, this pill AND the COMPLETE
+  // pill — measured at 390px, the name loses a character. Once she is
+  // finalized the 6px olive bar and the tint already say so, and the count
+  // has done its job, so this is the one that steps aside rather than the
+  // name.
+  if (compact && finalized) return null;
+  const first = count === 1;
+  return (
+    <View
+      style={{
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: first ? "#e8c4b8" : CARD_BORDER,
+        backgroundColor: "white",
+        paddingHorizontal: compact ? 7 : 9,
+        paddingVertical: 3,
+        marginLeft: 8,
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1}
+        style={{
+          fontFamily: fonts.sansBold,
+          fontSize: compact ? 10 : 11,
+          letterSpacing: 0.8,
+          color: first ? colors.primaryOnWhite : colors.muted,
+        }}
+      >
+        {finalized ? ordinalLabel(count) : `${ordinalLabel(count)} TIME`}
+      </Text>
+    </View>
+  );
+}
+
 function summaryText(item, logs) {
   const tracksWeight = item.exercise?.tracks_weight !== false;
   const real = (logs ?? []).filter((r) => r.reps != null || r.weight != null);
@@ -837,6 +896,7 @@ export function HubClientColumn({
                 .join(" | ")}
             </Text>
           </View>
+          <SessionRunPill count={entry.sessionRunCount} compact={compact} finalized={entry.finalized} />
           {entry.finalized ? (
             <View style={{ borderRadius: 999, backgroundColor: "#eef1e7", borderWidth: 1, borderColor: "#cfdcc2", paddingHorizontal: 10, paddingVertical: 4, marginRight: 8 }}>
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.9, color: DONE }}>COMPLETE</Text>

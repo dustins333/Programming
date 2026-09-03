@@ -53,15 +53,6 @@ function formatToday() {
   return new Date().toLocaleDateString("en-US", { timeZone: "America/Boise", weekday: "long", month: "short", day: "numeric" });
 }
 
-// 47,250 -> "47.3k". Volume runs to six figures on a busy day and the exact
-// pound count is not the point — the order of magnitude is.
-function compactNumber(n) {
-  if (n === null || n === undefined) return null;
-  if (n < 1000) return String(n);
-  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
-  return `${Math.round(n / 1000)}k`;
-}
-
 function roundWeight(w) {
   return w === null || w === undefined ? null : Math.round(w * 10) / 10;
 }
@@ -93,10 +84,14 @@ function PulseFigure({ value, label, onPress }) {
   );
 }
 
-// Nutrition used to hold the middle slot; it earned a card of its own, so
-// this is three pure training figures now. Volume is the one that says
-// something the other two can't — five sessions is five sessions whether it
-// was a deload or a heavy day.
+// Three figures a coach can act on, all training. Volume and new PRs used to
+// hold the last two slots and were dropped 2026-09-02: both are outcomes of a
+// day rather than a picture of it, and neither answers the question somebody
+// standing on the floor is actually asking, which is how the week is going.
+//
+// Sessions today | sessions this week | girls this week. The third is the one
+// the other two can't give you: 31 sessions across 19 girls says a dozen came
+// in twice, and 31 across 31 says nobody did.
 function PulseBand({ gym, onOpenSessions }) {
   return (
     <View style={{ backgroundColor: BAND_BG, borderRadius: 18, paddingVertical: 16, paddingHorizontal: 12, overflow: "hidden" }}>
@@ -111,14 +106,14 @@ function PulseBand({ gym, onOpenSessions }) {
         maxFontSizeMultiplier={1.1}
         style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.1, color: "rgba(247,243,238,.5)", marginBottom: 11 }}
       >
-        TODAY IN THE GYM
+        IN THE GYM
       </Text>
       <View style={{ flexDirection: "row" }}>
-        <PulseFigure value={gym?.sessions} label="sessions logged" onPress={onOpenSessions} />
+        <PulseFigure value={gym?.sessions} label="sessions today" onPress={onOpenSessions} />
         <View style={{ width: 1, backgroundColor: "rgba(247,243,238,.13)" }} />
-        <PulseFigure value={compactNumber(gym?.volume)} label="lb lifted" />
+        <PulseFigure value={gym?.sessionsWeek} label="sessions this week" />
         <View style={{ width: 1, backgroundColor: "rgba(247,243,238,.13)" }} />
-        <PulseFigure value={gym?.prs} label={gym?.prs === 1 ? "new PR" : "new PRs"} />
+        <PulseFigure value={gym?.membersWeek} label="girls this week" />
       </View>
     </View>
   );
