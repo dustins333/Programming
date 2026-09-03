@@ -101,6 +101,23 @@ function LiveDot() {
   );
 }
 
+// Reaching past boards must not depend on the live screen's own state. Only
+// one board can be open gym-wide (0071), so a coach writing up the session she
+// just ended is otherwise locked out the moment the next one starts.
+function PastBoardsLink({ onPress }) {
+  return (
+    <PressFade
+      onPress={onPress}
+      accessibilityLabel="Past boards"
+      style={{ alignSelf: "flex-end", paddingVertical: 8, paddingHorizontal: 4 }}
+    >
+      <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+        Past boards ›
+      </Text>
+    </PressFade>
+  );
+}
+
 function LiveSessionsButton({ onPress }) {
   return (
     <PressFade
@@ -542,6 +559,7 @@ export function SpcRosterMobile() {
 
         <View style={{ marginTop: 14 }}>
           <LiveSessionsButton onPress={() => router.push("/(coach)/spc/live")} />
+          <PastBoardsLink onPress={() => router.push("/(coach)/spc/sessions")} />
         </View>
 
         {roster.length === 0 ? (

@@ -430,10 +430,17 @@ export default function SpcLiveSessions() {
   // staging your first group would silently drop you onto "Start now".
   const leftKey = hasStaged ? "staged" : "stage";
   const tab = live ? liveTab : idleTab === "start" ? "start" : leftKey;
+  // History is offered in BOTH states. There is only ever one open board
+  // gym-wide (0071's partial unique index on ended_at is null), so gating it
+  // on "no board running" locked a coach out of writing up her own 7am the
+  // moment anyone else started the 8am — which is the normal shape of a
+  // morning here. Safe as a segment while live because it is a doorway, not a
+  // pane: it navigates away rather than replacing the board.
   const segments = live
     ? [
         { key: "overview", label: "Block overview" },
         { key: "logging", label: "Logging" },
+        { key: "history", label: "History" },
       ]
     : [
         { key: leftKey, label: hasStaged ? "Staged sessions" : "Stage a session" },
@@ -456,9 +463,6 @@ export default function SpcLiveSessions() {
     clearEditing();
   };
 
-  // History is a doorway rather than a third pane: selecting it navigates and
-  // the selector goes back to where it was, so there is no third body to keep
-  // in step with the two real ones.
   // Leaves the staging detour if one is open, so the tap always lands on the
   // roster it promises rather than under the aside.
   const goToStartNow = () => {
@@ -466,9 +470,15 @@ export default function SpcLiveSessions() {
     setIdleTab("start");
   };
 
-  const handleIdleTab = (key) => {
+  // One handler for both states, so History cannot be wired up in one and
+  // silently missed in the other.
+  const handleSegment = (key) => {
     if (key === "history") {
       router.push("/(coach)/spc/sessions");
+      return;
+    }
+    if (live) {
+      setLiveTab(key);
       return;
     }
     setIdleTab(key === leftKey ? "left" : key);
@@ -591,7 +601,7 @@ export default function SpcLiveSessions() {
               </Text>
             </PressFade>
           ) : (
-            <SegmentedControl segments={segments} activeKey={tab} onSelect={live ? setLiveTab : handleIdleTab} />
+            <SegmentedControl segments={segments} activeKey={tab} onSelect={handleSegment} />
           )}
 
           {/* While a board runs this sits above the two live views, because
