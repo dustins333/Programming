@@ -193,6 +193,7 @@ export function HubLiftCard({
   onSameAsLast,
   onChangeNote,
   onCommitNote,
+  onFocusNote,
   onOpenHistory,
   onCollapse,
 }) {
@@ -344,6 +345,7 @@ export function HubLiftCard({
       <TextInput
         value={note}
         onChangeText={onChangeNote}
+        onFocus={onFocusNote}
         onBlur={onCommitNote}
         multiline
         textAlignVertical="top"

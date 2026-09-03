@@ -299,8 +299,12 @@ export function HubClientColumn({
   const [expandedId, setExpandedId] = useState(null);
   const [rows, setRows] = useState([]);
   const [note, setNote] = useState("");
-  const [active, setActive] = useState({ set: 0, field: "reps" });
-  const [dock, setDock] = useState("keypad"); // keypad | calculator | history | null
+  // null until a box is actually tapped. The keypad is the tallest thing on
+  // the card, and a coach reading a lift she is not typing into wants that
+  // space back — so "a cell is focused" and "the keypad is up" are one fact,
+  // not two. Dismissing leaves a "Show keypad" bar rather than stranding it.
+  const [active, setActive] = useState(null);
+  const [dock, setDock] = useState(null); // keypad | calculator | history | null
   const [history, setHistory] = useState(undefined); // undefined = loading
   const [overflow, setOverflow] = useState({ scrollable: false, remaining: 0 });
 
@@ -319,6 +323,30 @@ export function HubClientColumn({
   const applyActive = (next) => {
     activeRef.current = next;
     setActive(next);
+  };
+  // Where the keypad lands when summoned without a box being tapped (the
+  // "Show keypad" bar, or a hardware keystroke). Computed on expand, so the
+  // "first box still needing a number" seeding survives the keypad no longer
+  // opening on its own.
+  const suggestedCell = useRef({ set: 0, field: "reps" });
+  const focusCell = (next) => {
+    applyActive(next);
+    suggestedCell.current = next;
+    setDock("keypad");
+  };
+  const blurCell = () => {
+    applyActive(null);
+    setDock(null);
+  };
+  // A hardware keystroke IS a coach reaching for a box, so it opens one rather
+  // than going nowhere. typingIntoAField() in lib/hubKeyboard already keeps
+  // these keys away from the note box, so this can never steal prose.
+  const ensureCell = () => {
+    const cell = activeRef.current;
+    if (cell) return cell;
+    const next = suggestedCell.current ?? { set: 0, field: "reps" };
+    focusCell(next);
+    return next;
   };
   // A draft counts as dirty from the keystroke until the WRITE LANDS, not
   // until the debounce merely fires. Those are different moments, and
@@ -395,11 +423,12 @@ export function HubClientColumn({
       }
       if (i === seeded.length - 1) focus = { set: i, field: wantsWeight ? "weight" : "reps" };
     }
-    applyActive(focus);
+    suggestedCell.current = focus;
+    applyActive(null);
     editSeq.current = 0;
     savedSeq.current = 0;
     inFlightSeq.current = -1;
-    setDock("keypad");
+    setDock(null);
     calc.reset();
     setHistory(undefined);
     getLiftBlockHistory({
@@ -440,7 +469,14 @@ export function HubClientColumn({
     // A note typed elsewhere lands the same way, unless this coach has started
     // editing it here.
     const remote = entry.noteForWeekByExerciseId?.get(expandedItem.exercise.id)?.body ?? "";
-    if (note.trim() === (noteSeed.current ?? "").trim() && remote !== note) {
+    // EXACT compare, never trimmed. Trimming here made a newline invisible to
+    // the "has this coach started editing?" test: typing Enter at the end of
+    // an existing note left note === seed once trimmed, so this branch read it
+    // as untouched and adopted `remote` straight back over it — the caret
+    // dropped to line two and sprang back up (reported 2026-09-02). The trim
+    // in commitNote is right; it is answering a different question, namely
+    // whether the change is worth appending a row for.
+    if (note === (noteSeed.current ?? "") && remote !== note) {
       noteSeed.current = remote; // no local edit in progress — adopt it
       setNote(remote);
     }
@@ -497,7 +533,9 @@ export function HubClientColumn({
     if (!item) return;
     const body = note.trim();
     if (body === (noteSeed.current ?? "").trim()) return; // nothing changed — don't append a duplicate row
-    noteSeed.current = body;
+    // The RAW text, so the merge guard above keeps recognising this as the
+    // coach's own in-progress edit rather than the trimmed copy coming back.
+    noteSeed.current = note;
     if (!body) return; // clearing a note isn't a delete; the table is append-only
     onSaveNote?.({ exerciseId: item.exercise.id, body, authorName });
   };
@@ -538,7 +576,7 @@ export function HubClientColumn({
   // first instead of appending to it. commitRows advances the ref by hand for
   // exactly this reason.
   const handleKey = (key) => {
-    const cell = activeRef.current;
+    const cell = ensureCell();
     const current = rowsRef.current[cell.set]?.[cell.field] ?? "";
     if (key === "back") {
       setValue(cell.set, cell.field, current.slice(0, -1));
@@ -550,7 +588,7 @@ export function HubClientColumn({
   };
 
   const handleNext = () => {
-    const cell = activeRef.current;
+    const cell = ensureCell();
     if (tracksWeight && cell.field === "reps") applyActive({ set: cell.set, field: "weight" });
     else if (cell.set + 1 < rowsRef.current.length) applyActive({ set: cell.set + 1, field: "reps" });
   };
@@ -559,7 +597,7 @@ export function HubClientColumn({
   // clamped at the edges rather than wrapping — wrapping from the last set
   // back to the first is how a number ends up on the wrong row.
   const handleMove = (dir) => {
-    const cell = activeRef.current;
+    const cell = ensureCell();
     if (dir === "left" && cell.field === "weight") applyActive({ set: cell.set, field: "reps" });
     else if (dir === "right" && tracksWeight && cell.field === "reps") applyActive({ set: cell.set, field: "weight" });
     else if (dir === "up" && cell.set > 0) applyActive({ set: cell.set - 1, field: cell.field });
@@ -591,7 +629,7 @@ export function HubClientColumn({
     const next = [...rowsRef.current, { reps: "", weight: "" }];
     rowsRef.current = next;
     setRows(next);
-    applyActive({ set: next.length - 1, field: "reps" });
+    focusCell({ set: next.length - 1, field: "reps" });
   };
 
   // One place that decides whether a pending draft is worth writing.
@@ -605,13 +643,13 @@ export function HubClientColumn({
 
   const handleSameAsLast = () => {
     const cell = activeRef.current;
-    if (cell.set === 0) return;
+    if (!cell || cell.set === 0) return;
     const prev = rowsRef.current;
     commitRows(prev.map((r, i) => (i === cell.set ? { ...prev[cell.set - 1] } : r)));
   };
 
   const handleInsertWeight = (total) => {
-    const cell = activeRef.current;
+    const cell = ensureCell();
     setValue(cell.set, "weight", String(total));
     setDock("keypad");
   };
@@ -632,14 +670,14 @@ export function HubClientColumn({
   // the phone only one client is visible and their name and the lift are
   // directly above it, so the label drops to just the field — the full
   // version wrapped to three lines and truncated at 390px.
-  const fieldLabel = `SET ${active.set + 1} ${active.field === "weight" ? "WEIGHT" : "REPS"}`;
+  const fieldLabel = active ? `SET ${active.set + 1} ${active.field === "weight" ? "WEIGHT" : "REPS"}` : "KEYPAD";
   const dockLabel = expandedItem
     ? dock === "history"
       ? compact
         ? "THIS BLOCK"
         : `THIS BLOCK · ${expandedItem.exercise.name}`
       : dock === "calculator"
-        ? `CALCULATOR · SET ${active.set + 1}`
+        ? `CALCULATOR${active ? ` · SET ${active.set + 1}` : ""}`
         : compact
           ? fieldLabel
           : `${(entry.clientName ?? "").split(" ")[0]} · ${expandedItem.exercise.name} · ${fieldLabel}`
@@ -700,13 +738,14 @@ export function HubClientColumn({
           compact={compact}
           onSetActive={(next) => {
             focusHubKeyboard(userId);
-            applyActive(next);
+            focusCell(next);
           }}
           onSwitchItem={switchSibling}
           onAddSet={handleAddSet}
           onSameAsLast={handleSameAsLast}
           onChangeNote={setNote}
           onCommitNote={() => commitNote(item)}
+          onFocusNote={() => { if (dock !== "history") blurCell(); }}
           onOpenHistory={() => setDock("history")}
           onCollapse={collapse}
         />
@@ -927,7 +966,10 @@ export function HubClientColumn({
       {expandedItem && dock ? (
         <HubDock
           label={dockLabel}
-          onDismiss={() => setDock(null)}
+          // Whatever the dock is showing, ⌄ means "put it away" — so the
+          // highlight goes with it. A lit box under no keypad claims to be
+          // the live cell when nothing can type into it.
+          onDismiss={blurCell}
           rightWidth={dock === "history" ? undefined : dock === "calculator" ? (compact ? 220 : 240) : padWidth}
           strip={
             dock === "keypad" ? (
@@ -943,9 +985,9 @@ export function HubClientColumn({
                 <DockPill label="Next" tone="filled" onPress={handleNext} />
               </View>
             ) : dock === "calculator" ? (
-              <HubPlateCalcStrip calc={calc} onInsert={handleInsertWeight} onBackToKeypad={() => setDock("keypad")} />
+              <HubPlateCalcStrip calc={calc} onInsert={handleInsertWeight} onBackToKeypad={() => { ensureCell(); setDock("keypad"); }} />
             ) : (
-              <HubHistoryStrip onBackToKeypad={() => setDock("keypad")} weekCount={history?.length ?? 0} />
+              <HubHistoryStrip onBackToKeypad={() => { ensureCell(); setDock("keypad"); }} weekCount={history?.length ?? 0} />
             )
           }
           right={
@@ -963,7 +1005,7 @@ export function HubClientColumn({
       {/* Dismissed dock leaves a way back rather than stranding the card. */}
       {expandedItem && !dock ? (
         <PressFade
-          onPress={() => setDock("keypad")}
+          onPress={() => { focusHubKeyboard(userId); ensureCell(); }}
           style={{ paddingVertical: 9, alignItems: "center", borderTopWidth: 2, borderTopColor: colors.primary, backgroundColor: PEACH_BG }}
         >
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Show keypad ⌃</Text>
