@@ -45,6 +45,14 @@ const REVIEW_POLL_MS = 10000;
 // the only differences are that there is no open session to poll for, and
 // that logs are read from and written to the day the board actually ran
 // rather than today.
+// Identity of a board's roster: who is on it, in which slot, on which workout.
+// Any of those changing is a different board and has to reach every device.
+function clientsSignature(clients) {
+  return (clients ?? [])
+    .map((c) => `${c.user_id}:${c.position}:${c.group_workout_id ?? c.spc_workout_id ?? ""}`)
+    .join("|");
+}
+
 export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
   const reviewMode = Boolean(reviewSession);
   const [hubSession, setHubSession] = useState(reviewSession ?? undefined); // undefined = loading, null = none open
@@ -80,7 +88,13 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
   sessionRef.current = reviewSession ?? hubSession;
   const boardRef = useRef(null);
   boardRef.current = board;
-  const warmupsForRef = useRef(null); // hub session id the warmups were fetched for
+  // Which workout ids warm-ups have already been fetched for, and for which
+  // session. Keyed on the WORKOUT ids rather than on the session id: a client
+  // added after the board opened keeps the same session id, so a session-id
+  // guard blocked her fetch forever and her warm-up strip stayed empty for the
+  // whole session (found live 2026-09-02 — Junyao added 33s after Ashley).
+  const warmupsFetchedRef = useRef(new Set()); // workout ids already fetched
+  const warmupsSessionRef = useRef(null); // the session those fetches belong to
   // The Boise day this board's sets belong to. Null while live, which is what
   // keeps every write on the live path reading todayInBoise() at the moment
   // the key was pressed rather than at mount.
@@ -106,7 +120,14 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
       setHubSession((prev) => {
         // Keep object identity stable when nothing changed, so effects keyed
         // on hubSession don't re-fire every 5s.
-        if (prev && open && prev.id === open.id && prev.clients.length === open.clients.length) return prev;
+        //
+        // Compared on a real signature of the roster, not just its LENGTH: a
+        // coach swapping one client for the next between two ticks of another
+        // device's poll leaves the count unchanged, and a length check would
+        // hold that device on the old roster indefinitely — showing the client
+        // who left and never the one who arrived.
+        if (prev && open && prev.id === open.id && clientsSignature(prev.clients) === clientsSignature(open.clients))
+          return prev;
         return open;
       });
       return open;
@@ -143,17 +164,45 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
     }
   }, []);
 
-  // Warm-ups don't change mid-session — fetched once per hub session.
+  // Warm-ups don't change mid-session, but WHO is on the board does — a coach
+  // adds the next client into a free slot without restarting the session. So
+  // this fetches per workout id and merges, rather than once per session:
+  // steady state finds nothing missing and does nothing, and a client added
+  // mid-session gets her warm-ups on the next poll.
   useEffect(() => {
     if (!hubSession) return;
-    if (warmupsForRef.current === hubSession.id) return;
-    warmupsForRef.current = hubSession.id;
+    // A different board starts clean, so an edited warm-up list is re-read.
+    if (warmupsSessionRef.current !== hubSession.id) {
+      warmupsSessionRef.current = hubSession.id;
+      warmupsFetchedRef.current = new Set();
+      setWarmups(new Map());
+    }
+    const missing = hubSession.clients.filter((c) => {
+      const workoutId = c.group_workout_id ?? c.spc_workout_id;
+      return workoutId && !warmupsFetchedRef.current.has(workoutId);
+    });
+    if (missing.length === 0) return;
+    // Marked before the request so a re-render mid-flight doesn't fire it
+    // twice; a failure clears the marks below so the next poll retries.
+    const ids = missing.map((c) => c.group_workout_id ?? c.spc_workout_id);
+    for (const id of ids) warmupsFetchedRef.current.add(id);
     let cancelled = false;
-    fetchHubWarmups(hubSession.clients)
+    fetchHubWarmups(missing)
       .then((map) => {
-        if (!cancelled) setWarmups(map);
+        if (cancelled) return;
+        // Merge, never replace — replacing would drop the warm-ups of everyone
+        // already on the board, since this fetch only covers the new slots.
+        setWarmups((prev) => {
+          const next = new Map(prev);
+          for (const [workoutId, rows] of map) next.set(workoutId, rows);
+          return next;
+        });
       })
-      .catch(() => {}); // warm-ups are display-only context; a failure never blocks the board
+      .catch(() => {
+        // warm-ups are display-only context; a failure never blocks the board,
+        // it just gets retried on the next tick.
+        for (const id of ids) warmupsFetchedRef.current.delete(id);
+      });
     return () => {
       cancelled = true;
     };
@@ -359,7 +408,8 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
     await endHubSession();
     setHubSession(null);
     setBoard(null);
-    warmupsForRef.current = null;
+    warmupsFetchedRef.current = new Set();
+    warmupsSessionRef.current = null;
   }, []);
 
   return {
