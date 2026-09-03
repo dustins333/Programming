@@ -6196,16 +6196,57 @@ Bonus run ($1,523.77, $129.21). Adding them would break the
 owner+staff+taxes==company_debit identity above unless all three columns move
 together.
 
-**Open bug, found in passing and NOT fixed**:
-`.claude/skills/payroll-to-gusto/compute_totals.mjs` computes **$34,072.46**
-for Kristan Alford on `2026-07-09`, where Gusto paid $775.45. Her 15
-`pay_entries` for that period are all normal (~$700 of real work) and the
-period's `closed_period_rate_snapshots` row is correct, so **the bug is in
-the script, not the data** — most likely string-vs-number handling, since
-`dbQuery` returns `numeric` as strings and `computeTotals` does
-`totals.groupCount += entry.group_sessions || 0`. The skill's own notes
-already flag this period as one where Kova and Gusto disagreed. Anything
-reading that script's per-staff totals is suspect until it is run down.
+**Resolved 2026-09-03** (was recorded here as an open bug): `.claude/skills/payroll-to-gusto/compute_totals.mjs` computing **$34,072.46** for Kristan Alford on `2026-07-09` where Gusto paid $775.45. The guess recorded here, string-vs-number handling, was right, and the exact mechanism is that `custom_amt` is the only field in `computeEntryBreakdown` added straight into the total instead of being multiplied by a rate, so it is the only one a string survives. `supabase db query` returns `numeric` as a JSON string, so `1436.5 + "159.00"` concatenated to `"1436.50159.00"`. Fixed by coercing at the CLI boundary; `lib/payroll/calc.js` is deliberately untouched because PostgREST returns `custom_amt` as a real JSON number, verified live, so the app itself was never wrong. See the section below.
+
+## First real payroll push to Gusto, and what the hours column actually was (2026-09-03)
+
+The `payroll-to-gusto` skill had only ever been run read-only. Terra flipped the
+Gusto connector from ask to approved this session, and the first genuine
+`update_payroll` went out: all 14 employees on period 2026-08-20 to 09-02,
+**$8,672.00**, hours zeroed, verified afterwards with a separate no-op read.
+`run_payroll` remains out of scope; she submits in Gusto herself.
+
+**"You zeroed half their hours" turned out not to be a partial write.** On a
+materialised roster, `Commission Only Nonexempt` employees arrive with **80.000
+Regular Hours prefilled** and are editable, while `Commission Only Exempt` ones
+arrive with `hourly_compensations: []`, nothing to zero, and reject hourly edits
+anyway. It happened to split 7/7. Both groups end at zero hours for opposite
+reasons, so **the set you must write to is exactly the set you are allowed to
+write to** — there was never an unreachable group. Drive the writes off the
+roster array, never a remembered list of names. A compensation change carries an
+`effective_date` and does **not** apply to a period that has already ended, so
+read the roster rather than inferring from `list_employees`.
+
+**`get_payroll` returns an empty roster even after a successful write.** A
+pre-prepare payroll (`calculated_at: null`) reports `employee_count: 0` /
+`employees: []` regardless of what has been written to it. To read back what is
+stored, call `update_payroll` with an **empty** `employee_compensations` array:
+it materialises the roster and returns it while changing nothing
+(`requested_updates: []`). Do not conclude a write was lost because
+`get_payroll` looks empty — that cost a real scare this session.
+
+**The `custom_amt` bug and why the app was safe.** `compute_totals.mjs` reported
+Ashley Mullett as `NaN` and, historically, Kristan Alford as $34,072.46. Root
+cause above. What makes this worth remembering as a class: **the CLI and
+PostgREST disagree on `numeric`.** `supabase db query` gives a JSON string,
+PostgREST gives a JSON number. Any script that feeds CLI output into app code
+expecting numbers has this latent, and it only surfaces where a value is added
+rather than multiplied. Verify which serialisation you are holding before
+trusting arithmetic on it.
+
+**Non-app payees are first-class in the skill now.** `unmapped` splits into
+`nonAppPayees` (no `core.users` row at all, so PAY them: Callie White the
+cleaner at ~$120/period, plus a departed coach picking up a one-off) and
+`unmappedCoaches` (has an account but no `gusto_employee_uuid`, so fix the
+mapping). Resolve a non-app payee to Gusto by **exact email, never by name** —
+Kova's `staff_name` says "Kelley Walker" and "Banesa" where Gusto says "Kelley
+Verner" and "Annai", so name matching would mishandle both.
+
+**Open, not chased**: Kelsie Neidner has a $25 custom entry dated 2026-09-02
+described "8/20 Group", months after leaving. Flagged to Terra to confirm she
+covered that session. Also still unexplained are two historical gaps from the
+2026-08-09 reconciliation (Abbi $1,274.40 vs $1,286.90, Abby $309 vs $509) which
+may or may not share the `custom_amt` cause.
 
 ## Database migrations
 
