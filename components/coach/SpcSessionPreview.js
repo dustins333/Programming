@@ -7,6 +7,8 @@ import { PressFade } from "../PressFade";
 import { Eyebrow } from "../Eyebrow";
 import { getSpcSessionPreview } from "../../lib/programming/spcSessionPreview";
 import { formatRest, schemeLabel } from "../../lib/programming/prescription";
+import { repUnit } from "../../lib/programming/repUnit";
+import { SetBubbleRow, hubBubbleSize } from "../hub/HubSetBubbles";
 import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
 import { formatDateShort } from "../../lib/formatDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
@@ -204,11 +206,14 @@ function WarmupCard({ warmups }) {
 function WeekChip({ weekNumber, isCurrent, result, selected, onPress }) {
   const logged = Boolean(result?.logged);
   const label = isCurrent ? "NOW" : `W${weekNumber}`;
-  const value = logged
-    ? [result.weight, result.reps].every((v) => v != null)
-      ? `${result.weight} × ${result.reps}`
-      : (result.weight ?? `${result.reps}`)
-    : "—";
+  // The chip is ~70px. It cannot hold three set pills, so it says the SPREAD
+  // of the week rather than picking one set out of it: "18" when every set
+  // matched, "10–15" when they didn't. It used to print `weight × reps` of
+  // the single heaviest set, which at chip size was indistinguishable from
+  // the whole session's prescription — see resultFor() for what that hid.
+  // Weight is the progression signal, so a weighted lift shows weights and a
+  // reps-only lift falls back to its rep spread.
+  const value = logged ? (result.weightRange ?? result.repRange ?? "—") : "—";
 
   const box = {
     flex: 1,
@@ -271,6 +276,18 @@ function WeekChip({ weekNumber, isCurrent, result, selected, onPress }) {
 function LiftCard({ lift, weekNumbers, currentWeek, selectedWeek, onSelectWeek }) {
   const result = lift.byWeek[selectedWeek] ?? null;
   const rx = [schemeLabel(lift.lift), lift.lift.rest ? `rest ${formatRest(lift.lift.rest)}` : null].filter(Boolean).join(" · ");
+  const exercise = lift.lift.exercises;
+  const tracksWeight = exercise?.tracks_weight !== false;
+  const unit = repUnit(exercise);
+  // Per-set targets for the dashed placeholders: the rep scheme when the
+  // sets differ, otherwise the flat prescription repeated.
+  const targets = useMemo(() => {
+    const item = lift.lift;
+    const scheme = item.rep_scheme?.length ? item.rep_scheme : null;
+    if (scheme) return scheme.map((r) => (r ?? "").trim() || null);
+    const n = Number(item.sets) || 0;
+    return Array.from({ length: n }, () => item.reps ?? null);
+  }, [lift.lift]);
 
   return (
     <View
@@ -310,20 +327,49 @@ function LiftCard({ lift, weekNumbers, currentWeek, selectedWeek, onSelectWeek }
           </Text>
         </View>
 
+        {/* This corner used to be a big number: the heaviest set's weight,
+            over "wk 1 · 12 reps". Both came from ONE cherry-picked set, and
+            at that size it read as the headline fact about the week. The
+            sets themselves are the headline fact — they render full width
+            below — so the corner is just the label saying which week you're
+            reading, since the picker that changes it sits under the fold of
+            a long session. */}
         <View style={{ alignItems: "flex-end" }}>
-          <Text
-            numberOfLines={1}
-            maxFontSizeMultiplier={1}
-            style={{ fontFamily: fonts.display, fontSize: 19, color: result?.logged ? LOGGED_GREEN : colors.hint }}
-          >
-            {result?.logged ? (result.weight ?? result.reps) : "—"}
+          <Text numberOfLines={1} maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: type.eyebrow, letterSpacing: 0.4, color: colors.muted }}>
+            {selectedWeek === currentWeek ? "NOW" : `WK ${selectedWeek}`}
           </Text>
-          <Text numberOfLines={1} maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sans, fontSize: type.eyebrow, color: colors.muted }}>
-            {result?.logged
-              ? `wk ${selectedWeek} · ${result.reps != null ? `${result.reps} reps` : "logged"}`
-              : `wk ${selectedWeek} · not logged`}
+          <Text numberOfLines={1} maxFontSizeMultiplier={1} style={{ marginTop: 1, fontFamily: fonts.sans, fontSize: type.eyebrow, color: result?.logged ? LOGGED_GREEN : colors.hint }}>
+            {result?.logged ? `${result.setCount} ${result.setCount === 1 ? "set" : "sets"}` : "not logged"}
           </Text>
         </View>
+      </View>
+
+      {/* EVERY set the week logged, one pill each — the same primitive the
+          wall display uses, whose own header warns against collapsing sets
+          into a run of text. A week with nothing logged fills out to the
+          programmed set count in dashed pills carrying the target, so
+          "3 × 8-12 and she did two of them" is visible as a shape rather
+          than as an absence. */}
+      <View style={{ marginTop: 10 }}>
+        {/* The bubbles put reps big and weight small — the wall display's
+            language, which a coach reads every day. There it sits under a
+            column header naming the two; here it wouldn't, and the
+            prescription line directly above reads sets × reps, so without
+            this "12 ×18" and "3 × 10-12" invite being read the same way
+            round. A reps-only lift has nothing to disambiguate. */}
+        {tracksWeight ? (
+          <Text maxFontSizeMultiplier={1} style={{ marginBottom: 3, fontFamily: fonts.sansSemiBold, fontSize: type.eyebrow, letterSpacing: 0.5, color: colors.hint }}>
+            {unit.header} × LB
+          </Text>
+        ) : null}
+        <SetBubbleRow
+          sets={result?.sets ?? []}
+          targetCount={targets.length}
+          targetFor={(i) => targets[i - 1] ?? null}
+          tracksWeight={tracksWeight}
+          size={hubBubbleSize(Math.max(result?.setCount ?? 0, targets.length))}
+          suffix={unit.suffix}
+        />
       </View>
 
       <View style={{ flexDirection: "row", gap: 6, marginTop: 11 }}>
