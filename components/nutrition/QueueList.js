@@ -2,6 +2,7 @@ import { View, Text, Pressable } from "react-native";
 import { STATUS_META } from "../../lib/nutrition/rosterStatus";
 import { weekOnProgram } from "../../lib/nutrition/queue";
 import { dateInBoise, daysBetween } from "../../lib/boiseDate";
+import { CheckinCallPill } from "./CheckinCallPill";
 import { fonts, colors } from "../../lib/theme";
 
 // The Nutrition queue's left rail (coach web v2, screen 17).
@@ -33,21 +34,28 @@ function initials(name) {
     .join("");
 }
 
+// Shared by subline and the booked-call line so the two can't word the week
+// differently on rows sitting one directly above the other.
+function weekPart(client, today) {
+  const week = weekOnProgram(client.startDate, today);
+  return week ? `· week ${week}` : "";
+}
+
 // One line per client, phrased for the status she's actually in — a waiting
 // check-in wants "how long has this been sitting", an onboarding client
 // wants "which step".
 function subline(client, today) {
-  const week = weekOnProgram(client.startDate, today);
-  const weekPart = week ? ` · week ${week}` : "";
+  const week = weekPart(client, today);
+  const weekSuffix = week ? ` ${week}` : "";
 
   if (client.rosterStatus === "readyForCheckin") {
     const days = client.checkinSubmittedAt ? daysBetween(today, dateInBoise(new Date(client.checkinSubmittedAt))) : null;
     const waited = days === null ? "Waiting" : days <= 0 ? "Waiting today" : `Waiting ${days} day${days === 1 ? "" : "s"}`;
-    return `${waited}${weekPart}`;
+    return `${waited}${weekSuffix}`;
   }
-  if (client.rosterStatus === "checkinPending") return `Nothing in yet${weekPart}`;
-  if (client.rosterStatus === "checkinCompleted") return `Reviewed${weekPart}`;
-  if (client.rosterStatus === "checkinClosed") return `Closed out, nothing came in${weekPart}`;
+  if (client.rosterStatus === "checkinPending") return `Nothing in yet${weekSuffix}`;
+  if (client.rosterStatus === "checkinCompleted") return `Reviewed${weekSuffix}`;
+  if (client.rosterStatus === "checkinClosed") return `Closed out, nothing came in${weekSuffix}`;
   if (client.rosterStatus === "otSetup") return "Waiting on you to send it";
   if (client.rosterStatus === "otInProgress")
     return client.trackingDatesCount
@@ -83,9 +91,25 @@ function ClientRow({ client, today, selected, onPress }) {
         <Text numberOfLines={1} style={{ fontFamily: selected ? fonts.sansBold : fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
           {client.name}
         </Text>
-        <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
-          {subline(client, today)}
-        </Text>
+        {/* A booked call TAKES the second line rather than sitting beside
+            the waiting count, because "Waiting 3 days" is the thing that
+            was misleading: a client with a call on the calendar is not
+            waiting on anybody. The week still shows, since that is the one
+            part of the old line that stays true either way. */}
+        {client.checkinBooking ? (
+          <View className="flex-row items-center" style={{ gap: 6, marginTop: 2, minWidth: 0 }}>
+            <CheckinCallPill booking={client.checkinBooking} today={today} />
+            {weekPart(client, today) ? (
+              <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", flexShrink: 0 }}>
+                {weekPart(client, today)}
+              </Text>
+            ) : null}
+          </View>
+        ) : (
+          <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
+            {subline(client, today)}
+          </Text>
+        )}
       </View>
     </Pressable>
   );

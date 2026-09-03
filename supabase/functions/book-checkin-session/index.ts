@@ -123,5 +123,36 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Mirror the appointment into Kova (0113) so the coach roster can say
+  // "she has a call Thursday at 9:30" instead of leaving her looking like a
+  // client who never got back to anyone. GHL stays the source of truth for
+  // the slot itself; this is a copy of what it just confirmed.
+  //
+  // Deliberately best-effort: the appointment EXISTS on the calendar by the
+  // time we get here, so a failed insert must never surface as a failed
+  // booking -- that would send the member back to pick a second slot for a
+  // call she has already got. Logged and swallowed instead.
+  try {
+    let appointmentId: string | null = null;
+    try {
+      const parsed = JSON.parse(bookBody);
+      appointmentId = parsed?.id ?? parsed?.appointment?.id ?? parsed?.event?.id ?? null;
+    } catch {
+      // GHL answered 2xx with something we could not parse -- the booking
+      // still happened, so record it without an id rather than not at all.
+    }
+
+    const { error: recordError } = await adminClient.schema("programming").from("nutrition_checkin_bookings").insert({
+      user_id: caller.id,
+      starts_at: startTime,
+      ends_at: endTime,
+      ghl_appointment_id: appointmentId,
+      ghl_calendar_id: calendarId,
+    });
+    if (recordError) console.error("Booked in GHL but failed to record in Kova:", recordError);
+  } catch (err) {
+    console.error("Booked in GHL but failed to record in Kova:", err);
+  }
+
   return new Response(JSON.stringify({ booked: true }), { status: 200, headers: jsonHeaders });
 });

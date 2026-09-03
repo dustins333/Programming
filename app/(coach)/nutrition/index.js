@@ -6,6 +6,7 @@ import { getNutritionRoster } from "../../../lib/nutrition/dashboard";
 import { STATUS_META, STATUS_ORDER } from "../../../lib/nutrition/rosterStatus";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { CoachShell } from "../../../components/CoachShell";
+import { CheckinCallPill } from "../../../components/nutrition/CheckinCallPill";
 import { fonts, colors } from "../../../lib/theme";
 
 const FILTER_ORDER = STATUS_ORDER;
@@ -184,6 +185,13 @@ export default function NutritionDashboard() {
                 <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
                   {metaLine(c)}
                 </Text>
+                {/* Same reason as the web queue row: a client with a call on
+                    the calendar is not a client who has gone quiet. */}
+                {c.checkinBooking ? (
+                  <View className="mt-1.5">
+                    <CheckinCallPill booking={c.checkinBooking} />
+                  </View>
+                ) : null}
               </Pressable>
             </Link>
           ))}

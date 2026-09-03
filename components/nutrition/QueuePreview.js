@@ -5,6 +5,7 @@ import { MacroRingRow, LoggingDots } from "./MacroRingRow";
 import { getQueuePreview, weekOnProgram, weekDates } from "../../lib/nutrition/queue";
 import { metricDeltas } from "../../lib/nutrition/checkinAnswers";
 import { deriveCalories } from "../../lib/nutrition/targets";
+import { CheckinCallPill } from "./CheckinCallPill";
 import { formatDateMD } from "../../lib/formatDate";
 import { formatDateTimeInBoise } from "../../lib/boiseDate";
 import { fonts, colors } from "../../lib/theme";
@@ -224,6 +225,14 @@ export function QueuePreview({ client, today }) {
               {weekNumber ? `Week ${weekNumber}` : "New client"}
               {preview.checkin?.submitted_at ? ` · check-in submitted ${formatDateTimeInBoise(preview.checkin.submitted_at)}` : " · no check-in in yet"}
             </Text>
+            {/* Its own line rather than appended to the one above: this is
+                the thing that explains why she is sitting in the queue, and
+                the line above is already at its length. */}
+            {client.checkinBooking ? (
+              <View style={{ marginTop: 4 }}>
+                <CheckinCallPill booking={client.checkinBooking} today={today} long />
+              </View>
+            ) : null}
           </View>
         </View>
         <Pressable onPress={() => router.push(href)} hitSlop={8}>
