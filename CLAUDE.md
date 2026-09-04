@@ -5976,277 +5976,118 @@ bug that did not exist.
 **Not done, deliberately**: `listRecentSessionsForUser` (the "Recent sessions"
 card on the group client profile) still reads completions only.
 
-## The mobile pulse band, and "her Nth time on this session" (2026-09-02)
+## The mobile pulse band, and "3 of 8" on the board (2026-09-02/03)
 
-Two asks, no migration, no deploy step — both are reads over data that
-already exists.
+Two asks over two rounds, no migration, no deploy step — everything here is a
+read over data that already exists.
 
-**Coach mobile home's pulse band is sessions today | sessions this week |
-girls this week.** Volume and new PRs are gone from it: both are outcomes of
-a day rather than a picture of one, and neither answers what a coach standing
-on the floor is actually asking, which is how the week is going. The header
-went from "TODAY IN THE GYM" to "IN THE GYM" so each figure can name its own
-window in its own label — with the old header, "sessions this week" under a
-"TODAY" heading contradicts itself and the labels have to get longer to
-compensate (measured at 390px, all three now fit on one line).
+### Four tiles, and every one of them opens its list
 
-`gymToday.js`'s three training figures come off **one** read of
-`session_completions` rather than three, because they are three views of the
-same rows and three queries are three chances to disagree. The week is
-Monday-to-today (`mondayOnOrBefore`), matching every other week in this app.
-`sessions` keeps its key name — the desktop launchpad and the sessions sheet
-both read it and both mean today. `volumeToday` is deleted;
-`lib/programming/volume.js` stays, it has three other callers.
+Coach mobile home's band is a 2x2 of **sessions today | sessions this week |
+girls in this week | girls not in this week**. Volume and new PRs are gone:
+both are outcomes of a day rather than a picture of one, and neither answers
+what a coach standing on the floor is asking. The header dropped from "TODAY
+IN THE GYM" to "IN THE GYM" so each figure can name its own window in its own
+label.
 
-**Girls-this-week rather than girls-today, decided with Terra**: unique
-members today would print the same number as sessions today on almost every
-day, since virtually nobody trains twice in a day. Across a week they
-diverge, and the gap is the information — 44 sessions across 31 girls says a
-dozen came in twice.
+**Two rules, deliberately, because the tiles answer two questions** (stated in
+`gymWeek.js`'s header and in each sheet's own subtitle):
 
-### The hub's session-run pill
+| | rule |
+|---|---|
+| Sessions | FINALIZED sessions. What "sessions logged" has always meant here. |
+| Girls | anyone who was actually IN — finalized, or with real sets against a session she never finalized. |
 
-Each client's card on the live board now carries "4TH TIME" beside her name:
-how many times she has done THAT session in the current block. Terra's
-reason, and it is the whole design constraint — *"if it's the first, the
-coaching will look very different than if it's their 10th."*
+The second rule exists entirely for the fourth tile. **"Girls not in this
+week" is the one figure a coach acts on by picking up the phone, so a woman
+who trained on Tuesday and forgot to tap Finalize must never appear on it.**
+She lands on the "in this week" list instead, flagged "Trained, not finalized
+yet", which is itself worth knowing. Seen + not-seen therefore equals the
+training roster exactly.
 
-- **Counted over the block, distinct weeks — the same definition 0098 gave
-  the staging picker**, so the two surfaces cannot disagree. A fresh block
-  restarting at 1 is correct rather than a flaw: Session 1 of block B is not
-  Session 1 of block A, and a first run through new programming genuinely is
-  coached differently.
-- **The current week counts whether or not she has finalized**, so the number
-  does not jump the instant somebody taps Finalize. Before finalize she is
-  the 4th time in progress; after, she is still the 4th.
+**Finding her costs one narrow query.** The log check runs ONLY over roster
+members with no completion this week — a short list of people who by
+definition have few log rows. Running it over the whole roster would mean
+pulling ~5,000 set rows onto a phone on every dashboard focus (measured: 2,063
+rows by Wednesday of a live week, so a full week lands near
+`listStartedSessionsSince`'s own 5,000 cap — worth knowing, since
+`clientsRoster.js` already calls that path with a week window).
+
+**The sheets render rows they are HANDED, never their own fetch.**
+`getGymWeek` returns the counts and the four lists together, `getGymToday`
+passes the whole payload through as `gym.week`, and `GymWeekModal` reads it.
+A count and the list it opens have to be the same array — the board's own
+"16 sets logged" row learned that the hard way. One `GymWeekModal` for all
+four tiles, for the same reason: four near-identical modals is how two of
+them end up disagreeing with the numbers above them.
+
+Deliberate consequence: `gym.sessions` (which the desktop launchpad also
+reads) is unchanged in meaning, but `SessionsTodayModal` — still used by
+desktop — counts finalized AND started, so the desktop tile and its sheet can
+still differ by a session. Mobile no longer uses it.
+
+Also fixed in passing: `quietMemberCount` tested `status <> 'paused'`, so an
+SPC client whose switch was turned off (0108's `inactive`) read as a quiet
+training member forever.
+
+### The board's session-run pill
+
+Each client's card on the live board carries **"3 of 8"** beside her name:
+which time through this session she is on, out of how many the block asks
+for. An **ongoing** program (0103, no end date) reads **"3 of ∞"** rather than
+borrowing a number off `block_length_weeks`, which is left populated but
+unread while the end is null. Terra's reason for the whole thing — *"if it's
+the first, the coaching will look very different than if it's their 10th."*
+
+- **The numerator is times DONE, not the week number.** Distinct weeks with a
+  completion, current block — the same definition 0098 gave the staging
+  picker, so the two surfaces cannot disagree. So a client in week 4 who
+  missed one reads "3 of 8", which is the honest number and says she is
+  behind.
+- **The current week counts whether or not she has finalized**, so it does not
+  jump the instant somebody taps Finalize.
+- A fresh block restarting at 1 is correct rather than a flaw: Session 1 of
+  block B is not Session 1 of block A, and a first run through new programming
+  genuinely is coached differently. First time reads clay, everything else
+  neutral.
 - **Zero extra queries.** `fetchHubBoard`'s `spcSessionComp` was already
   fetching every completion for those workout ids with no date filter, so the
   count is a client-side reduction over rows the 3-second poll already has.
+  The block's length came free by widening the existing `spc_blocks` embed.
 - **SPC sessions format only** (0102), where one `spc_workouts` row IS the
-  session for the whole run and each completion carries its own week. A
-  legacy weekly row could only ever answer 0 or 1. A GROUP column is left
-  without a pill on purpose: it has one workout row per week, so counting
-  across its block needs the sibling rows and a third query wave on a 3s
-  poll — to restate the "Week 3" already in its header, since a group
-  program's weeks are a shared calendar nobody works through out of order.
+  session for the whole run and each completion carries its own week. A legacy
+  weekly row could only ever answer 0 or 1. A GROUP column is left without a
+  pill on purpose: it has one workout row per week, so counting across its
+  block needs the sibling rows and a third query wave on a 3s poll — to
+  restate the "Week 3" already in its header, since a group program's weeks
+  are a shared calendar nobody works through out of order.
 - Reviewing a past board counts it as of that day (`week_number <=
   completionWeek`), not as of now.
 
-**The header row is a width budget, and the name has to win it.** Measured at
-the narrow 463px four-up column with "Lauren Bottelberghe": name + "12TH
-TIME" + COMPLETE + the reorder icon truncates the name, which is the one
-thing on that header that has to read from across the room. So the pill drops
-its word to a bare "12TH" once the column is finalized — exactly when COMPLETE
-needs the room — and on a phone-width column it steps aside entirely, where
-the 6px olive bar and the tint already say finalized. First time reads clay
-(`primaryOnWhite` + `#e8c4b8`), everything else neutral; white fill in both,
-because **on this board a peach fill already means pressable** (the history
-strip, the collapse circle) and this is information, not a control.
+**The header row is a width budget and the name has to win it.** Measured:
+name + pill + COMPLETE + the reorder icon clips "Lauren Bottelberghe" by a
+character at the narrow 463px four-up column and by four on a phone. So **the
+pill hides entirely once the column is finalized** — the COMPLETE pill, the
+6px olive bar and the tint all already say so, and the count has done its job
+by then.
 
-**Verified** by driving a throwaway `app/zz-hubcount.js` at 1400px and 390px
-with `PulseBand` temporarily exported (harness deleted, export reverted, `git
-status` clean): every name measured `scrollWidth === clientWidth` in all six
-column variants, and the pulse band's three labels each fit one line at
-390px. `npm run build` + `check:routes` clean, Babel parse + unresolved-
-identifier pass over all five touched files. **Not verified behind a real
-login** — standing limitation. Worth Terra's pass on a real board, especially
-a client mid-block whose count should read her real week.
+### Verification
 
-## Payroll: two live periods only, and a standing nag to finalize (2026-09-03)
+Both rounds driven through a throwaway `app/zz-hubcount.js` at 1400px and
+390px with `PulseBand` temporarily exported (harness deleted, export reverted,
+`git status` clean): every client name measured `scrollWidth ===
+clientWidth` across six column variants, the band's four labels each on one
+line at 390px, and all four sheets opened and read back (including the
+"Trained, not finalized yet" row and the not-in list ordered longest-gone
+first). `npm run build` + `check:routes` clean, plus a Babel parse,
+unresolved-identifier and unused-import pass over all eight touched files.
+**Not verified behind a real login** — standing limitation. Worth Terra's pass
+on a real board and against a real week's roster.
 
-Three asks from one report. No migration; one Edge Function redeploy.
-
-**The mystery third period pill was not a closed period.** `listWritablePeriods`
-mirrors what the DATABASE accepts, which is every OPEN period — and a period
-that simply never gets closed stays writable forever. **2026-07-23 is still
-open while 2026-08-06 sits closed after it**, so it had been sitting in the
-Log and Extra pay pill rows for weeks with nothing to say why. Confirmed by
-querying `pay_periods` before touching anything: it was never a closed period
-leaking through.
-
-New `listSelectablePeriods(periods, currentPeriodStart, finalizations)` caps
-the picker to the current period plus the previous one while it's still open
-to that coach. `listWritablePeriods` is deliberately left alone as the honest
-RLS mirror — the cap is a UI rule and belongs under its own name. Applied to
-both tabs, which meant **Extra pay had to start fetching the coach's own
-finalizations** (it passed none before, since `custom_requests` has no
-finalization gate in RLS). That is a real narrowing: a coach who finalizes and
-then remembers a custom request can no longer file one for that period. The
-escape hatch is the same one a missed line item has — an admin sends it back.
-
-**The reminder push had no on-screen counterpart.** It fires twice and is
-gone; nothing in the app said "you still owe a submission." New
-`lib/payroll/finalizePrompt.js` + `components/payroll/FinalizePrompt.js`,
-rendered on the Log tab and both dashboards (via `getLaunchpadExtras`, so the
-two homes can't drift).
-
-- **When it shows** is a deliberate near-mirror of the push's two windows: the
-  previous period from the moment it ends until finalized or closed, and the
-  current period on its last day. The push waits for `payroll_deadline_time`
-  (20:00) that evening; the banner is up all day instead. Reading the setting
-  and comparing Boise clock time in two more places buys nothing, and "payroll
-  is due today" is more useful in the morning than at 8pm.
-- **It's gated on there being something to finalize**, matching report.js's own
-  `hasSomethingToFinalize` — including the nutrition-only case, where the
-  coach has zero `pay_entries` because the finalize step is what writes them.
-  Without that gate the banner sends someone to a disabled "Nothing to
-  finalize yet" button, which teaches them to ignore it.
-- **It links to My Pay, not the Log tab**: finalizing is a review action, and
-  the button lives behind the full breakdown.
-
-**The push landed on the dashboard because it carried no `url`.** Fixed by
-sending `/payroll/report?period=<start>` — unprefixed, since `public/sw.js`
-hands it straight to `clients.openWindow()`. `PushDeepLink` gained a
-`COACH_PATHS` list so the native router gets `(coach)` added back, plus a
-`matchesBase` helper that compares the PATH alone (a bare `startsWith` check
-against a url carrying `?period=` misses the exact-match case). A
-`payroll_deadline_reminder` TYPE_ROUTES entry covers already-delivered
-notifications, losing only the period. `useOwnReport` takes an optional
-`initialPeriodStart` — without it the coach tapping "finalize the period that
-just ended" landed on the CURRENT period with nothing to submit.
-
-**Verified**: `npm run build` + `check:routes` clean, a Babel parse /
-unresolved-identifier / unused-import pass over all 13 touched files, and both
-new rules extracted from the SHIPPED source and run against the **real live
-`pay_periods` table** — 12 assertions covering the stale-open period dropping
-out, sent-back reopening a pill, both-owed-on-the-last-day preferring the
-older, and a previous period with no row at all still nagging. The banner was
-rendered and tapped at 375px through a throwaway `app/zz-fpharness.js` route
-(deleted; `git status` confirmed clean). Function redeployed, `verify_jwt:
-false` confirmed preserved afterwards, and the day's reminder was already
-stamped in `payroll_deadline_reminder_last_sent` so the deploy could not
-refire it.
-
-**Not verified behind a real login** — standing limitation.
-
-**Open for Terra, data not code**: `2026-07-23 → 2026-08-05` is still open two
-cycles later while the period after it is closed. Nothing in the app reaches
-it now, but it also never got its owner/staff snapshot or its rate freeze.
-
-## Payroll: adjustable approvals, non-app payees, and the Gusto backfill (2026-09-03)
-
-**Custom requests.** The admin can set the amount when approving; the amount
-is optional (and may be zero) when a coach submits. `approveRequest` had
-always taken an `approvedAmount` and written it onto the pay entry, and
-`approved_amount` / the "asked $X" line / the history row's "what was
-actually paid" logic all existed — the screen just hardcoded
-`amount_requested` into the call. The driving case is holiday pay: only an
-admin can work out the figure (an average of the last four days), so a coach
-who could not file without guessing would guess wrong or not file at all.
-Blank stores 0, reads as **amount TBD** on her own row, and seeds the admin's
-field **empty** with "no amount asked" rather than a `0` to edit around. A
-note can be recorded with the decision, wired to **both** Approve and Deny —
-a field sitting above both buttons that only one honoured would be the
-surprising option — and it renders back in the Decided table. **Zero amounts
-make `custom_requests_dedup_idx` (staff, period, description,
-amount_requested) collide far more easily**, so a 23505 now explains itself.
-
-**Non-app payees** (migration `0114`). Someone can be paid without being an
-app user — Callie White cleans the gym. **Nothing structural was missing**:
-`pay_entries.user_id` is nullable, name/email are snapshotted on every row,
-`admin insert pay_entries` only ever required `core.is_admin()` (it never
-mentions `user_id`), and every reader already groups on `user_id ??
-staff_email` and renders an **unlinked** row — that machinery exists because
-of Kelsie Neidner, a departed coach whose 41 rows are keyed on email alone.
-Only a way to *create* one was missing, plus an honest `source` value.
-Two display bugs such a row hits: the action rail said "Waiting on {name}"
-and the status said "Not finalized yet", both permanently and misleadingly
-true of someone with no app. `clampToPeriod` moved from `requests.js` into
-`periods.js` so both callers share one money-dating rule.
-
-### pay_periods' three money columns mean exactly this
-
-Reverse-engineered from `2026-08-06`, the one period Terra had filled by
-hand, then confirmed against `get_payroll` — **do not re-derive these**:
-
-| column | = |
-|---|---|
-| `owner_pay` | Terra Smout's gross in that period's **regular** Gusto payroll |
-| `staff_pay` | that payroll's `gross_pay` minus Terra |
-| `taxes_paid` | that payroll's **`employer_taxes`** |
-| grand total | `owner + staff + taxes` == Gusto's **`company_debit`** (the real bank debit) |
-
-**Kova's period `start_date` equals Gusto's `pay_period.start_date` exactly**
-— no offset, still true as of 2026-09-03.
-
-That validation also explained the workaround: Kova's `2026-08-06` read
-`taxes_paid 780.23` against Gusto's `660.23`, and `staff_pay` was short by
-the same amount — **Terra had padded taxes by exactly Callie's $120** so the
-grand total still tied out. Callie is a real Gusto employee (~$60/period
-through 2025, $120 from 2026-01).
-
-All **22 closed periods are now backfilled from Gusto** and every grand total
-ties to `company_debit` to the cent (`2026-08-06` corrected in the same pass).
-Rollback and the generated SQL are in that session's scratchpad
-(`rollback_pay_periods.sql` / `backfill_pay_periods.sql`); the three open
-periods are left for the app's own close flow. **Terra does not appear in any
-2025 payroll** — owner pay is genuinely `0.00` there, not missing data; she
-starts at `2025-12-25` ($2,471.32 — the same figure the 2026-08-21 audit
-found corrupted to $247,132 on a custom request).
-
-**`get_employee_earnings_summary` scoped to one period returns only the
-REGULAR payroll** (`payrolls_analyzed: 1`), excluding off-cycle runs sharing
-those dates — verified by summing its employees to that run's `gross_pay`.
-That is why the backfill is regular-run-only and internally consistent.
-
-**Known gap, deliberately not backfilled**: three real off-cycle runs are
-represented nowhere in Kova — `2026-02-05` two Adhoc runs ($1,473.82 +
-$995.27 commissions, $126.70 + $84.39 employer taxes) and `2026-04-02` a
-Bonus run ($1,523.77, $129.21). Adding them would break the
-owner+staff+taxes==company_debit identity above unless all three columns move
-together.
-
-**Resolved 2026-09-03** (was recorded here as an open bug): `.claude/skills/payroll-to-gusto/compute_totals.mjs` computing **$34,072.46** for Kristan Alford on `2026-07-09` where Gusto paid $775.45. The guess recorded here, string-vs-number handling, was right, and the exact mechanism is that `custom_amt` is the only field in `computeEntryBreakdown` added straight into the total instead of being multiplied by a rate, so it is the only one a string survives. `supabase db query` returns `numeric` as a JSON string, so `1436.5 + "159.00"` concatenated to `"1436.50159.00"`. Fixed by coercing at the CLI boundary; `lib/payroll/calc.js` is deliberately untouched because PostgREST returns `custom_amt` as a real JSON number, verified live, so the app itself was never wrong. See the section below.
-
-## First real payroll push to Gusto, and what the hours column actually was (2026-09-03)
-
-The `payroll-to-gusto` skill had only ever been run read-only. Terra flipped the
-Gusto connector from ask to approved this session, and the first genuine
-`update_payroll` went out: all 14 employees on period 2026-08-20 to 09-02,
-**$8,672.00**, hours zeroed, verified afterwards with a separate no-op read.
-`run_payroll` remains out of scope; she submits in Gusto herself.
-
-**"You zeroed half their hours" turned out not to be a partial write.** On a
-materialised roster, `Commission Only Nonexempt` employees arrive with **80.000
-Regular Hours prefilled** and are editable, while `Commission Only Exempt` ones
-arrive with `hourly_compensations: []`, nothing to zero, and reject hourly edits
-anyway. It happened to split 7/7. Both groups end at zero hours for opposite
-reasons, so **the set you must write to is exactly the set you are allowed to
-write to** — there was never an unreachable group. Drive the writes off the
-roster array, never a remembered list of names. A compensation change carries an
-`effective_date` and does **not** apply to a period that has already ended, so
-read the roster rather than inferring from `list_employees`.
-
-**`get_payroll` returns an empty roster even after a successful write.** A
-pre-prepare payroll (`calculated_at: null`) reports `employee_count: 0` /
-`employees: []` regardless of what has been written to it. To read back what is
-stored, call `update_payroll` with an **empty** `employee_compensations` array:
-it materialises the roster and returns it while changing nothing
-(`requested_updates: []`). Do not conclude a write was lost because
-`get_payroll` looks empty — that cost a real scare this session.
-
-**The `custom_amt` bug and why the app was safe.** `compute_totals.mjs` reported
-Ashley Mullett as `NaN` and, historically, Kristan Alford as $34,072.46. Root
-cause above. What makes this worth remembering as a class: **the CLI and
-PostgREST disagree on `numeric`.** `supabase db query` gives a JSON string,
-PostgREST gives a JSON number. Any script that feeds CLI output into app code
-expecting numbers has this latent, and it only surfaces where a value is added
-rather than multiplied. Verify which serialisation you are holding before
-trusting arithmetic on it.
-
-**Non-app payees are first-class in the skill now.** `unmapped` splits into
-`nonAppPayees` (no `core.users` row at all, so PAY them: Callie White the
-cleaner at ~$120/period, plus a departed coach picking up a one-off) and
-`unmappedCoaches` (has an account but no `gusto_employee_uuid`, so fix the
-mapping). Resolve a non-app payee to Gusto by **exact email, never by name** —
-Kova's `staff_name` says "Kelley Walker" and "Banesa" where Gusto says "Kelley
-Verner" and "Annai", so name matching would mishandle both.
-
-**Open, not chased**: Kelsie Neidner has a $25 custom entry dated 2026-09-02
-described "8/20 Group", months after leaving. Flagged to Terra to confirm she
-covered that session. Also still unexplained are two historical gaps from the
-2026-08-09 reconciliation (Abbi $1,274.40 vs $1,286.90, Abby $309 vs $509) which
-may or may not share the `custom_amt` cause.
+**Tooling note:** a synthetic tap on a react-native-web `Pressable` needed the
+pointer/mouse sequence AND a touchstart/touchend pair dispatched after it —
+touch events alone were ignored on a cold page load, and mouse events alone
+never fired the press. Worth reaching for both together next time.
 
 ## Database migrations
 

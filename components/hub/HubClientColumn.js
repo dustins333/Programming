@@ -69,36 +69,29 @@ const ROW_BUBBLES_H = 32;
 const RESTING_ROW_H = 3 + 9 + ROW_NAME_H + ROW_SCHEME_H + ROW_BUBBLES_H + 10;
 const RESTING_ROW_GAP = 8;
 
-// "4TH TIME" — how many times she has done this session in the current
-// block, the one she is standing in included. A first time and a tenth are
-// coached completely differently, which is the whole reason it is on the
-// card rather than buried in the meta line.
+// "3 of 8" — which time through this session she is on, out of how many the
+// block asks for. A first time and an eighth are coached completely
+// differently, which is the whole reason it is on the card rather than
+// buried in the meta line.
 //
-// The word is dropped to a bare "4TH" once the column is finalized, and only
-// then: that is exactly when the COMPLETE pill needs the room, and a long
-// name plus both pills otherwise truncates the one thing on this header that
-// has to be readable from across the room. Measured at the narrow 463px
-// four-up column with "Lauren Bottelberghe".
+// An ONGOING program (0103: no end date) has no total, so it reads "3 of ∞"
+// rather than borrowing a number off block_length_weeks, which is left
+// populated but unread while the end is null.
 //
 // The first time reads clay rather than neutral: that is the one the number
 // exists to catch, and the one where a coach has to slow down and teach.
 // White fill in both states — on this board a peach fill already means
 // pressable (the history strip, the collapse circle), and this is
 // information, not a control.
-function ordinalLabel(n) {
-  const tens = n % 100;
-  const suffix = tens >= 11 && tens <= 13 ? "TH" : ["TH", "ST", "ND", "RD"][n % 10] ?? "TH";
-  return `${n}${suffix}`;
-}
-
-function SessionRunPill({ count, compact, finalized }) {
+function SessionRunPill({ count, total, compact, finalized }) {
   if (!count) return null;
-  // A phone-width column cannot hold a full name, this pill AND the COMPLETE
-  // pill — measured at 390px, the name loses a character. Once she is
-  // finalized the 6px olive bar and the tint already say so, and the count
+  // A column cannot hold a full name, this pill AND the COMPLETE pill:
+  // measured, "Lauren Bottelberghe" loses a character at the narrow 463px
+  // four-up width and four of them on a phone. Once she is finalized the
+  // COMPLETE pill, the 6px olive bar and the tint all say so and the count
   // has done its job, so this is the one that steps aside rather than the
-  // name.
-  if (compact && finalized) return null;
+  // one thing on this header that has to read from across the room.
+  if (finalized) return null;
   const first = count === 1;
   return (
     <View
@@ -117,12 +110,12 @@ function SessionRunPill({ count, compact, finalized }) {
         maxFontSizeMultiplier={1}
         style={{
           fontFamily: fonts.sansBold,
-          fontSize: compact ? 10 : 11,
-          letterSpacing: 0.8,
+          fontSize: compact ? 10.5 : 12,
+          letterSpacing: 0.6,
           color: first ? colors.primaryOnWhite : colors.muted,
         }}
       >
-        {finalized ? ordinalLabel(count) : `${ordinalLabel(count)} TIME`}
+        {`${count} of ${total ?? "∞"}`}
       </Text>
     </View>
   );
@@ -896,7 +889,7 @@ export function HubClientColumn({
                 .join(" | ")}
             </Text>
           </View>
-          <SessionRunPill count={entry.sessionRunCount} compact={compact} finalized={entry.finalized} />
+          <SessionRunPill count={entry.sessionRunCount} total={entry.sessionRunTotal} compact={compact} finalized={entry.finalized} />
           {entry.finalized ? (
             <View style={{ borderRadius: 999, backgroundColor: "#eef1e7", borderWidth: 1, borderColor: "#cfdcc2", paddingHorizontal: 10, paddingVertical: 4, marginRight: 8 }}>
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.9, color: DONE }}>COMPLETE</Text>

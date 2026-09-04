@@ -13,7 +13,7 @@ import { listMembers } from "../../lib/programming/clients";
 import { formatDateMDY } from "../../lib/formatDate";
 import { CoachShell } from "../CoachShell";
 import { PressFade } from "../PressFade";
-import { SessionsTodayModal } from "./SessionsTodayModal";
+import { GymWeekModal } from "./GymWeekModal";
 import { useKeyboardInset } from "../../lib/useKeyboardInset";
 import { fonts, colors } from "../../lib/theme";
 
@@ -62,17 +62,38 @@ function roundWeight(w) {
 
 // A figure that failed to load renders as an em-dash, never 0 — a broken
 // query must not be able to say "0 sessions logged", which is a number a
-// coach would act on. getGymToday returns null for exactly this reason.
-function PulseFigure({ value, label, onPress }) {
+// coach would act on. getGymWeek returns null for exactly this reason.
+//
+// Every tile opens the list behind it, so each one is a real button and gets
+// a faint fill to say so. A bare number in a dark band reads as a readout;
+// four of them side by side with nothing to press is how a coach never finds
+// out they were tappable at all.
+function PulseFigure({ value, label, onPress, alert }) {
   const missing = value === null || value === undefined;
-  const Wrap = onPress ? PressFade : View;
+  const lit = alert && !missing && value > 0;
   return (
-    <Wrap
-      {...(onPress ? { onPress, accessibilityLabel: `${label}: open details` } : {})}
-      style={{ flex: 1, alignItems: "center" }}
+    <PressFade
+      onPress={onPress}
+      accessibilityLabel={`${label}: open the list`}
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 11,
+        paddingHorizontal: 6,
+        borderRadius: 13,
+        backgroundColor: "rgba(247,243,238,.055)",
+      }}
     >
-      <Text style={{ fontFamily: fonts.display, fontSize: 26, color: missing ? "rgba(247,243,238,.35)" : "#f7f3ee", lineHeight: 30 }}>
-        {missing ? "—" : value}
+      <Text
+        style={{
+          fontFamily: fonts.display,
+          fontSize: 26,
+          color: missing ? "rgba(247,243,238,.35)" : lit ? "#e8a288" : "#f7f3ee",
+          lineHeight: 30,
+        }}
+      >
+        {missing ? "–" : value}
       </Text>
       <Text
         numberOfLines={2}
@@ -81,21 +102,13 @@ function PulseFigure({ value, label, onPress }) {
       >
         {label}
       </Text>
-    </Wrap>
+    </PressFade>
   );
 }
 
-// Three figures a coach can act on, all training. Volume and new PRs used to
-// hold the last two slots and were dropped 2026-09-02: both are outcomes of a
-// day rather than a picture of it, and neither answers the question somebody
-// standing on the floor is actually asking, which is how the week is going.
-//
-// Sessions today | sessions this week | girls this week. The third is the one
-// the other two can't give you: 31 sessions across 19 girls says a dozen came
-// in twice, and 31 across 31 says nobody did.
-function PulseBand({ gym, onOpenSessions }) {
+function PulseBand({ gym, onOpen }) {
   return (
-    <View style={{ backgroundColor: BAND_BG, borderRadius: 18, paddingVertical: 16, paddingHorizontal: 12, overflow: "hidden" }}>
+    <View style={{ backgroundColor: BAND_BG, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 12, overflow: "hidden" }}>
       {/* Corner warmth only. The desktop hero uses a 190px blob, but this
           band is ~347 wide — at that size the circle covered the whole third
           column and read as a hard-edged block, not a glow. */}
@@ -105,16 +118,21 @@ function PulseBand({ gym, onOpenSessions }) {
       />
       <Text
         maxFontSizeMultiplier={1.1}
-        style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.1, color: "rgba(247,243,238,.5)", marginBottom: 11 }}
+        style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.1, color: "rgba(247,243,238,.5)", marginBottom: 10 }}
       >
         IN THE GYM
       </Text>
-      <View style={{ flexDirection: "row" }}>
-        <PulseFigure value={gym?.sessions} label="sessions today" onPress={onOpenSessions} />
-        <View style={{ width: 1, backgroundColor: "rgba(247,243,238,.13)" }} />
-        <PulseFigure value={gym?.sessionsWeek} label="sessions this week" />
-        <View style={{ width: 1, backgroundColor: "rgba(247,243,238,.13)" }} />
-        <PulseFigure value={gym?.membersWeek} label="girls this week" />
+      <View style={{ gap: 8 }}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <PulseFigure value={gym?.sessions} label="sessions today" onPress={() => onOpen("sessionsToday")} />
+          <PulseFigure value={gym?.sessionsWeek} label="sessions this week" onPress={() => onOpen("sessionsWeek")} />
+        </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <PulseFigure value={gym?.membersWeek} label="girls in this week" onPress={() => onOpen("membersWeek")} />
+          {/* The only one that lights up. The other three are a picture of
+              the week; this is the one a coach picks up the phone about. */}
+          <PulseFigure value={gym?.membersNotSeen} label="girls not in this week" onPress={() => onOpen("membersNotSeen")} alert />
+        </View>
       </View>
     </View>
   );
@@ -511,7 +529,9 @@ function RosterChip({ label, value, accent, onPress }) {
 export function CoachHomeMobile() {
   const router = useRouter();
   const [lookupOpen, setLookupOpen] = useState(false);
-  const [sessionsOpen, setSessionsOpen] = useState(false);
+  // Which of the four pulse tiles is open, or null. One piece of state
+  // rather than four booleans — they are mutually exclusive by definition.
+  const [pulseView, setPulseView] = useState(null);
   const [sheet, setSheet] = useState(null); // "nutrition" | "spc" | "group" | "payroll"
   const { profile, stats, extras, dismissals, setDismissals, nutritionToday, loadError, reload: load } = useCoachDashboard();
   // A hook, so it sits above the loading/error returns below.
@@ -594,7 +614,7 @@ export function CoachHomeMobile() {
             screen with a deadline attached to it. */}
         <FinalizePrompt prompt={safeExtras.finalizePrompt} />
 
-        <PulseBand gym={safeExtras.gym} onOpenSessions={() => setSessionsOpen(true)} />
+        <PulseBand gym={safeExtras.gym} onOpen={setPulseView} />
 
         <PressFade
           onPress={() => setLookupOpen(true)}
@@ -730,7 +750,7 @@ export function CoachHomeMobile() {
       </ScrollView>
 
       <ClientLookupSheet visible={lookupOpen} onClose={() => setLookupOpen(false)} router={router} />
-      <SessionsTodayModal visible={sessionsOpen} onClose={() => setSessionsOpen(false)} />
+      <GymWeekModal visible={pulseView !== null} view={pulseView} week={safeExtras.gym?.week ?? null} onClose={() => setPulseView(null)} />
 
       <Sheet
         visible={sheet === "nutrition"}
