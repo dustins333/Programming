@@ -145,7 +145,7 @@ export function HubPlateCalcGrid({ calc, width = 260 }) {
       <View style={{ flexDirection: "row", marginBottom: gap }}>
         {barButton("none", "None")}
         {barButton("barbell", "35 lb")}
-        {barButton("specialty", calc.selectedBar && calc.barMode === "specialty" ? `${calc.selectedBar.weight}` : "Spec", true)}
+        {barButton("specialty", calc.selectedBar && calc.barMode === "specialty" ? `${calc.selectedBar.weight} lb` : "Spec", true)}
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
         {PLATE_WEIGHTS.map((w, i) => (

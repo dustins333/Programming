@@ -158,7 +158,7 @@ function StandardCalc({ onInsert }) {
       </View>
 
       <Pressable onPress={() => onInsert(currentValue)} className="mt-3 items-center justify-center rounded-xl" style={{ height: 50, backgroundColor: colors.primary }}>
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "white" }}>Insert {formatNum(currentValue)}</Text>
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "white" }}>Insert {formatNum(currentValue)} lb</Text>
       </Pressable>
     </View>
   );
@@ -335,11 +335,14 @@ function PlateCalc({ onInsert }) {
 
       <View className="mb-3 items-center rounded-xl bg-white px-4 py-4" style={{ borderWidth: 1, borderColor: CARD_BORDER }}>
         <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>Total</Text>
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 32, color: "#44403c" }}>{formatNum(total)}</Text>
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 32, color: "#44403c" }}>
+          {formatNum(total)}
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 16, color: "#a8a29e" }}> lb</Text>
+        </Text>
       </View>
 
       <Pressable onPress={() => onInsert(total)} className="items-center justify-center rounded-xl" style={{ height: 50, backgroundColor: colors.primary }}>
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "white" }}>Insert {formatNum(total)}</Text>
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "white" }}>Insert {formatNum(total)} lb</Text>
       </Pressable>
     </View>
   );

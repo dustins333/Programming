@@ -49,7 +49,7 @@ export function LiftProgressSection({ logs, width }) {
           Best: {best.reps ?? "–"} reps @ {best.weight} lb ({formatDateMDY(best.date)})
         </Text>
       ) : null}
-      {points.length >= 2 ? <TrendChart points={points} width={chartWidth} /> : null}
+      {points.length >= 2 ? <TrendChart points={points} width={chartWidth} unit="lb" /> : null}
     </View>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
+import { deleteLoggedSet, getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { repUnit, repUnitHeader } from "../lib/programming/repUnit";
 import { fonts, colors, type } from "../lib/theme";
 import { formatDateMD } from "../lib/formatDate";
@@ -600,7 +600,15 @@ export function ExerciseCard({
         // A member can add sets beyond what the coach programmed (the "+"
         // at the end of the last row), so the card has to grow back to
         // whatever was actually logged, not just the target count.
-        const highest = todaysSets.reduce((max, s) => Math.max(max, s.set_number ?? 1), targetSets);
+        // Husk rows (both fields null) don't count towards the width. A set
+        // she typed into and then cleared has already been saved as nulls,
+        // and so has one she removed with the "−" if that delete didn't
+        // land — either way, growing the card back to it would resurrect a
+        // set she has visibly gotten rid of.
+        const highest = todaysSets.reduce(
+          (max, s) => (s.reps == null && s.weight == null ? max : Math.max(max, s.set_number ?? 1)),
+          targetSets
+        );
         setRows(() =>
           Array.from({ length: highest }, (_, i) => {
             const existing = todaysSets.find((s) => s.set_number === i + 1);
@@ -722,6 +730,32 @@ export function ExerciseCard({
   const fillPlan = planFillDown(rows, tracksWeight);
   const canFillDown = fillPlan.fills > 0;
 
+  // The "+" at the end of the last row turns into a "−" once that row is
+  // empty AND it's a set she added herself, so an accidental tap has a way
+  // back. Deliberately NOT offered on a set the coach programmed: a member
+  // part-way through a 3x8 has an empty last row too, and taking her "+"
+  // away there would mean she couldn't add a 4th set until she'd filled the
+  // 3rd. It also can't delete something a coach asked for — that row is
+  // rebuilt from the prescription on the next load anyway, so removing it
+  // would only look broken.
+  //
+  // A set she added and then filled shows the "+" again; clearing both
+  // boxes brings the "−" back, which is the route to removing it.
+  const lastRow = rows[rows.length - 1];
+  const canRemoveLastSet =
+    rows.length > targetSets && lastRow != null && lastRow.reps === "" && (!tracksWeight || lastRow.weight === "");
+
+  const handleRemoveLastSet = () => {
+    const setNumber = rows.length;
+    setRows((prev) => prev.slice(0, -1));
+    // Best-effort: nothing is usually there to delete (logResult never
+    // writes an all-blank row), and if this fails the husk guard on load
+    // above still keeps the set from coming back.
+    deleteLoggedSet({ userId, exerciseId: item.exercise.id, datePerformed, setNumber, session }).catch((err) => {
+      console.error("Failed to delete removed set:", err);
+    });
+  };
+
   const handleFillDown = () => {
     // Only fills the gaps: a set she already logged differently is left
     // exactly as she logged it. Recomputed off the latest rows rather than
@@ -771,7 +805,15 @@ export function ExerciseCard({
   // count has no target. A lift with none of the above renders no TARGET
   // column at all rather than a column of en dashes eating box width.
   const rowTargets = rows.map((_, i) => {
-    const t = item.repScheme?.[i] ?? item.targetReps ?? null;
+    // A per-set scheme covers every set the coach programmed (0030 backfills
+    // one entry per set), so a set past its length is one the member added
+    // herself and genuinely has no target. Falling through to targetReps
+    // there printed the WHOLE scheme, summarised, into that one set's target
+    // column — a member who tapped "+" on a 12-15/6-8/6-8 lift got a set 4
+    // reading "12-15, 6-8, 6-8", which is the builder's own summary string
+    // (summarizeRepScheme) and means nothing as a single set's target.
+    const scheme = item.repScheme;
+    const t = scheme?.length ? scheme[i] ?? null : item.targetReps ?? null;
     return t === null || t === "" ? null : String(t);
   });
   const hasTargets = rowTargets.some(Boolean);
@@ -1085,8 +1127,8 @@ export function ExerciseCard({
                       finger — it just stops being visible or tappable. */}
                   {isLast ? (
                     <PressFade
-                      onPress={() => setRows((prev) => [...prev, { reps: "", weight: "" }])}
-                      accessibilityLabel="Add a set"
+                      onPress={canRemoveLastSet ? handleRemoveLastSet : () => setRows((prev) => [...prev, { reps: "", weight: "" }])}
+                      accessibilityLabel={canRemoveLastSet ? `Remove set ${rows.length}` : "Add a set"}
                       style={{
                         width: trailingWidth,
                         height: trailingWidth,
@@ -1100,7 +1142,12 @@ export function ExerciseCard({
                         pointerEvents: restPickerOpen ? "none" : "auto",
                       }}
                     >
-                      <Ionicons name="add" size={17} color="#8a5140" />
+                      {/* Same circle, same clay — the glyph is the whole
+                          difference, so it reads as one control changing
+                          mode rather than a destructive button appearing.
+                          Nothing is lost either way: the row it removes is
+                          empty by definition. */}
+                      <Ionicons name={canRemoveLastSet ? "remove" : "add"} size={17} color="#8a5140" />
                     </PressFade>
                   ) : null}
                 </View>

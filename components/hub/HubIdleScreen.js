@@ -46,7 +46,7 @@ function bestValue(best) {
   if (best.tracks_weight === false || best.weight == null) {
     return `${best.reps ?? "–"} reps`;
   }
-  return best.reps != null ? `${best.reps}×${best.weight}` : `${best.weight}`;
+  return best.reps != null ? `${best.reps}×${best.weight} lb` : `${best.weight} lb`;
 }
 
 export function HubIdleScreen({ now, onPressClock = null }) {

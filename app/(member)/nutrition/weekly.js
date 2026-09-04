@@ -64,7 +64,7 @@ function fmt(value, digits = 0) {
 // average" that isn't really one.
 function AveragesBand({ title, loggedCount, averages, weightTrend }) {
   const stats = [
-    { label: "Weight", value: fmt(averages.weight, 1) },
+    { label: "Weight lb", value: fmt(averages.weight, 1) },
     { label: "Steps", value: averages.steps != null ? Math.round(averages.steps).toLocaleString() : "–" },
     { label: "Sleep", value: fmt(averages.sleep_hours, 1) },
     {

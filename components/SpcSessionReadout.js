@@ -69,7 +69,7 @@ function SetChip({ set }) {
       }}
     >
       <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: missed ? "#b23a22" : "#44403c" }}>
-        {set.weight != null ? `${set.weight} × ` : ""}
+        {set.weight != null ? `${set.weight} lb × ` : ""}
         {set.reps ?? "—"}
       </Text>
     </View>

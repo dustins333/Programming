@@ -125,10 +125,15 @@ function summaryText(item, logs) {
   if (real.length === 0) {
     return schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }, item.exercise);
   }
-  return real
-    .sort((a, b) => (a.set_number ?? 1) - (b.set_number ?? 1))
-    .map((r) => (tracksWeight && r.weight != null ? `${r.reps ?? "–"}×${r.weight}` : `${r.reps ?? "–"}`))
-    .join(" · ");
+  const sets = real.sort((a, b) => (a.set_number ?? 1) - (b.set_number ?? 1));
+  const anyWeight = tracksWeight && sets.some((r) => r.weight != null);
+  return (
+    sets.map((r) => (tracksWeight && r.weight != null ? `${r.reps ?? "–"}×${r.weight}` : `${r.reps ?? "–"}`)).join(" · ") +
+    // Said once at the end rather than on every set — this line is already
+    // the tightest thing in a resting row, and "8×65 lb · 8×65 lb" reads as
+    // a sentence where the point is the shape of three sets.
+    (anyWeight ? " lb" : "")
+  );
 }
 
 // The draft rows for a lift, built from what is already logged. Shared by the

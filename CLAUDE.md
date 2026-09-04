@@ -6101,6 +6101,79 @@ pointer/mouse sequence AND a touchstart/touchend pair dispatched after it —
 touch events alone were ignored on a cold page load, and mouse events alone
 never fired the press. Worth reaching for both together next time.
 
+## A route back out of an accidental set, and pounds said out loud (2026-09-03)
+
+Two reports off one screenshot of the member logging card. **No migration** —
+the delete uses `programming.logs`' existing `for all` member policy (0004).
+
+**The "+" at the end of the last set row becomes a "−" once that row is empty
+AND it is a set she added herself.** Tapping "+" by accident had no way back.
+The added condition beyond "the row is empty" is deliberate and is not a
+refinement for its own sake: a member part-way through a 3×8 has an empty last
+row too, so a bare empty test would take her "+" away exactly when she might
+want a fourth set, and would offer to delete a set the coach programmed — which
+`rows`' own initial state rebuilds from the prescription on the next load
+anyway, so it would only look broken. A set she added and then filled shows the
+"+" again; clearing both boxes brings the "−" back, which is the route to
+removing that one. Same circle, same clay, only the glyph changes — nothing is
+lost either way, because the row it removes is empty by definition.
+
+**Two things had to be true for the removal to stick**, and only the first is
+obvious. `logResult` never writes an all-blank row (it says so in its own
+comment), so the common case — tap "+", tap "−" — has nothing in the database
+at all. But a set she typed into and then *cleared* has already been saved as a
+row of nulls, because `logResult` deliberately updates an existing row even to
+null, and `getLoggedSetsForDate`'s `highest` counted that husk, so the deleted
+set came straight back on the next load. So: new `deleteLoggedSet` in
+`memberPlan.js` (scoped exactly like `logResult`'s own lookup — session-scoped,
+then the session-less fallback, never a TrueCoach import), fired best-effort,
+**plus** husks excluded from `highest`. The second is what makes it durable if
+the delete fails, and it also fixes the pre-existing "type then clear then
+reload" phantom row.
+
+**Real bug visible in the screenshot she sent, fixed in the same pass**: an
+added set 4 showed a target of `12-15, ...`. `rowTargets` fell through
+`item.repScheme?.[i] ?? item.targetReps`, and `targetReps` is `ex.reps`, which
+the builder writes as `summarizeRepScheme`'s **joined summary** ("12-15, 6-8,
+6-8") whenever the scheme varies. So one set's target column was printing the
+whole lift's scheme. A per-set scheme covers every programmed set (0030
+backfills one entry per set), so a set past its length now has no target at
+all, which is what the code's own comment had claimed all along.
+
+**Pounds: fill the gaps, keep "lb".** Terra's ask was "add a # everywhere to
+show that it's pounds"; asked, and she chose filling the gaps over switching
+the app's ~40 existing "lb" strings to gym shorthand. Most member surfaces were
+already covered (`summarizeSets`, the LB column header, My History, the session
+sheet, `lib/history.js`); what was bare was the **lift progress chart** (now
+`unit="lb"`), the **weight calculator's** total and Insert button, the SPC
+readout's set chips, the hub's collapsed summary line and idle-board bests, the
+specialty-bar button, and — the widest-reaching one — **`SetBubble`**, whose
+every caller renders it with no column header above it.
+
+That last one is the only place the unit costs layout, so it is width-aware
+rather than unconditional: `SetBubbleRow` drops it at `xs`, and
+`hubBubbleSize`'s thresholds moved one step earlier (`≥7 → xs`, `≥5 → sm`).
+Measured in the 463px four-up wall column with 3-digit weights: 2/3/4 sets land
+at 172/258/344, 5 at 384, 6 at 461, and 7-8 fall back to unit-less at 393/449 —
+nothing clips at any count, where an unconditional unit overflowed at 8.
+
+**Deliberately not touched**: the wall board's own "+ Add set" (a labelled
+button a coach drives, not an icon a member can fat-finger, and nobody has
+reported it); `CoachHomeMobile`'s weigh-in columns, whose 44px headers would
+clip a unit and whose numbers are unambiguous body weight; and `WeekRows`' dense
+day table, for the same width reason.
+
+**Verified** by driving the real card at 390px through a throwaway
+`app/zz-harness.js` (deleted; `git status` clean): add → "Remove set 4" with an
+empty target, remove → back to 3 sets and "+", reps-only and both-filled → "+",
+clearing both → "−" again, and the plate calculator reading "90 lb" / "Insert
+90 lb". Bubble widths measured for every count 2-8 in a second harness pass.
+`npm run build` + `check:routes` clean, plus a Babel parse and
+unresolved-identifier pass over all ten touched files. **Not verified behind a
+real login** — standing limitation; worth Terra confirming a real removal
+survives a reload.
+
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
