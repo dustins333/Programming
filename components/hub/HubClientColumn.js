@@ -78,20 +78,18 @@ const RESTING_ROW_GAP = 8;
 // rather than borrowing a number off block_length_weeks, which is left
 // populated but unread while the end is null.
 //
+// It stays put on a finalized column. It used to hide there, purely because
+// the COMPLETE pill and a long name could not share the row — with that pill
+// gone the header has the width, and "she has now done this 3 of 8 times" is
+// exactly as true after Finalize as before it.
+//
 // The first time reads clay rather than neutral: that is the one the number
 // exists to catch, and the one where a coach has to slow down and teach.
 // White fill in both states — on this board a peach fill already means
 // pressable (the history strip, the collapse circle), and this is
 // information, not a control.
-function SessionRunPill({ count, total, compact, finalized }) {
+function SessionRunPill({ count, total, compact }) {
   if (!count) return null;
-  // A column cannot hold a full name, this pill AND the COMPLETE pill:
-  // measured, "Lauren Bottelberghe" loses a character at the narrow 463px
-  // four-up width and four of them on a phone. Once she is finalized the
-  // COMPLETE pill, the 6px olive bar and the tint all say so and the count
-  // has done its job, so this is the one that steps aside rather than the
-  // one thing on this header that has to read from across the room.
-  if (finalized) return null;
   const first = count === 1;
   return (
     <View
@@ -858,10 +856,12 @@ export function HubClientColumn({
         overflow: "hidden",
       }}
     >
-      {/* A finalized column gets a 6px olive bar and a COMPLETE pill rather
-          than washing its whole background olive — visual-pass v4's house
-          rule is border-and-fill, never a full wash, and the bar carries the
-          same signal from across the room. The bar's height is reserved in
+      {/* A finalized column carries a 6px olive bar, an olive border and an
+          olive-tinted header, on top of the green wash over the session
+          itself (HubFinalizedOverlay) and a footer button that flips to
+          "Make changes". A COMPLETE pill in this header was a fifth way of
+          saying the same thing, and the one competing with the client's name
+          for width — dropped 2026-09-03. The bar's height is reserved in
           every column: rendering it only when finalized pushed that one
           column's entire contents 6px below its neighbours'. */}
       <View style={{ height: FINALIZED_BAR_H, backgroundColor: entry.finalized ? DONE : "transparent" }} />
@@ -889,12 +889,7 @@ export function HubClientColumn({
                 .join(" | ")}
             </Text>
           </View>
-          <SessionRunPill count={entry.sessionRunCount} total={entry.sessionRunTotal} compact={compact} finalized={entry.finalized} />
-          {entry.finalized ? (
-            <View style={{ borderRadius: 999, backgroundColor: "#eef1e7", borderWidth: 1, borderColor: "#cfdcc2", paddingHorizontal: 10, paddingVertical: 4, marginRight: 8 }}>
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.9, color: DONE }}>COMPLETE</Text>
-            </View>
-          ) : null}
+          <SessionRunPill count={entry.sessionRunCount} total={entry.sessionRunTotal} compact={compact} />
           <PressFade onPress={() => setEditOrder((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
             <Ionicons
               name={editOrder ? "close-circle" : canReorder ? "swap-vertical" : "person-remove-outline"}

@@ -6064,12 +6064,21 @@ the first, the coaching will look very different than if it's their 10th."*
 - Reviewing a past board counts it as of that day (`week_number <=
   completionWeek`), not as of now.
 
-**The header row is a width budget and the name has to win it.** Measured:
-name + pill + COMPLETE + the reorder icon clips "Lauren Bottelberghe" by a
-character at the narrow 463px four-up column and by four on a phone. So **the
-pill hides entirely once the column is finalized** — the COMPLETE pill, the
-6px olive bar and the tint all already say so, and the count has done its job
-by then.
+**The COMPLETE pill in the column header is gone** (Terra's call, and she was
+right): a finalized column already carried the green wash over its session
+body, a 6px olive bar, an olive border, an olive-tinted header and a footer
+button flipped to "Make changes". COMPLETE was a fifth way of saying the same
+thing, and the one competing with the client's name for width —
+`HubFinalizedOverlay`'s own header says the wash exists precisely because a
+small badge could not carry that signal across a gym.
+
+**The header row is a width budget and the name has to win it.** With
+COMPLETE there, name + run pill + the reorder icon clipped "Lauren
+Bottelberghe" by a character at the narrow 463px four-up column and by four on
+a phone, so the run pill used to hide on a finalized column. With COMPLETE
+gone the header has the width, so **the count now stays put after Finalize**,
+which is right anyway: "she has now done this 3 of 8 times" is exactly as true
+afterwards as before.
 
 ### Verification
 
@@ -6081,6 +6090,9 @@ line at 390px, and all four sheets opened and read back (including the
 "Trained, not finalized yet" row and the not-in list ordered longest-gone
 first). `npm run build` + `check:routes` clean, plus a Babel parse,
 unresolved-identifier and unused-import pass over all eight touched files.
+Re-measured after dropping COMPLETE: every name uncropped on every column,
+including a finalized "Lauren Bottelberghe" at both widths.
+
 **Not verified behind a real login** — standing limitation. Worth Terra's pass
 on a real board and against a real week's roster.
 
