@@ -58,6 +58,32 @@ function SetChip({ set }) {
       </View>
     );
   }
+  // A ramp-up (0116) is work she did on the way in, not one of her sets. It
+  // is shown because a coach wants to know she warmed into it, and it counts
+  // toward nothing — so it reads a step quieter than the real sets beside it,
+  // with the word on it rather than a colour a coach would have to learn.
+  if (set.rampUp) {
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 5,
+          borderWidth: 1,
+          borderColor: "#e4e0da",
+          borderRadius: 7,
+          paddingVertical: 4,
+          paddingHorizontal: 8,
+        }}
+      >
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.6, color: "#a8a29e" }}>RAMP</Text>
+        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#6f6862" }}>
+          {set.weight != null ? `${set.weight} lb × ` : ""}
+          {set.reps ?? "—"}
+        </Text>
+      </View>
+    );
+  }
   const missed = set.target != null && set.reps != null && set.reps < set.target;
   return (
     <View
@@ -132,7 +158,7 @@ function ExerciseRow({ row, supersetLetter, showSupersetHeader, inSuperset, narr
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
           {row.sets.map((set) => (
-            <SetChip key={set.setNumber} set={set} />
+            <SetChip key={set.key ?? set.setNumber} set={set} />
           ))}
         </View>
         {row.note ? (
@@ -188,7 +214,7 @@ function ExerciseRow({ row, supersetLetter, showSupersetHeader, inSuperset, narr
 
       <View style={{ flex: 1.4, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {row.sets.map((s) => (
-          <SetChip key={s.setNumber} set={s} />
+          <SetChip key={s.key ?? s.setNumber} set={s} />
         ))}
       </View>
 

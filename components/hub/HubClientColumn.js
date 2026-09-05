@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { PressFade } from "../PressFade";
 import { ClientGoalLine } from "../ClientGoalCard";
-import { SetBubbleRow, hubBubbleSize } from "./HubSetBubbles";
+import { SetBubbleRow, hubBubbleSize, bubbleCountFor } from "./HubSetBubbles";
 import { HubLiftCard, coachInstruction } from "./HubLiftCard";
 import { HubDock, DockPill } from "./HubDock";
 import { HubNumberPad } from "./HubNumberPad";
@@ -148,13 +148,18 @@ function rowsFromLogs(item, logs, atLeast = 0) {
     return {
       reps: row?.reps != null ? String(row.reps) : "",
       weight: row?.weight != null ? String(row.weight) : "",
+      // Carried so the rack-side card labels a ramp-up the same way her phone
+      // does. The hub never WRITES it — logResult only touches set_type when a
+      // caller passes one, so a coach saving a set here cannot silently
+      // promote her ramp-up back into a working set.
+      rampUp: row?.set_type === "ramp_up",
     };
   });
 }
 
 function sameRows(a, b) {
   if (a.length !== b.length) return false;
-  return a.every((r, i) => r.reps === b[i].reps && r.weight === b[i].weight);
+  return a.every((r, i) => r.reps === b[i].reps && r.weight === b[i].weight && Boolean(r.rampUp) === Boolean(b[i].rampUp));
 }
 
 function CompletionTick({ completed, onPress, size = 26 }) {
@@ -207,7 +212,7 @@ function RestingRow({ item, letter, logs, completed, hasNote, editOrder, canReor
   // A client logging a fourth set on a 3-set lift must not make her row taller
   // than the same lift in the next column, so the size is chosen off whatever
   // the row will actually draw, not off the prescription alone.
-  const setCount = Math.max(targetCount, (logs ?? []).reduce((m, r) => Math.max(m, r.set_number ?? 0), 0));
+  const setCount = bubbleCountFor(logs, targetCount);
   return (
     <PressFade
       onPress={onPress}

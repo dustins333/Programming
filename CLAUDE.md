@@ -6174,6 +6174,121 @@ real login** — standing limitation; worth Terra confirming a real removal
 survives a reload.
 
 
+## Ramp-up sets: keep the warm-up, stop it counting (2026-09-04)
+
+Members warm into a lift: grab the 25s, do a set, know it wasn't hard enough.
+The set really happened and they want to keep it, but it is not one of the
+three working sets the coach programmed. Swipe a logged set left-to-right and
+a button uncovers on the left that converts it; swipe again to convert back.
+Migration `0116` — **not yet run.**
+
+**The database never renumbers, and that is the load-bearing decision.**
+Terra's own framing was that the set numbers would have to move (1,2,3,4 →
+ramp, 1,2,3). They don't, in storage: `logs.set_number` is part of
+`logs_unique_set_idx` (0073), so shifting 2,3,4 down to 1,2,3 means updating
+rows into numbers their neighbours still hold, which a unique index rejects
+mid-statement — and it is an index, not a constraint, so it cannot be
+deferred. A row keeps its stored position and only `set_type` changes.
+
+The LABEL is derived instead: `lib/programming/setLabels.js` is the single
+definition (`deriveSetLabels`, `workingSets`, `isRampUpSet`), and **every
+screen that prints a set label goes through it**, because otherwise her own
+card would call a set "SET 1" while My History called the same row "Set 2".
+That was a real find, not a hypothetical — `history/[exerciseId].js` printed
+the raw `set_number`. The helper reads both row shapes (`set_type` off the
+database, `rampUp` on the card's local rows) so one function covers both.
+
+**The bug this exposed, which existed before ramp-ups and would have got
+worse:** the SPC read-out paired targets to sets by raw position
+(`spcBlockDetail.js`), so a ramp-up at position 1 shifted the whole lift by
+one and the "N short" verdict a coach reads was wrong for every set in it.
+Working sets and ramp-ups are now separated BEFORE anything is paired. The
+same off-by-one lived in the hub's `SetBubbleRow` and in `HubLiftCard`'s
+per-set target; both fixed the same way. `SetBubbleRow` also now lays out by
+stored position first, so a gap she left (set 1 and set 3 logged, set 2 not)
+stays a gap instead of closing up and claiming a set she skipped.
+
+**Terra's two calls, taken explicitly:** a ramp-up counts toward **nothing**
+on the coach's numbers (set count, session volume, hit-target), and it is
+visible **everywhere, marked** — the Last time sheet, My History, the coach's
+lift history, the SPC read-out, and the wall display all show it a step
+quieter with the word RAMP on it rather than a colour anyone has to learn.
+
+**The line I drew where she didn't specify**, and it is worth keeping
+consistent: a ramp-up is **counted as evidence she trained, not as one of her
+programmed sets**. So `gymWeek`'s "trained without finalizing",
+`spcSessionActivity`'s started-session floor, `hubHistory`'s "does this board
+have data" and `coachLogs`' activity feed all still count it — she was in the
+gym. Anything that compares against a prescription or announces progression
+does not.
+
+Three smaller decisions, none of which Terra's example distinguishes:
+- **A converted set stays where it is.** Convert set 3 of 4 and you get
+  working 1, working 2, ramp 1, working 3 — the order she actually did them,
+  and no row moves under her finger after the swipe.
+- **The card DOES grow a replacement row**, so the working sets always reach
+  the programmed count: mark one of three as a ramp-up and three working sets
+  are still waiting for her. Terra's call, and it reverses what her own example
+  showed (four rows in, four out) — asked directly and she wanted the row. The
+  invariant lives in `padWorkingSets` and is re-established on load as well as
+  on the toggle, or reopening a session mid-conversion would come back one
+  working row short. It pads only, never trims: converting a ramp-up BACK
+  leaves one more row than the prescription asks for, which is exactly the
+  state tapping "+" produces and which that row's own "−" already removes,
+  where auto-trimming would sometimes eat an empty row she added on purpose.
+  `canRemoveLastSet` counts WORKING rows for the same reason — on raw length it
+  would offer to delete a set she genuinely still owes.
+- **Fill-down ignores ramp-ups in both directions.** Carrying the 25s she
+  warmed up with down into her working sets is precisely the wrong number.
+
+**Two guards that would have silently done nothing**, both the class this file
+already warns about: `topSetOf`'s new ramp-up filter reads `set_type`, which
+`getExerciseStats` did not select — so PR exclusion would have been a no-op
+with a clean bundle. Six `logs` selects needed the column added. And
+`getMostRecentLog` (which seeds a coach's next prescription from her last log)
+now excludes ramp-ups, or adding a lift to an SPC session would propose the
+warm-up weight.
+
+**`logResult` only writes `set_type` when a caller passes one**, same rule as
+`notes` and for a sharper reason: the wall display and the back-log grid both
+write sets through it with no opinion about ramp-ups, so a blanket default
+would have a coach saving a note at the rack silently promote her ramp-up back
+into a working set.
+
+**Gesture notes.** PanResponder + `Animated`, matching the rest-timer button in
+the same file rather than reaching for gesture-handler — it is the responder
+system this app has proven on both native and the PWA, and everyone is on the
+PWA. The **capture-phase** hook is what lets the row take the gesture off a
+TextInput the finger landed on; it only claims the touch once the drag is
+clearly horizontal, so vertical scrolling still wins. `touchAction: "pan-y"`
+(web only) stops mobile Safari starting a text selection instead. Only one row
+is open at a time, held by the parent. The action is rendered only while it
+can be reached (open, or mid-drag) — rendering it always put four invisible
+"Ramp-up set" buttons in the accessibility tree with nothing to say which set
+each belonged to.
+
+**Verified by driving it for real** at 375px through a throwaway
+`app/zz-rampharness.js` (deleted; `logResult`/`getLoggedSetsForDate` stubbed to
+capture writes, then restored and **md5-verified byte-identical**): the swipe
+opens to exactly 116px, a swipe **starting on a text input** opens it (the
+capture steal works), a mostly-vertical drag does **not**, the labels come out
+`RAMP UP 1 / SET 1 / SET 2 / SET 3`, targets re-pair to 12/10/8, converting
+back restores SET 1-4, and the persisted write keeps `set_number` 1,2,3,4 with
+only set 1's `set_type` changed. Re-driven against a 3-set prescription for the
+replacement-row behaviour: marking set 1 as a ramp-up leaves three working sets
+with the third empty and awaiting her, that empty row correctly offers "+" and
+not "−" (it is owed, not spare), the fill-down offer appears and skips the
+ramp-up, and converting back leaves a spare SET 4 carrying a "−". `npm run build` + `check:routes` clean, plus a
+Babel parse / unresolved-identifier / unused-import pass over all 14 files, and
+10 unit cases against the shipped `setLabels.js`.
+
+**Not verified**: anything behind a real login, and none of it on native —
+standing limitation. The springs are rAF-driven and **rAF is throttled in the
+sandboxed browser pane**, so the slide animation itself was never watched, only
+the values it starts and ends at. Worth Terra's pass on a real phone: that the
+swipe feels right under a thumb mid-session, and that a converted set still
+reads correctly on the wall display.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -6268,6 +6383,7 @@ sections; next number after 0080 is 0081.)
 - `0112_logs_unique_set_alternate.sql` — **run**, verified live 2026-09-01, deliberately AFTER the deploy that removed the conflict-target column list from `logResult()` (confirmed by grepping the live entry bundle for that exact string and getting zero, not by assuming the deploy had landed). Applied during a measured quiet window (zero logs in the preceding 20 minutes) since a browser tab still holding pre-deploy JS would fail 42P10 on a new set; verified afterwards in a rolled-back transaction that a plain insert works, a racing duplicate raises 23505 for the app to catch, and two different away sessions on one day now stay as two rows. Widens `logs_unique_set_idx` with `alternate_session_id`. Safe only once `logResult()` no longer names a conflict-target column list, which it doesn't as of the 0110 commit. Applying it against older deployed JS breaks every new set insert with 42P10 — this happened for real. Numbered 0112 rather than 0111 because a parallel session was holding 0111 for unrelated nutrition work.
 
 - `0111_checkin_closeout_and_week_phases.sql` — **run**, verified live 2026-09-01 (both tables, RLS on, one staff policy each, the Monday CHECK and both unique constraints exercised in a rolled-back dry run, plus an 8-assertion impersonation test as a real coach and a real member, and a live PostgREST 200 rather than PGRST205). Adds `programming.nutrition_checkin_closeouts` (a coach resolving a week no client is going to file — deliberately not a fabricated `public.checkin_responses` row, and deliberately not a gate on the member) and `programming.nutrition_week_phases` (one row per phase CHANGE, so the Weeks tab can count "Diet 1, Diet 2, Diet 3" without a row per week; `phase` is nullable as an explicit "no phase from here"). Both staff-only in every direction. Needs `NOTIFY pgrst, 'reload schema'` after running.
+- `0116_log_set_type.sql` — **run**, verified live 2026-09-04 (dry-run in a rolled-back transaction first: all 17,148 existing rows backfill to `working`; then applied, column confirmed `text NOT NULL default 'working'` with its check constraint and 0 nulls, `NOTIFY pgrst` sent and a live REST select on `set_type` returning 200). Adds `programming.logs.set_type` (`working` default | `ramp_up`) so a member can keep a warm-up set she logged without it counting as one of her working sets. Additive with a default, so every existing row backfills to `working` and nothing changes meaning. **Deliberately does not renumber anything** — `set_number` is part of `logs_unique_set_idx` (0073) and cannot be shifted mid-statement; the display label is derived by `lib/programming/setLabels.js` instead. No index: `set_type` is only ever read alongside rows already fetched by user/exercise/date. Rollback is in the file's own header. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 

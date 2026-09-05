@@ -1,5 +1,6 @@
 import { Text, View } from "react-native";
 import { fonts, colors } from "../../lib/theme";
+import { deriveSetLabels, isRampUpSet } from "../../lib/programming/setLabels";
 
 // The one set-bubble primitive on the hub board. Reps large, weight small
 // beside it, each set in its own pill — used identically by a resting lift's
@@ -21,6 +22,9 @@ import { fonts, colors } from "../../lib/theme";
 const LOGGED_BG = "#f3f6ef";
 const LOGGED_BORDER = "#dbe8cf";
 const LOGGED_TEXT = "#3f4a36";
+// A ramp-up is her work, set aside: neutral where a working set is olive.
+const RAMP_BG = "#f6f5f3";
+const RAMP_BORDER = "#e4e0da";
 
 const SIZES = {
   // xs exists only so a single-line row can never clip — see hubBubbleSize().
@@ -35,6 +39,18 @@ const SIZES = {
 // four-up width, the tightest case) with three-digit weights: md fits 7, sm
 // fits 7 with room, xs fits 8+. Real SPC programming is 2-3 sets and the
 // most anyone has ever logged is 3, so this is headroom, not a common path.
+// Exactly how many bubbles SetBubbleRow will draw for a given set of logs, so
+// a caller sizing the row can't disagree with the row itself about how many
+// there are — a ramp-up adds a bubble that neither the prescription nor the
+// highest stored set number accounts for on its own.
+export function bubbleCountFor(sets = [], targetCount = 0) {
+  const real = (sets ?? []).filter((r) => r.reps != null || r.weight != null);
+  const maxSet = real.reduce((m, r) => Math.max(m, r.set_number ?? 0), 0);
+  const slots = maxSet > 0 ? maxSet : real.length;
+  const ramps = real.filter(isRampUpSet).length;
+  return Math.max(slots, ramps + targetCount);
+}
+
 export function hubBubbleSize(setCount) {
   // One step earlier than the original tuning, because naming the unit costs
   // roughly 13px a bubble: measured in the 463px four-up column with 3-digit
@@ -51,7 +67,7 @@ export function hubBubbleSize(setCount) {
 // repeating it on every bubble there would be noise. A reader with no such
 // header (the coach's session popup) passes it, or a 60-second carry reads
 // as 60 reps.
-export function SetBubble({ reps, weight, target, tracksWeight = true, size = "md", tone = "logged", stacked = true, suffix = "", showWeightUnit = true }) {
+export function SetBubble({ reps, weight, target, rampUp = false, tracksWeight = true, size = "md", tone = "logged", stacked = true, suffix = "", showWeightUnit = true }) {
   const s = SIZES[size] ?? SIZES.md;
   const logged = reps != null || weight != null;
   const showWeight = tracksWeight && weight != null;
@@ -68,8 +84,8 @@ export function SetBubble({ reps, weight, target, tracksWeight = true, size = "m
         borderRadius: 8,
         borderWidth: 1,
         borderStyle: logged ? "solid" : "dashed",
-        borderColor: logged ? (tone === "plain" ? "#e7e0d8" : LOGGED_BORDER) : "#ddd6cd",
-        backgroundColor: logged ? (tone === "plain" ? "white" : LOGGED_BG) : "transparent",
+        borderColor: rampUp ? RAMP_BORDER : logged ? (tone === "plain" ? "#e7e0d8" : LOGGED_BORDER) : "#ddd6cd",
+        backgroundColor: rampUp ? RAMP_BG : logged ? (tone === "plain" ? "white" : LOGGED_BG) : "transparent",
         flexDirection: "row",
         alignItems: "baseline",
         justifyContent: "center",
@@ -79,7 +95,7 @@ export function SetBubble({ reps, weight, target, tracksWeight = true, size = "m
         style={{
           fontFamily: fonts.sansBold,
           fontSize: s.reps,
-          color: logged ? (tone === "plain" ? "#292524" : LOGGED_TEXT) : colors.hint,
+          color: rampUp ? colors.muted : logged ? (tone === "plain" ? "#292524" : LOGGED_TEXT) : colors.hint,
         }}
         numberOfLines={1}
       >
@@ -90,7 +106,7 @@ export function SetBubble({ reps, weight, target, tracksWeight = true, size = "m
           style={{
             fontFamily: fonts.sansMedium,
             fontSize: s.weight,
-            color: tone === "plain" ? colors.muted : "#5c6b52",
+            color: rampUp || tone === "plain" ? colors.muted : "#5c6b52",
             marginLeft: 3,
           }}
           numberOfLines={1}
@@ -109,15 +125,45 @@ export function SetBubble({ reps, weight, target, tracksWeight = true, size = "m
 export function SetBubbleRow({ sets = [], targetCount = 0, targetFor, tracksWeight = true, size = "md", tone = "logged", wrap = true, suffix = "", showWeightUnit = size !== "xs" }) {
   const real = (sets ?? []).filter((r) => r.reps != null || r.weight != null);
   const maxSet = real.reduce((m, r) => Math.max(m, r.set_number ?? 0), 0);
-  const count = Math.max(targetCount, maxSet, real.length);
-  const bubbles = [];
-  for (let i = 1; i <= count; i++) {
-    const row = real.find((r) => (r.set_number ?? 0) === i) ?? (maxSet === 0 ? real[i - 1] : undefined);
+
+  // Laid out by STORED position first, exactly as the member's own card does,
+  // so a gap she left (set 1 and set 3 logged, set 2 not) stays a gap instead
+  // of closing up and claiming she did a set she skipped. Drafts coming off
+  // the hub's own editing state carry no set_number, so those stay positional.
+  const ordered =
+    maxSet > 0 ? Array.from({ length: maxSet }, (_, i) => real.find((r) => (r.set_number ?? 0) === i + 1) ?? null) : real;
+
+  // Then the target each bubble is asked to show is resolved by WORKING
+  // position, not by stored position — a ramp-up (0116) was never asked for,
+  // so it neither carries a target nor consumes one, and everything below it
+  // would otherwise be judged against the wrong number.
+  const labels = deriveSetLabels(ordered.map((r) => r ?? {}));
+  const workingCount = labels.filter((l) => !l.rampUp).length;
+
+  const bubbles = ordered.map((row, i) => (
+    <SetBubble
+      key={i}
+      reps={row?.reps ?? null}
+      weight={row?.weight ?? null}
+      rampUp={labels[i].rampUp}
+      target={!labels[i].rampUp && targetFor ? targetFor(labels[i].index) : null}
+      tracksWeight={tracksWeight}
+      showWeightUnit={showWeightUnit}
+      size={size}
+      tone={tone}
+      stacked={wrap}
+      suffix={suffix}
+    />
+  ));
+
+  // Fill out to the programmed set count with dashed placeholders, so "3 × 8
+  // but only two done" is still visible as a shape.
+  for (let i = workingCount + 1; i <= targetCount; i++) {
     bubbles.push(
       <SetBubble
-        key={i}
-        reps={row?.reps ?? null}
-        weight={row?.weight ?? null}
+        key={`pad${i}`}
+        reps={null}
+        weight={null}
         target={targetFor ? targetFor(i) : null}
         tracksWeight={tracksWeight}
         showWeightUnit={showWeightUnit}

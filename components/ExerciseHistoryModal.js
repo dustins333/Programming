@@ -8,6 +8,7 @@ import { PressFade } from "./PressFade";
 import { TrueCoachMatchModal } from "./TrueCoachMatchModal";
 import { listMyTrueCoachImports } from "../lib/programming/truecoachImports";
 import { formatCount } from "../lib/programming/repUnit";
+import { isRampUpSet } from "../lib/programming/setLabels";
 import { fonts, colors } from "../lib/theme";
 
 // design_handoff_member_lasttime_v1. This is now the ONLY place a member sees
@@ -76,6 +77,13 @@ function agoLabel(date, today) {
 // NOT get padded out to today's four, because inventing an empty fourth pill
 // would read as a set she skipped rather than one that was never asked for.
 function SetPill({ set, tinted, tracksWeight = true, exercise }) {
+  // A ramp-up (0116) is kept in the row rather than filtered out — knowing she
+  // warmed into it last week is part of "should I go up today". It is drawn
+  // muted and captioned so it can't be read as one of her sets, which also
+  // explains the one thing it costs: with a ramp-up in only some sessions,
+  // set 2 no longer sits strictly under set 2 down the column. The caption is
+  // what makes that legible rather than confusing.
+  const rampUp = isRampUpSet(set);
   return (
     <View
       style={{
@@ -85,11 +93,20 @@ function SetPill({ set, tinted, tracksWeight = true, exercise }) {
         paddingVertical: 7,
         borderRadius: 11,
         borderWidth: 1,
-        borderColor: tinted ? PEACH_BORDER : CARD_BORDER,
-        backgroundColor: tinted ? "#fffaf7" : "#fff",
+        ...(rampUp
+          ? { borderColor: "#e4e0da", borderStyle: "dashed", backgroundColor: "#faf9f7" }
+          : { borderColor: tinted ? PEACH_BORDER : CARD_BORDER, backgroundColor: tinted ? "#fffaf7" : "#fff" }),
       }}
     >
-      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 19, color: "#44403c" }}>
+      {rampUp ? (
+        <Text
+          maxFontSizeMultiplier={1}
+          style={{ fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.5, color: colors.muted, marginBottom: 1 }}
+        >
+          RAMP
+        </Text>
+      ) : null}
+      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 19, color: rampUp ? colors.muted : "#44403c" }}>
         {set.reps == null ? "–" : formatCount(set.reps, exercise)}
       </Text>
       {/* A reps-only lift has no weight line at all — a dash under every
@@ -98,7 +115,12 @@ function SetPill({ set, tinted, tracksWeight = true, exercise }) {
         <Text
           maxFontSizeMultiplier={1.1}
           numberOfLines={1}
-          style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: set.weight != null ? "#44403c" : colors.muted, marginTop: 2 }}
+          style={{
+            fontFamily: fonts.sansSemiBold,
+            fontSize: 14,
+            color: set.weight != null && !rampUp ? "#44403c" : colors.muted,
+            marginTop: 2,
+          }}
         >
           {set.weight != null ? `${set.weight} lb` : "–"}
         </Text>

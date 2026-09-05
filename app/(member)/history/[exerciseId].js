@@ -6,6 +6,7 @@ import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listLogsForExercise } from "../../../lib/programming/memberPlan";
 import { getExercise } from "../../../lib/programming/exercises";
 import { formatDateMDY } from "../../../lib/formatDate";
+import { deriveSetLabels } from "../../../lib/programming/setLabels";
 import { LiftProgressSection } from "../../../components/LiftProgress";
 import { TrueCoachLinkRow } from "../../../components/TrueCoachLinkRow";
 import { fonts, colors } from "../../../lib/theme";
@@ -142,11 +143,22 @@ export default function ExerciseHistory() {
             <Text className="mb-1.5" style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#44403c" }}>
               {formatDateMDY(group.date)}
             </Text>
-            {group.sets.map((s) => (
-              <Text key={s.id} style={{ fontFamily: fonts.sans, fontSize: 14, color: "#57534e", marginTop: 2 }}>
-                Set {s.set_number}: {s.reps ?? "–"} reps{s.weight != null ? ` @ ${s.weight} lb` : ""}
-              </Text>
-            ))}
+            {/* The label is DERIVED, never the stored set_number (0116). A
+                ramp-up keeps its row position in the database, so printing
+                the raw number here would have this screen call a set "Set 2"
+                while her own logging card calls the same set "SET 1". */}
+            {deriveSetLabels(group.sets).map((label, i) => {
+              const s = group.sets[i];
+              return (
+                <Text
+                  key={s.id}
+                  style={{ fontFamily: fonts.sans, fontSize: 14, color: label.rampUp ? colors.muted : "#57534e", marginTop: 2 }}
+                >
+                  {label.rampUp ? `Ramp up ${label.index}` : `Set ${label.index}`}: {s.reps ?? "–"} reps
+                  {s.weight != null ? ` @ ${s.weight} lb` : ""}
+                </Text>
+              );
+            })}
             {group.notes ? (
               <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, marginTop: 6, fontStyle: "italic" }}>
                 {group.notes}

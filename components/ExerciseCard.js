@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Platform } from "react-native";
+import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Platform, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { deleteLoggedSet, getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { repUnit, repUnitHeader } from "../lib/programming/repUnit";
+import { deriveSetLabels, workingSets, RAMP_UP, WORKING } from "../lib/programming/setLabels";
 import { fonts, colors, type } from "../lib/theme";
 import { formatDateMD } from "../lib/formatDate";
 import { dateInBoise } from "../lib/boiseDate";
@@ -90,7 +91,10 @@ const TARGET_TEXT = colors.hint;
 export function summarizeSets(entries, exercise) {
   const val = (v) => (v === "" || v == null ? null : String(v));
   const unit = (v) => (v == null ? "–" : `${v}${repUnit(exercise).suffix}`);
-  const real = entries.filter((s) => val(s.reps) !== null || val(s.weight) !== null);
+  // Ramp-ups are excluded (0116): "Logged 3 × 8 @ 185" is a statement about
+  // her working sets, and folding a warm-up into it would both inflate the
+  // count and break the "sets are uniform" test that keeps this line short.
+  const real = workingSets(entries).filter((s) => val(s.reps) !== null || val(s.weight) !== null);
   if (real.length === 0) return null;
   const reps = real.map((s) => val(s.reps));
   const weights = real.map((s) => val(s.weight));
@@ -118,6 +122,22 @@ export function coachNoteFor(item) {
   return item.notes || null;
 }
 
+// Marking a set as a ramp-up doesn't reduce what she still owes: if the coach
+// programmed three working sets, three working sets are still waiting for her.
+// So a fresh empty working row appears to take the converted one's place, and
+// the invariant "there are always at least targetSets working rows" is
+// re-established anywhere rows are built or reclassified.
+//
+// Deliberately pads only, never trims. Converting a ramp-up BACK leaves one
+// more working row than the prescription asks for, which is exactly the state
+// tapping "+" produces and which the "−" on that row already removes — where
+// auto-trimming would sometimes eat an empty row she had added on purpose.
+function padWorkingSets(rows, targetSets) {
+  const next = [...rows];
+  while (workingSets(next).length < targetSets) next.push({ reps: "", weight: "", rampUp: false });
+  return next;
+}
+
 // Carrying a logged set down into the empty ones below it, as a pure
 // function so the button's enabled state and the tap itself can't disagree.
 //
@@ -131,6 +151,11 @@ function planFillDown(rows, tracksWeight) {
   let source = null;
   let fills = 0;
   const next = rows.map((r) => {
+    // A ramp-up is neither a source nor a destination. Carrying the 25s she
+    // warmed up with down into her working sets is precisely the wrong
+    // number, and filling a ramp-up from a working set above it would undo
+    // the thing she just marked.
+    if (r.rampUp) return r;
     if (logged(r)) {
       source = r;
       return r;
@@ -495,6 +520,345 @@ function CalculatorMark() {
   );
 }
 
+// A ramp-up set is logged work that is not one of the working sets: neutral
+// warm grey where a working set is olive. Deliberately NOT a colour a member
+// has to learn — the row carries the words "RAMP UP 1" in place of "SET 1",
+// and the grey is only there so the block reads as set aside at a glance.
+const RAMP_BG = "#f6f5f3";
+const RAMP_BORDER = "#e4e0da";
+
+// How far the row slides to uncover its action, and how far she has to drag
+// before letting go commits rather than springs back.
+const SWIPE_ACTION_W = 116;
+const SWIPE_COMMIT = SWIPE_ACTION_W * 0.45;
+// Horizontal travel before the gesture is read as a swipe rather than a tap,
+// and how much more horizontal than vertical it has to be before it takes the
+// touch away from the page's own scrolling.
+const SWIPE_SLOP = 14;
+const SWIPE_BIAS = 1.4;
+
+// One set row.
+//
+// It is its own component because the swipe needs per-row animated state, and
+// hooks cannot be created inside the rows.map() this used to live in.
+//
+// The gesture: drag a logged set left-to-right and the row slides over,
+// uncovering a button that converts it to a ramp-up — or back, if it already
+// is one, so a misfire has a way out. It is hidden behind a swipe rather than
+// sitting on every row because it is a rare correction on a screen used every
+// day: a permanent per-row control would add clutter to three rows to serve
+// one of them, occasionally.
+//
+// PanResponder rather than react-native-gesture-handler, matching the rest
+// timer above it and for the same reason — it is the responder system this
+// app has already proven on both native and the PWA, and everyone is on the
+// PWA.
+//
+// Three details are load-bearing:
+//  - The CAPTURE-phase hook is what lets this row take the gesture off a
+//    TextInput the finger happened to land on. It only claims the touch once
+//    the drag is clearly horizontal, so vertical page scrolling still wins
+//    and a plain tap still puts the caret in the box.
+//  - touchAction "pan-y" (web only) tells the browser it may keep vertical
+//    scrolling and hand horizontal movement to JS. Without it mobile Safari
+//    starts a text selection inside the input instead.
+//  - Only one row is open at a time, held by the parent. A second row opening
+//    closes the first, so there is never a second stale action on screen
+//    pointing at a set she has stopped looking at.
+function SetRow({
+  row,
+  index,
+  label,
+  targetLabel,
+  hasTargets,
+  isCurrent,
+  isLast,
+  tracksWeight,
+  metrics,
+  canSwipe,
+  isOpen,
+  onOpen,
+  onClose,
+  onToggleRampUp,
+  onChange,
+  onFocusField,
+  onOpenCalc,
+  canRemoveLastSet,
+  onAddSet,
+  onRemoveSet,
+  hideTrailing,
+}) {
+  const { boxHeight, boxRadius, setLabelWidth, trailingWidth, targetWidth, rowGap, compact, blockInset } = metrics;
+  const translateX = useRef(new Animated.Value(0)).current;
+  // The action is only in the tree while it can actually be reached — open,
+  // or mid-drag on the way to open. Rendering it on every row put four
+  // "Ramp-up set" buttons behind the four set rows, invisible but read out in
+  // order by a screen reader with nothing to say which set each belonged to.
+  const [dragging, setDragging] = useState(false);
+  const openRef = useRef(isOpen);
+  openRef.current = isOpen;
+  const canSwipeRef = useRef(canSwipe);
+  canSwipeRef.current = canSwipe;
+  const callbacks = useRef(null);
+  callbacks.current = { onOpen, onClose };
+
+  const settle = (open) => {
+    Animated.spring(translateX, {
+      toValue: open ? SWIPE_ACTION_W : 0,
+      useNativeDriver: Platform.OS !== "web",
+      bounciness: 4,
+      speed: 18,
+    }).start();
+  };
+
+  // Someone else opened, or this row stopped being swipeable (she cleared it).
+  useEffect(() => {
+    settle(isOpen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_evt, g) =>
+        canSwipeRef.current && Math.abs(g.dx) > SWIPE_SLOP && Math.abs(g.dx) > Math.abs(g.dy) * SWIPE_BIAS,
+      onPanResponderGrant: () => setDragging(true),
+      onPanResponderMove: (_evt, g) => {
+        const base = openRef.current ? SWIPE_ACTION_W : 0;
+        translateX.setValue(Math.max(0, Math.min(SWIPE_ACTION_W, base + g.dx)));
+      },
+      onPanResponderRelease: (_evt, g) => {
+        setDragging(false);
+        const base = openRef.current ? SWIPE_ACTION_W : 0;
+        const end = base + g.dx;
+        if (end >= SWIPE_COMMIT) callbacks.current.onOpen();
+        else callbacks.current.onClose();
+        // The effect above only fires when isOpen actually CHANGES, so a drag
+        // that ends where it started has to be settled from here or the row
+        // stays parked halfway.
+        settle(end >= SWIPE_COMMIT);
+      },
+      onPanResponderTerminate: () => {
+        setDragging(false);
+        settle(openRef.current);
+      },
+    })
+  ).current;
+
+  const rampUp = label.rampUp;
+
+  // Keyed or not is per BOX, not per row: typing reps without a weight yet
+  // should settle the reps box and leave the weight box still asking. The
+  // clay border marks whichever box she's on.
+  const boxStyle = (hasValue) => ({
+    flex: 1,
+    minWidth: 0,
+    height: boxHeight,
+    borderRadius: boxRadius,
+    textAlign: "center",
+    fontFamily: fonts.display,
+    fontSize: compact ? 18 : 20,
+    color: rampUp ? MUTED : "#44403c",
+    paddingHorizontal: 8,
+    ...(hasValue
+      ? rampUp
+        ? { backgroundColor: RAMP_BG, borderWidth: 1, borderColor: RAMP_BORDER }
+        : { backgroundColor: LOGGED_BG, borderWidth: 1, borderColor: LOGGED_BORDER }
+      : isCurrent
+        ? { backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.primary }
+        : { backgroundColor: TARGET_BG, borderWidth: 1.5, borderStyle: "dashed", borderColor: TARGET_BORDER }),
+  });
+
+  return (
+    <View style={{ position: "relative", marginBottom: 7 }}>
+      {/* Uncovered by the swipe. Sits behind the row, which carries the
+          card's own white so nothing shows through at rest. */}
+      {canSwipe && (isOpen || dragging) ? (
+      <View
+        pointerEvents={isOpen ? "auto" : "none"}
+        style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: SWIPE_ACTION_W, justifyContent: "center" }}
+      >
+        <PressFade
+          onPress={() => onToggleRampUp()}
+          accessibilityLabel={rampUp ? `Make set ${index + 1} a working set` : `Mark set ${index + 1} as a ramp-up`}
+          style={{
+            height: boxHeight,
+            borderRadius: boxRadius,
+            backgroundColor: rampUp ? LOGGED_BG : RAMP_BG,
+            borderWidth: 1,
+            borderColor: rampUp ? LOGGED_BORDER : RAMP_BORDER,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 6,
+          }}
+        >
+          <Text
+            maxFontSizeMultiplier={1}
+            numberOfLines={2}
+            style={{
+              fontFamily: fonts.sansBold,
+              fontSize: 11,
+              lineHeight: 13,
+              textAlign: "center",
+              color: rampUp ? OLIVE : MUTED,
+            }}
+          >
+            {rampUp ? "Working set" : "Ramp-up set"}
+          </Text>
+        </PressFade>
+      </View>
+      ) : null}
+
+      <Animated.View
+        {...pan.panHandlers}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: rowGap,
+          backgroundColor: "#fff",
+          transform: [{ translateX }],
+          ...(Platform.OS === "web" ? { touchAction: "pan-y" } : null),
+        }}
+      >
+        {hasTargets ? (
+          /* The set number and its prescription are one tinted block, the
+             full height of the boxes beside it: peach means "what was
+             asked", white/olive means "what she did". Without the ground
+             behind it the two halves of the row read as one flat table and
+             the target looks like another field.
+
+             A ramp-up has no prescription — nobody asked for it — so its
+             label takes the whole block instead of leaving an en dash where
+             a target would be, which also gives "RAMP UP 1" room to sit on
+             one line where the SET column alone is too narrow for it. */
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              height: boxHeight,
+              borderRadius: boxRadius,
+              backgroundColor: rampUp ? RAMP_BG : PRESCRIPTION_BG,
+              borderWidth: 1,
+              borderColor: rampUp ? RAMP_BORDER : PRESCRIPTION_BORDER,
+            }}
+          >
+            <Text
+              maxFontSizeMultiplier={1}
+              numberOfLines={1}
+              style={{
+                width: rampUp ? setLabelWidth + targetWidth : setLabelWidth,
+                marginLeft: blockInset,
+                fontFamily: fonts.sansBold,
+                fontSize: type.eyebrow,
+                color: rampUp ? MUTED : colors.primary,
+              }}
+            >
+              {label.label}
+            </Text>
+            {rampUp ? null : (
+              <Text
+                maxFontSizeMultiplier={1}
+                numberOfLines={1}
+                style={{ width: targetWidth, textAlign: "center", fontFamily: fonts.sans, fontSize: compact ? 13.5 : 14, color: PRESCRIPTION_TEXT }}
+              >
+                {targetLabel ?? "–"}
+              </Text>
+            )}
+          </View>
+        ) : (
+          <Text
+            maxFontSizeMultiplier={1}
+            numberOfLines={1}
+            style={{ minWidth: setLabelWidth, fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: rampUp ? MUTED : colors.primary }}
+          >
+            {label.label}
+          </Text>
+        )}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <TextInput
+            ref={autofillSuppressedRef}
+            value={row.reps}
+            onChangeText={(v) => onChange("reps", v)}
+            onFocus={onFocusField}
+            // Coming back to a box that already has a number: the value is
+            // selected on focus, so the first keystroke replaces it outright
+            // instead of appending to what she typed the first time.
+            selectTextOnFocus
+            keyboardType="decimal-pad"
+            inputAccessoryViewID={NUMERIC_DONE_ID}
+            // Nothing but her own number ever goes in this box — the
+            // prescription sits in its own column to the left.
+            placeholder="–"
+            placeholderTextColor={TARGET_TEXT}
+            maxFontSizeMultiplier={1}
+            accessibilityLabel={targetLabel ? `${label.label} reps, target ${targetLabel}` : `${label.label} reps`}
+            style={{ ...boxStyle(row.reps !== ""), flex: undefined, width: "100%" }}
+          />
+        </View>
+        {tracksWeight ? (
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <TextInput
+              ref={autofillSuppressedRef}
+              value={row.weight}
+              onChangeText={(v) => onChange("weight", v)}
+              onFocus={onFocusField}
+              selectTextOnFocus
+              keyboardType="decimal-pad"
+              inputAccessoryViewID={NUMERIC_DONE_ID}
+              // Weight is never prescribed in this gym, so there is no target
+              // to state and nothing honest to put here.
+              placeholder="–"
+              placeholderTextColor={TARGET_TEXT}
+              maxFontSizeMultiplier={1}
+              accessibilityLabel={`${label.label} weight`}
+              style={{ ...boxStyle(row.weight !== ""), flex: undefined, width: "100%", paddingRight: 30 }}
+            />
+            <PressFade
+              onPress={() => {
+                Keyboard.dismiss();
+                onOpenCalc();
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 8 }}
+              accessibilityLabel={`Plate calculator for ${label.label}`}
+              style={{ position: "absolute", right: 6, top: 0, bottom: 0, justifyContent: "center" }}
+            >
+              <CalculatorMark />
+            </PressFade>
+          </View>
+        ) : null}
+        <View style={{ width: trailingWidth, alignItems: "flex-end" }}>
+          {/* Kept in the layout (opacity, not unmounted) while the rest fan is
+              open so nothing shifts under the member's finger — it just stops
+              being visible or tappable. */}
+          {isLast ? (
+            <PressFade
+              onPress={canRemoveLastSet ? onRemoveSet : onAddSet}
+              accessibilityLabel={canRemoveLastSet ? `Remove set ${index + 1}` : "Add a set"}
+              style={{
+                width: trailingWidth,
+                height: trailingWidth,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: CARD_BORDER,
+                backgroundColor: SOFT,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: hideTrailing ? 0 : 1,
+                pointerEvents: hideTrailing ? "none" : "auto",
+              }}
+            >
+              {/* Same circle, same clay — the glyph is the whole difference,
+                  so it reads as one control changing mode rather than a
+                  destructive button appearing. Nothing is lost either way:
+                  the row it removes is empty by definition. */}
+              <Ionicons name={canRemoveLastSet ? "remove" : "add"} size={17} color="#8a5140" />
+            </PressFade>
+          ) : null}
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
 export function ExerciseCard({
   userId,
   datePerformed,
@@ -530,7 +894,7 @@ export function ExerciseCard({
   // a greyed-out box still reads as something she failed to fill in, and it
   // would keep the card from ever counting as done.
   const tracksWeight = item.exercise?.tracks_weight !== false;
-  const [rows, setRows] = useState(() => Array.from({ length: targetSets }, () => ({ reps: "", weight: "" })));
+  const [rows, setRows] = useState(() => padWorkingSets([], targetSets));
   const [notes, setNotes] = useState("");
   // The note field grows to fit what's in it rather than scrolling inside a
   // fixed 44pt box — vertical growth is always preferable to a scroller
@@ -563,6 +927,9 @@ export function ExerciseCard({
   // fan's way while it's open — the presets sit close enough to the timer now
   // that the top one would otherwise land on it.
   const [restPickerOpen, setRestPickerOpen] = useState(false);
+  // Which row has its ramp-up action uncovered, or null. Held here rather
+  // than per row so opening one closes the last.
+  const [swipeOpenIndex, setSwipeOpenIndex] = useState(null);
   // Which preset the finger is over during a hold-and-drag, or null.
   const [restHoverIndex, setRestHoverIndex] = useState(null);
   const loaded = useRef(false);
@@ -610,12 +977,19 @@ export function ExerciseCard({
           targetSets
         );
         setRows(() =>
+          padWorkingSets(
           Array.from({ length: highest }, (_, i) => {
             const existing = todaysSets.find((s) => s.set_number === i + 1);
             return existing
-              ? { reps: existing.reps === null ? "" : String(existing.reps), weight: existing.weight === null ? "" : String(existing.weight) }
-              : { reps: "", weight: "" };
-          })
+              ? {
+                  reps: existing.reps === null ? "" : String(existing.reps),
+                  weight: existing.weight === null ? "" : String(existing.weight),
+                  rampUp: existing.set_type === RAMP_UP,
+                }
+              : { reps: "", weight: "", rampUp: false };
+          }),
+          targetSets
+          )
         );
         // Legacy fallback only. Notes written before 0087 live on the log
         // rows themselves; seeding from one keeps an old note visible, and
@@ -663,6 +1037,7 @@ export function ExerciseCard({
               setNumber: i + 1,
               reps: row.reps === "" ? null : Number(row.reps) || null,
               weight: !tracksWeight || row.weight === "" ? null : Number(row.weight),
+              setType: row.rampUp ? RAMP_UP : WORKING,
               source,
               session,
             })
@@ -742,8 +1117,12 @@ export function ExerciseCard({
   // A set she added and then filled shows the "+" again; clearing both
   // boxes brings the "−" back, which is the route to removing it.
   const lastRow = rows[rows.length - 1];
-  const canRemoveLastSet =
-    rows.length > targetSets && lastRow != null && lastRow.reps === "" && (!tracksWeight || lastRow.weight === "");
+  const lastRowEmpty = lastRow != null && lastRow.reps === "" && (!tracksWeight || lastRow.weight === "");
+  // Counted in WORKING rows, not raw ones: with a ramp-up on the lift the
+  // prescription is still three working sets, so raw length would offer to
+  // delete one she genuinely still owes. An empty ramp-up row is always
+  // removable — nobody asked for it in the first place.
+  const canRemoveLastSet = lastRowEmpty && (lastRow.rampUp || workingSets(rows).length > targetSets);
 
   const handleRemoveLastSet = () => {
     const setNumber = rows.length;
@@ -754,6 +1133,15 @@ export function ExerciseCard({
     deleteLoggedSet({ userId, exerciseId: item.exercise.id, datePerformed, setNumber, session }).catch((err) => {
       console.error("Failed to delete removed set:", err);
     });
+  };
+
+  // Reclassifying a set she already logged. Nothing is deleted and nothing is
+  // renumbered — the row keeps its stored set_number and simply stops being
+  // one of her working sets, which the autosave effect above writes as
+  // set_type on the next tick like any other edit.
+  const handleToggleRampUp = (index) => {
+    setRows((prev) => padWorkingSets(prev.map((r, i) => (i === index ? { ...r, rampUp: !r.rampUp } : r)), targetSets));
+    setSwipeOpenIndex(null);
   };
 
   const handleFillDown = () => {
@@ -770,7 +1158,7 @@ export function ExerciseCard({
   const titleSize = compact ? 19 : 21;
 
   const handleStartRest = (seconds) => {
-    const doneSets = rows.filter(isLogged).length;
+    const doneSets = workingSets(rows).filter(isLogged).length;
     startRest({
       seconds,
       liftName: item.exercise.name,
@@ -804,7 +1192,17 @@ export function ExerciseCard({
   // the flat fallback, and a set the member added herself past the programmed
   // count has no target. A lift with none of the above renders no TARGET
   // column at all rather than a column of en dashes eating box width.
+  // SET 1 / SET 2 / RAMP UP 1, derived rather than stored — see setLabels.js
+  // for why the database never renumbers.
+  const setLabels = deriveSetLabels(rows);
+
   const rowTargets = rows.map((_, i) => {
+    // A ramp-up was never asked for, so it has no target and — critically —
+    // it does not consume one. With a ramp-up at position 1 the set below it
+    // is her FIRST working set and takes the first entry in the scheme, or
+    // every target on the lift would be off by one.
+    if (setLabels[i].rampUp) return null;
+    const workingPosition = setLabels[i].index - 1;
     // A per-set scheme covers every set the coach programmed (0030 backfills
     // one entry per set), so a set past its length is one the member added
     // herself and genuinely has no target. Falling through to targetReps
@@ -813,7 +1211,7 @@ export function ExerciseCard({
     // reading "12-15, 6-8, 6-8", which is the builder's own summary string
     // (summarizeRepScheme) and means nothing as a single set's target.
     const scheme = item.repScheme;
-    const t = scheme?.length ? scheme[i] ?? null : item.targetReps ?? null;
+    const t = scheme?.length ? scheme[workingPosition] ?? null : item.targetReps ?? null;
     return t === null || t === "" ? null : String(t);
   });
   const hasTargets = rowTargets.some(Boolean);
@@ -821,6 +1219,7 @@ export function ExerciseCard({
   // The SET label keeps the left-aligned position it had before the block
   // existed, so it needs the block's own left inset.
   const BLOCK_INSET = 8;
+  const metrics = { boxHeight, boxRadius, setLabelWidth, trailingWidth, targetWidth, rowGap, compact, blockInset: BLOCK_INSET };
 
   return (
     <View
@@ -997,163 +1396,38 @@ export function ExerciseCard({
             <View style={{ width: trailingWidth }} />
           </View>
 
-          {rows.map((row, i) => {
-            const isCurrent = i === currentIndex;
-            const isLast = i === rows.length - 1;
-            const targetLabel = rowTargets[i];
-
-            // Keyed or not is per BOX, not per row: typing reps without a
-            // weight yet should settle the reps box and leave the weight box
-            // still asking. The clay border marks whichever box she's on.
-            const boxStyle = (hasValue) => ({
-              flex: 1,
-              minWidth: 0,
-              height: boxHeight,
-              borderRadius: boxRadius,
-              textAlign: "center",
-              fontFamily: fonts.display,
-              fontSize: compact ? 18 : 20,
-              color: "#44403c",
-              paddingHorizontal: 8,
-              ...(hasValue
-                ? { backgroundColor: LOGGED_BG, borderWidth: 1, borderColor: LOGGED_BORDER }
-                : isCurrent
-                  ? { backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.primary }
-                  : { backgroundColor: TARGET_BG, borderWidth: 1.5, borderStyle: "dashed", borderColor: TARGET_BORDER }),
-            });
-
-            return (
-              <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: rowGap, marginBottom: 7 }}>
-                {hasTargets ? (
-                  /* The set number and its prescription are one tinted block,
-                     the full height of the boxes beside it: peach means "what
-                     was asked", white/olive means "what she did". Without the
-                     ground behind it the two halves of the row read as one
-                     flat table and the target looks like another field. */
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      height: boxHeight,
-                      borderRadius: boxRadius,
-                      backgroundColor: PRESCRIPTION_BG,
-                      borderWidth: 1,
-                      borderColor: PRESCRIPTION_BORDER,
-                    }}
-                  >
-                    {/* Every SET label is the same clay as the lift name
-                        above it — this used to be the "current set" highlight
-                        applied to one row only, which made set 1 read as a
-                        different kind of label than sets 2 and 3. The current
-                        set is still marked by the clay border on its boxes,
-                        which is the more visible of the two signals. */}
-                    <Text
-                      maxFontSizeMultiplier={1}
-                      style={{ width: setLabelWidth, marginLeft: BLOCK_INSET, fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: colors.primary }}
-                    >
-                      SET {i + 1}
-                    </Text>
-                    <Text
-                      maxFontSizeMultiplier={1}
-                      numberOfLines={1}
-                      style={{ width: targetWidth, textAlign: "center", fontFamily: fonts.sans, fontSize: compact ? 13.5 : 14, color: PRESCRIPTION_TEXT }}
-                    >
-                      {targetLabel ?? "–"}
-                    </Text>
-                  </View>
-                ) : (
-                  <Text
-                    maxFontSizeMultiplier={1}
-                    style={{ width: setLabelWidth, fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: colors.primary }}
-                  >
-                    SET {i + 1}
-                  </Text>
-                )}
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <TextInput
-                    ref={autofillSuppressedRef}
-                    value={row.reps}
-                    onChangeText={(v) => updateRow(i, "reps", v)}
-                    onFocus={() => scrollFieldIntoView(cardRef.current)}
-                    // Coming back to a box that already has a number: the value is
-                    // selected on focus, so the first keystroke replaces it outright
-                    // instead of appending to what she typed the first time.
-                    selectTextOnFocus
-                    keyboardType="decimal-pad"
-                    inputAccessoryViewID={NUMERIC_DONE_ID}
-                    // Nothing but her own number ever goes in this box now —
-                    // the prescription sits in its own column to the left.
-                    placeholder="–"
-                    placeholderTextColor={TARGET_TEXT}
-                    maxFontSizeMultiplier={1}
-                    accessibilityLabel={targetLabel ? `Set ${i + 1} reps, target ${targetLabel}` : `Set ${i + 1} reps`}
-                    style={{ ...boxStyle(row.reps !== ""), flex: undefined, width: "100%" }}
-                  />
-                </View>
-                {tracksWeight ? (
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <TextInput
-                    ref={autofillSuppressedRef}
-                    value={row.weight}
-                    onChangeText={(v) => updateRow(i, "weight", v)}
-                    onFocus={() => scrollFieldIntoView(cardRef.current)}
-                    selectTextOnFocus
-                    keyboardType="decimal-pad"
-                    inputAccessoryViewID={NUMERIC_DONE_ID}
-                    // Weight is never prescribed in this gym, so there is no
-                    // target to state and nothing honest to put here.
-                    placeholder="–"
-                    placeholderTextColor={TARGET_TEXT}
-                    maxFontSizeMultiplier={1}
-                    accessibilityLabel={`Set ${i + 1} weight`}
-                    style={{ ...boxStyle(row.weight !== ""), flex: undefined, width: "100%", paddingRight: 30 }}
-                  />
-                  <PressFade
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setCalcRowIndex(i);
-                    }}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 8 }}
-                    accessibilityLabel={`Plate calculator for set ${i + 1}`}
-                    style={{ position: "absolute", right: 6, top: 0, bottom: 0, justifyContent: "center" }}
-                  >
-                    <CalculatorMark />
-                  </PressFade>
-                </View>
-                ) : null}
-                <View style={{ width: trailingWidth, alignItems: "flex-end" }}>
-                  {/* Kept in the layout (opacity, not unmounted) while the
-                      rest fan is open so nothing shifts under the member's
-                      finger — it just stops being visible or tappable. */}
-                  {isLast ? (
-                    <PressFade
-                      onPress={canRemoveLastSet ? handleRemoveLastSet : () => setRows((prev) => [...prev, { reps: "", weight: "" }])}
-                      accessibilityLabel={canRemoveLastSet ? `Remove set ${rows.length}` : "Add a set"}
-                      style={{
-                        width: trailingWidth,
-                        height: trailingWidth,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor: CARD_BORDER,
-                        backgroundColor: SOFT,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        opacity: restPickerOpen ? 0 : 1,
-                        pointerEvents: restPickerOpen ? "none" : "auto",
-                      }}
-                    >
-                      {/* Same circle, same clay — the glyph is the whole
-                          difference, so it reads as one control changing
-                          mode rather than a destructive button appearing.
-                          Nothing is lost either way: the row it removes is
-                          empty by definition. */}
-                      <Ionicons name={canRemoveLastSet ? "remove" : "add"} size={17} color="#8a5140" />
-                    </PressFade>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
+          {rows.map((row, i) => (
+            <SetRow
+              key={i}
+              row={row}
+              index={i}
+              label={setLabels[i]}
+              targetLabel={rowTargets[i]}
+              hasTargets={hasTargets}
+              isCurrent={i === currentIndex}
+              isLast={i === rows.length - 1}
+              tracksWeight={tracksWeight}
+              metrics={metrics}
+              // Her own logged work is what she can reclassify. A ramp-up
+              // stays swipeable even once its boxes are cleared, or a set she
+              // emptied would be stuck marked with no way back.
+              canSwipe={isLogged(row) || row.rampUp}
+              isOpen={swipeOpenIndex === i}
+              onOpen={() => setSwipeOpenIndex(i)}
+              onClose={() => setSwipeOpenIndex((cur) => (cur === i ? null : cur))}
+              onToggleRampUp={() => handleToggleRampUp(i)}
+              onChange={(field, value) => updateRow(i, field, value)}
+              onFocusField={() => {
+                setSwipeOpenIndex(null);
+                scrollFieldIntoView(cardRef.current);
+              }}
+              onOpenCalc={() => setCalcRowIndex(i)}
+              canRemoveLastSet={canRemoveLastSet}
+              onAddSet={() => setRows((prev) => [...prev, { reps: "", weight: "", rampUp: false }])}
+              onRemoveSet={handleRemoveLastSet}
+              hideTrailing={restPickerOpen}
+            />
+          ))}
 
           {canFillDown ? (
             <View style={{ flexDirection: "row", alignItems: "center", marginTop: 1, marginBottom: 8 }}>

@@ -6,6 +6,7 @@ import { LiftProgressSection } from "../../LiftProgress";
 import { PressFade } from "../../PressFade";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { formatCount } from "../../../lib/programming/repUnit";
+import { isRampUpSet } from "../../../lib/programming/setLabels";
 import { fonts, colors } from "../../../lib/theme";
 
 // Per-lift history on the SPC client page, reported as the gap it fills:
@@ -52,21 +53,32 @@ function groupByDate(logs) {
 
 function SetPill({ set, exercise, tracksWeight }) {
   const count = formatCount(set.reps, exercise);
+  // Shown, and shown as not one of her sets (0116). A coach reading a lift's
+  // history wants to see that she warmed into it; what she must not do is
+  // count it as a working set she has to explain.
+  const rampUp = isRampUpSet(set);
   return (
     <View
       style={{
         borderWidth: 1,
-        borderColor: CARD_BORDER,
-        backgroundColor: "#fff",
+        borderColor: rampUp ? "#e4e0da" : CARD_BORDER,
+        borderStyle: rampUp ? "dashed" : "solid",
+        backgroundColor: rampUp ? "#faf9f7" : "#fff",
         borderRadius: 8,
         paddingVertical: 4,
         paddingHorizontal: 9,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
       }}
     >
-      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c" }}>
+      {rampUp ? (
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.5, color: colors.muted }}>RAMP</Text>
+      ) : null}
+      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: rampUp ? colors.muted : "#44403c" }}>
         {count ?? "–"}
         {tracksWeight ? (
-          <Text style={{ fontFamily: fonts.sans, color: set.weight != null ? "#78716c" : colors.hint }}>
+          <Text style={{ fontFamily: fonts.sans, color: rampUp ? colors.muted : set.weight != null ? "#78716c" : colors.hint }}>
             {set.weight != null ? ` @ ${set.weight} lb` : " @ –"}
           </Text>
         ) : null}

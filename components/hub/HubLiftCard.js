@@ -4,6 +4,7 @@ import { PressFade } from "../PressFade";
 import { SetBubbleRow } from "./HubSetBubbles";
 import { schemeLabel, formatRest } from "../builder/SessionBuilderParts";
 import { fonts, colors } from "../../lib/theme";
+import { deriveSetLabels } from "../../lib/programming/setLabels";
 
 // The lift being typed into. Clay 2px border and 16px radius — the ONLY
 // 2px-clay thing on the board, so "which lift is live" is unmistakable from
@@ -306,12 +307,25 @@ export function HubLiftCard({
           </Text>
         ) : null}
       </View>
-      {rows.map((row, i) => (
+      {deriveSetLabels(rows).map((label, i) => {
+        const row = rows[i];
+        return (
         <View key={i} style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
-          <Text style={{ width: 26, fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#57534e" }}>{i + 1}</Text>
+          {/* "R1" rather than "RAMP UP 1" — the column is 26px wide, and the
+              word is on her own card where there is room for it. Derived, not
+              the stored set number: the board and her phone have to agree
+              about which set is which. */}
+          <Text
+            style={{ width: 26, fontFamily: fonts.sansSemiBold, fontSize: 13, color: label.rampUp ? colors.muted : "#57534e" }}
+            numberOfLines={1}
+          >
+            {label.short}
+          </Text>
           <FieldBox
             value={row.reps}
-            target={item.repScheme?.[i] ?? item.targetReps ?? null}
+            // By WORKING position: a ramp-up was never asked for, so it neither
+            // carries a target nor consumes one.
+            target={label.rampUp ? null : item.repScheme?.[label.index - 1] ?? item.targetReps ?? null}
             isActive={active?.set === i && active?.field === "reps"}
             onPress={() => onSetActive({ set: i, field: "reps" })}
             compact={compact}
@@ -326,7 +340,8 @@ export function HubLiftCard({
             />
           ) : null}
         </View>
-      ))}
+        );
+      })}
 
       <View style={{ flexDirection: "row", marginTop: 2 }}>
         <ActionButton label="+ Add set" onPress={onAddSet} />
