@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, ScrollView, Text, TextInput, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressFade } from "../PressFade";
 import { Eyebrow } from "../Eyebrow";
 import { buildDateOptions, formatTimeLabel } from "../../lib/dateTimeOptions";
-import { todayInBoise, addDays, dayOfWeekInBoise } from "../../lib/boiseDate";
+import { todayInBoise, addDays } from "../../lib/boiseDate";
 import { ClockTimePicker } from "../ClockTimePicker";
 import { fonts, colors, type } from "../../lib/theme";
 
@@ -34,12 +33,39 @@ const TINT_BORDER = "#f0ddd2";
 
 const DATE_OPTIONS = buildDateOptions(14);
 
+// "Thu Sep 4". Parsed at noon so the weekday can't roll to the wrong day.
+// This is the date under a day pill, so it never says "Today" — the pill's
+// own heading does that, and the line beneath it has to be the real date.
+function shortDayLabel(value) {
+  if (!value) return "";
+  return new Date(`${value}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
 function formatDateLabel(value) {
   if (!value) return "";
   const known = DATE_OPTIONS.find((o) => o.value === value);
-  if (known) return known.label;
-  // Parsed at noon so the weekday can't roll to the wrong day.
-  return new Date(`${value}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return known ? known.label : shortDayLabel(value);
+}
+
+// Now, in Boise, as the same "HH:MM" the time picker works in — so the two
+// can be compared as plain strings. Never device-local: a coach travelling
+// must not be told a 5am slot has passed because it has where she is.
+function nowTimeInBoise() {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Boise",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+}
+
+// Which day a time means, when nobody has said. Past-for-today means
+// tomorrow: staging at 9pm is staging for the morning, and the old default of
+// "always today" is what put 6 of the first 16 staged sessions on a day that
+// had already gone.
+function defaultDateFor(time) {
+  const today = todayInBoise();
+  return time && time < nowTimeInBoise() ? addDays(today, 1) : today;
 }
 
 export function describeWhen(staged) {
@@ -90,98 +116,104 @@ function SheetShell({ visible, onClose, children, label }) {
   );
 }
 
-// A real <select> on web (the PWA is web, and a native list there would be a
-// worse control than the one the browser already has), NativePickerField on
-// native — the same split announcements and payroll already use.
 const CLAY = "#a46a57";
 const TODAY_BG = "#fdf6f2";
-const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
-// How far ahead a session can be staged. Matches the 14 days the dropdown
-// this replaces offered, i.e. two swipes of the strip.
-const HORIZON_WEEKS = 2;
 
-function DateStrip({ value, onChange }) {
+// WHICH DAY, as two pills rather than a fortnight.
+//
+// This replaces a 7-day strip with a fortnight's worth of paging, which the
+// data says was never needed and was actively going wrong: of the first 16
+// staged sessions, 15 were for the day they were created and exactly one was
+// for any other day. Nothing was ever staged more than a day ahead.
+//
+// What the strip WAS doing was being missed. The board matches a staged
+// session on its date alone (hub_staged_for_pin), so a group dated today
+// disappears at Boise midnight — and 6 of those 16 were saved for a time that
+// had already passed when they were saved, including two staged two minutes
+// apart one evening where only the first got the day changed. That is the
+// whole bug: a coach staging tomorrow's 8:30 at 9pm has to notice a small
+// grid of day numbers and move it, and half the time doesn't.
+//
+// So: two big pills that state the day and the date, and a Today pill that
+// says out loud when the time picked has already gone by.
+//
+// A third pill appears only when an existing group is dated further out, so
+// reopening one can never silently move it to a day the coach didn't pick.
+function DayPills({ value, onChange, timeValue, touched }) {
   const today = todayInBoise();
-  const [weekOffset, setWeekOffset] = useState(0);
+  const tomorrow = addDays(today, 1);
+  // Only meaningful against today: the board ignores the time and matches on
+  // the date, so "already passed" is about the day being nearly over, not
+  // about the slot itself.
+  const passedToday = Boolean(timeValue) && timeValue < nowTimeInBoise();
 
-  const start = addDays(today, weekOffset * 7);
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const date = addDays(start, i);
-    return { date, letter: DAY_LETTERS[dayOfWeekInBoise(date)], isToday: date === today };
-  });
+  // A third pill only when an existing group is dated further out. It costs
+  // the row a third of its width, which is why the warning gets shorter: at
+  // 375px "already passed" fits two pills and ellipsises across three, and
+  // letting it wrap instead pushed the whole row below the fold (measured).
+  const hasOther = Boolean(value && value !== today && value !== tomorrow);
+  const passedLabel = hasOther ? "passed" : "already passed";
 
-  const arrow = (dir, label, disabled) => (
-    <PressFade
-      onPress={() => setWeekOffset((o) => o + dir)}
-      disabled={disabled}
-      accessibilityLabel={label}
-      pressedOpacity={0.6}
-      style={{
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        borderWidth: 1,
-        borderColor: CARD_BORDER,
-        backgroundColor: "#fff",
-        alignItems: "center",
-        justifyContent: "center",
-        opacity: disabled ? 0.35 : 1,
-      }}
-    >
-      <Ionicons name={dir < 0 ? "chevron-back" : "chevron-forward"} size={16} color="#57534e" />
-    </PressFade>
-  );
+  const options = [
+    { value: today, label: "Today", sub: passedToday ? passedLabel : shortDayLabel(today), warn: passedToday },
+    { value: tomorrow, label: "Tomorrow", sub: shortDayLabel(tomorrow), warn: false },
+  ];
+  if (hasOther) {
+    options.push({
+      value,
+      label: new Date(`${value}T12:00:00`).toLocaleDateString("en-US", { weekday: "long" }),
+      sub: new Date(`${value}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      warn: false,
+    });
+  }
 
   return (
-    <View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        {arrow(-1, "Earlier days", weekOffset === 0)}
-        <View style={{ flex: 1, flexDirection: "row", gap: 4 }}>
-          {days.map((day) => {
-            const selected = day.date === value;
-            return (
-              <PressFade
-                key={day.date}
-                onPress={() => onChange(day.date)}
-                accessibilityLabel={formatDateLabel(day.date)}
-                pressedOpacity={0.6}
-                style={{
-                  flex: 1,
-                  borderRadius: 14,
-                  paddingVertical: 8,
-                  alignItems: "center",
-                  gap: 3,
-                  backgroundColor: selected ? CLAY : day.isToday ? TODAY_BG : "transparent",
-                  borderWidth: day.isToday && !selected ? 1.5 : 0,
-                  borderColor: CLAY,
-                }}
-              >
-                <Text
-                  maxFontSizeMultiplier={1}
-                  style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, color: selected ? "#fff" : colors.muted }}
-                >
-                  {day.letter}
-                </Text>
-                <Text
-                  maxFontSizeMultiplier={1}
-                  style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: selected ? "#fff" : "#44403c" }}
-                >
-                  {Number(day.date.slice(8, 10))}
-                </Text>
-              </PressFade>
-            );
-          })}
-        </View>
-        {arrow(1, "Later days", weekOffset >= HORIZON_WEEKS - 1)}
-      </View>
-      {/* A day number alone can't say which month, and the strip crosses one
-          every few weeks. */}
-      <Text
-        maxFontSizeMultiplier={1.15}
-        style={{ marginTop: 7, textAlign: "center", fontFamily: fonts.sansSemiBold, fontSize: type.caption, color: colors.muted }}
-      >
-        {formatDateLabel(value)}
-      </Text>
+    <View style={{ flexDirection: "row", gap: 8 }}>
+      {options.map((opt) => {
+        const selected = opt.value === value;
+        // The nudge, not a rule: the day only auto-follows the clock while
+        // the coach hasn't picked one herself. Once she has, it stays put.
+        const nudge = !touched && !selected && passedToday && opt.value === tomorrow;
+        return (
+          <PressFade
+            key={opt.value}
+            onPress={() => onChange(opt.value)}
+            accessibilityLabel={`${opt.label}, ${formatDateLabel(opt.value)}`}
+            pressedOpacity={0.7}
+            style={{
+              flex: 1,
+              borderRadius: 14,
+              paddingVertical: 11,
+              paddingHorizontal: 8,
+              alignItems: "center",
+              backgroundColor: selected ? CLAY : nudge ? TODAY_BG : "#fff",
+              borderWidth: selected ? 0 : nudge ? 1.5 : 1,
+              borderColor: nudge ? CLAY : INPUT_BORDER,
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.1}
+              style={{ fontFamily: fonts.sansBold, fontSize: 15, color: selected ? "#fff" : INK }}
+            >
+              {opt.label}
+            </Text>
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.1}
+              style={{
+                marginTop: 2,
+                textAlign: "center",
+                fontFamily: fonts.sansSemiBold,
+                fontSize: type.caption,
+                color: selected ? "rgba(255,255,255,0.85)" : opt.warn ? "#b23a22" : colors.muted,
+              }}
+            >
+              {opt.sub}
+            </Text>
+          </PressFade>
+        );
+      })}
     </View>
   );
 }
@@ -222,9 +254,58 @@ export function StageWhenSheet({
   busyLabel = "Starting…",
   initial = null,
 }) {
-  const [date, setDate] = useState(initial?.scheduledDate ?? DATE_OPTIONS[0]?.value ?? "");
   const [time, setTime] = useState(initial?.scheduledTime ?? "05:00");
+  const [date, setDate] = useState(initial?.scheduledDate ?? defaultDateFor(initial?.scheduledTime ?? "05:00"));
   const [title, setTitle] = useState(initial?.title ?? "");
+  // Reopening an existing group counts as already chosen: its day is the
+  // coach's from a previous sitting, and must not drift when she comes back
+  // to change the time.
+  const [dayTouched, setDayTouched] = useState(Boolean(initial?.scheduledDate));
+
+  // ClockTimePicker hands its onChange a FUNCTIONAL updater, not a value, so
+  // that an hour and a minute tapped inside one React batch compose instead of
+  // the second undoing the first. Resolving it needs the current time, and
+  // reading that from state would be a render behind in exactly that case — so
+  // a ref is advanced by hand, the same idiom ExerciseCard's rowsRef and the
+  // hub's activeRef use for the same reason.
+  const timeRef = useRef(time);
+
+  // The sheet is mounted for the life of the screen with `visible` toggling,
+  // so state seeded at mount is whatever was last typed — reopening to edit a
+  // group showed the previous group's values, and a default date worked out
+  // this morning would still be sitting there tonight. Re-seed on every open,
+  // the same thing ClockTimePicker's resetKey does below. Keyed on `visible`
+  // alone: `initial` is a fresh object each render and would loop.
+  useEffect(() => {
+    if (!visible) return;
+    const t = initial?.scheduledTime ?? "05:00";
+    timeRef.current = t;
+    setTime(t);
+    setDate(initial?.scheduledDate ?? defaultDateFor(t));
+    setTitle(initial?.title ?? "");
+    setDayTouched(Boolean(initial?.scheduledDate));
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The day follows the clock only until the coach picks one herself. This is
+  // the actual fix for sessions landing on a morning that has gone: at 9pm,
+  // choosing 8:30 means tomorrow, and leaving the day alone should not quietly
+  // mean otherwise.
+  const chooseTime = (updater) => {
+    const next = typeof updater === "function" ? updater(timeRef.current) : updater;
+    timeRef.current = next;
+    setTime(next);
+    if (dayTouched) return;
+    const today = todayInBoise();
+    // Only ever nudges between today and tomorrow. A group dated further out
+    // is a day the coach chose, and the clock must not drag it back.
+    if (date !== today && date !== addDays(today, 1)) return;
+    setDate(defaultDateFor(next));
+  };
+
+  const chooseDay = (next) => {
+    setDayTouched(true);
+    setDate(next);
+  };
 
   return (
     <SheetShell visible={visible} onClose={onClose} label="Close staging setup">
@@ -245,11 +326,15 @@ export function StageWhenSheet({
           The board offers a staged session on the morning it's for, so tonight's work is waiting at 5am.
         </Text>
 
-        <View style={{ marginTop: 16 }}>
-          <DateStrip value={date} onChange={setDate} />
-        </View>
         <View style={{ marginTop: 14 }}>
-          <ClockTimePicker value={time} onChange={setTime} resetKey={visible} />
+          <ClockTimePicker value={time} onChange={chooseTime} resetKey={visible} />
+        </View>
+        {/* Under the clock, per the order a coach actually thinks in: the
+            time is the thing always being set, the day is usually just
+            "today". Kept above the name field and the buttons so it can't
+            fall below the fold on a short phone — measured. */}
+        <View style={{ marginTop: 14 }}>
+          <DayPills value={date} onChange={chooseDay} timeValue={time} touched={dayTouched} />
         </View>
 
         <TextInput
