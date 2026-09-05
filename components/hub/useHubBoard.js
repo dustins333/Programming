@@ -376,7 +376,11 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
         // did earlier in the week instead of recording a second one.
         await unfinalizeSpcSession(userId, entry.spcWorkoutId, { instance: entry.instance ?? 1 });
       } else {
-        await finalizeSpcSession(userId, entry.spcWorkoutId, new Date().toISOString(), { instance: entry.instance ?? 1 });
+        // No date on purpose: a new completion gets now, and a second tap on
+        // one that already exists leaves its date alone. Reviewing a past
+        // board and finalizing something on it must not drag that session
+        // forward to today. See finalizeGroupSession's completed-at rule.
+        await finalizeSpcSession(userId, entry.spcWorkoutId, null, { instance: entry.instance ?? 1 });
       }
       await refreshBoard();
     },
