@@ -6289,6 +6289,48 @@ the values it starts and ends at. Worth Terra's pass on a real phone: that the
 swipe feels right under a thumb mid-session, and that a converted set still
 reads correctly on the wall display.
 
+## Supersets you can see, and a collapsed card you can just tap (2026-09-04)
+
+Two small asks on the logging card, both from real use.
+
+**The superset field is real peach now, not near-white.** The dashed container
+was `#fffdfb` with white cards sitting on it — the same white, so the grouping
+was invisible unless you went looking for the dashes. It is `#fdece5` (the
+app's own peach) with an `#e0b6a5` dashed border; the cards stay white, and the
+contrast between them and the field is what says "these two go together" from
+across the gym. The SUPERSET chip had to invert with it — it was rust text on a
+`#fdece5` pill, which is now exactly the colour behind it, so it would have
+vanished into the ground. It is solid rust with white text.
+
+**A collapsed card opens on a tap anywhere**, including the name and the
+padding, rather than making her find a 15px chevron. Two details:
+- The root element is a `Pressable` while collapsed and a plain `View` once
+  open. **Not** a Pressable that stays mounted with its handler swapped: that
+  would leave one more thing in the responder chain above the set rows for
+  their swipe gesture to win against, and the expanded tree is the one that has
+  actually been driven and verified. Changing the element type remounts the
+  subtree, which costs nothing here — the expanded content is conditionally
+  rendered and mounts fresh on expand anyway.
+- The name is the link into history **only once the card is open**. On a
+  collapsed card it does what the rest of the card does, so a tap on the most
+  obvious thing on the row can't be the one thing that doesn't work.
+
+The chevron is unchanged and stays on both states: on a collapsed card it is
+what says the card opens at all, and it is still how it closes.
+
+**Verified by driving all five cases** through a throwaway `app/zz-ssharness.js`
+at 375px (deleted; `useAuth` and two `memberPlan` functions stubbed, restored
+and **md5-verified byte-identical**): tapping the empty card body opens it,
+tapping the name of a collapsed card opens it **without** opening history,
+tapping the name of an open card **does** open history, the chevron still
+expands and collapses, and — the case worth proving, since the checkbox is now
+nested inside a pressable card — tapping the completion checkbox toggles it and
+does **not** open the card, because the inner Pressable wins the responder.
+Re-confirmed the set-row swipe still opens to 116px with the root's element
+type now changing. `npm run build` + `check:routes` clean, scope pass clean.
+
+**Not verified**: behind a real login, or on native — standing limitation.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

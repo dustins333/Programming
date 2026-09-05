@@ -326,28 +326,37 @@ export function SessionLogger({
     <View>
       {groups.map((group, groupIndex) =>
         group.length > 1 ? (
+          /* The ground inside the dashed line is REAL peach, not the
+             near-white it used to be (#fffdfb, which read as the same white
+             as the cards sitting on it — the whole grouping was invisible
+             unless you went looking for the dashes). The cards stay white, so
+             the contrast between them and the field is what says "these two
+             go together" from across the gym. */
           <View
             key={group[0].id}
             style={{
               borderWidth: 1.5,
-              borderColor: "#d8bcae",
+              borderColor: "#e0b6a5",
               borderStyle: "dashed",
               borderRadius: 18,
-              backgroundColor: "#fffdfb",
+              backgroundColor: "#fdece5",
               paddingHorizontal: 11,
               paddingTop: 9,
               paddingBottom: 1,
               marginBottom: 10,
             }}
           >
+            {/* Solid rust on the peach field. The old chip was rust text on a
+                #fdece5 pill, which is now exactly the colour behind it — it
+                would have vanished into the ground. */}
             <Text
               maxFontSizeMultiplier={1.1}
               style={{
                 alignSelf: "flex-start",
                 fontFamily: fonts.sansBold,
                 fontSize: type.eyebrow,
-                color: "#b23a22",
-                backgroundColor: "#fdece5",
+                color: "#fff",
+                backgroundColor: "#b23a22",
                 borderRadius: 999,
                 paddingHorizontal: 10,
                 paddingVertical: 3,

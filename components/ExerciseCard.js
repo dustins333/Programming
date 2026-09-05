@@ -1221,9 +1221,26 @@ export function ExerciseCard({
   const BLOCK_INSET = 8;
   const metrics = { boxHeight, boxRadius, setLabelWidth, trailingWidth, targetWidth, rowGap, compact, blockInset: BLOCK_INSET };
 
+  // Collapsed, the WHOLE card is the way in — tapping anywhere on it opens the
+  // lift, including the name and the padding, rather than making her find a
+  // 15px chevron. Expanded, the root goes back to a plain View: a Pressable
+  // sitting above the set rows would be one more thing in the responder chain
+  // their swipe gesture has to win against, and the expanded tree is the one
+  // that has actually been driven and verified. The chevron stays either way —
+  // it is what says the card opens at all, and it is still how it closes.
+  const collapsedOpens = !expanded && Boolean(onToggleExpanded);
+  const CardRoot = collapsedOpens ? Pressable : View;
+
   return (
-    <View
+    <CardRoot
       ref={cardRef}
+      {...(collapsedOpens
+        ? {
+            onPress: () => onToggleExpanded(item.id),
+            accessibilityRole: "button",
+            accessibilityLabel: `Open ${item.exercise.name}`,
+          }
+        : null)}
       style={{
         backgroundColor: "#fff",
         borderRadius: compact ? 14 : 18,
@@ -1250,10 +1267,15 @@ export function ExerciseCard({
                 on the card anymore. The NAME is clay because the name is the
                 tap target; the set number stays dark because it's a label,
                 not a control. That split is the whole affordance, so don't
-                collapse it back into one colour. */}
+                collapse it back into one colour.
+                ...but only once the lift is OPEN. On a collapsed card the name
+                does what the rest of the card does and opens it, so a tap on
+                the most obvious thing on the row can't be the one thing that
+                doesn't. History is a tap away again the moment the card is
+                open, which is also where it is actually useful. */}
             <PressFade
-              onPress={() => setHistoryOpen(true)}
-              accessibilityLabel={`${item.exercise.name} history`}
+              onPress={() => (expanded ? setHistoryOpen(true) : onToggleExpanded?.(item.id))}
+              accessibilityLabel={expanded ? `${item.exercise.name} history` : `Open ${item.exercise.name}`}
               style={{ flexDirection: "row", alignItems: "center", gap: 7, flexShrink: 1, minWidth: 0 }}
             >
               <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.display, fontSize: titleSize, lineHeight: titleSize * 1.15, flexShrink: 1 }}>
@@ -1618,6 +1640,6 @@ export function ExerciseCard({
         onClose={() => setCalcRowIndex(null)}
         onInsert={(value) => updateRow(calcRowIndex, "weight", String(value))}
       />
-    </View>
+    </CardRoot>
   );
 }
