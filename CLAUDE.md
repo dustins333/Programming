@@ -6318,6 +6318,21 @@ padding, rather than making her find a 15px chevron. Two details:
 The chevron is unchanged and stays on both states: on a collapsed card it is
 what says the card opens at all, and it is still how it closes.
 
+**A rust "+" sits between supersetted lifts** (`SupersetLink` in
+`SessionLogger.js`) — this and that, back to back. Zero-height and absolutely
+positioned, so it costs the stack no layout and simply sits in the 10px gap
+`ExerciseCard`'s own `marginBottom` already leaves: the gap spans -10..0 from
+there, so a 26px circle centred in it starts at `top: -18` and overlaps each
+card by 8px, which is what makes it read as joining them rather than as a third
+thing between them. `zIndex` because a later sibling paints over an earlier one
+and the bottom half would otherwise vanish behind the card below;
+`pointerEvents="none"` so a decoration can't eat a tap on a card that now opens
+from anywhere. Rendered between every consecutive pair, not just once, so a
+three-lift group (which the schema allows since 0085) chains correctly.
+Measured rather than eyeballed: both markers land 0.00px off the gap's centre
+vertically and horizontally, and a synthetic tap directly beneath one reaches
+the card and opens it.
+
 **Verified by driving all five cases** through a throwaway `app/zz-ssharness.js`
 at 375px (deleted; `useAuth` and two `memberPlan` functions stubbed, restored
 and **md5-verified byte-identical**): tapping the empty card body opens it,

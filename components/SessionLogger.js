@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { View, Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import {
   listGroupExerciseCompletionsForItems,
   listSpcExerciseCompletionsForItems,
@@ -20,6 +21,42 @@ import { toastError } from "../lib/toast";
 import { ExerciseCard } from "./ExerciseCard";
 import { addCoachingNote, listSessionExerciseNotes } from "../lib/programming/coachingNotes";
 import { useAuth } from "../lib/auth/AuthProvider";
+
+// The "+" between two supersetted lifts — this and that, back to back.
+//
+// Zero-height and absolutely positioned, so it costs the stack no layout at
+// all and simply sits in the 10px gap ExerciseCard's own marginBottom already
+// leaves between cards: the gap spans -10..0 from here, so a 26px circle
+// centred in it starts at -18. It overlaps both cards by 8px, which is what
+// makes it read as joining them rather than as a third thing between them.
+//
+// zIndex because a later sibling paints over an earlier one — without it the
+// bottom half would disappear behind the card below. pointerEvents none so a
+// decoration can never eat a tap meant for either card, which now open on a
+// tap anywhere.
+//
+// Solid rust with a white glyph, echoing the SUPERSET chip above it rather
+// than introducing a third treatment inside the same block.
+function SupersetLink() {
+  return (
+    <View pointerEvents="none" style={{ height: 0, alignItems: "center", zIndex: 2 }}>
+      <View
+        style={{
+          position: "absolute",
+          top: -18,
+          width: 26,
+          height: 26,
+          borderRadius: 999,
+          backgroundColor: "#b23a22",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="add" size={16} color="#fff" />
+      </View>
+    </View>
+  );
+}
 
 // The member's session-logging surface (design_handoff_member_lift_v1).
 //
@@ -365,7 +402,12 @@ export function SessionLogger({
             >
               SUPERSET
             </Text>
-            {group.map((item, i) => renderCard(item, group, groupIndex, i))}
+            {group.map((item, i) => (
+              <Fragment key={item.id}>
+                {i > 0 ? <SupersetLink /> : null}
+                {renderCard(item, group, groupIndex, i)}
+              </Fragment>
+            ))}
           </View>
         ) : (
           renderCard(group[0], group, groupIndex, 0)
