@@ -6476,6 +6476,44 @@ and it is what makes the finalize-updates-the-latest-instance path correct.
 not of the table. `select instance, count(*) group by 1` found three real
 make-ups. Count the whole column before asserting a feature has never been used.
 
+### Follow-up the same day: the board ran the wrong session, and the cache decided
+
+Two reports off the first real use, both real.
+
+**The board opened the make-up already finished.** Nothing on a board slot said
+WHICH completion it was running, and on a live board `finalized` means "any
+completion for this week" — `onBoardDay` only applies in review mode, where a
+date is passed. A make-up has an earlier completion for that week by
+definition, so it always read as done, with every lift already ticked.
+`hub_session_clients.instance` (migration `0118`) fixes it: `hub_open_makeup`
+stamps the number on the slot, and `fetchHubBoard` scopes `finalized`, the
+per-exercise ticks and both writes to it. `markSpcExerciseComplete` /
+`unmarkSpcExerciseComplete` gained an `instance` parameter defaulting to 1, so
+the member's own screen is untouched.
+
+**`hub_open_makeup` no longer writes the completion at all** — that was the
+other half of the green wash. It reserves the number; the row is written when
+the coach finalizes, like every other board session. **The member's My Week
+sheet still creates it up front, deliberately** — she is deep-linked straight
+into logging and her week has to count it immediately. Don't "unify" these.
+
+**Her My Week didn't ask, and the cause was `screenCache`.** The make-up gate
+read `row.completed`, and My Week paints from cache, so a session finalized
+since that snapshot still says "not done". Ashley's was finalized *on the
+board*, so nothing she did on her own phone ever invalidated her cache — which
+is why it was her and not Terra. `openSpcPreview` already re-reads the
+completion from the network (its own comment says why); the decision moved to
+after that read. **General shape worth remembering: a cached value is safe to
+PAINT and unsafe to DECIDE on.** Anywhere a cached field gates a branch the
+user cannot get back to, re-read first.
+
+**The same-day limit, stated rather than papered over**: `programming.logs`
+carries no instance (0102 — it is part of `logs_unique_set_idx`, and widening
+that broke production once), so two sessions of the same lift on ONE day share
+their set rows and the second overwrites the first. A make-up on a different
+day — the actual use case — is unaffected, because the board reads logs by
+date. The dialog now says so while the choice is still open.
+
 **Verified**: dry run rolled back and confirmed to leave nothing, then applied;
 `hub_open_makeup` driven as the real display account (instance 2 then 3 for an
 on-board client, refused off the board, null no-op when nothing is logged); the
@@ -6583,6 +6621,7 @@ sections; next number after 0080 is 0081.)
 - `0111_checkin_closeout_and_week_phases.sql` — **run**, verified live 2026-09-01 (both tables, RLS on, one staff policy each, the Monday CHECK and both unique constraints exercised in a rolled-back dry run, plus an 8-assertion impersonation test as a real coach and a real member, and a live PostgREST 200 rather than PGRST205). Adds `programming.nutrition_checkin_closeouts` (a coach resolving a week no client is going to file — deliberately not a fabricated `public.checkin_responses` row, and deliberately not a gate on the member) and `programming.nutrition_week_phases` (one row per phase CHANGE, so the Weeks tab can count "Diet 1, Diet 2, Diet 3" without a row per week; `phase` is nullable as an explicit "no phase from here"). Both staff-only in every direction. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - `0116_log_set_type.sql` — **run**, verified live 2026-09-04 (dry-run in a rolled-back transaction first: all 17,148 existing rows backfill to `working`; then applied, column confirmed `text NOT NULL default 'working'` with its check constraint and 0 nulls, `NOTIFY pgrst` sent and a live REST select on `set_type` returning 200). Adds `programming.logs.set_type` (`working` default | `ramp_up`) so a member can keep a warm-up set she logged without it counting as one of her working sets. Additive with a default, so every existing row backfills to `working` and nothing changes meaning. **Deliberately does not renumber anything** — `set_number` is part of `logs_unique_set_idx` (0073) and cannot be shifted mid-statement; the display label is derived by `lib/programming/setLabels.js` instead. No index: `set_type` is only ever read alongside rows already fetched by user/exercise/date. Rollback is in the file's own header. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - `0117_hub_makeup_sessions.sql` — **run**, verified live 2026-09-05 (dry run rolled back and confirmed to leave nothing, then applied; column, function, and `hub_resolve_staged`'s new OUT parameter all confirmed by query, plus a behavioural test as the real display account and an end-to-end staged start as a real coach, both rolled back). Adds `programming.hub_staged_clients.new_instance`, `programming.hub_open_makeup(uuid, uuid, smallint)`, `new_instance` on `hub_resolve_staged`'s return (DROP + CREATE — return type changes; body otherwise byte-identical to 0104's), and a `hub_open_makeup` call in `hub_start_staged`'s insert loop. Fixes "start a new one" being impossible from the wall display, which had never worked. **Apply before deploying the JS** — `addStagedClient` writes `new_instance`. Old JS against the new function is fine either way (an extra returned field is ignored; a missing one reads as false).
+- `0118_hub_slot_instance.sql` — **run**, verified live 2026-09-05 (dry run rolled back, then applied; the whole scenario rebuilt against Ashley's real rows in a rolled-back transaction — slot moves to the next free instance, her original completion and tick stay on instance 1, the make-up opens with zero of each, and a finalize/un-finalize round trip touches only its own row). Adds `programming.hub_session_clients.instance` (default 1, nothing to backfill) and changes `hub_open_makeup` to RESERVE that number on the slot instead of writing a completion — writing it at board start is what made a make-up open washed green, since a live board's `finalized` is "any completion for this week". The board scopes finalized-state, per-exercise ticks and both writes to the slot's instance. **The member's My Week sheet still creates the completion up front on purpose** — she is deep-linked straight into logging.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
