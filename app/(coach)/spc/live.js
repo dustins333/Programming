@@ -10,7 +10,7 @@ import { useHubBoard } from "../../../components/hub/useHubBoard";
 import { HubLiveSession } from "../../../components/hub/HubLiveSession";
 import { HubClientPickList } from "../../../components/hub/HubClientPickList";
 import { HubSessionPreviewSheet } from "../../../components/hub/HubSessionPreviewSheet";
-import { HubPinCard } from "../../../components/hub/HubPinCard";
+import { HubPinButton } from "../../../components/hub/HubPinButton";
 import { HubAddClientModal } from "../../../components/hub/HubPickerModals";
 import { StagedSessionsCard, useStagedSessions } from "../../../components/hub/StagedSessionsCard";
 import { SpcSessionDeck } from "../../../components/coach/SpcSessionPreview";
@@ -517,14 +517,18 @@ export default function SpcLiveSessions() {
             flexGrow: 1,
           }}
         >
+          {/* The back row carries the PIN button. It's otherwise empty in
+              every state, so the PIN never has to fight "+ Add client" /
+              "End session" / "Stage another" for width on a phone. */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <PressFade onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/spc"))}>
+              <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
+            </PressFade>
+            <HubPinButton />
+          </View>
+
           <View className="mb-4 flex-row items-center justify-between">
             <View style={{ flex: 1 }}>
-              <PressFade
-                onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/spc"))}
-                style={{ marginBottom: 6 }}
-              >
-                <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Back</Text>
-              </PressFade>
               <Text
                 numberOfLines={1}
                 maxFontSizeMultiplier={1.1}
@@ -676,7 +680,6 @@ export default function SpcLiveSessions() {
                 initialSessionNumbers={tab === "stage" ? initialSessionNumbers : null}
                 onGoToStartNow={tab === "stage" ? goToStartNow : null}
               />
-              {tab === "start" ? <HubPinCard /> : null}
             </View>
           )}
         </ScrollView>
