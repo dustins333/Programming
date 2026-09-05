@@ -5,6 +5,8 @@ import { PressFade } from "../PressFade";
 import { SegmentedControl } from "../SegmentedControl";
 import { listStartableHubClients } from "../../lib/programming/hub";
 import { startNewSpcSessionInstance } from "../../lib/programming/sessionCompletions";
+import { formatDateShort } from "../../lib/formatDate";
+import { dateInBoise, todayInBoise } from "../../lib/boiseDate";
 import { toastError } from "../../lib/toast";
 import { fonts, colors, type } from "../../lib/theme";
 
@@ -34,6 +36,10 @@ import { fonts, colors, type } from "../../lib/theme";
 // sessions out of order and miss them, so "Session 1 (3) · Session 2 (1)"
 // is the sentence a coach is actually reading — it says which one is behind,
 // which "completed this week" on its own cannot.
+//
+// THE DATE beside it (migration 0115) is when she last finalized that
+// session. The count alone can't separate two sessions logged once each,
+// which is the commonest version of this decision.
 //
 // A client who can't be started still shows, greyed and unpickable with the
 // reason on the row — either "No block running" or "Nothing published this
@@ -80,15 +86,50 @@ function CountCircle({ count, tone }) {
 
 /* -------------------------------------------------------------- session row */
 
+// When she last finalized this session, as prose: "Last Aug 29". The year is
+// appended only when it isn't this one — a block runs weeks, so the year is
+// never in question in practice, and spelling it every time costs width the
+// pill doesn't have.
+//
+// Read through dateInBoise, never a slice of the ISO string: a session
+// finalized in the Boise evening is already tomorrow in UTC.
+function lastLoggedLabel(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const boise = dateInBoise(d);
+  const sameYear = boise.slice(0, 4) === todayInBoise().slice(0, 4);
+  return `Last ${formatDateShort(boise)}${sameYear ? "" : ` ${boise.slice(0, 4)}`}`;
+}
+
 // Full width, not a wrapping chip row. Real session titles run to "Alicia
 // SPC: Pull Ups + Athleticism", which cannot sit beside a sibling on a phone
 // — and the count and the preview both need somewhere to live.
+//
+// THE COACH'S OWN TITLE LEADS when there is one, with "Session 2" demoted
+// underneath it. It used to be the other way round, which buried the only
+// part of the row that says what the session actually is. With no title the
+// number stays in bold, so a row is never left without a heading.
+//
+// The second line also carries when she last finalized it. loggedCount alone
+// cannot answer "which of these did she do most recently" — a client with one
+// completion against each session reads identically on every pill, which is
+// exactly the case a coach is standing there trying to resolve.
 function SessionRow({ session, active, onPress, onPreview }) {
   const done = Boolean(session.completed);
   const bg = active ? colors.primary : done ? DONE_BG : "#fff";
   const border = active ? colors.primary : done ? DONE_BORDER : CARD_BORDER;
   const text = active ? "#fff" : INK;
   const sub = active ? "rgba(255,255,255,0.75)" : colors.muted;
+
+  const numberLabel = `Session ${session.sessionNumber}`;
+  const title = (session.title ?? "").trim();
+  const last = lastLoggedLabel(session.lastLoggedAt);
+  // "Not logged yet" only where we actually know that. A count above zero
+  // with no date means the roster predates this field, and inventing "never"
+  // there would be a lie the coach would act on.
+  const dateLine = last ?? ((session.loggedCount ?? 0) === 0 ? "Not logged yet" : null);
+  const subLine = [title ? numberLabel : null, dateLine].filter(Boolean).join(" · ");
 
   return (
     <View
@@ -112,11 +153,11 @@ function SessionRow({ session, active, onPress, onPreview }) {
         ) : null}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: text }}>
-            {`Session ${session.sessionNumber}`}
+            {title || numberLabel}
           </Text>
-          {session.title ? (
+          {subLine ? (
             <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: type.caption, color: sub, marginTop: 1 }}>
-              {session.title}
+              {subLine}
             </Text>
           ) : null}
         </View>
