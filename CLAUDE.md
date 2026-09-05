@@ -6412,6 +6412,81 @@ throttled-rAF signature this file already warns about. Any animation is
 unverifiable through the Browser pane. **Not verified behind a real login,
 and not on native.** Worth Terra finishing a real session on her phone.
 
+## The make-up option never worked from the wall or the prestage (2026-09-05)
+
+Reported as clients not being able to start a second SPC session: it worked
+from My Week and not from the coach's board or the SPC prestage. Two separate
+causes, one fix. Migration `0117` — applied and verified live.
+
+**The board was a hard 42501, every time.** `HubClientPickList` created the
+second completion at PICK time, and the display account's only write policy on
+`session_completions` is `is_gym_display() AND hub_active_client(user_id)` —
+false for a client being picked, because she is not on the board yet. Proved
+both directions against live data before touching anything: as the real display
+account the identical insert **succeeds** for a client already on the board and
+is **refused** for one who is not. The three instance-2 rows that do exist all
+came from the member's own My Week sheet, which writes as the member — exactly
+the split the coaches described.
+
+**The prestage genuinely didn't offer it** (`allowRepeat={mode === "start"}`),
+and for a good reason at the time: answering it wrote a completion on the spot,
+so staging would have filed one against today's week for a session she had not
+done yet.
+
+**Both fall out of one change: the picker records the answer, it does not
+write.** `newInstance` rides on the slot, and the completion is opened once she
+is actually on the board — where the display's existing policy already permits
+it, with no widening. That also killed a quieter bug: cancelling the picker used
+to leave a phantom instance-2 completion behind, which My Week counts as a
+session she never did.
+
+**`programming.hub_open_makeup(user, workout, week)`** is the single definition,
+called by `hub.js` after every board write (`startHubSession`,
+`startHubSessionWithPin`, `addHubClient`) and by `hub_start_staged` for a
+flagged staged row. Two properties are load-bearing:
+- It requires the client to be on the OPEN board with THAT workout, so the
+  display's reach is exactly `hub_active_client`'s rule plus the workout, not
+  one row wider.
+- **It does nothing, returning null, when she has no completion for that week.**
+  That is what makes a stale staged answer harmless — a group staged on Sunday
+  for Monday crosses a block week, where she has logged nothing, and the
+  ordinary finalize creating instance 1 is right. Never invent a completion for
+  a session she has not done: the board would open washed green and her week
+  would count a session that never happened.
+
+The week is a **parameter**, not re-derived in SQL. Every caller already holds
+the authoritative value from the same RPC family (`hub_startable_clients` /
+`hub_resolve_staged`), and the JS derives it in `spcCompletionWeek` — a fourth
+copy of the block-week arithmetic is a fourth thing to drift.
+
+**Staging persists the intent** (`hub_staged_clients.new_instance`, surfaced by
+`hub_resolve_staged`, seeded back into the picker via `initialMakeups` so
+reopening a group to change its time doesn't silently undo it). The row reads
+"· doing it again" while a slot is flagged — on the Stage tab the completion is
+hours away, and a flag nobody can see is a flag nobody can trust.
+
+**Worth knowing about the board's `finalized`, which is NOT what this changed**:
+`onBoardDay` only applies when `dateOverride` is set (review mode), so on a LIVE
+board `finalized` means "any completion for this week", regardless of day. A
+client who logged Monday already shows finalized on Thursday's board. Pre-existing,
+and it is what makes the finalize-updates-the-latest-instance path correct.
+
+**A stale note cost a wrong claim in the first draft of the migration header**:
+"every instance is 1" was true of the last ten days' rows I happened to sample,
+not of the table. `select instance, count(*) group by 1` found three real
+make-ups. Count the whole column before asserting a feature has never been used.
+
+**Verified**: dry run rolled back and confirmed to leave nothing, then applied;
+`hub_open_makeup` driven as the real display account (instance 2 then 3 for an
+on-board client, refused off the board, null no-op when nothing is logged); the
+whole staged path end to end as a real coach, rolled back; and the picker driven
+in a browser through a throwaway `app/zz-mkharness.js` (deleted, and
+`listStartableHubClients`' stub reverted) — the dialog fires, "start a new one"
+emits the flag and marks the row, "put that session on the board" does not,
+switching session and deselecting both clear it, a second client is unaffected,
+and a double-tap through the Modal's fade-out no longer throws. **Not verified
+behind a real login.**
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -6507,6 +6582,7 @@ sections; next number after 0080 is 0081.)
 
 - `0111_checkin_closeout_and_week_phases.sql` — **run**, verified live 2026-09-01 (both tables, RLS on, one staff policy each, the Monday CHECK and both unique constraints exercised in a rolled-back dry run, plus an 8-assertion impersonation test as a real coach and a real member, and a live PostgREST 200 rather than PGRST205). Adds `programming.nutrition_checkin_closeouts` (a coach resolving a week no client is going to file — deliberately not a fabricated `public.checkin_responses` row, and deliberately not a gate on the member) and `programming.nutrition_week_phases` (one row per phase CHANGE, so the Weeks tab can count "Diet 1, Diet 2, Diet 3" without a row per week; `phase` is nullable as an explicit "no phase from here"). Both staff-only in every direction. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - `0116_log_set_type.sql` — **run**, verified live 2026-09-04 (dry-run in a rolled-back transaction first: all 17,148 existing rows backfill to `working`; then applied, column confirmed `text NOT NULL default 'working'` with its check constraint and 0 nulls, `NOTIFY pgrst` sent and a live REST select on `set_type` returning 200). Adds `programming.logs.set_type` (`working` default | `ramp_up`) so a member can keep a warm-up set she logged without it counting as one of her working sets. Additive with a default, so every existing row backfills to `working` and nothing changes meaning. **Deliberately does not renumber anything** — `set_number` is part of `logs_unique_set_idx` (0073) and cannot be shifted mid-statement; the display label is derived by `lib/programming/setLabels.js` instead. No index: `set_type` is only ever read alongside rows already fetched by user/exercise/date. Rollback is in the file's own header. Needs `NOTIFY pgrst, 'reload schema'` after running.
+- `0117_hub_makeup_sessions.sql` — **run**, verified live 2026-09-05 (dry run rolled back and confirmed to leave nothing, then applied; column, function, and `hub_resolve_staged`'s new OUT parameter all confirmed by query, plus a behavioural test as the real display account and an end-to-end staged start as a real coach, both rolled back). Adds `programming.hub_staged_clients.new_instance`, `programming.hub_open_makeup(uuid, uuid, smallint)`, `new_instance` on `hub_resolve_staged`'s return (DROP + CREATE — return type changes; body otherwise byte-identical to 0104's), and a `hub_open_makeup` call in `hub_start_staged`'s insert loop. Fixes "start a new one" being impossible from the wall display, which had never worked. **Apply before deploying the JS** — `addStagedClient` writes `new_instance`. Old JS against the new function is fine either way (an extra returned field is ignored; a missing one reads as false).
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
