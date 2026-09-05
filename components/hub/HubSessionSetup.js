@@ -41,6 +41,7 @@ export function HubSessionSetup({ profile, onStarted }) {
           spcWorkoutId: s.spcWorkoutId,
           groupWorkoutId: s.groupWorkoutId ?? null,
           weekNumber: s.weekNumber,
+          newInstance: s.newInstance,
         })),
       });
       setSlots([]);

@@ -149,7 +149,7 @@ function StageAnotherButton({ onPress }) {
 // Both halves of the selector show the same roster; only the sentence above
 // it and what the docked bar does with the result differ. One component so
 // "tap a name, then tap her session" cannot drift between the two.
-function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSessionNumbers, initialProgram, onGoToStartNow }) {
+function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSessionNumbers, initialMakeups, initialProgram, onGoToStartNow }) {
   return (
     <View style={{ flex: 1 }}>
       <Text style={{ fontFamily: fonts.sans, fontSize: type.body, lineHeight: 20, color: colors.muted, marginBottom: 14 }}>
@@ -196,9 +196,14 @@ function StagePicker({ mode = "stage", editing, onChange, onPreview, initialSess
           onChange={onChange}
           onPreview={onPreview}
           initialSessionNumbers={initialSessionNumbers}
-          // Starting now only. Staging a future group must not offer to file
-          // a second instance, which would land against today's week.
-          allowRepeat={mode === "start"}
+          initialMakeups={initialMakeups}
+          // Offered on both tabs now. It used to be Start-now only, because
+          // answering it wrote the second completion on the spot and staging
+          // would have filed one against today's week for a session she had
+          // not done yet. Since 0117 the answer is only recorded here and the
+          // completion is opened when the group starts, against the week that
+          // actually runs — so a stale answer is a no-op rather than a lie.
+          allowRepeat
           // Likewise: a staged slot stores a session NUMBER and resolves it
           // against SPC in the morning (0090/0091), so a group member staged
           // here would be unstartable. See 0106's header.
@@ -309,6 +314,13 @@ export default function SpcLiveSessions() {
     return Object.fromEntries(editing.clients.map((c) => [c.user_id, c.session_number]));
   }, [editing]);
 
+  // Same reason, for the make-up answers: reopening a group to change its
+  // time must not quietly drop "she's doing Session 1 again".
+  const initialMakeups = useMemo(() => {
+    if (!editing?.clients?.length) return null;
+    return Object.fromEntries(editing.clients.map((c) => [c.user_id, Boolean(c.new_instance)]));
+  }, [editing]);
+
   const handleStarted = async () => {
     await refreshSession();
     await refreshBoard();
@@ -334,6 +346,7 @@ export default function SpcLiveSessions() {
           spcWorkoutId: s.spcWorkoutId,
           groupWorkoutId: s.groupWorkoutId ?? null,
           weekNumber: s.weekNumber,
+          newInstance: s.newInstance,
         })),
       });
       setSlots([]);
@@ -623,6 +636,7 @@ export default function SpcLiveSessions() {
               onChange={setSlots}
               onPreview={(row, session) => setPreview({ clientName: row.name, weekNumber: row.weekNumber, session })}
               initialSessionNumbers={initialSessionNumbers}
+              initialMakeups={initialMakeups}
               onGoToStartNow={goToStartNow}
             />
           ) : live ? (
@@ -678,6 +692,7 @@ export default function SpcLiveSessions() {
                 onChange={setSlots}
                 onPreview={(row, session) => setPreview({ clientName: row.name, weekNumber: row.weekNumber, session })}
                 initialSessionNumbers={tab === "stage" ? initialSessionNumbers : null}
+                initialMakeups={tab === "stage" ? initialMakeups : null}
                 onGoToStartNow={tab === "stage" ? goToStartNow : null}
               />
             </View>

@@ -4,10 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../PressFade";
 import { SegmentedControl } from "../SegmentedControl";
 import { listStartableHubClients } from "../../lib/programming/hub";
-import { startNewSpcSessionInstance } from "../../lib/programming/sessionCompletions";
 import { formatDateShort } from "../../lib/formatDate";
 import { dateInBoise, todayInBoise } from "../../lib/boiseDate";
-import { toastError } from "../../lib/toast";
 import { fonts, colors, type } from "../../lib/theme";
 
 // The roster both hub pickers work from — every active SPC client with a
@@ -183,6 +181,11 @@ function SessionRow({ session, active, onPress, onPreview }) {
 export function HubClientRow({
   row,
   selectedWorkout,
+  // She has already logged the selected session this week and the coach
+  // answered "start a new one". Said on the row because the completion is
+  // not opened until the board starts — on the Stage tab that is hours
+  // later, and a flag nobody can see is a flag nobody can trust.
+  makeup = false,
   isOpen,
   unavailable,
   reason,
@@ -225,7 +228,7 @@ export function HubClientRow({
             {unavailable
               ? reason
               : selected
-                ? `Week ${row.weekNumber} · Session ${chosen?.sessionNumber ?? ""}`
+                ? `Week ${row.weekNumber} · Session ${chosen?.sessionNumber ?? ""}${makeup ? " · doing it again" : ""}`
                 : `Week ${row.weekNumber} · ${row.sessions.length} session${row.sessions.length === 1 ? "" : "s"}`}
           </Text>
         </View>
@@ -267,11 +270,11 @@ export function HubClientRow({
 // Only offered where the board is about to run. Staging tomorrow's 6am is the
 // one place this must NOT appear: the instance would be created against
 // today's week, for a session she has not done yet.
-function RepeatSessionDialog({ visible, name, sessionNumber, busy, onClose, onOpenLogged, onStartNew }) {
+function RepeatSessionDialog({ visible, name, sessionNumber, onClose, onOpenLogged, onStartNew }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
-        onPress={busy ? undefined : onClose}
+        onPress={onClose}
         style={{ flex: 1, backgroundColor: "rgba(68,64,60,0.45)", alignItems: "center", justifyContent: "center", padding: 20 }}
       >
         <Pressable
@@ -295,9 +298,7 @@ function RepeatSessionDialog({ visible, name, sessionNumber, busy, onClose, onOp
           <View style={{ gap: 10, marginTop: 16 }}>
             <PressFade
               onPress={onOpenLogged}
-              disabled={busy}
               style={{
-                opacity: busy ? 0.5 : 1,
                 backgroundColor: "#fff",
                 borderWidth: 1,
                 borderColor: "#e0dbd4",
@@ -313,9 +314,7 @@ function RepeatSessionDialog({ visible, name, sessionNumber, busy, onClose, onOp
             </PressFade>
             <PressFade
               onPress={onStartNew}
-              disabled={busy}
               style={{
-                opacity: busy ? 0.5 : 1,
                 backgroundColor: "#fff",
                 borderWidth: 1,
                 borderColor: "#e0dbd4",
@@ -332,7 +331,6 @@ function RepeatSessionDialog({ visible, name, sessionNumber, busy, onClose, onOp
           </View>
           <PressFade
             onPress={onClose}
-            disabled={busy}
             style={{ alignSelf: "center", marginTop: 16, paddingVertical: 6, paddingHorizontal: 12 }}
           >
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: colors.primaryOnWhite }}>Never mind</Text>
@@ -357,10 +355,14 @@ export function HubClientPickList({
   // morning, so the workout is only resolved at start.
   initialSessionNumbers = null,
   // Picking a session she has already logged this week asks whether to open
-  // it or start a second one. True only where the board is about to run
-  // (start now, add mid-session) — never when staging a future group, where
-  // a new instance would be filed against the wrong week.
+  // it or start a second one. Answering "start a new one" does NOT write
+  // anything here — it flags the slot, and the make-up completion is opened
+  // once she is actually on the board. See handleStartNewInstance.
   allowRepeat = false,
+  // { userId: true } — reopening a staged group whose slots were already
+  // flagged as make-ups, so the answer survives an edit. Keyed by user id for
+  // the same reason initialSessionNumbers is: that is what a staged row holds.
+  initialMakeups = null,
   // Whether the SPC / group segments are offered. Default on so the wall's
   // own picker and add-mid-session get them without opting in; staging turns
   // it off (see the header).
@@ -381,11 +383,13 @@ export function HubClientPickList({
   const [expanded, setExpanded] = useState(null); // row.key
   const [program, setProgram] = useState(initialProgram ?? "spc");
   const [repeatAsk, setRepeatAsk] = useState(null); // { row, session }
-  const [repeatBusy, setRepeatBusy] = useState(false);
   // Once she has answered for a session, selecting it again is just a
-  // selection. Without this, deselect-and-reselect would keep asking and
-  // could file a third and fourth instance nobody meant to create.
+  // selection — deselect-and-reselect must not keep asking.
   const [repeatAnswered, setRepeatAnswered] = useState(() => new Set());
+  // Which of those answers was "start a new one". This is the ONLY thing the
+  // dialog produces: the completion itself is opened after she lands on the
+  // board (hub_open_makeup, migration 0117), never here.
+  const [makeups, setMakeups] = useState(() => new Set());
 
   const load = () => {
     setLoadError(false);
@@ -403,14 +407,20 @@ export function HubClientPickList({
   useEffect(() => {
     if (seeded || !roster || !initialSessionNumbers) return;
     const next = {};
+    const seedMakeups = new Set();
     for (const [userId, sessionNumber] of Object.entries(initialSessionNumbers)) {
       const row = roster.find((r) => r.userId === userId && r.programKind === "spc");
       const session = (row?.sessions ?? []).find((s) => s.sessionNumber === sessionNumber);
-      if (session) next[row.key] = session.spcWorkoutId;
+      if (!session) continue;
+      next[row.key] = session.spcWorkoutId;
+      // A staged slot the coach already answered "start a new one" for comes
+      // back flagged, so editing the group's time doesn't quietly undo it.
+      if (initialMakeups?.[userId]) seedMakeups.add(`${row.key}:${session.spcWorkoutId}`);
     }
     setSeeded(true);
-    if (Object.keys(next).length > 0) emit(next);
-  }, [roster, initialSessionNumbers, seeded]);
+    setMakeups(seedMakeups);
+    if (Object.keys(next).length > 0) emit(next, seedMakeups);
+  }, [roster, initialSessionNumbers, initialMakeups, seeded]);
 
   const excluded = useMemo(() => new Set(excludeUserIds), [excludeUserIds]);
 
@@ -452,7 +462,9 @@ export function HubClientPickList({
     });
   }, [roster, search, excluded, activeProgram, allowPrograms]);
 
-  const emit = (next) => {
+  // `nextMakeups` defaults to current state — passed explicitly only by the
+  // handlers that change it in the same tick, since state is a render behind.
+  const emit = (next, nextMakeups = makeups) => {
     setPicked(next);
     const slots = Object.entries(next).map(([key, workoutId]) => {
       const row = (roster ?? []).find((r) => r.key === key);
@@ -474,6 +486,11 @@ export function HubClientPickList({
         // can find them. Falls back to the client row for a roster fetched
         // before the RPC started returning it.
         weekNumber: session?.weekNumber ?? row?.weekNumber ?? null,
+        // "She already did this — start a second one." An intent, not a
+        // record: the caller opens it after the board write, because the
+        // display account may only write a completion for a client already
+        // on the board (0117's header).
+        newInstance: nextMakeups.has(`${key}:${workoutId}`),
       };
     });
     onChange?.(slots);
@@ -488,28 +505,33 @@ export function HubClientPickList({
   };
 
   // The select itself, once any "she already did this" question is settled.
-  const selectSession = (row, session) => {
+  const selectSession = (row, session, nextMakeups = makeups) => {
     const next = mode === "single" ? {} : { ...picked };
     // Switching session for someone already picked isn't a new slot, so the
     // cap only applies to a client who isn't on the list yet.
     if (mode === "multi" && !picked[row.key] && Object.keys(next).length >= MAX_SLOTS) return;
     next[row.key] = session.groupWorkoutId ?? session.spcWorkoutId;
-    emit(next);
+    emit(next, nextMakeups);
   };
 
-  const handleStartNewInstance = async () => {
+  // Records the answer and nothing else. Writing the second completion HERE
+  // is what broke this from the wall for good: the display's only write
+  // policy on session_completions requires the client to be on the board
+  // already, which she never is at pick time, so every "start a new one"
+  // from the TV died on a 42501. It also left a phantom completion behind
+  // whenever the coach then cancelled the picker. Opened at start/add
+  // instead — see 0117.
+  const handleStartNewInstance = () => {
+    // The Modal stays mounted while it fades out, so a fast second tap can
+    // land after repeatAsk has already been cleared.
+    if (!repeatAsk) return;
     const { row, session } = repeatAsk;
-    setRepeatBusy(true);
-    try {
-      await startNewSpcSessionInstance(row.userId, session.spcWorkoutId);
-      setRepeatAnswered((prev) => new Set(prev).add(`${row.key}:${session.spcWorkoutId}`));
-      setRepeatAsk(null);
-      selectSession(row, session);
-    } catch (e) {
-      toastError("Couldn't start a second session", e);
-    } finally {
-      setRepeatBusy(false);
-    }
+    const key = `${row.key}:${session.spcWorkoutId}`;
+    const nextMakeups = new Set(makeups).add(key);
+    setMakeups(nextMakeups);
+    setRepeatAnswered((prev) => new Set(prev).add(key));
+    setRepeatAsk(null);
+    selectSession(row, session, nextMakeups);
   };
 
   const chooseSession = (row, session) => {
@@ -517,7 +539,17 @@ export function HubClientPickList({
     if (picked[row.key] === workoutId) {
       const next = { ...picked };
       delete next[row.key];
-      emit(next);
+      // Taking her off drops the make-up answer with her, or re-picking the
+      // same session later would silently still be flagged.
+      const nextMakeups = new Set(makeups);
+      nextMakeups.delete(`${row.key}:${workoutId}`);
+      setMakeups(nextMakeups);
+      setRepeatAnswered((prev) => {
+        const n = new Set(prev);
+        n.delete(`${row.key}:${workoutId}`);
+        return n;
+      });
+      emit(next, nextMakeups);
       return;
     }
     // "She already did this — open it or start a second?" is an SPC question:
@@ -594,6 +626,7 @@ export function HubClientPickList({
               key={row.key}
               row={row}
               selectedWorkout={selectedWorkout}
+              makeup={Boolean(selectedWorkout) && makeups.has(`${row.key}:${selectedWorkout}`)}
               isOpen={expanded === row.key}
               unavailable={unavailable}
               reason={betweenBlocks ? "No block running" : "Nothing published this week"}
@@ -613,13 +646,17 @@ export function HubClientPickList({
         visible={Boolean(repeatAsk)}
         name={repeatAsk?.row?.name}
         sessionNumber={repeatAsk?.session?.sessionNumber}
-        busy={repeatBusy}
-        onClose={() => (repeatBusy ? null : setRepeatAsk(null))}
+        onClose={() => setRepeatAsk(null)}
         onOpenLogged={() => {
+          if (!repeatAsk) return;
           const { row, session } = repeatAsk;
-          setRepeatAnswered((prev) => new Set(prev).add(`${row.key}:${session.spcWorkoutId}`));
+          const key = `${row.key}:${session.spcWorkoutId}`;
+          const nextMakeups = new Set(makeups);
+          nextMakeups.delete(key);
+          setMakeups(nextMakeups);
+          setRepeatAnswered((prev) => new Set(prev).add(key));
           setRepeatAsk(null);
-          selectSession(row, session);
+          selectSession(row, session, nextMakeups);
         }}
         onStartNew={handleStartNewInstance}
       />
