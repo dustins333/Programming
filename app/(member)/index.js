@@ -1567,6 +1567,18 @@ export default function MemberHome() {
         getSpcCompletion(profile.id, row.workout.id),
       ]);
       const completed = !!completion;
+      // The make-up question is decided on THIS answer, not on row.completed.
+      // My Week paints from cache, so a session finalized since that snapshot
+      // — by her on another device, or by her coach on the board — still says
+      // "not done" on the row, and the gate above would skip the question
+      // entirely and open the session as though there were nothing to choose.
+      // That is the one place the cache is destructive rather than merely
+      // stale: the decision is taken before the real answer arrives.
+      if (!skipMakeup && completed && spcEntry.block?.format === "sessions") {
+        setPreview((p) => ({ ...p, visible: false }));
+        setMakeup({ spcEntry, row: { ...row, completed: true, completedAt: completion.completed_at } });
+        return;
+      }
       setPreview((p) => ({
         ...p,
         loading: false,

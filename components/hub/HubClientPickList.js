@@ -270,7 +270,7 @@ export function HubClientRow({
 // Only offered where the board is about to run. Staging tomorrow's 6am is the
 // one place this must NOT appear: the instance would be created against
 // today's week, for a session she has not done yet.
-function RepeatSessionDialog({ visible, name, sessionNumber, onClose, onOpenLogged, onStartNew }) {
+function RepeatSessionDialog({ visible, name, sessionNumber, sameDay, onClose, onOpenLogged, onStartNew }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
@@ -329,6 +329,17 @@ function RepeatSessionDialog({ visible, name, sessionNumber, onClose, onOpenLogg
               </Text>
             </PressFade>
           </View>
+          {/* A set row is keyed by date, not by session (0102: logs carry no
+              instance), so two sessions on ONE day share their sets and the
+              second overwrites the first. Said here rather than discovered
+              afterwards — it is the only case where "start a new one" costs
+              something, and it is invisible until her morning numbers have
+              already gone. */}
+          {sameDay ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, lineHeight: 17, color: "#8a5a2e", marginTop: 14 }}>
+              She logged this earlier today, so both sessions share today's set boxes. A make-up on a different day keeps its own.
+            </Text>
+          ) : null}
           <PressFade
             onPress={onClose}
             style={{ alignSelf: "center", marginTop: 16, paddingVertical: 6, paddingHorizontal: 12 }}
@@ -646,6 +657,10 @@ export function HubClientPickList({
         visible={Boolean(repeatAsk)}
         name={repeatAsk?.row?.name}
         sessionNumber={repeatAsk?.session?.sessionNumber}
+        sameDay={
+          !!repeatAsk?.session?.lastLoggedAt &&
+          dateInBoise(new Date(repeatAsk.session.lastLoggedAt)) === todayInBoise()
+        }
         onClose={() => setRepeatAsk(null)}
         onOpenLogged={() => {
           if (!repeatAsk) return;

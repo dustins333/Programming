@@ -348,9 +348,9 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
         if (next) await markGroupExerciseComplete(userId, item.id);
         else await unmarkGroupExerciseComplete(userId, item.id);
       } else if (next) {
-        await markSpcExerciseComplete(userId, item.id, entry.completionWeek ?? entry.weekNumber);
+        await markSpcExerciseComplete(userId, item.id, entry.completionWeek ?? entry.weekNumber, entry.instance ?? 1);
       } else {
-        await unmarkSpcExerciseComplete(userId, item.id, entry.completionWeek ?? entry.weekNumber);
+        await unmarkSpcExerciseComplete(userId, item.id, entry.completionWeek ?? entry.weekNumber, entry.instance ?? 1);
       }
     },
     []
@@ -364,9 +364,13 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
         if (entry.finalized) await unfinalizeGroupSession(userId, entry.groupWorkoutId);
         else await finalizeGroupSession(userId, entry.groupWorkoutId);
       } else if (entry.finalized) {
-        await unfinalizeSpcSession(userId, entry.spcWorkoutId);
+        // Both name the instance this board is running (0118). Left to
+        // default, finalize would find the week's LATEST completion and
+        // re-stamp it — so a make-up would quietly overwrite the session she
+        // did earlier in the week instead of recording a second one.
+        await unfinalizeSpcSession(userId, entry.spcWorkoutId, { instance: entry.instance ?? 1 });
       } else {
-        await finalizeSpcSession(userId, entry.spcWorkoutId);
+        await finalizeSpcSession(userId, entry.spcWorkoutId, new Date().toISOString(), { instance: entry.instance ?? 1 });
       }
       await refreshBoard();
     },
