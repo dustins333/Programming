@@ -46,6 +46,12 @@ import { SessionLogger } from "../../components/SessionLogger";
 import { SessionHeroBar } from "../../components/SessionHeroBar";
 import { ProgramPickerModal } from "../../components/ProgramPickerModal";
 import { FinalizePlate } from "../../components/session/FinalizePlate";
+import {
+  FinalizeWash,
+  FinalizeConfettiScreen,
+  useFinalizeCelebration,
+  holdUntil,
+} from "../../components/session/FinalizeCelebration";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
 import { buildLiftFinalizePlate } from "../../lib/finalizePlate";
 import { getGroupWeeklyProgress, getSpcWeeklyProgress } from "../../lib/programming/weeklyProgress";
@@ -73,7 +79,10 @@ const FOOTER_CLEARANCE = 96;
 // not_published) — a "ready" session already gets its program name from
 // the page's own header (SessionHeroBar), so passing null there avoids
 // showing the same name twice.
-function FitnessCard({ title, children }) {
+// `celebrating` washes the session green for the beat after it is finalized
+// (see components/session/FinalizeCelebration.js). It sits over the session
+// only, never the title, and never blocks a tap.
+function FitnessCard({ title, children, celebrating = false }) {
   return (
     <View className="mb-6">
       {title ? (
@@ -81,7 +90,10 @@ function FitnessCard({ title, children }) {
           {title}
         </Text>
       ) : null}
-      {children}
+      <View>
+        {children}
+        {celebrating ? <FinalizeWash /> : null}
+      </View>
     </View>
   );
 }
@@ -214,6 +226,11 @@ export default function MyFitness() {
   // have no weekly target to count against — see the README's "Extras /
   // one-offs: no plate" rule).
   const [finalizePlate, setFinalizePlate] = useState(null);
+
+  // The green wash + confetti that runs on the session itself the moment it
+  // is finalized, matching the gym-floor board. `celebration.key` names the
+  // one session that washes; the confetti is screen-wide.
+  const { celebration, celebrate, clearCelebration } = useFinalizeCelebration();
   // The page's own ScrollView is what a focused reps/weight/notes field
   // scrolls itself above the keyboard inside — this used to be the focus
   // overlay's ScrollView, but with the session on one page the page is the
@@ -688,6 +705,7 @@ export default function MyFitness() {
     if (groupEntry.completed) {
       await unfinalizeGroupSession(profile.id, groupEntry.workout.id);
       void clearScreen(SCREEN_MY_WEEK, profile.id);
+      clearCelebration();
       setGroups((prev) => prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: false } : g)));
       toastSuccess("Un-finalized — keep logging.");
       return;
@@ -697,25 +715,36 @@ export default function MyFitness() {
     // snapshot so the next visit can't show this session as still to do.
     void clearScreen(SCREEN_MY_WEEK, profile.id);
     setGroups((prev) => prev.map((g) => (g.groupProgramId === groupEntry.groupProgramId ? { ...g, completed: true } : g)));
-    try {
-      const progress = await getGroupWeeklyProgress(profile.id, groupEntry.groupProgramId);
-      const plate = await buildLiftFinalizePlate({
-        userId: profile.id,
-        sessionKey: `group:${groupEntry.workout.id}`,
-        session: { groupWorkoutId: groupEntry.workout.id },
-        sessionName: groupEntry.workout.title || `Session ${groupEntry.sessionNumber}`,
-        weekNumber: groupEntry.weekNumber,
-        exerciseIds: groupEntry.exercises.map((ex) => ex.exercise?.id),
-        progress,
-      });
-      setFinalizePlate(plate);
-    } catch (err) {
-      // The finalize itself already succeeded — a failure computing the
-      // celebratory plate shouldn't look like the finalize failed, so this
-      // falls back to the plain toast instead of surfacing an error.
-      console.error("Finalize plate failed to build", err);
-      toastSuccess("Workout finalized — nice work!");
-    }
+    // Wash + confetti start now; the plate is held until `plateAt` so the
+    // beat is seen rather than covered in the same frame.
+    const plateAt = celebrate(`group:${groupEntry.groupProgramId}`);
+    // Detached on purpose: SessionLogger holds its button on "Saving…" for
+    // as long as onFinalize is pending, and the button sits under the wash.
+    // Returning now lets it flip to its finished state while the beat plays.
+    void (async () => {
+      try {
+        const progress = await getGroupWeeklyProgress(profile.id, groupEntry.groupProgramId);
+        const plate = await buildLiftFinalizePlate({
+          userId: profile.id,
+          sessionKey: `group:${groupEntry.workout.id}`,
+          session: { groupWorkoutId: groupEntry.workout.id },
+          sessionName: groupEntry.workout.title || `Session ${groupEntry.sessionNumber}`,
+          weekNumber: groupEntry.weekNumber,
+          exerciseIds: groupEntry.exercises.map((ex) => ex.exercise?.id),
+          progress,
+        });
+        await holdUntil(plateAt);
+        setFinalizePlate(plate);
+      } catch (err) {
+        // The finalize itself already succeeded — a failure computing the
+        // celebratory plate shouldn't look like the finalize failed, so this
+        // falls back to the plain toast instead of surfacing an error. The
+        // celebration is unaffected either way; it is already running.
+        console.error("Finalize plate failed to build", err);
+        await holdUntil(plateAt);
+        toastSuccess("Workout finalized — nice work!");
+      }
+    })();
   };
 
   const handleFinalizeSpc = async () => {
@@ -729,6 +758,7 @@ export default function MyFitness() {
     if (session.completed) {
       await unfinalizeSpcSession(profile.id, session.workout.id);
       void clearScreen(SCREEN_MY_WEEK, profile.id);
+      clearCelebration();
       setCompleted(false);
       toastSuccess("Un-finalized — keep logging.");
       return;
@@ -736,25 +766,30 @@ export default function MyFitness() {
     await finalizeSpcSession(profile.id, session.workout.id);
     void clearScreen(SCREEN_MY_WEEK, profile.id);
     setCompleted(true);
-    try {
-      const progress = await getSpcWeeklyProgress(profile.id);
-      const plate = await buildLiftFinalizePlate({
-        userId: profile.id,
-        sessionKey: `spc:${session.workout.id}:${spc.weekNumber}`,
-        // The workout's AUTHORED week, never the week it's being shown in:
-        // a moved session (0101) files its logs under the week it was written
-        // in, which is where every reader looks for them.
-        session: { spcWorkoutId: session.workout.id, weekNumber: session.workout.week_number },
-        sessionName: spcDetail?.title || session.workout.title || `Session ${session.sessionNumber}`,
-        weekNumber: spc.weekNumber,
-        exerciseIds: (spcDetail?.exercises ?? []).map((ex) => ex.exercise?.id),
-        progress,
-      });
-      setFinalizePlate(plate);
-    } catch (err) {
-      console.error("Finalize plate failed to build", err);
-      toastSuccess("Workout finalized — nice work!");
-    }
+    const plateAt = celebrate("spc");
+    void (async () => {
+      try {
+        const progress = await getSpcWeeklyProgress(profile.id);
+        const plate = await buildLiftFinalizePlate({
+          userId: profile.id,
+          sessionKey: `spc:${session.workout.id}:${spc.weekNumber}`,
+          // The workout's AUTHORED week, never the week it's being shown in:
+          // a moved session (0101) files its logs under the week it was written
+          // in, which is where every reader looks for them.
+          session: { spcWorkoutId: session.workout.id, weekNumber: session.workout.week_number },
+          sessionName: spcDetail?.title || session.workout.title || `Session ${session.sessionNumber}`,
+          weekNumber: spc.weekNumber,
+          exerciseIds: (spcDetail?.exercises ?? []).map((ex) => ex.exercise?.id),
+          progress,
+        });
+        await holdUntil(plateAt);
+        setFinalizePlate(plate);
+      } catch (err) {
+        console.error("Finalize plate failed to build", err);
+        await holdUntil(plateAt);
+        toastSuccess("Workout finalized — nice work!");
+      }
+    })();
   };
 
   // One-offs are open-until-completed, no recurrence — once finalized it
@@ -762,8 +797,17 @@ export default function MyFitness() {
   const handleFinalizeOneOff = async (workoutId) => {
     await finalizeOneOffSession(profile.id, workoutId);
     void clearScreen(SCREEN_MY_WEEK, profile.id);
-    setOneOffs((prev) => prev.filter((o) => o.workout.id !== workoutId));
-    toastSuccess("Workout finalized — nice work!");
+    // A one-off leaves the list once it's done — but not until the wash has
+    // landed on it, or the card it belongs to is gone before the
+    // celebration has anything to celebrate on. Same beat the plate waits
+    // for on group and SPC, so the timing reads the same whichever kind of
+    // session was just finished.
+    const removeAt = celebrate(`one_off:${workoutId}`);
+    void (async () => {
+      await holdUntil(removeAt);
+      setOneOffs((prev) => prev.filter((o) => o.workout.id !== workoutId));
+      toastSuccess("Workout finalized — nice work!");
+    })();
   };
 
   // Finalize is a two-way toggle here, same as group and SPC — an
@@ -775,6 +819,7 @@ export default function MyFitness() {
     const already = alternate.completions.has(sessionId);
     if (already) {
       await unfinalizeAlternateSession(profile.id, sessionId, alternate.week);
+      clearCelebration();
     } else {
       await finalizeAlternateSession(profile.id, sessionId, alternate.week);
     }
@@ -786,7 +831,13 @@ export default function MyFitness() {
       else next.set(sessionId, new Date().toISOString());
       return { ...prev, completions: next };
     });
-    if (!already) toastSuccess("Workout finalized — nice work!");
+    if (!already) {
+      const toastAt = celebrate(`alternate:${sessionId}`);
+      void (async () => {
+        await holdUntil(toastAt);
+        toastSuccess("Workout finalized — nice work!");
+      })();
+    }
   };
 
   if (groupsLoading) {
@@ -1177,7 +1228,7 @@ export default function MyFitness() {
             )}
 
             {groupEntry.status === "ready" && (
-              <FitnessCard title={null}>
+              <FitnessCard title={null} celebrating={celebration?.key === `group:${groupEntry.groupProgramId}`}>
                 <WarmupCard warmups={groupEntry.warmups} />
 
                 <SessionLogger
@@ -1255,7 +1306,7 @@ export default function MyFitness() {
           )}
 
           {spc?.status === "ready" && (
-            <FitnessCard title={null}>
+            <FitnessCard title={null} celebrating={celebration?.key === "spc"}>
               {spcDetailError ? (
                 <View className="items-center py-4">
                   <Text className="mb-2 text-center" style={{ fontFamily: fonts.sans, fontSize: 13, color: "#b23a22" }}>
@@ -1317,7 +1368,7 @@ export default function MyFitness() {
         alternate.sessions
           .filter((entry) => !focus.alternateSessionId || entry.session.id === focus.alternateSessionId)
           .map(({ session, warmups, exercises }) => (
-            <FitnessCard key={session.id} title={session.title}>
+            <FitnessCard key={session.id} title={session.title} celebrating={celebration?.key === `alternate:${session.id}`}>
               <WarmupCard warmups={warmups} />
               <SessionLogger
                 userId={profile.id}
@@ -1345,7 +1396,7 @@ export default function MyFitness() {
         oneOffs
           .filter((o) => !focus.oneOffWorkoutId || o.workout.id === focus.oneOffWorkoutId)
           .map(({ workout, warmups, exercises }) => (
-          <FitnessCard key={workout.id} title={workout.title}>
+          <FitnessCard key={workout.id} title={workout.title} celebrating={celebration?.key === `one_off:${workout.id}`}>
             <WarmupCard warmups={warmups} />
             <SessionLogger
               userId={profile.id}
@@ -1382,6 +1433,12 @@ export default function MyFitness() {
         setPickerDismissed(true);
       }}
     />
+
+    {/* Screen-level and outside the ScrollView, so the pieces fall down what
+        the member is looking at and can't scroll away mid-fall. Rendered
+        before the plate so it paints underneath it: the plate is a Modal,
+        which sits above in-tree content on both platforms. */}
+    <FinalizeConfettiScreen runKey={celebration?.runKey ?? null} />
 
     <FinalizePlate plate={finalizePlate} onDone={() => setFinalizePlate(null)} />
     </View>

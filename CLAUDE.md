@@ -6346,6 +6346,72 @@ type now changing. `npm run build` + `check:routes` clean, scope pass clean.
 
 **Not verified**: behind a real login, or on native — standing limitation.
 
+## The member's phone gets the board's finish (2026-09-04)
+
+Finalizing on the wall washes the session green and drops confetti; on a
+phone it produced a toast and the accomplishment plate. Now both. **No
+migration, no deploy step** — this is all client-side.
+
+**The confetti has one implementation now.** `components/FinalizeConfetti.js`
+holds the piece animation and the palette; the wall
+(`components/hub/HubFinalizedOverlay.js`) and the phone
+(`components/session/FinalizeCelebration.js`) pass their own tuning. The
+wall's numbers are byte-for-byte what they were (28 pieces, 2600-4200ms
+falls, 1100ms stagger, `CELEBRATION_MS` 5600) — that extraction is a pure
+move. The phone runs the same 28 pieces faster (1300-2000ms, 500ms stagger),
+because a run tuned to turn a head from twenty feet away just reads as
+confetti that will not stop when it is in your hand. `FINALIZED_WASH` moved
+into the shared file as well, so the member bundle never pulls in the hub's
+overlay to know one colour.
+
+**The plate is held 1500ms.** It is a full-screen Modal, so without the hold
+the wash and the first pieces are covered in the same frame they appear —
+the celebration would exist and nobody would ever see it. Terra picked this
+over "plate immediately, confetti over it" and over waiting out the whole
+run. `holdUntil(timestamp)` holds for the REMAINDER of the beat rather than
+a flat delay: building the plate is two round trips of its own and those
+should count toward the hold, not stack on top of it.
+
+**The follow-up work runs detached (`void (async () => {...})()`).**
+`SessionLogger` keeps its button on "Saving…" at 50% opacity for as long as
+`onFinalize` is pending, and that button sits under the wash — awaiting the
+hold inside the handler left it saying "Saving…" through the whole
+celebration. Returning immediately lets it flip to its finished state while
+the beat plays.
+
+Every session kind celebrates, keyed so only the one just finalized washes
+(`group:<programId>` / `spc` / `alternate:<id>` / `one_off:<id>`). A one-off
+normally drops out of the list the instant it is done; its removal waits the
+same 1500ms, or the card is gone before the wash has anything to land on.
+Un-finalizing inside the run calls `clearCelebration()` — otherwise the
+session sits green while its own button says it is no longer finished.
+
+**Two decisions worth not re-litigating:**
+- **The wash never blocks.** On the board a finalized session is genuinely
+  closed and the wash is what says so; a member can still go back and fix a
+  set, so it is `pointerEvents="none"` throughout and clears itself.
+  Verified by hit-testing the middle of it and reaching the card underneath.
+- **The wash is NOT faded in.** A 220ms `Animated.timing` was built and
+  dropped: it buys a fifth of a second of polish and costs a whole failure
+  mode. rAF is throttled in a backgrounded tab and frozen outright in the
+  preview browser, and a timing that never advances leaves the wash at
+  opacity 0 — measured, exactly that, on the first pass. The wall's wash
+  appears instantly too.
+
+**Verification, and the one thing it could not cover.** `npm run build` +
+`check:routes` clean, a Babel parse / unresolved-identifier / unused-import
+pass over every touched file, and the composed frame driven for real at
+390px through a throwaway `app/zz-celeb.js` (deleted; `git status`
+confirmed clean): 28 pieces in all six palette colours, the wash sized to
+the finalized card alone with the second card untouched, hit-testing passing
+through it, pieces painting above every card and button, and the plate
+arriving after the hold. **The fall itself was never watched** — sampling
+mid-flight showed the pieces sitting at their start for 800ms and then
+jumping straight to the end state with nothing in between, which is the
+throttled-rAF signature this file already warns about. Any animation is
+unverifiable through the Browser pane. **Not verified behind a real login,
+and not on native.** Worth Terra finishing a real session on her phone.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

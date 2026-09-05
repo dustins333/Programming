@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from "react";
-import { Animated, Easing, Modal, Platform, Text, View } from "react-native";
+import { Modal, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../PressFade";
+import { FinalizeConfetti, confettiRunMs, FINALIZED_WASH } from "../FinalizeConfetti";
 import { fonts, colors } from "../../lib/theme";
 
 // The finalized state on the live board, and the two-step way back out of it.
@@ -24,88 +24,30 @@ import { fonts, colors } from "../../lib/theme";
 // the same confirm the "Make changes" button opens.
 
 const DONE = "#4d6142";
-export const FINALIZED_WASH = "rgba(87,124,60,0.55)";
+export { FINALIZED_WASH };
 
-// RNW ignores the native driver and warns; everything here is transform and
-// opacity only, so native gets the real thing and web falls back to JS.
-const USE_NATIVE_DRIVER = Platform.OS !== "web";
-
-const CONFETTI_COLORS = ["#a46a57", "#4d6142", "#e8c9a0", "#b23a22", "#8fb473", "#f0ddd2"];
+// The piece animation itself lives in components/FinalizeConfetti.js, shared
+// with the member's own phone celebration. These numbers are the wall's:
+// long enough to actually be seen from across the gym and turn a head, which
+// is slower than the same confetti wants to be in someone's hand.
 const PIECE_COUNT = 28;
-// Long enough to actually be seen from across the gym and turn a head. Pieces
-// fall at their own speeds over their own staggered starts, so this has to
-// outlast the slowest possible one (the longest delay plus the longest fall)
-// or the last few would be cut off mid-air.
 const FALL_MIN_MS = 2600;
 const FALL_MAX_MS = 4200;
 const STAGGER_MS = 1100;
-export const CELEBRATION_MS = FALL_MAX_MS + STAGGER_MS + 300;
+export const CELEBRATION_MS = confettiRunMs({ fallMaxMs: FALL_MAX_MS, staggerMs: STAGGER_MS });
 
-// Each piece owns its own Animated.Value via a child component, since hooks
-// cannot be created in a loop.
-function ConfettiPiece({ left, delay, duration, color, size, distance }) {
-  const progress = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const anim = Animated.timing(progress, {
-      toValue: 1,
-      duration,
-      delay,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: USE_NATIVE_DRIVER,
-    });
-    anim.start();
-    return () => anim.stop();
-  }, [progress, delay, duration]);
-
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [-30, distance] });
-  const rotate = progress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "540deg"] });
-  const opacity = progress.interpolate({ inputRange: [0, 0.82, 1], outputRange: [1, 1, 0] });
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={{
-        position: "absolute",
-        left,
-        top: 0,
-        width: size,
-        height: size * 1.9,
-        borderRadius: 2,
-        backgroundColor: color,
-        transform: [{ translateY }, { rotate }],
-        opacity,
-      }}
-    />
-  );
-}
-
-// Falls the length of the column. Positions are percentages rather than
-// measured pixels on purpose: onLayout is a ResizeObserver on web and cannot
-// be relied on here, and the card clips its own overflow anyway, so a piece
-// that falls past the bottom simply disappears.
+// Falls the length of the column. The card clips its own overflow, so a
+// piece that falls past the bottom simply disappears.
 export function HubFinalizeConfetti({ runKey, compact = false }) {
-  const distance = compact ? 900 : 1300;
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: PIECE_COUNT }, (_, i) => ({
-        key: `${runKey}:${i}`,
-        left: `${Math.round(Math.random() * 94)}%`,
-        delay: Math.random() * STAGGER_MS,
-        // Per piece, so they don't fall as one sheet.
-        duration: FALL_MIN_MS + Math.random() * (FALL_MAX_MS - FALL_MIN_MS),
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-        size: 6 + Math.random() * 6,
-      })),
-    [runKey],
-  );
-
   return (
-    <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}>
-      {pieces.map((p) => (
-        <ConfettiPiece key={p.key} left={p.left} delay={p.delay} duration={p.duration} color={p.color} size={p.size} distance={distance} />
-      ))}
-    </View>
+    <FinalizeConfetti
+      runKey={runKey}
+      pieceCount={PIECE_COUNT}
+      distance={compact ? 900 : 1300}
+      fallMinMs={FALL_MIN_MS}
+      fallMaxMs={FALL_MAX_MS}
+      staggerMs={STAGGER_MS}
+    />
   );
 }
 
