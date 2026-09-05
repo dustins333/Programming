@@ -47,9 +47,15 @@ const REVIEW_POLL_MS = 10000;
 // rather than today.
 // Identity of a board's roster: who is on it, in which slot, on which workout.
 // Any of those changing is a different board and has to reach every device.
+// Everything the board reads off a slot. `instance` is in here because it is
+// not fixed for the life of a slot: a make-up resolves it (0118), and while it
+// was missing from this signature the board pinned itself to whatever it first
+// saw and never looked again — so a make-up added mid-session stayed on
+// instance 1 and opened reading the earlier session's completion. Any field
+// this hook consumes belongs here; leaving one out is silent and permanent.
 function clientsSignature(clients) {
   return (clients ?? [])
-    .map((c) => `${c.user_id}:${c.position}:${c.group_workout_id ?? c.spc_workout_id ?? ""}`)
+    .map((c) => `${c.user_id}:${c.position}:${c.group_workout_id ?? c.spc_workout_id ?? ""}:${c.instance ?? 1}`)
     .join("|");
 }
 
