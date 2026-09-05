@@ -6548,6 +6548,43 @@ switching session and deselecting both clear it, a second client is unaffected,
 and a double-tap through the Modal's fade-out no longer throws. **Not verified
 behind a real login.**
 
+## A second tap of Finalize moved the day she trained (2026-09-05)
+
+Found chasing why a client couldn't log: she trained on the 2nd, logged 19 sets
+across 6 lifts, opened the session again three days later and tapped Finalize —
+and spent the morning looking at empty boxes.
+
+**`finalizeSpcSession` and its three siblings re-stamped `completed_at` to now
+on an existing row.** That is not cosmetic. The member's logging screen derives
+`datePerformed` from that timestamp (`plan.js`), so re-finalizing a session
+trained days earlier repoints it at today, the set lookup misses, and her work
+disappears from her own screen while sitting untouched in the table. The
+member's own Finalize button passes no date at all, so it is one tap to trip.
+
+**One rule now, in all four finalize functions**: an explicit date always wins;
+no date means *now if this is new, leave it alone if it already exists*. The
+back-log flows (`plan-block.js`, `plan-spc-block.js`, My Week's own, and the
+coach logging on a client's behalf in `SpcClientPage`) all pass a date, so they
+still move it — that is what they are for. Un-finalize DELETES the row, so
+genuinely re-doing a session still gets today; only a second tap on a row that
+is already there is protected. The board stops passing an explicit `now` for
+the same reason, so reviewing a past board can no longer drag a session forward.
+
+**Recovering a row that this already moved**: the true finish time is
+`max(created_at)` of that session's own `logs` rows — the sets carry when they
+were written, so nothing has to be guessed. Ashley Klink's was restored that
+way.
+
+**Worth generalising: a timestamp that a screen uses to LOOK SOMETHING UP is
+not a free-form audit field.** `completed_at` reads like "when was this marked
+done", and it is also the key the logging screen resolves a day's sets through.
+Anything that writes it has to know that.
+
+Verified by driving the shipped functions against the live database with a
+throwaway user, all five branches (explicit past date, re-finalize with no
+date, the board's call shape, explicit new date, un-finalize-then-finalize),
+rows deleted afterwards.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
