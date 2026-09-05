@@ -6318,20 +6318,23 @@ padding, rather than making her find a 15px chevron. Two details:
 The chevron is unchanged and stays on both states: on a collapsed card it is
 what says the card opens at all, and it is still how it closes.
 
-**A rust "+" sits between supersetted lifts** (`SupersetLink` in
-`SessionLogger.js`) — this and that, back to back. Zero-height and absolutely
-positioned, so it costs the stack no layout and simply sits in the 10px gap
-`ExerciseCard`'s own `marginBottom` already leaves: the gap spans -10..0 from
-there, so a 26px circle centred in it starts at `top: -18` and overlaps each
-card by 8px, which is what makes it read as joining them rather than as a third
-thing between them. `zIndex` because a later sibling paints over an earlier one
-and the bottom half would otherwise vanish behind the card below;
-`pointerEvents="none"` so a decoration can't eat a tap on a card that now opens
-from anywhere. Rendered between every consecutive pair, not just once, so a
-three-lift group (which the schema allows since 0085) chains correctly.
-Measured rather than eyeballed: both markers land 0.00px off the gap's centre
-vertically and horizontally, and a synthetic tap directly beneath one reaches
-the card and opens it.
+**The "+" between the two lifts is gone, and the chip is `colors.primary`
+now, not `#b23a22` (2026-09-05).** A rust circle sat in the 10px gap between
+supersetted cards to read as joining them; Terra's own pass said the field and
+its border already do that, and the connector was one more thing inside a block
+that is already busy. `SupersetLink` is deleted with it (and the now-unused
+`Ionicons` and `Fragment` imports).
+
+**The chip is the same rust the client goal card is filled with.** It shipped
+as `#b23a22`, described in the commit as "rust" — it is not. `#b23a22` is this
+app's destructive/alert red (the peach last-time pill's text, the tab badge,
+the standardized destructive colour), and Terra read it as red immediately.
+Rust is `colors.primary` (`#a46a57`), which `ClientGoalCard` fills its hero
+with, so that is what the chip uses. **It has to stay a fill, not rust text:**
+the field behind it is `#fdece5`, which is exactly the background the old
+rust-text pill used, so text alone would vanish into it. Worth remembering as a
+naming trap — `#b23a22` gets called rust in comments across this codebase and
+is the red one; `colors.primary` / `colors.primaryOnWhite` are the rusts.
 
 **Verified by driving all five cases** through a throwaway `app/zz-ssharness.js`
 at 375px (deleted; `useAuth` and two `memberPlan` functions stubbed, restored
