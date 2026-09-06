@@ -6743,6 +6743,88 @@ restores to exactly the saved offset once, never scrolls again on a later
 layout pass, and abandons the restore if the coach scrolls first. **Not
 verified behind a real login** — standing limitation.
 
+## A green card is not a sent check-in (2026-09-06)
+
+Coaches reported members doing their questionnaire, seeing the card go
+green, and walking away believing they were done. No migration; all
+client-side.
+
+**The reported premise was stale, and checking it first reshaped the fix.**
+"They still have to click submit" stopped being true on 2026-08-25
+(`721e6da`), confirmed live in the deployed bundle before touching
+anything. Which narrows the failure sharply: on a form-only week a fully
+answered form auto-sends, and a partly answered one leaves the card grey,
+so **green card == sent**. The confusion can essentially only happen on a
+**photo week**, where a week suddenly has two tasks instead of the usual
+one.
+
+**And the word was ours.** The form sheet's button read
+`{canFinalize ? "Submit check-in" : "Done"}` — and `canFinalize` is false
+while photos are outstanding, so a member who answered every question was
+handed a button saying **Done**. That is the exact moment described.
+
+**Worth measuring before believing a report is a crisis.** 18-19 of 22
+active clients file every week, and photo-required weeks are not worse
+(15/18 client-weeks) than the rest. Zero cases of "photos in, no check-in."
+So this is polish for a confused few, and the submission numbers should not
+be expected to move. Told Terra so she could calibrate.
+
+**No due date anywhere in the copy, and this was Terra's catch.**
+`deriveCheckinStatus` takes no date at all — it is purely "is there a
+response row". The Saturday a week lapses is only when it rolls off the
+current filing window and starts rendering as Missed on the coach's
+timeline; nothing changes for the client. Putting "due Saturday" in front
+of someone about to file tonight tells her she has six more days, and her
+coaching is turnaround-based rather than deadline-based. The nudge says
+"You haven't sent your check-in yet. Photos still needed." and stops.
+
+What shipped: tasks **chained in both directions** (finishing one opens the
+other, but only when she actually finished the one she was in — bailing out
+of a half-answered form returns her to the overview rather than trapping
+her); the sheet button never says "Done"; a **"Not sent yet" strip** naming
+what is left, in the attention peach rather than an alarm red; **Step 1 of
+2 / Step 2 of 2** on the cards; the band flagging a photo week up front; a
+full-width **"Complete your check-in" pill** on My Week's Nutrition card
+(nothing outside the Check-In tab had ever mentioned a check-in was
+waiting); and the two reminders below.
+
+**The reminder is split by moment, deliberately.** Terra asked for a popup
+on navigating away. The most common reason to leave that screen
+mid-check-in is **to go and take the photos**, so a dialog there blocks the
+thing it is asking for and trains people to dismiss it unread. Instead:
+- **Leaving:** a toast, suppressed entirely when she is heading to the
+  Photos tab (`NutritionTabHeader` gained an `onNavigate` callback for
+  exactly this), once a day per app session via a module-scope date guard —
+  a component ref would reset on every sub-tab hop.
+- **Reopening the app:** the real popup (`components/nutrition/CheckinNudge.js`,
+  mounted beside `AnnouncementChecker`, mount + AppState foreground per that
+  file's own lesson). Only when she **started and stopped** — nothing typed
+  and nothing uploaded is My Week's pill's job, not a popup's. Gated on
+  `showNutritionTab` so a member without nutrition never pays for the
+  lookup, and every guard answerable without a query runs first, so the
+  common case costs one local read. `lib/formDraft.js` gained `readDraft()`
+  so "did she start?" can be asked outside the hook.
+
+**`lib/nutrition/checkinProgress.js` is one definition of what is still
+owed**, shared by all three surfaces. Three copies of that wording is how
+the screen and the reminder end up disagreeing about what she owes.
+
+**Verification gotcha worth remembering: `document.body.innerText` returns
+`""` while the Browser pane is hidden.** innerText is layout-dependent, and
+a hidden pane does not lay out. This read exactly like "the component
+rendered nothing" and sent me looking for a bug that did not exist. Use
+`textContent`. (Also: a synthetic tap needs the pressable itself — RNW
+renders it as a plain `div` with `tabindex="0"` and **no** `role="button"`,
+so climb to the `[tabindex="0"]` ancestor rather than tapping the text node.)
+
+Driven for real in a browser with the data layer stubbed (every stubbed
+file restored and md5-verified byte-identical, harness routes deleted):
+both chain directions, the button label flipping to "Next: add your photos"
+as the last answer lands, exactly one submit firing after the final task,
+the toast suppressed toward Photos and firing toward Weekly with the right
+combined label, and the popup's once-a-day guard. **Not verified behind a
+real login** — standing limitation.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
