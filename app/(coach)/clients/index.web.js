@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +10,12 @@ import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { ClientRosterTable, TABLE_WIDTH } from "../../../components/ClientRosterTable";
 import { GhlImportIssuesCard } from "../../../components/GhlImportIssuesCard";
 import { fonts, colors } from "../../../lib/theme";
+import {
+  readRosterView,
+  saveRosterView,
+  useRosterScrollRestore,
+  CLIENTS_ROSTER_VIEW,
+} from "../../../lib/rosterViewState";
 
 const PAGE_SIZE = 25;
 
@@ -60,16 +66,55 @@ function FilterChip({ label, count, active, onPress, tone }) {
   );
 }
 
+// The chip a deep link is asking for. ?program= names a program (or one of
+// the pseudo-programs the chips share a key space with); ?filter= is the
+// dashboard's attention rows. Applied in that order, so a link carrying both
+// lands on the attention filter, matching the order the two effects used to
+// run in.
+function filterFromParams(params) {
+  let next = null;
+  if (typeof params.program === "string") next = params.program;
+  if (params.filter === "flagged") next = "flagged";
+  if (params.filter === "quiet") next = "quiet";
+  return next;
+}
+
+// One string standing for "which deep link am I here on". Compared against
+// the one the remembered view was reconciled with: a different value is a
+// fresh link from the dashboard and outranks anything remembered, the same
+// value is just this screen being re-entered.
+function deepLinkKey(params) {
+  const program = typeof params.program === "string" ? params.program : "";
+  const filter = typeof params.filter === "string" ? params.filter : "";
+  return `${program}|${filter}`;
+}
+
 export default function ClientsWeb() {
   const router = useRouter();
   const params = useLocalSearchParams();
+
+  // Where this coach was last time they were on this screen, this session.
+  // Web pushes /clients/<userId> as a new screen and unmounts this one, so
+  // without this the filter, search, sort, page and scroll position are all
+  // rebuilt from defaults on the way back — see lib/rosterViewState.js.
+  //
+  // The native list (index.js) deliberately has no equivalent: it's a Tabs
+  // screen that stays mounted while a coach drills into a client, so its
+  // state survives on its own.
+  const [savedView] = useState(() => readRosterView(CLIENTS_ROSTER_VIEW));
+  const linkKey = deepLinkKey(params);
+  const linkIsNew = !savedView || savedView.deepLink !== linkKey;
+
   const [state, setState] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState(typeof params.program === "string" ? params.program : "all");
-  const [sort, setSort] = useState("name");
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState(linkIsNew ? "" : savedView.search ?? "");
+  const [filter, setFilter] = useState(
+    linkIsNew ? filterFromParams(params) ?? "all" : savedView.filter ?? "all"
+  );
+  const [sort, setSort] = useState(savedView?.sort ?? "name");
+  const [page, setPage] = useState(linkIsNew ? 1 : savedView.page ?? 1);
+  const scrollProps = useRosterScrollRestore(CLIENTS_ROSTER_VIEW, { enabled: !linkIsNew });
 
   const load = useCallback(async () => {
     try {
@@ -84,20 +129,44 @@ export default function ClientsWeb() {
     load();
   }, [load]);
 
-  // A tile on the Dashboard (or any other future deep link) can pre-set the
-  // filter via ?program= / ?filter= — only apply on arrival, not every
-  // re-render, so a coach changing it by hand doesn't get overridden.
+  // A second arrival from the dashboard with a different link, without this
+  // screen having unmounted in between. The initializers above can't see it,
+  // and the remembered-view effect below would otherwise record the new link
+  // against the old filter — making the next visit treat a genuine deep link
+  // as already handled. A link this screen has already reconciled must NOT
+  // reapply, or a coach who changed the chip by hand would be overridden.
+  const appliedLinkRef = useRef(linkKey);
   useEffect(() => {
-    if (typeof params.program === "string") setFilter(params.program);
-  }, [params.program]);
-  useEffect(() => {
-    if (params.filter === "flagged") setFilter("flagged");
-    if (params.filter === "quiet") setFilter("quiet");
-  }, [params.filter]);
+    if (appliedLinkRef.current === linkKey) return;
+    appliedLinkRef.current = linkKey;
+    const next = filterFromParams(params);
+    if (next) setFilter(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkKey]);
 
+  // Changing what's being listed sends you back to page 1 — but not on the
+  // first run, which would throw away a remembered page before it was ever
+  // shown.
+  const pageResetArmed = useRef(false);
   useEffect(() => {
+    if (!pageResetArmed.current) {
+      pageResetArmed.current = true;
+      return;
+    }
     setPage(1);
   }, [search, filter, sort]);
+
+  // Remember the view for the rest of the session. Scroll is written
+  // separately, from onScroll, so it isn't tied to a re-render.
+  useEffect(() => {
+    saveRosterView(CLIENTS_ROSTER_VIEW, {
+      search,
+      filter,
+      sort,
+      page,
+      deepLink: appliedLinkRef.current,
+    });
+  }, [search, filter, sort, page, linkKey]);
 
   const handleLink = async (form) => {
     try {
@@ -167,7 +236,12 @@ export default function ClientsWeb() {
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1" style={{ backgroundColor: "#faf8f6" }} contentContainerStyle={{ padding: isNarrow ? 16 : 40 }}>
+      <ScrollView
+        {...scrollProps}
+        className="flex-1"
+        style={{ backgroundColor: "#faf8f6" }}
+        contentContainerStyle={{ padding: isNarrow ? 16 : 40 }}
+      >
         <View className="mb-5 flex-row flex-wrap items-start justify-between" style={{ gap: 16 }}>
           <View>
             <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 26 }}>Clients</Text>

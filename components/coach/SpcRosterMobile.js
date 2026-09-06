@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, TextInput, ActivityIndicator, Modal, Animated, Easing } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { readRosterView, saveRosterView, useRosterScrollRestore, SPC_ROSTER_VIEW } from "../../lib/rosterViewState";
 import {
   getSpcRosterDetail,
   defaultCoachFilter,
@@ -394,38 +395,63 @@ export function ClientRow({ row, first, onPress }) {
 export function SpcRosterMobile() {
   const router = useRouter();
   const { profile } = useAuth();
-  const [roster, setRoster] = useState(null);
-  const [loadError, setLoadError] = useState(null);
-  const [search, setSearch] = useState("");
-  const [coachFilter, setCoachFilter] = useState(null);
-  // Opens filtered to you when any of these clients are yours (the token
-  // above the list says so, and clearing it is one tap). Applied once, after
-  // the roster lands — this screen refetches on every focus, and without the
-  // ref a coach who switched to All would have it put back on their way
-  // back from a client's page.
-  const coachDefaultApplied = useRef(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [sort, setSort] = useState("name");
-  const [dir, setDir] = useState(1);
-  const [preview, setPreview] = useState(null);
 
-  // The dashboard's SPC rows link here with ?status= ("Needs Printed" →
-  // this page showing only those). This screen is a native tab and stays
-  // mounted, so the initializer alone would miss a second arrival with a
-  // different status.
+  // The dashboard's SPC rows link here with ?status= ("Due now" → this page
+  // showing only those). This screen is a native tab and stays mounted, so the
+  // initializer alone would miss a second arrival with a different status.
   const params = useLocalSearchParams();
   // Old dashboard links can carry retired state keys (the pre-simplification
   // taxonomy) — an unknown key would filter everything to zero rows, so only
   // a current state name is accepted.
   const validStatus = (raw) => (typeof raw === "string" && SPC_STATES[raw] ? raw : null);
-  const [statusFilter, setStatusFilter] = useState(validStatus(params.status));
-  const appliedStatusParamRef = useRef(typeof params.status === "string" ? params.status : "");
+  const rawStatusParam = typeof params.status === "string" ? params.status : "";
+
+  // Where this coach was last time they were on this screen, this session.
+  // Read lazily so it's the value at mount, not whatever a later render sees.
+  const [savedView] = useState(() => readRosterView(SPC_ROSTER_VIEW));
+  // A dashboard link carrying a status this screen hasn't reconciled yet is a
+  // deliberate "show me these" and outranks anything remembered. Coming back
+  // from a client's page re-enters on the same URL, which is not that.
+  const statusParamIsNew = !savedView || savedView.statusParam !== rawStatusParam;
+
+  const [roster, setRoster] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [search, setSearch] = useState(statusParamIsNew ? "" : savedView.search ?? "");
+  const [coachFilter, setCoachFilter] = useState(savedView?.coachFilter ?? null);
+  // Opens filtered to you when any of these clients are yours (the token
+  // above the list says so, and clearing it is one tap). Applied once, and
+  // only on the session's first visit — a coach who switched to All must not
+  // have it put back, either by this screen's refetch-on-every-focus or by
+  // the remount that web does on the way back from a client's page.
+  const coachDefaultApplied = useRef(Boolean(savedView?.coachDefaultApplied));
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sort, setSort] = useState(savedView?.sort ?? "name");
+  const [dir, setDir] = useState(savedView?.dir ?? 1);
+  const [preview, setPreview] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(
+    statusParamIsNew ? validStatus(rawStatusParam) : savedView.statusFilter ?? null
+  );
+  const appliedStatusParamRef = useRef(rawStatusParam);
+  const scrollProps = useRosterScrollRestore(SPC_ROSTER_VIEW, { enabled: !statusParamIsNew });
   useEffect(() => {
     const raw = typeof params.status === "string" ? params.status : "";
     if (appliedStatusParamRef.current === raw) return;
     appliedStatusParamRef.current = raw;
     setStatusFilter(validStatus(raw));
   }, [params.status]);
+
+  // Remember the view for the rest of the session. Scroll is written
+  // separately, from onScroll, so it isn't tied to a re-render.
+  useEffect(() => {
+    saveRosterView(SPC_ROSTER_VIEW, {
+      search,
+      coachFilter,
+      statusFilter,
+      sort,
+      dir,
+      statusParam: appliedStatusParamRef.current,
+    });
+  }, [search, coachFilter, statusFilter, sort, dir, rawStatusParam]);
 
   const load = useCallback(async () => {
     // Clear any previous failure first — without this a successful Retry
@@ -437,6 +463,10 @@ export function SpcRosterMobile() {
       setRoster(loaded);
       if (!coachDefaultApplied.current) {
         coachDefaultApplied.current = true;
+        // Recorded straight away rather than by the effect above: resolving to
+        // "no default" changes no state, so the effect wouldn't run and the
+        // next mount would think the default had never been applied.
+        saveRosterView(SPC_ROSTER_VIEW, { coachDefaultApplied: true });
         const mine = defaultCoachFilter(loaded, profile);
         if (mine) setCoachFilter(mine);
       }
@@ -538,6 +568,7 @@ export function SpcRosterMobile() {
   return (
     <CoachShell>
       <ScrollView
+        {...scrollProps}
         style={{ flex: 1, backgroundColor: CANVAS }}
         contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 20, paddingBottom: 20 }}
       >

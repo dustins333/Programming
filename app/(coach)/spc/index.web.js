@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -15,6 +15,12 @@ import { fonts, colors, statusColors } from "../../../lib/theme";
 import { SPC_STATES, SPC_STATE_ORDER, monthDay } from "../../../lib/programming/spcState";
 import { formatDateRange } from "../../../lib/formatDate";
 import { useAuth } from "../../../lib/auth/AuthProvider";
+import {
+  readRosterView,
+  saveRosterView,
+  useRosterScrollRestore,
+  SPC_ROSTER_VIEW,
+} from "../../../lib/rosterViewState";
 
 // SPC roster, coach web (design_handoff_spc_rework_v1, 1g).
 //
@@ -242,24 +248,66 @@ function SpcRosterDesktop() {
   const router = useRouter();
   const { profile } = useAuth();
   const params = useLocalSearchParams();
+  const rawStatusParam = typeof params.status === "string" ? params.status : "";
+
+  // Where this coach was last time they were on this screen, this session.
+  // Web pushes /spc/<userId> as a new screen and unmounts this one, so without
+  // this every filter, the search and the scroll position are rebuilt from
+  // defaults on the way back — see lib/rosterViewState.js.
+  const [savedView] = useState(() => readRosterView(SPC_ROSTER_VIEW));
+  // A dashboard link carrying a status this screen hasn't reconciled yet is a
+  // deliberate "show me these" and outranks anything remembered. Coming back
+  // from a client's page re-enters on the same URL, which is not that.
+  const statusParamIsNew = !savedView || savedView.statusParam !== rawStatusParam;
+  // Old dashboard links can carry retired state keys — an unknown key would
+  // filter everything to zero, so only a current state name is accepted.
+  const validStatus = (raw) => (SPC_STATES[raw] ? raw : null);
+
   const [rows, setRows] = useState([]);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
-  // Old dashboard links can carry retired state keys — an unknown key would
-  // filter everything to zero, so only a current state name is accepted.
   const [statusFilter, setStatusFilter] = useState(
-    typeof params.status === "string" && SPC_STATES[params.status] ? params.status : null
+    statusParamIsNew ? validStatus(rawStatusParam) : savedView.statusFilter ?? null
   );
-  const [coachFilter, setCoachFilter] = useState("all");
+  // null means every coach, same as the phone roster — matchesCoachFilter
+  // already treats them as one thing, and sharing the shape is what lets both
+  // widths remember one view rather than two that drift.
+  const [coachFilter, setCoachFilter] = useState(savedView?.coachFilter ?? null);
   // Applied once, after the rows land — the default needs to know whether
   // this coach has any SPC clients at all, and both the roster and the
-  // profile arrive async. The ref is what stops a refocus reload (this
-  // screen reloads on every focus) putting the filter back after a coach
-  // has deliberately switched to All.
-  const coachDefaultApplied = useRef(false);
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("name");
-  const [dir, setDir] = useState(1);
+  // profile arrive async. Once it's been applied this session it stays
+  // applied, so neither the refocus reload nor the remount on the way back
+  // from a client's page can put it back after a coach switched to All.
+  const coachDefaultApplied = useRef(Boolean(savedView?.coachDefaultApplied));
+  const [search, setSearch] = useState(statusParamIsNew ? "" : savedView.search ?? "");
+  const [sort, setSort] = useState(savedView?.sort ?? "name");
+  const [dir, setDir] = useState(savedView?.dir ?? 1);
+  const scrollProps = useRosterScrollRestore(SPC_ROSTER_VIEW, { enabled: !statusParamIsNew });
+
+  // A second arrival from the dashboard with a different status, without this
+  // screen having unmounted in between. The initializer alone can't see it,
+  // and the remembered-view effect below would otherwise record the new param
+  // against the old filter — making the next visit treat a genuine deep link
+  // as already handled.
+  const appliedStatusParamRef = useRef(rawStatusParam);
+  useEffect(() => {
+    if (appliedStatusParamRef.current === rawStatusParam) return;
+    appliedStatusParamRef.current = rawStatusParam;
+    setStatusFilter(validStatus(rawStatusParam));
+  }, [rawStatusParam]);
+
+  // Remember the view for the rest of the session. Scroll is written
+  // separately, from onScroll, so it isn't tied to a re-render.
+  useEffect(() => {
+    saveRosterView(SPC_ROSTER_VIEW, {
+      search,
+      coachFilter,
+      statusFilter,
+      sort,
+      dir,
+      statusParam: appliedStatusParamRef.current,
+    });
+  }, [search, coachFilter, statusFilter, sort, dir, rawStatusParam]);
 
   const load = useCallback(async () => {
     try {
@@ -268,6 +316,10 @@ function SpcRosterDesktop() {
       setRows(loaded);
       if (!coachDefaultApplied.current) {
         coachDefaultApplied.current = true;
+        // Recorded straight away rather than by the effect above: resolving to
+        // "no default" changes no state, so the effect wouldn't run and the
+        // next mount would think the default had never been applied.
+        saveRosterView(SPC_ROSTER_VIEW, { coachDefaultApplied: true });
         const mine = defaultCoachFilter(loaded, profile);
         if (mine) setCoachFilter(mine);
       }
@@ -364,7 +416,11 @@ function SpcRosterDesktop() {
 
   return (
     <CoachShell>
-      <ScrollView style={{ flex: 1, backgroundColor: CANVAS }} contentContainerStyle={{ padding: 26, paddingBottom: 60 }}>
+      <ScrollView
+        {...scrollProps}
+        style={{ flex: 1, backgroundColor: CANVAS }}
+        contentContainerStyle={{ padding: 26, paddingBottom: 60 }}
+      >
         <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
           <View style={{ flex: 1, minWidth: 240 }}>
             <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primaryOnWhite }}>SPC</Text>
@@ -440,8 +496,8 @@ function SpcRosterDesktop() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#78716c" }}>Coach:</Text>
             <select
-              value={coachFilter}
-              onChange={(e) => setCoachFilter(e.target.value)}
+              value={coachFilter ?? "all"}
+              onChange={(e) => setCoachFilter(e.target.value === "all" ? null : e.target.value)}
               style={{
                 fontFamily: fonts.sansSemiBold,
                 fontSize: 13,

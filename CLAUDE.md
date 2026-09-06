@@ -6588,6 +6588,125 @@ throwaway user, all five branches (explicit past date, re-finalize with no
 date, the board's call shape, explicit new date, un-finalize-then-finalize),
 rows deleted afterwards.
 
+## The rosters remember where you were (2026-09-05)
+
+Change the coach filter on SPC, open a client, come back, and you were on
+the default filter at the top of the list again. Both SPC rosters already
+guarded that filter against the refocus reload with a `coachDefaultApplied`
+ref — **but a ref lives on the component instance, and on web pushing
+`/spc/<userId>` unmounts the roster.** The ref went with it, the fresh
+instance loaded, and `defaultCoachFilter` reapplied. Search, status chip,
+sort and scroll position were lost the same way. The Clients roster had the
+identical problem, and is fixed in the same pass. No migration; this is all
+client-side.
+
+**New `lib/rosterViewState.js` — an in-memory Map, deliberately NOT
+AsyncStorage**, for two reasons worth keeping:
+
+- It has to be readable **synchronously during the first render**. A filter
+  restored a tick later paints the wrong list and then jumps, and an async
+  read can't seed `useState` at all.
+- **It should die on reload.** A reload is a fresh start, and a fresh start
+  is exactly when "opens filtered to you" is the right behaviour. Persisting
+  a coach filter across reloads would mean looking at someone else's roster
+  days later with only a small token to explain why.
+
+So: session memory, not storage. Losing all of it costs one tap. Keyed
+rather than SPC-specific so the Clients roster can adopt it without a second
+copy of the idea drifting away from this one, and cleared on sign-out next
+to `clearAllScreenCaches`.
+
+**Precedence, because a dashboard `?status=` link and a remembered view can
+disagree.** The store keeps the raw status param it was last reconciled
+against; a param that doesn't match it is a *fresh* deep link and outranks
+everything remembered (and starts at the top of the list). Coming back from
+a client's page re-enters on the same URL, which is not that. Desktop also
+gained the reconcile effect the phone already had, so a second dashboard
+link arriving without an unmount can't record a new param against the old
+filter — which would make the *next* visit treat a genuine deep link as
+already handled.
+
+Also normalised the desktop coach filter from `"all"` to `null`, matching
+the phone. `matchesCoachFilter` already treated them as one thing; sharing
+the shape is what lets both widths remember one view instead of two that
+drift, and the `<select>` keeps `"all"` as its option value.
+
+**Scroll restore is driven by `onContentSizeChange`, not an effect on
+mount.** The rows aren't laid out when the ScrollView first mounts, so a
+`scrollTo` there clamps to whatever height exists at that instant and lands
+somewhere arbitrary. `useRosterScrollRestore` waits for a content height at
+least as tall as the saved offset, restores once, and **abandons the restore
+the moment any scroll event arrives** — it clears its own pending flag
+before calling `scrollTo`, so anything still arriving is the coach scrolling
+for themselves and must not be yanked back.
+
+### The Clients roster, same treatment
+
+`app/(coach)/clients/index.web.js` keeps its chip, search, sort **and page**
+across the round trip. Two things specific to it:
+
+- **Its two deep-link params are collapsed into one key** (`?program=` and
+  `?filter=`, joined as `"program|filter"`), because "is this a fresh link"
+  has to be one question. The old pair of effects reapplied the param on
+  every mount with no applied-ref at all, so a remembered chip would have
+  been overridden on the way back from every client — the exact failure the
+  precedence rule above exists to prevent.
+- **The `setPage(1)`-on-filter-change effect had to skip its first run.** It
+  fires on mount like any other effect, so it would have thrown away a
+  restored page before it was ever painted. Changing a filter while mounted
+  still resets to page 1, which is what that effect is for.
+
+**The native Clients list (`index.js`) is deliberately untouched.** It's a
+Tabs screen that stays mounted while a coach drills into a client, so its
+state already survives; it also has a different filter model
+(`programFilter` + `flaggedOnly` rather than one key), so sharing a stored
+shape with the web list would mean normalising two UIs that genuinely
+differ. Note the web file has no mobile branch, so the PWA renders it at
+every width — which is why fixing web covers the phone too.
+
+### Two verification lessons
+
+**Scroll events do not fire at all in the hidden Browser pane.** Measured:
+setting `scrollTop` on a real scroller moved it to 500 and a plain
+`addEventListener("scroll")` fired **zero** times. Same class as the rAF and
+ResizeObserver gaps already recorded here, and it means anything driven by
+`onScroll` or `onContentSizeChange` (RNW implements the latter as
+`onLayout`, i.e. ResizeObserver) is unverifiable through that pane. The way
+round it: render the real hook in a probe component that exposes its
+returned handlers on `globalThis` and call them by hand — that still
+exercises the shipped state machine and the real store, just not the
+browser's delivery of the events.
+
+**A ternary rendering the same component type in the same position does not
+remount it.** The harness toggled `{mounted ? <Probe id="A"/> : <Probe
+id="B"/>}` to simulate leaving and coming back; React reconciled by position
+and type, reused the one instance, and only changed the prop — so the refs
+never reinitialised and the restore looked broken when the code was fine.
+Distinct `key`s force the real unmount. Worth remembering for any test of
+mount-time behaviour.
+
+**Also worth knowing about that pane**: it reported `window.innerWidth/
+innerHeight` of **0** after a reload while collapsed, which makes every
+measurement meaningless (a scroller read `clientHeight: 0` against
+`scrollHeight: 4189`). Check `innerWidth` before trusting a measurement, and
+`resize_window` to a real size first.
+
+**Verified**: `npm run build` + `check:routes` clean, a Babel parse and
+unresolved-identifier pass over every touched file, and both screens driven
+for real through throwaway `app/zz-rosterharness.js` / `app/zz-clientsharness.js`
+routes with their data layer and `useAuth` stubbed (harnesses deleted, every
+stubbed file restored and md5-verified byte-identical). Exercised on SPC: the
+coach filter, the search and a cleared filter all surviving an
+unmount/remount at 1280 and 390, and a `?status=` arrival forcing the top of
+the list while the coach filter still persists. On Clients: the chip, the
+sort and page 2 all surviving the round trip; a `?filter=flagged` arrival
+applying, then a hand-picked chip surviving a return on that same URL; and a
+search typed while mounted still resetting to page 1. And the shared hook's
+state machine end to end — saves on scroll, skips a too-short layout,
+restores to exactly the saved offset once, never scrolls again on a later
+layout pass, and abandons the restore if the coach scrolls first. **Not
+verified behind a real login** — standing limitation.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
