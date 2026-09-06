@@ -17,7 +17,11 @@ import { fonts, colors } from "../../lib/theme";
 // Deliberately owns no padding or safe-area inset — Today puts this in a
 // fixed block above its own ScrollView while the other three put it inside
 // theirs, and each screen already handles that itself.
-export function NutritionTabHeader({ activeKey, badges = null, children }) {
+// `onNavigate` fires with the target tab key just before the push, so a
+// screen can react to where the member is going. The Check-In screen uses
+// it to stay quiet when she taps through to Photos, which is part of
+// finishing her check-in rather than abandoning it.
+export function NutritionTabHeader({ activeKey, badges = null, onNavigate, children }) {
   const router = useRouter();
 
   return (
@@ -45,7 +49,10 @@ export function NutritionTabHeader({ activeKey, badges = null, children }) {
         badges={badges}
         onSelect={(key) => {
           const seg = NUTRITION_TABS.find((s) => s.key === key);
-          if (seg && seg.key !== activeKey) router.push(seg.href);
+          if (seg && seg.key !== activeKey) {
+            onNavigate?.(seg.key);
+            router.push(seg.href);
+          }
         }}
       />
     </>

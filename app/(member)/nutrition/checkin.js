@@ -15,7 +15,8 @@ import { PhotoUpload } from "../../../components/nutrition/PhotoUpload";
 import { ZoomSchedulerModal } from "../../../components/nutrition/ZoomSchedulerModal";
 import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHeader";
 import { formatDateMDY } from "../../../lib/formatDate";
-import { toastSuccess } from "../../../lib/toast";
+import { toastSuccess, showToast } from "../../../lib/toast";
+import { describeCheckinProgress, outstandingLabel, hasStartedCheckin } from "../../../lib/nutrition/checkinProgress";
 import { notifyCoachOfClient } from "../../../lib/notifications/sendPush";
 import { fonts, colors, type } from "../../../lib/theme";
 import { NUMERIC_DONE_ID } from "../../../components/NumericInputAccessory";
@@ -33,7 +34,19 @@ import { DraftNotice } from "../../../components/DraftNotice";
 const CANVAS = "#faf8f6";
 const ANGLES = ["front", "side", "back"];
 
-function TaskRow({ title, subtitle, done, onPress }) {
+// Module scope on purpose: the leave-nudge below should fire at most once
+// a day, and the screen it lives on is pushed and popped as the member
+// moves between nutrition sub-tabs, so a component ref would reset on
+// every hop and nag her each time. Resets on app reload, which is fine —
+// a fresh session is a fair time to remind someone once.
+let lastLeaveNudgeDate = null;
+
+// `step` ("Step 1 of 2") is the fix for the specific confusion coaches
+// reported: a green card is this app's finished language everywhere else,
+// so one green card among two read as "check-in done". Numbering says out
+// loud that there is a step 2. Omitted entirely when there is only one
+// task, where it would be noise.
+function TaskRow({ title, subtitle, done, step, onPress }) {
   return (
     <Pressable
       onPress={onPress}
@@ -43,6 +56,14 @@ function TaskRow({ title, subtitle, done, onPress }) {
       <View className="flex-1 flex-row items-center gap-2.5">
         <Ionicons name={done ? "checkmark-circle" : "ellipse-outline"} size={26} color={done ? "#4d6142" : "#c9c4bd"} />
         <View className="flex-1">
+          {step ? (
+            <Text
+              maxFontSizeMultiplier={1.1}
+              style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.8, textTransform: "uppercase", color: done ? "#4d6142" : colors.primaryOnWhite, marginBottom: 2 }}
+            >
+              {step}
+            </Text>
+          ) : null}
           <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14.5, color: "#44403c" }}>{title}</Text>
           {subtitle ? (
             <Text className="mt-0.5 text-xs text-stone-500" style={{ fontFamily: fonts.sans }} numberOfLines={2}>
@@ -180,6 +201,31 @@ function SkipReasonModal({ visible, onClose, onSubmit }) {
   );
 }
 
+// The screen had no "not sent" state distinct from "still going": one quiet
+// grey line beneath two cards, one of which was green. This states the one
+// thing she needs to know, in the app's attention peach rather than an alarm
+// red — nothing has gone wrong, she simply isn't finished.
+function NotSentStrip({ label }) {
+  return (
+    <View
+      className="mt-2 flex-row items-start gap-2.5 rounded-2xl px-4 py-3.5"
+      style={{ backgroundColor: "#fdf6f2", borderWidth: 1.5, borderColor: colors.primary }}
+    >
+      <Ionicons name="alert-circle" size={20} color={colors.primaryOnWhite} />
+      <View className="flex-1">
+        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansBold, fontSize: 14, color: colors.primaryOnWhite }}>
+          Not sent yet
+        </Text>
+        {label ? (
+          <Text maxFontSizeMultiplier={1.2} className="mt-0.5" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted }}>
+            {label.charAt(0).toUpperCase() + label.slice(1)}. It sends itself as soon as you finish.
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 export default function WeeklyCheckin() {
   // Tabs keep this screen mounted, so a mount-only load never re-runs
   // on a return visit — see lib/useRefreshOnFocus.js.
@@ -305,9 +351,18 @@ export default function WeeklyCheckin() {
   const answeredCount = questions ? questions.filter((q) => (answers[q.id] || "").trim().length > 0).length : 0;
   const formSatisfied = questions ? questions.every((q) => (answers[q.id] || "").trim().length > 0) : false;
   const canFinalize = photosSatisfied && (questions?.length === 0 || formSatisfied);
-  // Only count tasks the member actually has: a non-photo week has one.
-  const taskTotal = (photosRequired ? 1 : 0) + (questions?.length > 0 ? 1 : 0);
-  const taskDoneCount = (photosRequired && photosSatisfied ? 1 : 0) + (questions?.length > 0 && formSatisfied ? 1 : 0);
+  // Task counting and the "what's left" wording both come from the shared
+  // helper — My Week's pill and the nudge ask the same question, and a
+  // second copy here is how the screen and the reminder end up disagreeing
+  // about what she still owes.
+  const progress = describeCheckinProgress({
+    photosRequired,
+    photosSatisfied,
+    questionCount: questions?.length ?? 0,
+    answeredCount,
+  });
+  const taskTotal = progress.taskTotal;
+  const taskDoneCount = progress.taskDone;
 
   const reopenWeekEnd = reopen ? addDays(reopen.week_start, 6) : null;
   const reopenPhotosRequired = access.client && reopen ? isPhotoRequirementWeek(access.client, reopen.week_start) : false;
@@ -320,7 +375,14 @@ export default function WeeklyCheckin() {
   const reopenPhotosSatisfied = !reopenPhotosRequired || reopenPhotosUploaded || !!reopenSkipReason;
   const reopenFormSatisfied = questions ? questions.every((q) => (reopenAnswers[q.id] || "").trim().length > 0) : false;
   const reopenCanFinalize = reopenPhotosSatisfied && (questions?.length === 0 || reopenFormSatisfied);
-  const reopenTaskTotal = (reopenPhotosRequired ? 1 : 0) + (questions?.length > 0 ? 1 : 0);
+  const reopenAnsweredCount = questions ? questions.filter((q) => (reopenAnswers[q.id] || "").trim().length > 0).length : 0;
+  const reopenProgress = describeCheckinProgress({
+    photosRequired: reopenPhotosRequired,
+    photosSatisfied: reopenPhotosSatisfied,
+    questionCount: questions?.length ?? 0,
+    answeredCount: reopenAnsweredCount,
+  });
+  const reopenTaskTotal = reopenProgress.taskTotal;
 
   // Autosave both forms as they're typed. Answers used to live only in the
   // component state above, with the single write happening on Finalize —
@@ -371,20 +433,37 @@ export default function WeeklyCheckin() {
   // two doors out of one sheet that do different things is exactly the
   // ambiguity this change is meant to remove. Answers are already saved as
   // a draft either way, so nothing is lost.
+  // Chaining. Finishing one task and closing the sheet used to land her back
+  // on a screen holding one green card and one grey one, which reads as done.
+  // The next required task now opens straight away instead.
+  //
+  // Gated on having actually FINISHED the task she was in: bailing out of a
+  // half-answered form should return her to the overview, not shove her into
+  // the other task. Opening the next sheet also blocks the auto-submit effect
+  // (it refuses while any popup is open), so nothing sends early.
   const closeFormPopup = () => {
     setFormPopupOpen(false);
     setAutoArmed(true);
+    if (formSatisfied && photosRequired && !photosSatisfied) setPhotoPopupOpen(true);
   };
 
   const closeReopenFormPopup = () => {
     setReopenFormPopupOpen(false);
     setReopenAutoArmed(true);
+    if (reopenFormSatisfied && reopenPhotosRequired && !reopenPhotosSatisfied) setReopenPhotoPopupOpen(true);
   };
 
   const handlePhotosUploaded = async () => {
     setPhotoPopupOpen(false);
+    // Read satisfaction off the freshly fetched rows rather than the derived
+    // `photosUploaded`, which won't have updated inside this closure — and
+    // this fires on ANY upload, so a member who has only sent front so far
+    // must not be chained onward as though she were finished.
+    let nowSatisfied = false;
     try {
-      setPhotos(await listAllPhotos(profile.id));
+      const fresh = await listAllPhotos(profile.id);
+      setPhotos(fresh);
+      nowSatisfied = hasAllAngles(photosForRequirementWeek(fresh, currentWeek));
     } catch (err) {
       console.error("Failed to refresh photos:", err);
     }
@@ -392,16 +471,21 @@ export default function WeeklyCheckin() {
     // `photos`, so arming first would have the effect evaluate against the
     // pre-upload list and decide nothing had changed.
     setAutoArmed(true);
+    if (nowSatisfied && questions?.length > 0 && !formSatisfied) setFormPopupOpen(true);
   };
 
   const handleReopenPhotosUploaded = async () => {
     setReopenPhotoPopupOpen(false);
+    let nowSatisfied = false;
     try {
-      setPhotos(await listAllPhotos(profile.id));
+      const fresh = await listAllPhotos(profile.id);
+      setPhotos(fresh);
+      nowSatisfied = hasAllAngles(fresh.filter((ph) => ph.date >= reopen.week_start));
     } catch (err) {
       console.error("Failed to refresh photos:", err);
     }
     setReopenAutoArmed(true);
+    if (nowSatisfied && questions?.length > 0 && !reopenFormSatisfied) setReopenFormPopupOpen(true);
   };
 
   const handleReopenSubmit = async () => {
@@ -422,7 +506,7 @@ export default function WeeklyCheckin() {
       await reopenDraft.clearDraft();
       setReopenSubmitted(true);
       setReopen(null);
-      toastSuccess("Check-in submitted — your coach will review it!");
+      toastSuccess("Check-in submitted. Your coach will review it!");
       notifyCoachOfClient({
         clientUserId: profile.id,
         title: "Missed check-in submitted",
@@ -460,7 +544,7 @@ export default function WeeklyCheckin() {
       const saved = await submitCheckin(profile.id, payload, { photosSkipReason: !photosUploaded ? skipReason : null });
       await liveDraft.clearDraft();
       setResponse(saved);
-      toastSuccess("Check-in submitted — your coach will review it!");
+      toastSuccess("Check-in submitted. Your coach will review it!");
       // Fire-and-forget — the coach side was entirely pull-based before
       // (nothing ever told a coach a check-in landed).
       notifyCoachOfClient({
@@ -527,6 +611,40 @@ export default function WeeklyCheckin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reopenShouldSend]);
 
+  // Leaving with a started-but-unsent check-in. A toast rather than a modal,
+  // deliberately: the most common reason to leave this screen mid-check-in is
+  // to go and take the photos, and blocking that with a dialog would teach
+  // people to dismiss it unread. Suppressed outright when she's heading to
+  // the Photos tab, since that IS finishing the check-in.
+  //
+  // Read through a ref because the cleanup runs long after the render that
+  // created it, and every value it needs changes as she types.
+  const leaveStateRef = useRef({});
+  leaveStateRef.current = {
+    submitted: !!response,
+    started: hasStartedCheckin({ answeredCount, anglesInCount: anglesIn.length, skipReason }),
+    label: outstandingLabel(progress),
+    taskTotal,
+  };
+  const suppressLeaveNudgeRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      suppressLeaveNudgeRef.current = false;
+      return () => {
+        const st = leaveStateRef.current;
+        if (suppressLeaveNudgeRef.current) return;
+        if (st.submitted || !st.started || !st.label || st.taskTotal === 0) return;
+        if (lastLeaveNudgeDate === today) return;
+        lastLeaveNudgeDate = today;
+        showToast(`You haven't sent your check-in yet. ${st.label.charAt(0).toUpperCase()}${st.label.slice(1)}.`, {
+          type: "info",
+          duration: 4500,
+        });
+      };
+    }, [today])
+  );
+
   if (access.status !== "active") {
     return <NutritionAccessMessage status={access.status} error={access.error} onRetry={access.refetch} />;
   }
@@ -555,7 +673,14 @@ export default function WeeklyCheckin() {
 
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerClassName="px-6 pb-8" contentContainerStyle={{ paddingTop: insets.top + 6 }}>
-      <NutritionTabHeader activeKey="checkin" />
+      <NutritionTabHeader
+        activeKey="checkin"
+        onNavigate={(key) => {
+          // Going to Photos is part of finishing the check-in, not walking
+          // away from it.
+          if (key === "photos") suppressLeaveNudgeRef.current = true;
+        }}
+      />
 
       {/* Week band (v5, 5a) — the "N of M done" chip is the whole status of
           the check-in in one place, rather than making the member infer it
@@ -595,14 +720,14 @@ export default function WeeklyCheckin() {
         </Text>
         <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "rgba(247,243,238,0.72)", marginTop: 2 }}>
           {response
-            ? "Submitted — your coach will review it."
+            ? "Submitted. Your coach will review it."
             : submitting
               ? "Sending it to your coach…"
               : canFinalize && taskTotal > 0
-                ? "Everything's in — send it below."
-                : taskTotal <= 1
-                  ? "Finish the task below and you're done — it sends itself."
-                  : "Finish both tasks below and you're done — it sends itself."}
+                ? "Everything's in. Send it below."
+                : taskTotal > 1
+                  ? "This week needs your photos too. Do both below and it sends itself."
+                  : "Finish the task below and it sends itself."}
         </Text>
       </View>
 
@@ -616,8 +741,9 @@ export default function WeeklyCheckin() {
           {reopenPhotosRequired ? (
             <TaskRow
               title="That week's progress photos"
+              step={reopenTaskTotal > 1 ? "Step 1 of 2" : null}
               done={reopenPhotosSatisfied}
-              subtitle={reopenPhotosUploaded ? "Submitted" : reopenSkipReason ? `Skipped — ${reopenSkipReason}` : "Tap to upload"}
+              subtitle={reopenPhotosUploaded ? "Submitted" : reopenSkipReason ? `Skipped: ${reopenSkipReason}` : "Tap to upload"}
               onPress={() => setReopenPhotoPopupOpen(true)}
             />
           ) : null}
@@ -625,6 +751,7 @@ export default function WeeklyCheckin() {
           {questions.length > 0 ? (
             <TaskRow
               title="Check-in form"
+              step={reopenTaskTotal > 1 ? "Step 2 of 2" : null}
               done={reopenFormSatisfied}
               subtitle={reopenFormSatisfied ? "All answered" : `${questions.length} question${questions.length === 1 ? "" : "s"}`}
               onPress={() => setReopenFormPopupOpen(true)}
@@ -657,15 +784,13 @@ export default function WeeklyCheckin() {
               </Text>
             </Pressable>
           ) : (
-            <Text maxFontSizeMultiplier={1.2} className="mt-0.5 text-center text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-              This sends as soon as {reopenTaskTotal <= 1 ? "it's" : "both are"} done.
-            </Text>
+            <NotSentStrip label={outstandingLabel(reopenProgress)} />
           )}
         </View>
       ) : reopenSubmitted ? (
         <View className="mb-5 rounded-2xl border px-4 py-3.5" style={{ borderColor: "#4d6142", borderWidth: 2, backgroundColor: "#f3f6ef" }}>
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#4d6142" }}>
-            Missed check-in submitted — thanks for catching up!
+            Missed check-in submitted. Thanks for catching up!
           </Text>
         </View>
       ) : null}
@@ -676,7 +801,7 @@ export default function WeeklyCheckin() {
               while the reopened-exception path got the celebratory card. */}
           <View className="mb-4 rounded-2xl border px-4 py-3.5" style={{ borderColor: "#4d6142", borderWidth: 2, backgroundColor: "#f3f6ef" }}>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#4d6142" }}>
-              Submitted {formatDateMDY(dateInBoise(new Date(response.submitted_at)))} ✓ — your coach will review it.
+              Submitted {formatDateMDY(dateInBoise(new Date(response.submitted_at)))} ✓. Your coach will review it.
             </Text>
             {responseTriggersBooking(response) ? (
               // The scheduler used to be openable exactly once, right after
@@ -712,12 +837,13 @@ export default function WeeklyCheckin() {
             <>
               <TaskRow
                 title="This week's progress photos"
+                step={taskTotal > 1 ? "Step 1 of 2" : null}
                 done={photosSatisfied}
                 subtitle={
                   photosUploaded
                     ? `Submitted | ${anglesIn.join(", ")}`
                     : skipReason
-                      ? `Skipped — ${skipReason}`
+                      ? `Skipped: ${skipReason}`
                       : anglesIn.length > 0
                         ? `${anglesIn.join(", ")} in | ${anglesMissing.join(", ")} still needed`
                         : "Tap to upload | front, side, back"
@@ -741,6 +867,7 @@ export default function WeeklyCheckin() {
           {questions.length > 0 ? (
             <TaskRow
               title="Check-in form"
+              step={taskTotal > 1 ? "Step 2 of 2" : null}
               done={formSatisfied}
               subtitle={
                 formSatisfied
@@ -812,13 +939,7 @@ export default function WeeklyCheckin() {
               </Text>
             </Pressable>
           ) : taskTotal > 0 ? (
-            <Text
-              maxFontSizeMultiplier={1.2}
-              className="mt-1 text-center text-xs text-stone-500"
-              style={{ fontFamily: fonts.sans }}
-            >
-              Your check-in sends to your coach as soon as {taskTotal <= 1 ? "this is" : "both are"} done.
-            </Text>
+            <NotSentStrip label={outstandingLabel(progress)} />
           ) : null}
         </View>
       )}
@@ -881,9 +1002,17 @@ export default function WeeklyCheckin() {
         {/* The label names what the tap will actually do. When this is the
             last outstanding task, closing the sheet submits — so it says so
             rather than saying "Done" and quietly sending the check-in. */}
+        {/* Never "Done" when it isn't. On a photo week this button used to
+            read "Done" while her photos were still outstanding, which is the
+            exact moment members told their coaches they thought they had
+            finished. It now names what the tap actually does. */}
         <Pressable onPress={closeFormPopup} className="items-center rounded-[14px] bg-primary py-3">
           <Text maxFontSizeMultiplier={1.2} className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-            {canFinalize ? "Submit check-in" : "Done"}
+            {canFinalize
+              ? "Submit check-in"
+              : formSatisfied && photosRequired && !photosSatisfied
+                ? "Next: add your photos"
+                : "Save and close"}
           </Text>
         </Pressable>
       </PopupModal>
@@ -896,6 +1025,8 @@ export default function WeeklyCheckin() {
           setSkipModalOpen(false);
           setPhotoPopupOpen(false);
           setAutoArmed(true);
+          // Declining photos satisfies that task, so the same chain applies.
+          if (questions.length > 0 && !formSatisfied) setFormPopupOpen(true);
         }}
       />
 
@@ -958,7 +1089,11 @@ export default function WeeklyCheckin() {
             )}
             <Pressable onPress={closeReopenFormPopup} className="items-center rounded-[14px] bg-primary py-3">
               <Text maxFontSizeMultiplier={1.2} className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                {reopenCanFinalize ? "Submit check-in" : "Done"}
+                {reopenCanFinalize
+                  ? "Submit check-in"
+                  : reopenFormSatisfied && reopenPhotosRequired && !reopenPhotosSatisfied
+                    ? "Next: add your photos"
+                    : "Save and close"}
               </Text>
             </Pressable>
           </PopupModal>
@@ -971,6 +1106,7 @@ export default function WeeklyCheckin() {
               setReopenSkipModalOpen(false);
               setReopenPhotoPopupOpen(false);
               setReopenAutoArmed(true);
+              if (questions.length > 0 && !reopenFormSatisfied) setReopenFormPopupOpen(true);
             }}
           />
         </>

@@ -8,6 +8,7 @@ import { useNutritionAccess } from "../../lib/nutrition/useNutritionAccess";
 import { useHasFitness } from "../../lib/programming/useFitnessAccess";
 import { useEventsAccess } from "../../lib/programming/useEventsAccess";
 import { AnnouncementChecker } from "../../lib/notifications/AnnouncementChecker";
+import { CheckinNudge } from "../../components/nutrition/CheckinNudge";
 import { FloatingMessageBubble } from "../../components/FloatingMessageBubble";
 import { RestTimerBar } from "../../components/RestTimerBar";
 import { RestTimerProvider, useRestTimer } from "../../lib/restTimer";
@@ -141,6 +142,9 @@ function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, unseenEve
   return (
     <>
       <AnnouncementChecker />
+      {/* Gated on the tab being visible at all so a member with no nutrition
+          never pays for the lookup. */}
+      {showNutritionTab ? <CheckinNudge /> : null}
       <View style={{ flex: 1, backgroundColor: colors.canvas }}>
         <RestTimerBar />
         <SafeAreaInsetsContext.Provider value={tabInsets}>

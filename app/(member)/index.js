@@ -37,6 +37,9 @@ import { listLiveEventsForUser, listMyResponses } from "../../lib/programming/ev
 import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
 import { listLogsForDateRange } from "../../lib/nutrition/dailyLog";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
+import { getCheckinForWeek, getClientQuestions } from "../../lib/nutrition/checkin";
+import { isPhotoRequirementWeek } from "../../lib/nutrition/photos";
+import { computeWeekWindows } from "../../lib/nutrition/weekCycle";
 import { retryOnce } from "../../lib/retry";
 import { formatDateMDY } from "../../lib/formatDate";
 import { SessionSheet } from "../../components/SessionSheet";
@@ -601,7 +604,7 @@ function OnboardingNutritionCard({ onNavigate }) {
 // 7-day consistency strip. Ring reads logged ÷ days elapsed, not ÷ 7
 // (house rule 3) — Wednesday with 3 of 3 logged is 3/3 and olive. Today is
 // never a miss until the day is over.
-function NutritionCard({ days, elapsed, loggedCount, onNavigate, onDayPress }) {
+function NutritionCard({ days, elapsed, loggedCount, checkinDue, onCheckinPress, onNavigate, onDayPress }) {
   const today = todayInBoise();
   return (
     <View
@@ -673,6 +676,32 @@ function NutritionCard({ days, elapsed, loggedCount, onNavigate, onDayPress }) {
           );
         })}
       </View>
+      {/* Until this landed, nothing outside the Check-In tab itself ever told
+          a member a check-in was waiting — she had to go looking. Full width
+          so it reads as the card's call to action rather than a decoration,
+          and it simply isn't rendered once the check-in is in. */}
+      {checkinDue ? (
+        <PressFade
+          onPress={onCheckinPress}
+          accessibilityLabel="Complete your check-in"
+          style={{
+            marginTop: 10,
+            borderRadius: 999,
+            backgroundColor: CLAY,
+            paddingVertical: 11,
+            paddingHorizontal: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 7,
+          }}
+        >
+          <Ionicons name="clipboard-outline" size={15} color="#fff" />
+          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#fff" }}>
+            Complete your check-in
+          </Text>
+        </PressFade>
+      ) : null}
     </View>
   );
 }
@@ -1121,7 +1150,27 @@ export default function MemberHome() {
             // Adherence is measured against days elapsed, not 7 (house rule 3).
             const elapsed = days.filter((d) => d.date <= today).length;
             const loggedCount = days.filter((d) => d.date <= today && d.finalized).length;
-            return { enrolled, data: { status: "ready", days, elapsed, loggedCount } };
+
+            // Is this week's check-in still outstanding? Its own try/catch on
+            // purpose: a missing pill is a far smaller loss than a Nutrition
+            // card that vanishes because one extra query blipped. Photos are
+            // resolved off the client row already in hand, so this costs two
+            // queries and never a third.
+            let checkinDue = false;
+            try {
+              const checkinWeek = computeWeekWindows(today).currentWeek;
+              const [checkinResponse, checkinQuestions] = await Promise.all([
+                getCheckinForWeek(profile.id, checkinWeek.start),
+                getClientQuestions(profile.id),
+              ]);
+              const owesSomething =
+                checkinQuestions.length > 0 || isPhotoRequirementWeek(nutritionClient, checkinWeek.start);
+              checkinDue = !checkinResponse && owesSomething;
+            } catch (err) {
+              console.error("My Week: failed to load check-in status", err);
+            }
+
+            return { enrolled, data: { status: "ready", days, elapsed, loggedCount, checkinDue } };
           });
           if (!isStale()) {
             setNutritionEnrolled(result.enrolled);
@@ -1945,6 +1994,8 @@ export default function MemberHome() {
           days={nutrition.days}
           elapsed={nutrition.elapsed}
           loggedCount={nutrition.loggedCount}
+          checkinDue={nutrition.checkinDue}
+          onCheckinPress={() => router.push("/(member)/nutrition/checkin")}
           onNavigate={() => router.push("/(member)/nutrition")}
           onDayPress={(date) => router.push({ pathname: "/(member)/nutrition", params: { date } })}
         />
