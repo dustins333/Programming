@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&amp;family=Protest+Strike&amp;display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #efeae4; }
+  * { box-sizing: border-box; }
+  a { color: #8a5140; text-decoration: none; }
+  a:hover { color: #a46a57; }
+  input, textarea, button { font-family: inherit; }
+  input:focus, textarea:focus { outline: none; }
+  ::placeholder { color: rgba(247,243,238,.32); }
+  @keyframes kbfall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(760px) rotate(540deg); opacity: 0; } }
+  @keyframes kbpop { 0% { transform: scale(.6); opacity: 0; } 55% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes kbflash { 0% { opacity: 0; } 12% { opacity: .85; } 100% { opacity: 0; } }
+  @keyframes kbrise { 0% { transform: translateY(14px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+</style>
+</helmet>
+
+<section style="padding: 44px; display: flex; flex-wrap: wrap; gap: 44px; align-items: flex-start; font-family: Montserrat, sans-serif; color: #44403c;">
+
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="font-size: 10px; font-weight: 700; letter-spacing: .12em; background: #0b0b0b; color: #6fffd9; padding: 5px 9px; border-radius: 999px;">1a</div>
+      <div style="font-size: 12.5px; font-weight: 600; color: #57534e;">Benchmark Day | member flow</div>
+    </div>
+
+    <div style="width: 390px; height: 844px; border-radius: 38px; background: #000; padding: 0; overflow: hidden; position: relative; box-shadow: 0 18px 44px rgba(68,64,60,.18); border: 1px solid #1c1c1c;">
+
+      <div style="position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;">
+
+        <sc-if value="{{ onWeek }}" hint-placeholder-val="{{ true }}">
+          <div style="min-height: 844px; background: #faf8f6; padding: 46px 20px 24px;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px;">
+              <div>
+                <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; color: #44403c; line-height: 1;">Hi, Dustin</div>
+                <div style="font-size: 11.5px; color: #78716c; margin-top: 5px;">Sunday, Sep 6</div>
+              </div>
+              <img src="assets/kova-logo.jpg" alt="Kova Strength" style="width: 34px; height: 34px; border-radius: 999px;">
+            </div>
+
+            <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .14em; color: #a8a29e; margin: 0 2px 10px;">THIS QUARTER</div>
+
+            <sc-if value="{{ isCountdown }}">
+              <div onClick="{{ goHub }}" style="cursor: pointer; background: #000; border-radius: 22px; padding: 18px 18px 17px; position: relative; overflow: hidden; border: 1.5px solid #2a2a2a; margin-bottom: 22px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .16em; color: #6fffd9; text-shadow: 0 0 10px rgba(111,255,217,.7);">{{ nameUpper }} BENCHMARK</div>
+                  <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .1em; color: rgba(247,243,238,.5);">{{ daysLabel }}</div>
+                </div>
+                <div style="font-family: 'Protest Strike', sans-serif; font-size: 33px; line-height: 1; margin: 11px 0 6px; color: #fff; text-shadow: 0 0 16px rgba(255,102,196,.55), 0 0 42px rgba(255,102,196,.3);">Benchmark Day</div>
+                <div style="font-size: 11.5px; color: rgba(247,243,238,.62);">You've been training. Now let's see it.</div>
+                <div style="display: flex; gap: 7px; margin-top: 15px;">
+                  <div style="height: 4px; flex: 1; border-radius: 999px; background: #ff66c4; box-shadow: 0 0 12px rgba(255,102,196,.8);"></div>
+                  <div style="height: 4px; flex: 1; border-radius: 999px; background: #ff9f45; box-shadow: 0 0 12px rgba(255,159,69,.8);"></div>
+                  <div style="height: 4px; flex: 1; border-radius: 999px; background: #eaff70; box-shadow: 0 0 12px rgba(234,255,112,.8);"></div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isLive }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ goHub }}" style="cursor: pointer; background: #000; border-radius: 22px; padding: 18px; position: relative; overflow: hidden; border: 1.5px solid #ff66c4; box-shadow: 0 0 0 4px rgba(255,102,196,.12), 0 10px 26px rgba(0,0,0,.22); margin-bottom: 22px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .16em; color: #6fffd9; text-shadow: 0 0 10px rgba(111,255,217,.7);">{{ nameUpper }} BENCHMARK</div>
+                  <div style="font-size: 9px; font-weight: 700; letter-spacing: .12em; color: #000; background: #6fffd9; padding: 4px 8px; border-radius: 999px;">TODAY</div>
+                </div>
+                <div style="font-family: 'Protest Strike', sans-serif; font-size: 36px; line-height: 1; margin: 11px 0 6px; color: #fff; text-shadow: 0 0 16px rgba(255,102,196,.6), 0 0 44px rgba(255,102,196,.32);">You vs You</div>
+                <div style="font-size: 11.5px; color: rgba(247,243,238,.66); margin-bottom: 16px;">Pull Ups | Push Ups | Squats</div><div style="display: flex; align-items: center; justify-content: space-between; background: #ff66c4; border-radius: 14px; height: 48px; padding: 0 8px 0 16px; box-shadow: 0 0 22px rgba(255,102,196,.45);">
+                  <div style="font-size: 13.5px; font-weight: 700; color: #12000a;">Let's Do This</div>
+                  <div style="width: 34px; height: 34px; border-radius: 10px; background: rgba(0,0,0,.16); display: flex; align-items: center; justify-content: center; color: #12000a; font-size: 15px; font-weight: 700;">›</div>
+                </div>
+                
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isResults }}">
+              <div onClick="{{ goFinal }}" style="cursor: pointer; background: #000; border-radius: 22px; padding: 18px; overflow: hidden; border: 1.5px solid #2a2a2a; margin-bottom: 22px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .16em; color: #6fffd9; text-shadow: 0 0 10px rgba(111,255,217,.7);">{{ nameUpper }} BENCHMARK</div>
+                  <div style="font-size: 9px; font-weight: 700; letter-spacing: .12em; color: #6fffd9; border: 1px solid rgba(111,255,217,.45); padding: 3px 8px; border-radius: 999px;">3/3 LOGGED</div>
+                </div>
+                <div style="font-family: 'Protest Strike', sans-serif; font-size: 30px; line-height: 1; margin: 11px 0 12px; color: #fff;">Benchmark Data</div>
+                <div style="display: flex; gap: 8px; align-items: stretch;">
+                  <div style="flex: 1; height: 104px; border: 1px solid rgba(255,102,196,.4); border-radius: 12px; padding: 9px 10px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 8.5px; font-weight: 700; letter-spacing: .1em; color: rgba(247,243,238,.5);">PULL UPS</div>
+                    <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; line-height: 1; color: #ff66c4; text-shadow: 0 0 14px rgba(255,102,196,.6);">28</div>
+                    <div style="font-size: 8px; font-weight: 700; letter-spacing: .06em; line-height: 1.3; color: rgba(247,243,238,.42);">SEC ECCENTRIC</div>
+                  </div>
+                  <div style="flex: 1; height: 104px; border: 1px solid rgba(255,159,69,.4); border-radius: 12px; padding: 9px 10px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 8.5px; font-weight: 700; letter-spacing: .1em; color: rgba(247,243,238,.5);">PUSH UPS</div>
+                    <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; line-height: 1; color: #ff9f45; text-shadow: 0 0 14px rgba(255,159,69,.6);">16</div>
+                    <div style="font-size: 8px; font-weight: 700; letter-spacing: .06em; line-height: 1.3; color: rgba(247,243,238,.42);">REPS</div>
+                  </div>
+                  <div style="flex: 1; height: 104px; border: 1px solid rgba(234,255,112,.4); border-radius: 12px; padding: 9px 10px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 8.5px; font-weight: 700; letter-spacing: .1em; color: rgba(247,243,238,.5);">SQUATS</div>
+                    <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; line-height: 1; color: #eaff70; text-shadow: 0 0 14px rgba(234,255,112,.6);">15</div>
+                    <div style="font-size: 8px; font-weight: 700; letter-spacing: .06em; line-height: 1.3; color: rgba(247,243,238,.42);">REPS | 45 LB</div>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .14em; color: #a8a29e; margin: 0 2px 10px;">YOUR WEEK</div>
+            <div style="background: #fff; border: 1px solid #dbe8cf; border-radius: 18px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 4px 14px rgba(68,64,60,.045);">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="width: 7px; height: 7px; border-radius: 999px; background: #4d6142;"></div>
+                  <div style="font-size: 14.5px; font-weight: 700;">Flagship</div>
+                  <div style="font-size: 11px; font-weight: 700; color: #8a5140;">View full block ›</div>
+                </div>
+                <div style="font-family: 'Protest Strike', sans-serif; font-size: 13px; color: #4d6142;">3/3</div>
+              </div>
+              <div style="display: flex; gap: 6px; margin-top: 12px;">
+                <div style="flex: 1; height: 34px; border: 2px solid #4d6142; border-radius: 12px;"></div>
+                <div style="flex: 1; height: 34px; border: 2px solid #4d6142; border-radius: 12px;"></div>
+                <div style="flex: 1; height: 34px; border: 2px solid #4d6142; border-radius: 12px;"></div>
+              </div>
+            </div>
+            <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 18px; padding: 14px 16px; box-shadow: 0 4px 14px rgba(68,64,60,.045);">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <div style="font-size: 14.5px; font-weight: 700;">Nutrition</div>
+                  <div style="font-size: 11px; color: #78716c; margin-top: 3px;">Tap a day to log it</div>
+                </div>
+                <div style="font-family: 'Protest Strike', sans-serif; font-size: 13px; color: #a46a57;">1/7</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ onHub }}">
+          <div style="min-height: 844px; background: #000; padding: 46px 18px 30px; position: relative;">
+            <div onClick="{{ goWeek }}" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; height: 44px; color: rgba(247,243,238,.6); font-size: 12px; font-weight: 600;">‹ My week</div>
+            <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .16em; color: #6fffd9; text-shadow: 0 0 10px rgba(111,255,217,.6); margin-top: 6px;">{{ nameUpper }} BENCHMARK | SEP 6</div>
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 44px; line-height: .96; color: #fff; margin: 10px 0 8px; text-shadow: 0 0 18px rgba(255,255,255,.28);">Benchmark<br>Day</div>
+            <div style="font-size: 12.5px; color: rgba(247,243,238,.62); max-width: 300px; margin-bottom: 6px;">You vs You. Three movements.</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin: 16px 0 18px;">
+              <div style="flex: 1; height: 5px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden;">
+                <div style="height: 100%; width: {{ progressPct }}; background: #6fffd9; box-shadow: 0 0 14px rgba(111,255,217,.8); border-radius: 999px;"></div>
+              </div>
+              <div style="font-size: 10px; font-weight: 700; letter-spacing: .1em; color: #6fffd9;">{{ progressLabel }}</div>
+            </div>
+
+            <sc-for list="{{ hubCards }}" as="c" hint-placeholder-count="3">
+              <div onClick="{{ c.onOpen }}" style="cursor: pointer; border-radius: 20px; padding: 16px 16px 15px; margin-bottom: 12px; background: #0a0a0a; border: 1.5px solid {{ c.border }};">
+                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+                  <div style="min-width: 0;">
+                    
+                    
+                  <div style="font-family: 'Protest Strike', sans-serif; font-size: 42px; line-height: 1; color: {{ c.color }}; text-shadow: {{ c.glow }}; width: 189px; height: 49px">{{ c.name }}</div></div>
+                  <div style="flex: none;">{{ c.bell }}</div>
+                </div>
+                <div style="margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid rgba(255,255,255,.09); padding-top: 12px;">
+                  <div style="font-size: 11.5px; font-weight: 600; color: {{ c.statusColor }};">{{ c.status }}</div>
+                  <div style="font-size: 10px; font-weight: 700; letter-spacing: .1em; color: rgba(247,243,238,.42);">{{ c.action }}</div>
+                </div>
+              </div>
+            </sc-for>
+
+            <sc-if value="{{ allDone }}">
+              <div onClick="{{ goFinal }}" style="cursor: pointer; margin-top: 8px; height: 52px; border-radius: 15px; background: #6fffd9; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #001a13; box-shadow: 0 0 26px rgba(111,255,217,.45);">See your benchmark card</div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ onLift }}">
+          <div style="min-height: 844px; background: #000; padding: 46px 18px 34px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div onClick="{{ goHub }}" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; height: 44px; color: rgba(247,243,238,.6); font-size: 12px; font-weight: 600;">‹ Benchmark Day</div>
+              <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .12em; color: rgba(247,243,238,.42);">TEST {{ liftIndex }} OF 3</div>
+            </div>
+            <div style="font-family: 'Protest Strike', sans-serif; font-size: 40px; line-height: 1; color: {{ liftColor }}; text-shadow: {{ liftGlow }}; margin: 4px 0 6px;">{{ liftName }}</div>
+            <div style="font-size: 11.5px; color: rgba(247,243,238,.55); margin-bottom: 16px;">{{ liftHint }}</div>
+
+            <sc-if value="{{ hasVariants }}">
+              <div>
+                <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .14em; color: rgba(247,243,238,.42); margin-bottom: 8px;">VARIATION</div>
+                <div style="display: flex; gap: 5px; background: rgba(255,255,255,.07); border-radius: 14px; padding: 5px; margin-bottom: 18px;">
+                  <sc-for list="{{ variants }}" as="v" hint-placeholder-count="2">
+                    <div onClick="{{ v.onPick }}" style="cursor: pointer; flex: 1; min-height: 44px; border-radius: 10px; background: {{ v.bg }}; color: {{ v.fg }}; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px 6px; font-size: 11px; font-weight: 700; line-height: 1.25;">{{ v.label }}</div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="display: grid; grid-template-columns: 1fr 92px 92px; gap: 9px; align-items: end; margin-bottom: 8px;">
+              <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .14em; color: rgba(247,243,238,.42);">TIER</div>
+              <div style="font-size: 9px; font-weight: 700; letter-spacing: .1em; color: rgba(247,243,238,.36); text-align: center;">LAST TIME</div>
+              <div style="font-size: 9px; font-weight: 700; letter-spacing: .1em; color: #6fffd9; text-align: center;">THIS TIME</div>
+            </div>
+
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+              <div style="display: grid; grid-template-columns: 1fr 92px 92px; gap: 9px; align-items: stretch; border-top: 1px solid rgba(255,255,255,.09); padding: 11px 0;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                  <div style="font-family: 'Protest Strike', sans-serif; font-size: 30px; line-height: 1; color: {{ r.numColor }}; text-shadow: {{ r.numGlow }}; flex: none;">{{ r.tier }}</div>
+                  <div style="min-width: 0;">
+                    <div style="font-size: 11.5px; font-weight: 600; color: #f7f3ee; line-height: 1.3;">{{ r.label }}</div>
+                    <div style="font-size: 9.5px; color: rgba(247,243,238,.45); margin-top: 2px;">{{ r.sub }}</div>
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: center;">{{ r.lastCell }}</div>
+                <div style="display: flex; align-items: center; justify-content: center;">{{ r.thisCell }}</div>
+              </div>
+            </sc-for>
+
+            <div style="border-top: 1px solid rgba(255,255,255,.09); margin-top: 4px; padding-top: 18px;">
+              <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .14em; color: rgba(247,243,238,.42); margin-bottom: 10px;">NOTES</div>
+              <div style="border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 12px 13px; margin-bottom: 9px; background: rgba(255,255,255,.03);">
+                <div style="font-size: 9px; font-weight: 700; letter-spacing: .1em; color: rgba(247,243,238,.36); margin-bottom: 6px;">LAST TIME</div>
+                <textarea value="{{ lastNote }}" onChange="{{ onLastNote }}" placeholder="Add a note from last time." rows="2" style="width: 100%; border: none; background: transparent; color: rgba(247,243,238,.72); font-size: 12px; line-height: 1.45; resize: none;"></textarea>
+              </div>
+              <div style="border: 1.5px solid {{ noteBorder }}; border-radius: 14px; padding: 12px 13px; background: rgba(255,255,255,.03);">
+                <div style="font-size: 9px; font-weight: 700; letter-spacing: .1em; color: #6fffd9; margin-bottom: 6px;">THIS TIME</div>
+                <textarea value="{{ thisNote }}" onChange="{{ onNote }}" placeholder="How did it feel? What's next?" rows="3" style="width: 100%; border: none; background: transparent; color: #f7f3ee; font-size: 12px; line-height: 1.45; resize: none;"></textarea>
+              </div>
+            </div>
+
+            <div onClick="{{ onComplete }}" style="cursor: {{ completeCursor }}; margin-top: 20px; height: 52px; border-radius: 15px; background: {{ completeBg }}; border: 1.5px solid {{ completeBorder }}; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: {{ completeFg }}; box-shadow: {{ completeShadow }};">{{ completeLabel }}</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ onFinal }}">
+          <div style="min-height: 844px; background: #000; padding: 46px 18px 30px; position: relative;">
+            <div style="position: relative;">{{ finalConfetti }}</div>
+            <div onClick="{{ goHub }}" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; height: 44px; color: rgba(247,243,238,.6); font-size: 12px; font-weight: 600; position: relative;">‹ Benchmark Day</div>
+
+            <div style="position: relative; border-radius: 24px; border: 1.5px solid rgba(111,255,217,.35); background: #050505; padding: 22px 20px 20px; margin-top: 6px; overflow: hidden; animation: kbpop .5s cubic-bezier(.2,.9,.3,1) both;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <div>
+                  <div style="font-size: 9px; font-weight: 700; letter-spacing: .16em; color: #6fffd9; text-shadow: 0 0 10px rgba(111,255,217,.6);">{{ nameUpper }} BENCHMARK</div>
+                  <div style="font-size: 9px; font-weight: 700; letter-spacing: .12em; color: rgba(247,243,238,.42); margin-top: 4px;">SEP 6, 2026 | IDAHO FALLS</div>
+                </div>
+                <img src="assets/kova-logo.jpg" alt="Kova Strength" style="width: 78px; height: 78px; border-radius: 999px;">
+              </div>
+
+              <div style="font-family: 'Protest Strike', sans-serif; font-size: 42px; line-height: .95; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,.3);">{{ memberName }}</div>
+              <div style="font-size: 11.5px; color: rgba(247,243,238,.55); margin: 6px 0 20px;">Three tests. You vs you.</div>
+
+              <div style="display: flex; gap: 9px;">
+                <sc-for list="{{ finalTiles }}" as="t" hint-placeholder-count="3">
+                  <div style="flex: 1; border: 1.5px solid {{ t.border }}; border-radius: 16px; padding: 13px 10px 12px; text-align: center; background: rgba(255,255,255,.02);">
+                    <div style="font-size: 8.5px; font-weight: 700; letter-spacing: .1em; color: rgba(247,243,238,.5);">{{ t.eyebrow }}</div>
+                    <div style="font-family: 'Protest Strike', sans-serif; font-size: 44px; line-height: 1; color: {{ t.color }}; text-shadow: {{ t.glow }}; margin: 4px 0 2px;">{{ t.value }}</div>
+                    <div style="font-size: 9px; font-weight: 700; letter-spacing: .08em; color: rgba(247,243,238,.42);">{{ t.unit }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="margin-top: 18px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 13px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="font-size: 10px; font-weight: 700; letter-spacing: .12em; color: rgba(247,243,238,.4);">KOVA STRENGTH</div>
+                <div style="font-size: 10px; font-weight: 700; letter-spacing: .12em; color: #6fffd9;">ALWAYS IN PROGRESS</div>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 9px; margin-top: 16px; position: relative;">
+              <div style="flex: 1; height: 50px; border-radius: 14px; background: #6fffd9; display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 700; color: #001a13; cursor: pointer; box-shadow: 0 0 22px rgba(111,255,217,.4);">Save to photos</div>
+              <div onClick="{{ goWeek }}" style="flex: none; width: 108px; height: 50px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 700; color: #f7f3ee; cursor: pointer;">Done</div>
+            </div>
+            <div style="font-size: 11px; color: rgba(247,243,238,.4); text-align: center; margin-top: 14px; line-height: 1.5; position: relative;">Next Benchmark Day is New Year's Day, in 17 weeks.</div>
+
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ celebrating }}">
+          <div style="position: absolute; inset: 0; min-height: 844px; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; overflow: hidden;">
+            <div style="position: absolute; inset: 0; background: {{ celebrateFlash }}; animation: kbflash 1.1s ease-out both;"></div>
+            {{ celebrateConfetti }}
+            <div style="position: relative; text-align: center; animation: kbpop .55s cubic-bezier(.2,.9,.3,1) both;">
+              <div style="font-size: 10px; font-weight: 700; letter-spacing: .18em; color: rgba(247,243,238,.55);">{{ celebrateEyebrow }}</div>
+              <div style="font-family: 'Protest Strike', sans-serif; font-size: 34px; line-height: 1; color: #fff; margin: 12px 0 2px;">{{ celebrateLift }}</div>
+              <div style="font-family: 'Protest Strike', sans-serif; font-size: 124px; line-height: .86; color: {{ celebrateColor }}; text-shadow: {{ celebrateGlow }};">{{ celebrateValue }}</div>
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: .16em; color: rgba(247,243,238,.5); margin-top: 2px;">{{ celebrateUnit }}</div>
+            </div>
+            <div style="position: relative; text-align: center; margin-top: 26px; animation: kbrise .5s .18s ease-out both;">
+              <div style="display: inline-block; max-width: 300px; font-size: 12px; font-weight: 700; line-height: 1.45; color: {{ celebrateColor }}; border: 1.5px solid {{ celebrateColor }}; border-radius: 20px; padding: 10px 18px;">{{ celebrateTierLine }}</div>
+              
+            </div>
+            <div onClick="{{ dismissCelebrate }}" style="position: relative; cursor: pointer; margin-top: 34px; min-width: 216px; height: 52px; padding: 0 22px; border-radius: 999px; background: {{ celebrateCtaBg }}; display: flex; align-items: center; justify-content: center; gap: 9px; font-size: 14px; font-weight: 700; color: #0a0a0a; box-shadow: {{ celebrateCtaShadow }};"><span>{{ celebrateCta }}</span><span style="font-size: 17px; font-weight: 700; flex: none; opacity: .55;">›</span></div>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="font-size: 10px; font-weight: 700; letter-spacing: .12em; background: #0b0b0b; color: #6fffd9; padding: 5px 9px; border-radius: 999px;">1b</div>
+      <div style="font-size: 12.5px; font-weight: 600; color: #57534e;">Coach control | three dates drive everything</div>
+    </div>
+
+    <div style="width: 390px; height: 844px; border-radius: 38px; background: #faf8f6; overflow: hidden; position: relative; box-shadow: 0 18px 44px rgba(68,64,60,.14); border: 1px solid #ece7e1;">
+      <div style="padding: 46px 20px 24px;">
+        <div style="font-family: 'Protest Strike', sans-serif; font-size: 26px; color: #44403c; line-height: 1;">Settings</div>
+        <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .14em; color: #a8a29e; margin: 22px 2px 10px;">BENCHMARK DAY</div>
+
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 18px; padding: 4px 16px; box-shadow: 0 4px 14px rgba(68,64,60,.045);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f4efe9;">
+            <div style="font-size: 13.5px; font-weight: 700;">Benchmark name</div>
+            <div style="font-size: 13px; color: #57534e;">Labor Day ›</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f4efe9;">
+            <div style="min-width: 0;">
+              <div style="font-size: 13.5px; font-weight: 700;">Show on My Week from</div>
+              <div style="font-size: 11px; color: #78716c; margin-top: 3px;">The button appears, counting down.</div>
+            </div>
+            <div style="flex: none; min-height: 40px; display: flex; align-items: center; padding: 0 12px; border: 1px solid #d9d4cd; border-radius: 9px; font-size: 13px; font-weight: 600; color: #44403c;">Aug 25</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f4efe9;">
+            <div style="min-width: 0;">
+              <div style="font-size: 13.5px; font-weight: 700;">Benchmark Day</div>
+              <div style="font-size: 11px; color: #78716c; margin-top: 3px;">Logging opens. Kettlebells go live.</div>
+            </div>
+            <div style="flex: none; min-height: 40px; display: flex; align-items: center; padding: 0 12px; border: 1.5px solid #a46a57; border-radius: 9px; font-size: 13px; font-weight: 700; color: #8a5140; background: #fdf6f2;">Sep 6</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0;">
+            <div style="min-width: 0;">
+              <div style="font-size: 13.5px; font-weight: 700;">Hide from My Week after</div>
+              <div style="font-size: 11px; color: #78716c; margin-top: 3px;">Her card moves to history.</div>
+            </div>
+            <div style="flex: none; min-height: 40px; display: flex; align-items: center; padding: 0 12px; border: 1px solid #d9d4cd; border-radius: 9px; font-size: 13px; font-weight: 600; color: #44403c;">Sep 13</div>
+          </div>
+        </div>
+
+        <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .14em; color: #a8a29e; margin: 22px 2px 10px;">WHAT SHE SEES</div>
+        <div style="background: #fff; border: 1px solid #ece7e1; border-radius: 18px; padding: 16px; box-shadow: 0 4px 14px rgba(68,64,60,.045);">
+          <div style="display: grid; grid-template-columns: 66px 1fr; gap: 10px 12px; align-items: start;">
+            <div style="font-size: 11px; font-weight: 700; color: #78716c; padding-top: 1px;">Aug 25</div>
+            <div>
+              <div style="font-size: 12.5px; font-weight: 700; color: #44403c;">Counting down</div>
+              <div style="font-size: 11px; color: #78716c; margin-top: 2px;">Button shows, board is locked.</div>
+            </div>
+            <div style="font-size: 11px; font-weight: 700; color: #8a5140; padding-top: 1px;">Sep 6</div>
+            <div>
+              <div style="font-size: 12.5px; font-weight: 700; color: #8a5140;">Logging open</div>
+              <div style="font-size: 11px; color: #78716c; margin-top: 2px;">She places her kettlebells and keys her numbers.</div>
+            </div>
+            <div style="font-size: 11px; font-weight: 700; color: #78716c; padding-top: 1px;">Sep 7</div>
+            <div>
+              <div style="font-size: 12.5px; font-weight: 700; color: #44403c;">Card ready</div>
+              <div style="font-size: 11px; color: #78716c; margin-top: 2px;">Results stay on My Week, kettlebells lock.</div>
+            </div>
+            <div style="font-size: 11px; font-weight: 700; color: #78716c; padding-top: 1px;">Sep 13</div>
+            <div>
+              <div style="font-size: 12.5px; font-weight: 700; color: #44403c;">Off My Week</div>
+              <div style="font-size: 11px; color: #78716c; margin-top: 2px;">Everything logged stays in her history.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 390px; background: #fff; border: 1px solid #ece7e1; border-radius: 18px; padding: 16px 18px; font-size: 12px; line-height: 1.6; color: #57534e;">
+      <div style="font-size: 9.5px; font-weight: 700; letter-spacing: .14em; color: #a8a29e; margin-bottom: 8px;">HOW IT WORKS</div>
+      Tap the neon button, pick a lift, then tap a box in the <strong>This time</strong> column to place your kettlebell. Type your number right on the bell, the way the sticker works on the board. One bell per lift.
+    </div>
+  </div>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;benchmarkName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Labor Day&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;weekButtonState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;countdown&quot;,&quot;live&quot;,&quot;results&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;My Week button&quot;},&quot;daysOut&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:5,&quot;min&quot;:1,&quot;max&quot;:21,&quot;unit&quot;:&quot;days&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;My Week button&quot;},&quot;firstTime&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Member data&quot;},&quot;memberName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Dustin&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Member data&quot;}}">
+const LIFTS = {
+  pull: {
+    name: "Pull Ups", color: "#ff66c4", dim: "#8c3a6b", rgb: "255,102,196", index: 1,
+    hint: "Check out the pull up phases. ",
+    variants: null,
+    tiers: [
+      { label: "Leg assist iso hold", sub: "Hold at the top", unit: "sec hold" },
+      { label: "Max time iso hold", sub: "Hold at the top | no assistance", unit: "sec hold" },
+      { label: "Max time eccentric", sub: "Lower slow", unit: "sec eccentric" },
+      { label: "Full reps", sub: "Chin over bar", unit: "reps" }
+    ]
+  },
+  push: {
+    name: "Push Ups", color: "#ff9f45", dim: "#8c5a2a", rgb: "255,159,69", index: 2,
+    hint: "Pick your variation, then place your bell.",
+    variants: ["Hands elevated or banded", "Body weight from floor"],
+    graduate: "Congrats! You moved from assisted to unassisted push ups!", regress: "Back on the bands",
+    tiers: [
+      { label: "1 to 4 reps", sub: "Tier 1", unit: "reps" },
+      { label: "5 to 9 reps", sub: "Tier 2", unit: "reps" },
+      { label: "10 to 14 reps", sub: "Tier 3", unit: "reps" },
+      { label: "15+ reps", sub: "Tier 4", unit: "reps" }
+    ]
+  },
+  squat: {
+    name: "Squats", color: "#eaff70", dim: "#7f8a3a", rgb: "234,255,112", index: 3,
+    hint: "Pick your variation. Log reps and the load you used.",
+    variants: ["Adjusted load", "50% body weight + full depth"],
+    graduate: "Congrats! You moved from an adjusted load to 50% of your body weight", regress: "Back to adjusted load",
+    load: true,
+    tiers: [
+      { label: "1 to 7 reps", sub: "Tier 1", unit: "reps" },
+      { label: "8 to 13 reps", sub: "Tier 2", unit: "reps" },
+      { label: "14 to 19 reps", sub: "Tier 3", unit: "reps" },
+      { label: "20+ reps", sub: "Tier 4", unit: "reps" }
+    ]
+  }
+};
+
+const ORDER = ["pull", "push", "squat"];
+
+const LAST = {
+  pull: { tier: 2, value: "22", variant: 0, note: "Iso hold felt shaky at the top. Grip gave out first." },
+  push: { tier: 3, value: "12", variant: 0, note: "Green band. Elbows drifted out on the last few." },
+  squat: { tier: 2, value: "11", load: "45", variant: 0, note: "45 lb goblet. Depth was honest all the way through." }
+};
+
+const NO_LAST = {
+  pull: { tier: 0, value: "", variant: 0, note: "" },
+  push: { tier: 0, value: "", variant: 0, note: "" },
+  squat: { tier: 0, value: "", load: "", variant: 0, note: "" }
+};
+
+class Component extends DCLogic {
+  state = {
+    screen: "week",
+    lift: "pull",
+    variant: { pull: 0, push: 0, squat: 0 },
+    placed: {},
+    notes: {},
+    done: [],
+    celebrate: null
+  };
+
+  confettiSpecs = Array.from({ length: 38 }, (_, i) => {
+    const r = (n) => ((Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1 + 1) % 1;
+    return {
+      left: r(1) * 100,
+      w: 5 + r(2) * 7,
+      h: 9 + r(3) * 12,
+      dur: 1.5 + r(4) * 1.3,
+      delay: r(5) * 0.7,
+      rot: r(6) * 360,
+      tint: Math.floor(r(7) * 4)
+    };
+  });
+
+  bell(color, size, glow) {
+    return React.createElement("svg", { viewBox: "0 0 24 24", width: size, height: size, style: { display: "block", filter: glow ? "drop-shadow(0 0 7px " + color + ")" : "none" } },
+      React.createElement("path", { d: "M8.2 8.4a3.9 3.9 0 0 1 7.6 0", fill: "none", stroke: color, strokeWidth: 2.4, strokeLinecap: "round" }),
+      React.createElement("circle", { cx: 12, cy: 15.2, r: 6.6, fill: color })
+    );
+  }
+
+  confetti(colors, keyPrefix) {
+    const pieces = this.confettiSpecs.map((s, i) => React.createElement("div", {
+      key: keyPrefix + i,
+      style: {
+        position: "absolute", left: s.left + "%", top: "-8%",
+        width: s.w, height: s.h, background: colors[s.tint % colors.length],
+        borderRadius: 2, transform: "rotate(" + s.rot + "deg)",
+        animation: "kbfall " + s.dur + "s " + s.delay + "s linear forwards"
+      }
+    }));
+    return React.createElement("div", { style: { position: "absolute", left: 0, right: 0, top: 0, height: 844, overflow: "hidden", pointerEvents: "none", zIndex: 40 } }, pieces);
+  }
+
+  lastOf() {
+    if (this.state.last) return this.state.last;
+    return this.props.firstTime ? NO_LAST : LAST;
+  }
+
+  mutateLast(fn) {
+    const base = this.lastOf();
+    const copy = JSON.parse(JSON.stringify(base));
+    fn(copy);
+    this.setState({ last: copy });
+  }
+
+  placeLast(liftKey, tier) {
+    this.mutateLast((d) => {
+      const cur = d[liftKey];
+      if (cur.tier === tier) { cur.tier = 0; cur.value = ""; cur.load = ""; return; }
+      cur.tier = tier;
+      cur.variant = this.state.variant[liftKey];
+      if (cur.tier !== tier) cur.value = "";
+    });
+  }
+
+  setLastField(liftKey, field, val) {
+    const clean = val.replace(/[^0-9]/g, "").slice(0, 4);
+    this.mutateLast((d) => { d[liftKey][field] = clean; });
+  }
+
+  setLastNote(liftKey, val) {
+    this.mutateLast((d) => { d[liftKey].note = val; });
+  }
+
+  place(liftKey, tier) {
+    const L = LIFTS[liftKey];
+    if (this.state.done.indexOf(liftKey) > -1) return;
+    this.setState((s) => {
+      const v = s.variant[liftKey];
+      const prev = s.placed[liftKey];
+      const sameCell = prev && prev.tier === tier && prev.variant === v;
+      if (sameCell) return { placed: Object.assign({}, s.placed, { [liftKey]: null }) };
+      const next = { tier: tier, value: prev ? prev.value : "", load: prev ? prev.load || "" : "", variant: v };
+      return { placed: Object.assign({}, s.placed, { [liftKey]: next }) };
+    });
+  }
+
+  setField(liftKey, field, val) {
+    const clean = val.replace(/[^0-9]/g, "").slice(0, 4);
+    this.setState((s) => {
+      const p = s.placed[liftKey];
+      if (!p) return {};
+      return { placed: Object.assign({}, s.placed, { [liftKey]: Object.assign({}, p, { [field]: clean }) }) };
+    });
+  }
+
+  deltaFor(liftKey) {
+    const p = this.state.placed[liftKey];
+    const last = this.lastOf()[liftKey];
+    if (!p) return { text: "Not logged", tone: "muted" };
+    const L = LIFTS[liftKey];
+    const head = "Tier " + p.tier;
+    if (!last.tier) return { text: head, tone: "first" };
+    if (L.variants && p.variant > last.variant) return { text: L.graduate, tone: "grad" };
+    if (L.variants && p.variant < last.variant) return { text: head + " | " + L.regress, tone: "muted" };
+    const n = Math.abs(p.tier - last.tier);
+    const word = n === 1 ? " tier" : " tiers";
+    if (p.tier > last.tier) return { text: head + " | Up " + n + word, tone: "up" };
+    if (p.tier < last.tier) return { text: head + " | Down " + n + word, tone: "muted" };
+    return { text: head + " | Held", tone: "flat" };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const P = this.props;
+    const name = P.benchmarkName || "Labor Day";
+    const memberName = P.memberName || "Dustin";
+    const btnState = P.weekButtonState || "live";
+    const days = P.daysOut == null ? 5 : P.daysOut;
+    const L = LIFTS[s.lift];
+    const placed = s.placed[s.lift];
+    const lastAll = this.lastOf();
+    const last = lastAll[s.lift];
+    const hasLast = !!last.tier;
+    const isDone = s.done.indexOf(s.lift) > -1;
+    const glowOf = (l) => "0 0 14px rgba(" + l.rgb + ",.55), 0 0 40px rgba(" + l.rgb + ",.25)";
+
+    const hubCards = ORDER.map((k) => {
+      const l = LIFTS[k];
+      const p = s.placed[k];
+      const d = s.done.indexOf(k) > -1;
+      const unit = l.tiers[p ? p.tier - 1 : 0].unit;
+      return {
+        name: l.name, color: l.color, glow: glowOf(l),
+        border: d ? "rgba(" + l.rgb + ",.7)" : "rgba(255,255,255,.13)",
+        sub: l.variants ? l.variants.length + " variations | 4 tiers" : "4 tiers | one bell",
+        bell: this.bell(d ? l.color : "rgba(255,255,255,.16)", 34, d),
+        status: d ? (p.value || "–") + " " + unit + (l.load && p.load ? " at " + p.load + " lb" : "") + " | " + this.deltaFor(k).text : "Not logged yet",
+        statusColor: d ? l.color : "rgba(247,243,238,.4)",
+        action: d ? "REVIEW ›" : "OPEN ›",
+        onOpen: () => this.setState({ screen: "lift", lift: k })
+      };
+    });
+
+    const rows = L.tiers.map((t, i) => {
+      const tier = i + 1;
+      const lastHere = last.tier === tier && last.variant === s.variant[s.lift];
+      const here = placed && placed.tier === tier && placed.variant === s.variant[s.lift];
+      let lastCell;
+      if (lastHere) {
+        lastCell = React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center" } },
+          React.createElement("div", { style: { position: "relative", width: 58, height: 58, display: "flex", alignItems: "center", justifyContent: "center" } },
+            React.createElement("div", { onClick: () => this.placeLast(s.lift, tier), style: { position: "absolute", inset: 0, cursor: "pointer" } }, this.bell(L.dim, 54, false)),
+            React.createElement("input", {
+              value: last.value, onChange: (e) => this.setLastField(s.lift, "value", e.target.value),
+              inputMode: "numeric", placeholder: "0",
+              style: { position: "absolute", top: 25, left: 11, width: 36, textAlign: "center", background: "transparent", border: "none", fontFamily: "'Protest Strike', sans-serif", fontSize: 18, color: "#f7f3ee", padding: 0 }
+            })
+          ),
+          React.createElement("div", { style: { marginTop: -1, fontSize: 8, fontWeight: 700, letterSpacing: ".06em", lineHeight: 1.25, textAlign: "center", color: "rgba(247,243,238,.5)" } }, t.unit.toUpperCase()),
+          L.load ? React.createElement("label", {
+            style: { marginTop: 5, minHeight: 30, width: 88, borderRadius: 999, border: "1.5px solid rgba(255,255,255,.2)", display: "flex", alignItems: "center", justifyContent: "center", gap: 3, cursor: "text" } },
+            React.createElement("input", {
+              value: last.load || "", onChange: (e) => this.setLastField(s.lift, "load", e.target.value),
+              inputMode: "numeric", placeholder: "–",
+              style: { width: 34, textAlign: "right", background: "transparent", border: "none", fontFamily: "'Protest Strike', sans-serif", fontSize: 16, color: "rgba(247,243,238,.8)", padding: 0 }
+            }),
+            React.createElement("span", { style: { fontSize: 9, fontWeight: 700, letterSpacing: ".08em", color: "rgba(247,243,238,.5)" } }, "LB")
+          ) : null
+        );
+      } else {
+        lastCell = React.createElement("div", {
+          onClick: () => this.placeLast(s.lift, tier),
+          style: { width: "100%", height: 56, borderRadius: 12, border: "1.5px dashed rgba(255,255,255,.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(247,243,238,.2)", fontSize: 15 }
+        }, "–");
+      }
+
+      let thisCell;
+      if (here) {
+        const bellStack = React.createElement("div", { style: { position: "relative", width: 62, height: 62, display: "flex", alignItems: "center", justifyContent: "center" } },
+          React.createElement("div", { onClick: () => this.place(s.lift, tier), style: { position: "absolute", inset: 0, cursor: isDone ? "default" : "pointer" } }, this.bell(L.color, 58, true)),
+          React.createElement("input", {
+            value: placed.value, onChange: (e) => this.setField(s.lift, "value", e.target.value),
+            inputMode: "numeric", placeholder: "0", disabled: isDone,
+            style: { position: "absolute", top: 27, left: 12, width: 38, textAlign: "center", background: "transparent", border: "none", fontFamily: "'Protest Strike', sans-serif", fontSize: 20, color: "#0a0a0a", padding: 0 }
+          }),
+          React.createElement("div", { style: { position: "absolute", bottom: -12, left: -14, right: -14, textAlign: "center", fontSize: 8, fontWeight: 700, letterSpacing: ".06em", lineHeight: 1.25, color: L.color } }, t.unit.toUpperCase())
+        );
+        const loadPill = L.load ? React.createElement("label", {
+          style: { marginTop: 6, minHeight: 30, width: 88, borderRadius: 999, border: "1.5px solid " + (placed.load ? L.color : "rgba(255,255,255,.26)"), borderStyle: placed.load ? "solid" : "dashed", display: "flex", alignItems: "center", justifyContent: "center", gap: 3, cursor: isDone ? "default" : "text" } },
+          React.createElement("input", {
+            value: placed.load || "", onChange: (e) => this.setField(s.lift, "load", e.target.value),
+            inputMode: "numeric", placeholder: "–", disabled: isDone,
+            style: { width: 34, textAlign: "right", background: "transparent", border: "none", fontFamily: "'Protest Strike', sans-serif", fontSize: 16, color: placed.load ? L.color : "rgba(247,243,238,.5)", padding: 0 }
+          }),
+          React.createElement("span", { style: { fontSize: 9, fontWeight: 700, letterSpacing: ".08em", color: placed.load ? L.color : "rgba(247,243,238,.4)" } }, "LB")
+        ) : null;
+        thisCell = React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 12 } }, bellStack, loadPill);
+      } else {
+        thisCell = React.createElement("div", {
+          onClick: () => this.place(s.lift, tier),
+          style: { width: "100%", height: 56, borderRadius: 12, border: "2px dashed rgba(255,255,255,.22)", cursor: isDone ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(247,243,238,.3)", fontSize: 15 }
+        }, "–");
+      }
+
+      return {
+        tier: tier, label: t.label, sub: t.sub,
+        numColor: here ? L.color : "rgba(247,243,238,.28)",
+        numGlow: here ? glowOf(L) : "none",
+        lastCell: lastCell, thisCell: thisCell
+      };
+    });
+
+    const cel = s.celebrate;
+    const celLift = cel ? LIFTS[cel] : L;
+    const celPlaced = cel ? s.placed[cel] : null;
+    const celDelta = cel ? this.deltaFor(cel) : null;
+    const allDone = s.done.length === 3;
+
+    const finalTiles = ORDER.map((k) => {
+      const l = LIFTS[k];
+      const lk = lastAll[k];
+      const p = s.placed[k] || (lk.tier ? { tier: lk.tier, value: lk.value, load: lk.load } : null);
+      const d = this.deltaFor(k);
+      const unit = p ? l.tiers[p.tier - 1].unit : "";
+      return {
+        eyebrow: l.name.toUpperCase(), color: p ? l.color : "rgba(247,243,238,.28)", glow: p ? glowOf(l) : "none",
+        border: p ? "rgba(" + l.rgb + ",.45)" : "rgba(255,255,255,.14)",
+        value: p ? (p.value || "–") : "–",
+        unit: p ? (l.load && p.load ? unit.toUpperCase() + " | " + p.load + " LB" : unit.toUpperCase()) : "NOT LOGGED",
+        delta: d.text,
+        deltaColor: d.tone === "up" || d.tone === "grad" || d.tone === "first" ? "#6fffd9" : "rgba(247,243,238,.5)",
+        deltaBorder: d.tone === "up" || d.tone === "grad" || d.tone === "first" ? "rgba(111,255,217,.5)" : "rgba(255,255,255,.16)"
+      };
+    });
+
+    const canComplete = !!placed && !!placed.value && (!L.load || !!placed.load);
+
+    return {
+      memberName: memberName,
+      nameUpper: name.toUpperCase(),
+      daysLabel: days === 1 ? "TOMORROW" : "IN " + days + " DAYS",
+      isCountdown: btnState === "countdown",
+      isLive: btnState === "live",
+      isResults: btnState === "results",
+
+      onWeek: s.screen === "week" && !s.celebrate,
+      onHub: s.screen === "hub" && !s.celebrate,
+      onLift: s.screen === "lift" && !s.celebrate,
+      onFinal: s.screen === "final" && !s.celebrate,
+      goWeek: () => this.setState({ screen: "week", celebrate: null }),
+      goHub: () => this.setState({ screen: "hub", celebrate: null }),
+      goFinal: () => this.setState({ screen: "final", celebrate: null }),
+
+      progressPct: Math.round((s.done.length / 3) * 100) + "%",
+      progressLabel: s.done.length + "/3 LOGGED",
+      hubCards: hubCards,
+      allDone: allDone,
+
+      liftName: L.name,
+      liftColor: L.color,
+      liftGlow: glowOf(L),
+      liftHint: L.hint,
+      liftIndex: L.index,
+      hasVariants: !!L.variants,
+      variants: (L.variants || []).map((v, i) => ({
+        label: v,
+        bg: s.variant[s.lift] === i ? L.color : "transparent",
+        fg: s.variant[s.lift] === i ? "#0a0a0a" : "rgba(247,243,238,.62)",
+        onPick: () => this.setState((st) => ({ variant: Object.assign({}, st.variant, { [s.lift]: i }) }))
+      })),
+      rows: rows,
+      hasLast: hasLast,
+      lastNote: last.note,
+      onLastNote: (e) => this.setLastNote(s.lift, e.target.value),
+      thisNote: s.notes[s.lift] || "",
+      noteBorder: (s.notes[s.lift] || "").length ? "rgba(111,255,217,.45)" : "rgba(255,255,255,.12)",
+      onNote: (e) => { const v = e.target.value; this.setState((st) => ({ notes: Object.assign({}, st.notes, { [s.lift]: v }) })); },
+
+      completeLabel: isDone ? "Logged | tap a bell to change" : canComplete ? "Mark " + L.name.toLowerCase() + " complete" : !placed ? "Place your kettlebell first" : !placed.value ? "Type your number on the bell" : "Add the load you used",
+      completeBg: isDone ? "transparent" : canComplete ? L.color : "transparent",
+      completeFg: isDone ? "rgba(247,243,238,.55)" : canComplete ? "#0a0a0a" : "rgba(247,243,238,.38)",
+      completeBorder: isDone ? "rgba(111,255,217,.4)" : canComplete ? L.color : "rgba(255,255,255,.14)",
+      completeShadow: canComplete && !isDone ? "0 0 26px rgba(" + L.rgb + ",.4)" : "none",
+      completeCursor: canComplete && !isDone ? "pointer" : "default",
+      onComplete: () => {
+        if (isDone || !canComplete) return;
+        const key = s.lift;
+        this.setState((st) => ({ done: st.done.indexOf(key) > -1 ? st.done : st.done.concat([key]), celebrate: key }));
+      },
+
+      celebrating: !!cel,
+      celebrateLift: celLift.name,
+      celebrateValue: celPlaced ? (celPlaced.value || "–") : "",
+      celebrateUnit: celPlaced ? (celLift.load && celPlaced.load ? celLift.tiers[celPlaced.tier - 1].unit.toUpperCase() + " AT " + celPlaced.load + " LB" : celLift.tiers[celPlaced.tier - 1].unit.toUpperCase()) : "",
+      celebrateTierLine: celDelta ? celDelta.text : "",
+      celebrateColor: celLift.color,
+      celebrateGlow: "0 0 26px rgba(" + celLift.rgb + ",.75), 0 0 70px rgba(" + celLift.rgb + ",.4)",
+      celebrateFlash: "radial-gradient(circle at 50% 42%, rgba(" + celLift.rgb + ",.5), transparent 62%)",
+      celebrateEyebrow: name.toUpperCase() + " BENCHMARK",
+      celebrateDelta: celDelta ? celDelta.text : "",
+      celebrateCopy: celPlaced ? (celDelta.tone === "grad" ? "" : celDelta.tone === "up" ? "That is the training showing up." : celDelta.tone === "flat" ? "Same tier, and you held it. That counts." : "On the board. Now you have something to chase.") : "",
+      celebrateCta: s.done.length === 3 ? "See my results" : "Next test",
+      celebrateCtaBg: s.done.length === 3 ? "#6fffd9" : "#fff",
+      celebrateCtaShadow: s.done.length === 3 ? "0 0 28px rgba(111,255,217,.5)" : "none",
+      celebrateConfetti: this.confetti([celLift.color, "#6fffd9", "#ffffff", celLift.color], "c"),
+      dismissCelebrate: () => this.setState((st) => ({ celebrate: null, screen: st.done.length === 3 ? "final" : "hub" })),
+
+      finalTiles: finalTiles,
+      finalConfetti: this.confetti(["#ff66c4", "#ff9f45", "#eaff70", "#6fffd9"], "f")
+    };
+  }
+}
+
+</script>
+</body>
+</html>

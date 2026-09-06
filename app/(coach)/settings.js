@@ -23,6 +23,7 @@ import {
   deleteQuestionnaireTemplateQuestion,
 } from "../../lib/nutrition/onboarding";
 import { listSpecialtyBars, saveSpecialtyBars } from "../../lib/equipment/specialtyBars";
+import { BenchmarkSettings } from "../../components/coach/BenchmarkSettings";
 import { fonts, colors } from "../../lib/theme";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { CoachShell } from "../../components/CoachShell";
@@ -128,6 +129,7 @@ const SETTINGS_TABS = [
   { key: "team", label: "Team" },
   { key: "defaults", label: "Defaults" },
   { key: "equipment", label: "Equipment" },
+  { key: "benchmark", label: "Benchmark" },
   { key: "templates", label: "Nutrition" },
   { key: "notifications", label: "Notifications" },
   { key: "messaging", label: "Messaging" },
@@ -1165,6 +1167,8 @@ export default function Settings() {
         </View>
       </View>
       )}
+
+      {tab === "benchmark" && <BenchmarkSettings />}
 
       {tab === "notifications" && (
       <View className="rounded-xl border border-stone-200 p-5">

@@ -230,6 +230,9 @@ function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, unseenEve
 
       {/* Reached from the Help card in Settings. */}
       <Tabs.Screen name="how-to" options={{ href: null }} />
+      {/* Benchmark Day is reached from its own card on My Week, four days a
+          year. It is not a fifth tab. */}
+      <Tabs.Screen name="benchmark" options={{ href: null }} />
 
       {/* Nested screens inside the nutrition/history folders have no nested
           _layout of their own, so expo-router flattens them as siblings —

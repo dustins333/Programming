@@ -15,6 +15,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/benchmark/:movement", "destination": "/benchmark/[movement]" },
     { "source": "/blocks/:blockId", "destination": "/blocks/[blockId]" },
     { "source": "/builder/:workoutId", "destination": "/builder/[workoutId]" },
     { "source": "/clients/:userId", "destination": "/clients/[userId]" },

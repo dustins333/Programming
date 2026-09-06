@@ -86,7 +86,11 @@ function ConfettiPiece({ left, delay, duration, color, size, distance }) {
 // `runKey` is what starts a fresh run — change it and every piece is rebuilt
 // with new random offsets, so finalizing twice never replays the identical
 // pattern.
-export function FinalizeConfetti({ runKey, pieceCount, distance, fallMinMs, fallMaxMs, staggerMs }) {
+// `colors` defaults to the app's own warm palette. Benchmark Day passes its
+// own neon set — that feature is deliberately the one place in the app that
+// isn't clay and cream, and a benchmark celebration raining terracotta would
+// be the only warm thing on a black screen.
+export function FinalizeConfetti({ runKey, pieceCount, distance, fallMinMs, fallMaxMs, staggerMs, colors = CONFETTI_COLORS }) {
   const pieces = useMemo(
     () =>
       Array.from({ length: pieceCount }, (_, i) => ({
@@ -95,7 +99,7 @@ export function FinalizeConfetti({ runKey, pieceCount, distance, fallMinMs, fall
         delay: Math.random() * staggerMs,
         // Per piece, so they don't fall as one sheet.
         duration: fallMinMs + Math.random() * (fallMaxMs - fallMinMs),
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        color: colors[i % colors.length],
         size: 6 + Math.random() * 6,
       })),
     // Deliberately only runKey: re-rolling the pieces because a parent

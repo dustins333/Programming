@@ -34,6 +34,13 @@ import {
 import { listAlternateCompletionsForWeek, getAlternateCompletion } from "../../lib/programming/sessionCompletions";
 import { hasUnreadMessages } from "../../lib/programming/messages";
 import { listLiveEventsForUser, listMyResponses } from "../../lib/programming/events";
+import {
+  getActiveBenchmarkEvent,
+  getPreviousBenchmarkEvent,
+  getBenchmarkBoard,
+  benchmarkPhase,
+  daysUntilBenchmark,
+} from "../../lib/programming/benchmark";
 import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
 import { listLogsForDateRange } from "../../lib/nutrition/dailyLog";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
@@ -49,6 +56,7 @@ import { ProgressRing } from "../../components/ProgressRing";
 import { PressFade } from "../../components/PressFade";
 import { fonts, colors, type } from "../../lib/theme";
 import { Eyebrow } from "../../components/Eyebrow";
+import { BenchmarkWeekCard } from "../../components/benchmark/BenchmarkWeekCard";
 import { showToast } from "../../lib/toast";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -822,7 +830,7 @@ function MyWeekSkeleton() {
   );
 }
 
-const CACHE_SECTIONS = ["groups", "spc", "nutrition", "oneOffs", "alternate", "messaging", "events"];
+const CACHE_SECTIONS = ["groups", "spc", "nutrition", "oneOffs", "alternate", "messaging", "events", "benchmark"];
 
 export default function MemberHome() {
   const { profile } = useAuth();
@@ -836,6 +844,9 @@ export default function MemberHome() {
   const [oneOffs, setOneOffs] = useState([]);
   const [alternate, setAlternate] = useState(null);
   const [hasUnread, setHasUnread] = useState(false);
+  // Benchmark Day. Its own isolated fetch, like every other domain on this
+  // screen — the quarterly self-test failing must not blank her training week.
+  const [benchmark, setBenchmark] = useState(null);
   const [messagingEnabled, setMessagingEnabled] = useState(false);
   // Live events this member hasn't answered yet. The Events tab is where
   // they live; this is just the nudge on the screen people actually open.
@@ -908,6 +919,7 @@ export default function MemberHome() {
       setHasUnread(cached.messaging?.unread ?? false);
     }
     if ("events" in cached) setPendingEvents(cached.events);
+    if ("benchmark" in cached) setBenchmark(cached.benchmark);
 
     // On a failed refresh the display-only sections below keep whatever was
     // painted from cache instead of blanking themselves. Before caching, a
@@ -1312,6 +1324,38 @@ export default function MemberHome() {
         } catch (err) {
           console.error("My Week: failed to check events", err);
           if (!isStale() && !("events" in cached)) setPendingEvents([]);
+        }
+      })(),
+
+      // Benchmark Day. Whether the button shows at all is the coach's three
+      // dates, so a member outside the window pays for one cheap query and
+      // nothing renders.
+      (async () => {
+        try {
+          const event = await retryOnce(() => getActiveBenchmarkEvent());
+          if (!event) {
+            if (!isStale()) {
+              setBenchmark(null);
+              save("benchmark", null);
+            }
+            return;
+          }
+          const phase = benchmarkPhase(event);
+          // The countdown state shows nothing she has logged, so it needs no
+          // board — one round trip instead of three in the common case.
+          let board = null;
+          if (phase !== "countdown") {
+            const previous = await getPreviousBenchmarkEvent(event);
+            board = (await getBenchmarkBoard(profile.id, event, previous)).current;
+          }
+          const payload = { event, board };
+          if (!isStale()) {
+            setBenchmark(payload);
+            save("benchmark", payload);
+          }
+        } catch (err) {
+          console.error("My Week: failed to load Benchmark Day", err);
+          if (!isStale() && !("benchmark" in cached)) setBenchmark(null);
         }
       })(),
     ]);
@@ -1893,6 +1937,29 @@ export default function MemberHome() {
           meta="Your coach is building your program. Check back soon."
         />
       )}
+
+      {/* Benchmark Day — four days a year, above her week because on those
+          days it IS the week. The phase is recomputed here rather than stored
+          with the fetch, so a tab left open overnight rolls from countdown to
+          live on its own. */}
+      {(() => {
+        const phase = benchmarkPhase(benchmark?.event);
+        if (phase === "none") return null;
+        return (
+          <>
+            <Eyebrow style={{ marginBottom: 10 }}>This quarter</Eyebrow>
+            <BenchmarkWeekCard
+              phase={phase}
+              event={benchmark.event}
+              board={benchmark.board}
+              daysOut={daysUntilBenchmark(benchmark.event)}
+              onOpen={() =>
+                router.push(phase === "results" ? "/(member)/benchmark/card" : "/(member)/benchmark")
+              }
+            />
+          </>
+        );
+      })()}
 
       {(readyGroups.length > 0 || spc?.status === "ready" || oneOffs.length > 0 || nutrition || groups.some((g) => g.status !== "ready")) && (
         <Eyebrow style={{ marginBottom: 10 }}>Your week</Eyebrow>

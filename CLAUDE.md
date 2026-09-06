@@ -6825,6 +6825,128 @@ the toast suppressed toward Photos and firing toward Weekly with the right
 combined label, and the popup's once-a-day guard. **Not verified behind a
 real login** — standing limitation.
 
+## Benchmark Day: the neon board comes into the app (2026-09-06)
+
+A handoff (`design_handoff_member_benchmark_v1/` — README + `Kova Benchmark
+Day.dc.html` + 10 screenshots + `board-reference.png`) brings the gym's
+quarterly self-test into the member app. Four times a year members test pull
+ups, push ups and squats and place one plastic kettlebell per movement on a
+neon board bolted to the wall; this is that ritual, on a phone. Migration
+`0120` — applied and verified live.
+
+**It is deliberately the one place in the app that is not warm clay and
+cream.** Black ground, three neon lift colours sampled from the physical
+board, mint for "this improved". Those tokens live in
+`components/benchmark/neon.js` and NOT in `lib/theme.js`, on purpose: a mint
+that only ever means "you beat last quarter" should not be reachable from a
+nutrition screen.
+
+**The glow, which is most of the visual identity.** The design calls for
+LAYERED text glows (`0 0 16px …, 0 0 42px …`) and RN's
+`textShadowColor/Offset/Radius` can only express one. **react-native-web
+accepts a raw `textShadow` CSS string as a first-class style property** — it
+is in RNW's own allowlist and its preprocessor concatenates it with any
+derived value (it now warns that the `textShadow*` props are the deprecated
+form). So on web, where every real user is, `neonTextShadow()` hands it the
+literal CSS and the design lands exactly. Native falls back to the
+single-layer props at the CORE radius. The handoff suggested an absolutely
+positioned duplicate `Text` behind the real one to fake the halo; rejected —
+a duplicate has to reproduce the original's line breaking exactly or it
+fringes, and this codebase has been burned twice by absolutely positioned
+text on Fabric. Box glows are `shadowColor` + `shadowRadius` at zero offset,
+which RNW compiles to a real `box-shadow`; native Android gets a plain
+elevation shadow instead of a coloured one, accepted rather than faked.
+
+**Schema: two tables, and the `slot` column is the whole design.**
+`benchmark_events` is the coach's three dates. `benchmark_entries` is one row
+per (event, member, movement, **slot**), where slot is `'this'` or `'last'` —
+because the member's screen has TWO columns and BOTH are editable. `'last'`
+is an **override** of what the previous event says she did, not a write back
+onto it: the Last column exists mostly for her FIRST benchmark, when there is
+no history to prefill and she is typing what she remembers, and letting that
+edit reach back would mean a finished benchmark can change months later with
+nothing saying so. So the app reads the previous event's `'this'` row as the
+default and only writes a `'last'` row once she actually changes something —
+same override-or-default shape as `spc_workout_week_titles`. **A benchmark
+that was recorded correctly stores nothing extra.**
+
+**No status column and no publish step.** Which of the three My Week states
+shows is derived from today against `show_from` / `benchmark_day` /
+`hide_after`, so there is no half-published state to leave behind. The phase
+is recomputed at RENDER on My Week rather than stored with the fetch, so a tab
+left open overnight rolls from countdown to live on its own.
+`value`/`load` are TEXT, not numeric — what goes on the bell is whatever she
+keys in, and the unit differs per tier (pull ups tier 2 is seconds of an iso
+hold, tier 4 is reps), so storing the string keeps the record equal to the
+sticker on the physical kettlebell.
+
+**Writes are bounded to `benchmark_day … hide_after` in RLS, deliberately
+wider than the UI's lock.** The kettlebells lock the morning after benchmark
+day, but a member finishing at 11:58pm must not hit a wall at 12:01, and a
+stale browser tab must not be able to write into a benchmark from three
+months ago.
+
+**Comparison rules** live once in `compareEntries` and are derived on every
+read, never stored. The rule worth not relitigating: **variation outranks
+tier** — moving off the bands onto the floor is a win even when the tier
+drops, and the pill is then the whole sentence with no tier in it at all.
+
+**Two places the README and the prototype disagreed, and the prototype won**
+(same precedent as the coach-web pass): the hub's movement names are **42px**,
+not the README's 30 — the prototype's own markup renders 42 and the signed-off
+screenshot shows it. And the celebration's result pill is **always the lift
+colour**, never mint — checked against the prototype's markup rather than
+inferred from the palette note, which is about the shareable card's delta line.
+
+**Deviation worth Terra's call: the card's primary button says "Screenshot
+this card", not the design's "Save to photos".** There is no rasterizer in this
+app — `react-native-view-shot` is a native dependency and every real user is on
+the installed PWA, where a native module never arrives — so a "Save to photos"
+button would do nothing. The card is built screenshot-clean for exactly this
+reason, the same way the coach's photo-compare board is. Making it a real save
+means adding that dependency plus a native rebuild.
+
+**Not built, and not in the handoff: a coach-facing results view.** The RLS
+(staff read every member's entries) and the query
+(`listBenchmarkEntriesForEvent`) are in place, so it is one screen away rather
+than one migration away.
+
+`FinalizeConfetti` gained an optional `colors` prop rather than growing a
+fourth confetti implementation; everything else about it is unchanged.
+
+**Two real layout bugs found by measuring, which a clean bundle did not
+catch**: the My Week results tiles' three neon numbers sat 5px out of line
+because `SEC ECCENTRIC` wrapped to two lines while `REPS` did not — with
+`space-between`, a bottom block that wraps pushes the number above it up, so
+the unit line now RESERVES two lines whether it needs them or not. And the
+coach settings' name `<input>` took its own 181px intrinsic width against a
+130px `minWidth` and wrapped the label beside it onto two lines — the standing
+RNW rule, pin it with `width` + `flexGrow/flexShrink: 0`, never a bare
+`flex: 0`.
+
+**Verification.** Migration dry-run in a rolled-back transaction, then a
+15-assertion RLS impersonation test as a real member, a real coach and a real
+admin (member sees 1 of 3 events and only her own entries; insert into a
+future or closed event, as another user, or of an event itself all refused
+42501; coach reads all three and writes none; both constraints and the
+uniqueness rule bite) — also rolled back — before applying for real. 34 unit
+assertions against the SHIPPED comparison/phase/unit source. `npm run build` +
+`check:routes` clean (the route gate caught the missing rewrite, as designed),
+plus a Babel parse / unresolved-identifier / unused-import pass over all 18
+touched files. And every screen driven for real at 390px through a throwaway
+`app/zz-bench.js` route (deleted, stubs restored and md5-verified
+byte-identical): all three My Week states, the hub empty and one-logged, the
+pull-ups card placing a bell → keying a number → the gate advancing through
+all four labels, moving the bell carrying the number AND the unit changing
+with the tier, tapping the occupied box removing it, the squats variation
+toggle with its load gate and the bell correctly hiding on the other
+variation, the celebration with its flash/confetti/pill, the shareable card,
+and the coach settings including the date picker and its out-of-order guard.
+
+**Not verified**: any of it behind a real login, and none of it on native —
+standing limitation. Worth Terra's pass: set a real benchmark's dates, then
+log a real movement on a phone.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -6923,6 +7045,7 @@ sections; next number after 0080 is 0081.)
 - `0117_hub_makeup_sessions.sql` — **run**, verified live 2026-09-05 (dry run rolled back and confirmed to leave nothing, then applied; column, function, and `hub_resolve_staged`'s new OUT parameter all confirmed by query, plus a behavioural test as the real display account and an end-to-end staged start as a real coach, both rolled back). Adds `programming.hub_staged_clients.new_instance`, `programming.hub_open_makeup(uuid, uuid, smallint)`, `new_instance` on `hub_resolve_staged`'s return (DROP + CREATE — return type changes; body otherwise byte-identical to 0104's), and a `hub_open_makeup` call in `hub_start_staged`'s insert loop. Fixes "start a new one" being impossible from the wall display, which had never worked. **Apply before deploying the JS** — `addStagedClient` writes `new_instance`. Old JS against the new function is fine either way (an extra returned field is ignored; a missing one reads as false).
 - `0118_hub_slot_instance.sql` — **run**, verified live 2026-09-05 (dry run rolled back, then applied; the whole scenario rebuilt against Ashley's real rows in a rolled-back transaction — slot moves to the next free instance, her original completion and tick stay on instance 1, the make-up opens with zero of each, and a finalize/un-finalize round trip touches only its own row). Adds `programming.hub_session_clients.instance` (default 1, nothing to backfill) and changes `hub_open_makeup` to RESERVE that number on the slot instead of writing a completion — writing it at board start is what made a make-up open washed green, since a live board's `finalized` is "any completion for this week". The board scopes finalized-state, per-exercise ticks and both writes to the slot's instance. **The member's My Week sheet still creates the completion up front on purpose** — she is deep-linked straight into logging.
 - `0119_hub_start_with_instance.sql` — **run**, verified live 2026-09-05 (dry run rolled back, then applied; both RPCs driven as the real display account against Ashley's real rows in rolled-back transactions — a make-up add and a PIN start each read instance 2 the first time the slot is visible with no completion at that instance, an ordinary add still reads 1, and a call with the flag absent falls back to 1 with no error). `hub_add_client` and `hub_start_session` now resolve a make-up's instance themselves before returning, closing the window the board's poll was falling into. **Drops the 4-argument `hub_add_client` overload** — adding a defaulted parameter creates a new function rather than replacing the old one, and both would match a 4-argument call.
+- `0120_benchmark_day.sql` — **run**, verified live 2026-09-06 (dry-run then a 15-assertion RLS impersonation test as a real member, coach and admin in a rolled-back transaction first; both tables, 7 policies, and a live PostgREST 200 confirmed after). Adds `programming.benchmark_events` (the coach's three dates, no status column — an event whose window covers today IS live) and `programming.benchmark_entries` (one row per event/member/movement/**slot**, where `slot` is `'this'` or `'last'` — see the Benchmark Day section for why the Last column is an override rather than a write back onto the previous event). Member writes are bounded to `benchmark_day … hide_after`, deliberately wider than the UI's lock.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
