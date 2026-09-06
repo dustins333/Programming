@@ -199,6 +199,8 @@ export default function ClientsWeb() {
 
   // Counts are computed against the search-filtered set, not the raw
   // roster, so a chip never promises rows a search has already excluded.
+  const isSearching = search.trim().length > 0;
+
   const searched = useMemo(() => {
     if (!state) return [];
     const q = search.trim().toLowerCase();
@@ -214,8 +216,14 @@ export default function ClientsWeb() {
     return base.map((c) => ({ ...c, count: searched.filter((r) => matchesFilter(r, c.key)).length }));
   }, [state, searched, matchesFilter]);
 
+  // A search looks at EVERYONE. Searching inside the chip is the same as not
+  // finding her: a coach types a name because she wants that person, and the
+  // whole reason to type it is usually that she isn't in whatever slice is on
+  // screen. So while there's a search the chip stands down (and says so, and
+  // goes inert) rather than being cleared — clearing would make her set it up
+  // again afterwards.
   const filtered = useMemo(() => {
-    const rows = searched.filter((r) => matchesFilter(r, filter));
+    const rows = isSearching ? searched : searched.filter((r) => matchesFilter(r, filter));
     return [...rows].sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
       if (sort === "flags") return b.flagCount - a.flagCount || a.name.localeCompare(b.name);
@@ -225,7 +233,7 @@ export default function ClientsWeb() {
       const bv = b.lastSession.days == null ? Number.MAX_SAFE_INTEGER : b.lastSession.days;
       return bv - av || a.name.localeCompare(b.name);
     });
-  }, [searched, filter, sort, matchesFilter]);
+  }, [searched, filter, isSearching, sort, matchesFilter]);
 
   const { width } = useWindowDimensions();
   const isNarrow = width < MOBILE_BREAKPOINT;
@@ -247,8 +255,9 @@ export default function ClientsWeb() {
             <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 26 }}>Clients</Text>
             {state ? (
               <Text className="mt-0.5 text-stone-500" style={{ fontFamily: fonts.sans, fontSize: 13 }}>
-                {state.rows.length} active
-                {unassignedCount > 0 ? ` · ${unassignedCount} unassigned` : ""}
+                {isSearching
+                  ? `${filtered.length} match${filtered.length === 1 ? "" : "es"} · filters paused while you search`
+                  : `${state.rows.length} active${unassignedCount > 0 ? ` · ${unassignedCount} unassigned` : ""}`}
               </Text>
             ) : null}
           </View>
@@ -290,7 +299,19 @@ export default function ClientsWeb() {
           <ActivityIndicator color={colors.primary} />
         ) : (
           <>
-            <View className="mb-[18px] flex-row flex-wrap items-center" style={{ gap: 8 }}>
+            {/* Chips dimmed and inert rather than hidden while a search is
+                running: hiding them would make the toolbar jump, and leaving
+                them live would offer clicks that change nothing on screen.
+                The chosen chip is still there when the search clears. Sort is
+                deliberately left alone — it's a preference, not a slice. */}
+            <View
+              className="mb-[18px] flex-row flex-wrap items-center"
+              style={{ gap: 8 }}
+            >
+              <View
+                className="flex-row flex-wrap items-center"
+                style={{ gap: 8, opacity: isSearching ? 0.4 : 1, pointerEvents: isSearching ? "none" : "auto" }}
+              >
               {chips.map((chip) => (
                 <FilterChip
                   key={chip.key}
@@ -301,6 +322,7 @@ export default function ClientsWeb() {
                   onPress={() => setFilter(chip.key)}
                 />
               ))}
+              </View>
               <View className="ml-auto">
                 <Select
                   value={sort}
@@ -318,7 +340,13 @@ export default function ClientsWeb() {
               <ClientRosterTable
                 rows={pageRows}
                 today={state.today}
-                emptyMessage={state.rows.length === 0 ? "No members linked yet." : "No clients match this filter."}
+                emptyMessage={
+                  state.rows.length === 0
+                    ? "No members linked yet."
+                    : isSearching
+                      ? "Nobody matches that search."
+                      : "No clients match this filter."
+                }
                 onOpenClient={(row) => router.push(`/(coach)/clients/${row.id}`)}
                 /* Message goes to the client's own page rather than the
                    Messages inbox: the inbox has no "open this client" param

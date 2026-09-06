@@ -342,13 +342,18 @@ function SpcRosterDesktop() {
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [rows]);
 
-  // Search narrows first, then coach, then the status chips — every count
-  // describes the set a coach is actually looking at.
+  // A search looks at EVERYONE. Searching inside the filter is the same as
+  // not finding her: a coach types a name because she wants that person, and
+  // the whole reason to type it is usually that she isn't in whatever slice
+  // is on screen. So while there's a search, both the coach filter and the
+  // status chips stand down (and say so, and go inert) rather than being
+  // cleared — clearing would make her set them up again afterwards.
+  const isSearching = search.trim().length > 0;
+
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const byCoach = rows.filter((r) => matchesCoachFilter(r, coachFilter, profile?.id));
-    if (!q) return byCoach;
-    return byCoach.filter((r) => (r.name ?? "").toLowerCase().includes(q));
+    if (q) return rows.filter((r) => (r.name ?? "").toLowerCase().includes(q));
+    return rows.filter((r) => matchesCoachFilter(r, coachFilter, profile?.id));
   }, [rows, coachFilter, search, profile?.id]);
 
   const counts = useMemo(() => {
@@ -358,7 +363,7 @@ function SpcRosterDesktop() {
   }, [searched]);
 
   const visible = useMemo(() => {
-    const filtered = statusFilter ? searched.filter((r) => r.state === statusFilter) : searched;
+    const filtered = statusFilter && !isSearching ? searched.filter((r) => r.state === statusFilter) : searched;
     const byName = (a, b) => (a.name ?? "").localeCompare(b.name ?? "");
     const sorted = [...filtered].sort((a, b) => {
       if (sort === "name") return byName(a, b);
@@ -367,7 +372,7 @@ function SpcRosterDesktop() {
       return byName(a, b);
     });
     return dir === 1 ? sorted : sorted.reverse();
-  }, [searched, statusFilter, sort, dir]);
+  }, [searched, statusFilter, isSearching, sort, dir]);
 
   const runningOutThisWeek = useMemo(
     () => searched.filter((r) => r.status !== "paused" && r.daysLeft != null && r.daysLeft >= 0 && r.daysLeft <= 6 && !r.nextQueued).length,
@@ -425,8 +430,16 @@ function SpcRosterDesktop() {
           <View style={{ flex: 1, minWidth: 240 }}>
             <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primaryOnWhite }}>SPC</Text>
             <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#78716c", marginTop: 2 }}>
-              {searched.length} client{searched.length === 1 ? "" : "s"}
-              {runningOutThisWeek > 0 ? ` · ${runningOutThisWeek} run out this week` : ""}
+              {isSearching ? (
+                <>
+                  {visible.length} match{visible.length === 1 ? "" : "es"} · filters paused while you search
+                </>
+              ) : (
+                <>
+                  {searched.length} client{searched.length === 1 ? "" : "s"}
+                  {runningOutThisWeek > 0 ? ` · ${runningOutThisWeek} run out this week` : ""}
+                </>
+              )}
             </Text>
           </View>
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
@@ -473,6 +486,20 @@ function SpcRosterDesktop() {
               color: "#2a211c",
             }}
           />
+          {/* Dimmed and inert rather than hidden while a search is running:
+              hiding them would make the toolbar jump, and leaving them live
+              would offer clicks that change nothing on screen. The chosen
+              filter is still there when the search clears. */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+              opacity: isSearching ? 0.4 : 1,
+              pointerEvents: isSearching ? "none" : "auto",
+            }}
+          >
           <StatusChip
             label="All"
             count={searched.length}
@@ -497,6 +524,7 @@ function SpcRosterDesktop() {
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#78716c" }}>Coach:</Text>
             <select
               value={coachFilter ?? "all"}
+              disabled={isSearching}
               onChange={(e) => setCoachFilter(e.target.value === "all" ? null : e.target.value)}
               style={{
                 fontFamily: fonts.sansSemiBold,
@@ -516,6 +544,7 @@ function SpcRosterDesktop() {
                 </option>
               ))}
             </select>
+          </View>
           </View>
         </View>
 
@@ -548,7 +577,9 @@ function SpcRosterDesktop() {
               <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#a8a29e", textAlign: "center" }}>
                 {rows.length === 0
                   ? "Nobody is on SPC yet. Turn it on from a client's profile to get started."
-                  : "No clients match your search or filters."}
+                  : isSearching
+                    ? "Nobody on SPC matches that search."
+                    : "No clients match your filters."}
               </Text>
             </View>
           ) : (

@@ -6664,6 +6664,38 @@ shape with the web list would mean normalising two UIs that genuinely
 differ. Note the web file has no mobile branch, so the PWA renders it at
 every width — which is why fixing web covers the phone too.
 
+### A search looks at everyone
+
+Searching inside the filter is the same as not finding her: a coach types a
+name because she wants that person, and the whole reason to type it is
+usually that she isn't in whatever slice is on screen. So on all three
+rosters a non-empty search now bypasses every filter (SPC's coach filter and
+status chips, Clients' chip).
+
+The filters **stand down, they are not cleared** — clearing would make her
+set them up again afterwards, and the whole point of the session memory
+above is that she doesn't have to. While a search is running the filter
+controls dim to 0.4 and go inert, the count line reads "N matches · filters
+paused while you search", and the empty state says the search found nobody
+rather than blaming the filters. Clearing the search puts everything back
+exactly as it was. **Sort is deliberately left live** — it's a preference,
+not a slice.
+
+Inert is belt and braces, because the two mechanisms fail differently:
+`pointerEvents: "none"` on a wrapper is what a real click hit-tests against,
+and `disabled` on the Pressable is what actually stops onPress. The wrapper
+alone is not enough on the phone's Filter button — RNW gives the inner Text
+`pointer-events: auto`, so `elementFromPoint` still lands on it and the
+click bubbles; the Pressable's own `disabled` (which RNW renders as
+`aria-disabled` plus `pointer-events: none` on the pressable itself) is what
+holds. Verified both ways on both.
+
+**A synthetic `dispatchEvent` on an element bypasses hit-testing entirely**,
+so it CANNOT be used to prove `pointer-events: none` blocks anything — it
+fires the handler regardless, which is exactly what happened here and made
+an inert control look live. Test it with `document.elementFromPoint` at the
+control's own centre instead, and check the returned node isn't inside it.
+
 ### Two verification lessons
 
 **Scroll events do not fire at all in the hidden Browser pane.** Measured:
@@ -6701,8 +6733,12 @@ unmount/remount at 1280 and 390, and a `?status=` arrival forcing the top of
 the list while the coach filter still persists. On Clients: the chip, the
 sort and page 2 all surviving the round trip; a `?filter=flagged` arrival
 applying, then a hand-picked chip surviving a return on that same URL; and a
-search typed while mounted still resetting to page 1. And the shared hook's
-state machine end to end — saves on scroll, skips a too-short layout,
+search typed while mounted still resetting to page 1. For the search
+override: on SPC, filtering to one coach AND one status and then searching a
+name belonging to neither still finds her, on both widths, with the controls
+measurably unreachable and the count line saying so; on Clients, filtering to
+Unassigned and searching an assigned client finds her; and clearing the
+search restores both. And the shared hook's state machine end to end — saves on scroll, skips a too-short layout,
 restores to exactly the saved offset once, never scrolls again on a later
 layout pass, and abandons the restore if the coach scrolls first. **Not
 verified behind a real login** — standing limitation.

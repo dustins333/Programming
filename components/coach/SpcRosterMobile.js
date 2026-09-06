@@ -494,12 +494,22 @@ export function SpcRosterMobile() {
     return roster.filter((r) => (r.name ?? "").toLowerCase().includes(q));
   }, [roster, search]);
 
+  // A search looks at EVERYONE. Searching inside the filter is the same as
+  // not finding her: a coach types a name because she wants that person, and
+  // the whole reason to type it is usually that she isn't in whatever slice
+  // is on screen. So while there's a search, the status and coach filters
+  // stand down (and say so, and go inert) rather than being cleared —
+  // clearing would make her set them up again afterwards.
+  const isSearching = search.trim().length > 0;
+
   const filtered = useMemo(() => {
-    const rows = searched.filter((r) => {
-      if (statusFilter && r.state !== statusFilter) return false;
-      if (!matchesCoachFilter(r, coachFilter, profile?.id)) return false;
-      return true;
-    });
+    const rows = isSearching
+      ? searched
+      : searched.filter((r) => {
+          if (statusFilter && r.state !== statusFilter) return false;
+          if (!matchesCoachFilter(r, coachFilter, profile?.id)) return false;
+          return true;
+        });
     const byName = (a, b) => (a.name ?? "").localeCompare(b.name ?? "");
     const sorted = [...rows].sort((a, b) => {
       if (sort === "name") return byName(a, b);
@@ -513,7 +523,7 @@ export function SpcRosterMobile() {
       return byName(a, b);
     });
     return dir === 1 ? sorted : sorted.reverse();
-  }, [searched, statusFilter, coachFilter, sort, dir, profile?.id]);
+  }, [searched, statusFilter, coachFilter, isSearching, sort, dir, profile?.id]);
 
   // "2 need programming" counts clients whose PROGRAM is running out (due
   // soon/now with something currently running) — deliberately not the
@@ -584,8 +594,11 @@ export function SpcRosterMobile() {
         </View>
 
         <Text maxFontSizeMultiplier={1.15} style={{ marginTop: 2, fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted }}>
-          {searched.length} client{searched.length === 1 ? "" : "s"}
-          {needProgramming > 0 ? ` · ${needProgramming} need programming` : ""}
+          {isSearching
+            ? `${filtered.length} match${filtered.length === 1 ? "" : "es"} · filters paused while you search`
+            : `${searched.length} client${searched.length === 1 ? "" : "s"}${
+                needProgramming > 0 ? ` · ${needProgramming} need programming` : ""
+              }`}
         </Text>
 
         <View style={{ marginTop: 14 }}>
@@ -619,8 +632,17 @@ export function SpcRosterMobile() {
                   color: INK,
                 }}
               />
+              {/* Dimmed and inert rather than hidden while a search is
+                  running: hiding it would make the row jump, and leaving it
+                  live would open a sheet whose counts describe a filter that
+                  isn't being applied. pointerEvents on the wrapper as well as
+                  `disabled`, matching the two web rosters — one style rule
+                  that can be hit-tested beats trusting a prop to have been
+                  threaded all the way down. */}
+              <View style={{ opacity: isSearching ? 0.4 : 1, pointerEvents: isSearching ? "none" : "auto" }}>
               <PressFade
                 onPress={() => setSheetOpen(true)}
+                disabled={isSearching}
                 accessibilityLabel="Filter clients"
                 style={{
                   flexDirection: "row",
@@ -656,10 +678,20 @@ export function SpcRosterMobile() {
                   </View>
                 ) : null}
               </PressFade>
+              </View>
             </View>
 
             {activeFilterCount > 0 ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 7,
+                  marginTop: 10,
+                  opacity: isSearching ? 0.4 : 1,
+                  pointerEvents: isSearching ? "none" : "auto",
+                }}
+              >
                 {statusFilter ? (
                   <FilterToken label={SPC_STATES[statusFilter]?.label ?? statusFilter} onClear={() => setStatusFilter(null)} />
                 ) : null}
@@ -677,7 +709,7 @@ export function SpcRosterMobile() {
             <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, overflow: "hidden" }}>
               {filtered.length === 0 ? (
                 <Text style={{ padding: 16, fontFamily: fonts.sans, fontSize: 13, color: colors.muted }}>
-                  No clients match your search or filters.
+                  {isSearching ? "Nobody on SPC matches that search." : "No clients match your filters."}
                 </Text>
               ) : (
                 filtered.map((row, i) => (
