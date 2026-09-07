@@ -7375,6 +7375,22 @@ Worth remembering too that a plausible-looking placeholder is worse than an
 obviously fake one — the handoff mock's own "Aug 16 – 31" read as real
 because it was formatted exactly like the real thing.
 
+**And the actual mechanism, checked rather than assumed, because Terra's read
+of it was better than mine.** I did start my own server — the scratch config
+on 8095, never her 8081 — so the leak was not a shared Metro. What I did was
+take over the Browser pane's only tab: `preview_start` points a tab at its URL,
+and with one tab open that tab is HERS. Her window switched to my harness, and
+when I later called `preview_stop` it was left sitting on a dead port.
+
+**So the fix is a tool choice, not a warning.** `tabs_create` opens a
+BACKGROUND tab and says so in its own result ("the user's current tab stays in
+front"); driving that by `tabId` leaves her front tab alone. Reach for
+`preview_start` to boot the server, then do harness work in a background tab —
+and if the pane does end up on a stopped server, navigate it back to whatever
+she was on (`lsof -nP -iTCP -sTCP:LISTEN | grep 808` finds her Metro; hers has
+been plain `expo start --web` on 8081, not the 8082 in `.claude/launch.json`)
+rather than leaving her looking at a dead page.
+
 ## Any program length, and no way to shorten a live one (2026-09-07)
 
 The SPC publish/reschedule modal offered four lengths (4/5/6/8) plus Ongoing.
