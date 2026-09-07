@@ -6970,15 +6970,25 @@ log a real movement on a phone.
   `/benchmark/card` internally.
 - **"bell" is not an abbreviation we use** — it is a kettlebell, or a KB.
   Full-word "kettlebell" is fine and stays in the placement copy and every
-  accessibility label.
+  accessibility label. This also rewrote one of the handoff's own strings: the
+  push-ups hint was "Pick your variation, then place your bell."
 - The hub's per-movement supporting line ("4 tiers | one bell", "2 variations
   | 4 tiers") is gone as fluff.
-- **"That is the training showing up." is gone** from the celebration. A tier
-  gain and a variation move now get NO supporting line at all: the pill above
-  already says "Up 1 tier" or names the move, and a sentence of encouragement
-  on top of a number that speaks for itself reads as padding. The two that
-  remain are the two doing real work, since a held tier could otherwise read
-  as failure and a first entry has nothing to compare against.
+- **The celebration's supporting copy is gone entirely, and this one is worth
+  reading before "restoring it from the handoff".** The README specifies a
+  line under the number for three of the four results ("That is the training
+  showing up." on a tier gain, "Same tier, and you held it. That counts." when
+  held, "On the board. Now you have something to chase." with no prior data)
+  and nothing on a variation move, reasoning that there the pill says it all.
+  All three were built verbatim. Terra cut the first, then the other two.
+  So the handoff's own variation-move rule is now applied to every result and
+  `celebrationCopy` is deleted rather than left returning "" four times.
+  **The handoff still asks for those lines; it is out of date on this point,
+  by decision.** A note to that effect sits where the function was, since the
+  next person to diff the code against the README will otherwise "fix" it back.
+  Checked both the README and the prototype for alternative wording first —
+  there is none, those three strings are the only supporting copy anywhere in
+  the bundle.
 - `isWinTone` was deleted, dead since the celebration pill was corrected to
   always use the lift colour.
 

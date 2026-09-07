@@ -6,7 +6,7 @@ import { PressFade } from "../PressFade";
 import { FinalizeConfetti } from "../FinalizeConfetti";
 import { NeonText } from "./NeonText";
 import { NEON, glow } from "./neon";
-import { LIFTS, compareEntries, celebrationCopy, unitLabel } from "../../lib/programming/benchmark";
+import { LIFTS, compareEntries, unitLabel } from "../../lib/programming/benchmark";
 import { fonts } from "../../lib/theme";
 
 // The one place in the app that celebrates. Everything else here is
@@ -40,7 +40,6 @@ export function BenchmarkCelebration({ eventName, movement, entry, lastEntry, al
     Animated.timing(rise, { toValue: 1, duration: 500, delay: 180, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }).start();
   }, [flash, pop, rise]);
 
-  const copy = celebrationCopy(delta.tone);
 
   return (
     <View style={{ flex: 1, backgroundColor: NEON.ground, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
@@ -147,23 +146,6 @@ export function BenchmarkCelebration({ eventName, movement, entry, lastEntry, al
             {delta.text}
           </Text>
         </View>
-
-        {copy ? (
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{
-              fontFamily: fonts.sans,
-              fontSize: 13,
-              lineHeight: 19,
-              color: NEON.ink62,
-              maxWidth: 260,
-              textAlign: "center",
-              marginTop: 14,
-            }}
-          >
-            {copy}
-          </Text>
-        ) : null}
 
         <PressFade
           onPress={onDismiss}
