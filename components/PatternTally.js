@@ -7,6 +7,7 @@ const LABELS = {
   squat: "Squat",
   lunge: "Lunge",
   hinge: "Hinge",
+  bridge: "Bridge",
   core: "Core",
   row: "Row",
   horizontal_push: "H Push",
