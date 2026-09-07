@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, Image, Pressable, Modal, ActivityIndicator } from "react-native";
 import { getPhotoSignedUrls } from "../../lib/nutrition/photos";
-import { OptionStepper } from "./OptionPicker";
+import { OptionStepper } from "../OptionPicker";
 import { ZoomableImage } from "./ZoomableImage";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";

@@ -12,7 +12,7 @@ import {
 } from "../../../lib/programming/templateCategories";
 import { CoachShell } from "../../../components/CoachShell";
 import { TemplateCategoryManager } from "../../../components/coach/TemplateCategoryManager";
-import { OptionPicker } from "../../../components/nutrition/OptionPicker";
+import { OptionPicker } from "../../../components/OptionPicker";
 import { fonts, colors } from "../../../lib/theme";
 import { toastError } from "../../../lib/toast";
 import { confirmDeleteTemplate } from "../../../lib/confirmDialog";

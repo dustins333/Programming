@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, Image, Modal, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getPhotoSignedUrls, updatePhotoSubmission, deletePhoto } from "../../lib/nutrition/photos";
-import { OptionPicker, OptionStepper } from "./OptionPicker";
+import { OptionPicker, OptionStepper } from "../OptionPicker";
 import { confirmDeletePhoto } from "../../lib/confirmDialog";
 import { toastError } from "../../lib/toast";
 import { formatDateMDY } from "../../lib/formatDate";

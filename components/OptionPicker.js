@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, Pressable, Modal, Platform, ScrollView } from "react-native";
-import { fonts, colors } from "../../lib/theme";
+import { fonts, colors } from "../lib/theme";
 
 const isWeb = Platform.OS === "web";
 

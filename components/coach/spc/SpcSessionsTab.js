@@ -3,6 +3,7 @@ import { View, Text, TextInput, Modal, ActivityIndicator, Switch, Platform } fro
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../../PressFade";
+import { OptionPicker } from "../../OptionPicker";
 import { ExercisePickerModal } from "../../ExercisePickerModal";
 import { fonts, colors } from "../../../lib/theme";
 import { addDays, mondayOnOrBefore, todayInBoise } from "../../../lib/boiseDate";
@@ -347,6 +348,28 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
 
 /* ---------------------------------------------------------- publish modal */
 
+// The dropdown's full range. The chips below it are shortcuts into this same
+// value, not a separate control, so the two can never disagree about what is
+// selected. Values are STRINGS because react-native-web's <select> hands back
+// e.target.value — passing numbers would give the web build "6" where native
+// gave 6.
+const WEEK_CHOICES = Array.from({ length: 12 }, (_, i) => i + 1);
+
+// A block can be longer than 12 weeks (a rolling one grows a week at a time),
+// so its own length joins the list rather than being clamped away — clamping
+// would silently shorten it to the default the moment its dates were changed.
+function weekOptions(currentWeeks) {
+  const weeks = [...WEEK_CHOICES];
+  if (Number.isInteger(currentWeeks) && currentWeeks > 0 && !weeks.includes(currentWeeks)) {
+    weeks.push(currentWeeks);
+    weeks.sort((a, b) => a - b);
+  }
+  return [
+    ...weeks.map((w) => ({ value: String(w), label: `${w} ${w === 1 ? "week" : "weeks"}` })),
+    { value: "ongoing", label: "Ongoing (no end date)" },
+  ];
+}
+
 // Does double duty: publishing a draft, and changing the dates of one already
 // published for a future Monday. Same question either way — which Monday, how
 // long, and what that does to whatever is running — so a second modal would
@@ -385,13 +408,10 @@ export function PublishProgramModal({ visible, onClose, current, spcClient, onPu
       // Seeded from where it actually is, so the modal opens showing the
       // truth and any change is a deliberate one.
       setStartDate(block.block_start_date);
-      setWeeks(
-        block.block_end_date == null
-          ? "ongoing"
-          : [4, 5, 6, 8].includes(block.block_length_weeks)
-            ? block.block_length_weeks
-            : 6
-      );
+      // Its real length, whatever it is — the dropdown can hold any of them.
+      // Seeding to a nearby quick pick would have quietly RESHAPED a 3-week
+      // program into a 6-week one on save.
+      setWeeks(block.block_end_date == null ? "ongoing" : block.block_length_weeks || 6);
       return;
     }
     // No current program → default to Now, so publishing visibly takes
@@ -399,7 +419,7 @@ export function PublishProgramModal({ visible, onClose, current, spcClient, onPu
     // (Terra's item 4). With one running, next Monday is the safer default
     // and Now is one tap away.
     setStartDate(current ? nextMonday : thisMonday);
-    setWeeks([4, 5, 6, 8].includes(current?.block_length_weeks) ? current.block_length_weeks : 6);
+    setWeeks(current?.block_length_weeks || 6);
     // Derived values are stable while the modal is open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -440,7 +460,20 @@ export function PublishProgramModal({ visible, onClose, current, spcClient, onPu
             ))}
           </View>
 
-          <Eyebrow style={{ marginTop: 18, marginBottom: 8 }}>HOW MANY WEEKS</Eyebrow>
+          {/* The dropdown carries the whole range and always reads the
+              current value, so it doubles as the read-out for the chips
+              beside it — tapping 5 makes it say "5 weeks", and picking 3
+              lights no chip. One value, two ways in. */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 18, marginBottom: 8 }}>
+            <Eyebrow>HOW MANY WEEKS</Eyebrow>
+            <View style={{ width: 148 }}>
+              <OptionPicker
+                options={weekOptions(rescheduling ? block?.block_length_weeks : current?.block_length_weeks)}
+                value={ongoing ? "ongoing" : String(weeks ?? "")}
+                onChange={(v) => setWeeks(v === "ongoing" ? "ongoing" : Number(v))}
+              />
+            </View>
+          </View>
           <View style={{ flexDirection: "row", gap: 8 }}>
             {/* PressFade needs a plain object style, never an array — it
                 spreads the style it's handed (see the v5 pass's Pressable
@@ -468,7 +501,7 @@ export function PublishProgramModal({ visible, onClose, current, spcClient, onPu
               {startDate
                 ? ongoing
                   ? `Starts ${monthDay(startDate)} · ongoing`
-                  : `${monthDay(startDate)} – ${monthDay(endDate)} · ${weeks} weeks`
+                  : `${monthDay(startDate)} – ${monthDay(endDate)} · ${weeks} ${weeks === 1 ? "week" : "weeks"}`
                 : ""}
             </Text>
             <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c", marginTop: 4 }}>
