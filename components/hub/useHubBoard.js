@@ -427,6 +427,7 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
   }, []);
 
   return {
+    reviewMode,
     hubSession,
     board,
     warmups,

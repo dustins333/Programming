@@ -338,6 +338,14 @@ export function HubClientColumn({
   warmups,
   scale = "tv",
   authorName = null,
+  // Review mode only (a past board, reopened on a coach's phone). A finalized
+  // session stays fully writable and drops the wash, keeping every other
+  // finalized marker — the olive bar, border, header tint, and a footer that
+  // says so. Finalizing LOCKS on the live board because that board is on a
+  // wall anyone walks past; a board that finished this morning has the
+  // opposite problem, which is that finishing the write-up is the whole
+  // reason to reopen it.
+  editableWhenFinalized = false,
   onToggleComplete,
   onMoveLift,
   onToggleFinalize,
@@ -633,6 +641,9 @@ export function HubClientColumn({
     if (!entry.finalized || wasFinalized) return;
     // A lift left open under the wash reads as broken — and nothing under the
     // wash is reachable to close it. Flush whatever is in it and shut it.
+    // Kept in review too, where there is no wash: collapsing is what
+    // guarantees a half-typed set lands rather than riding the debounce, and
+    // the card reopens on a tap.
     if (expandedId) collapse();
     setCelebrate(Date.now());
     const t = setTimeout(() => setCelebrate(0), CELEBRATION_MS);
@@ -869,7 +880,8 @@ export function HubClientColumn({
       {/* A finalized column carries a 6px olive bar, an olive border and an
           olive-tinted header, on top of the green wash over the session
           itself (HubFinalizedOverlay) and a footer button that flips to
-          "Make changes". A COMPLETE pill in this header was a fifth way of
+          "Make changes". These three are what carries "finalized" on their
+          own in review, where the wash and that button are both dropped. A COMPLETE pill in this header was a fifth way of
           saying the same thing, and the one competing with the client's name
           for width — dropped 2026-09-03. The bar's height is reserved in
           every column: rendering it only when finalized pushed that one
@@ -1116,29 +1128,71 @@ export function HubClientColumn({
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Show keypad ⌃</Text>
           </PressFade>
         ) : null}
-        {entry.finalized ? <HubFinalizedWash compact={compact} onPress={() => setConfirmUndo(true)} /> : null}
+        {entry.finalized && !editableWhenFinalized ? (
+          <HubFinalizedWash compact={compact} onPress={() => setConfirmUndo(true)} />
+        ) : null}
       </View>
 
       <View style={{ padding: 10, paddingTop: 8 }}>
-        {/* Finalizing is one tap; undoing is two. The button on a finished
-            session says what it is FOR, and the confirm says what it will
-            actually do — a one-tap un-finalize on a wall anyone walks past is
-            a session quietly reopened by a sleeve. */}
-        <PressFade
-          onPress={() => (entry.finalized ? setConfirmUndo(true) : onToggleFinalize?.())}
-          style={{
-            borderRadius: 12,
-            paddingVertical: compact ? 11 : 13,
-            alignItems: "center",
-            backgroundColor: entry.finalized ? "transparent" : DONE,
-            borderWidth: entry.finalized ? 1.5 : 0,
-            borderColor: DONE,
-          }}
-        >
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: compact ? 14 : 15, color: entry.finalized ? DONE : "white" }}>
-            {entry.finalized ? "Make changes" : "Finalize session"}
-          </Text>
-        </PressFade>
+        {/* Three footers, and which one shows is the whole difference between
+            the two surfaces.
+
+            Not finalized: the one-tap Finalize, everywhere. Reviewing a board
+            where somebody forgot to tap it is a real case, so this stays live
+            on a past session too.
+
+            Finalized on the LIVE board: "Make changes", which opens a confirm
+            rather than undoing outright — a one-tap un-finalize on a wall
+            anyone walks past is a session quietly reopened by a sleeve.
+
+            Finalized in REVIEW: nothing is locked, so a button offering to
+            unlock it would be a lie. It states the fact instead, with undo
+            demoted to a quiet link beside it — the rare "I marked the wrong
+            client done", not the way in to adding a note. */}
+        {entry.finalized && editableWhenFinalized ? (
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderRadius: 999,
+                backgroundColor: "#eef1e7",
+                borderWidth: 1,
+                borderColor: "#cfdcc2",
+                paddingLeft: 9,
+                paddingRight: 12,
+                paddingVertical: 7,
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={16} color={DONE} style={{ marginRight: 6 }} />
+              <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: DONE }}>
+                Finalized · still editable
+              </Text>
+            </View>
+            <View style={{ flex: 1 }} />
+            <PressFade onPress={() => setConfirmUndo(true)} style={{ paddingHorizontal: 8, paddingVertical: 7 }}>
+              <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.muted }}>
+                Undo finalize
+              </Text>
+            </PressFade>
+          </View>
+        ) : (
+          <PressFade
+            onPress={() => (entry.finalized ? setConfirmUndo(true) : onToggleFinalize?.())}
+            style={{
+              borderRadius: 12,
+              paddingVertical: compact ? 11 : 13,
+              alignItems: "center",
+              backgroundColor: entry.finalized ? "transparent" : DONE,
+              borderWidth: entry.finalized ? 1.5 : 0,
+              borderColor: DONE,
+            }}
+          >
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: compact ? 14 : 15, color: entry.finalized ? DONE : "white" }}>
+              {entry.finalized ? "Make changes" : "Finalize session"}
+            </Text>
+          </PressFade>
+        )}
       </View>
 
       {/* Painted last so it falls over the whole card. pointerEvents none, so
@@ -1148,6 +1202,7 @@ export function HubClientColumn({
 
       <HubUndoFinalizeModal
         visible={confirmUndo}
+        editable={editableWhenFinalized}
         clientName={(entry.clientName ?? "").split(" ")[0] || null}
         onCancel={() => setConfirmUndo(false)}
         onConfirm={() => {

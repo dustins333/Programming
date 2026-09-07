@@ -20,8 +20,16 @@ import { fonts, colors, type } from "../../lib/theme";
 // authorName: whose first name a saved note is attributed to — the coach's
 // own on their phone, the hub session's coach on the TV (the display account
 // is a device, not a person, and cannot read core.users to look one up).
+//
+// A finalized session LOCKS on the live board and stays open in review. The
+// lock exists for the wall: a session anyone walks past has to be safe from a
+// sleeve, and the wash is what reads "done" from across the gym. Neither is
+// true of a board that finished hours ago on a coach's phone, where the whole
+// point is writing it up afterwards — so review mode keeps every finalized
+// marker and drops the wash. reviewMode comes off the hook rather than from
+// `scale`, since the live coach phone is also scale="phone".
 export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now, onDropClient = null }) {
-  const { hubSession, board, warmups, setEditing, markEdit, clearEditing, saveSets, saveNote, toggleExerciseComplete, toggleFinalize, moveLift } = hub;
+  const { reviewMode, hubSession, board, warmups, setEditing, markEdit, clearEditing, saveSets, saveNote, toggleExerciseComplete, toggleFinalize, moveLift } = hub;
   const { width } = useWindowDimensions();
   const [activeClientId, setActiveClientId] = useState(null); // phone-width tabs
 
@@ -93,6 +101,7 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now, o
     : null;
 
   const handlers = {
+    editableWhenFinalized: reviewMode,
     onToggleComplete: handleToggleComplete,
     onDropClient: handleDropClient,
     onMoveLift: handleMoveLift,
@@ -127,6 +136,7 @@ export function HubLiveSession({ hub, authorId, authorName, scale = "tv", now, o
             warmups={warmups.get(slot.group_workout_id ?? slot.spc_workout_id)}
             scale="phone"
             authorName={authorName}
+            editableWhenFinalized={reviewMode}
             onToggleComplete={(item, next) => handleToggleComplete(slot, item, next)}
             onMoveLift={(itemId, dir) => handleMoveLift(slot, itemId, dir)}
             onToggleFinalize={() => handleToggleFinalize(slot)}

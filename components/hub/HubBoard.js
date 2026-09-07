@@ -56,6 +56,7 @@ export function HubBoard({ hubSession, board, warmups, scale = "tv", now, author
           warmups={warmups.get(slot.group_workout_id ?? slot.spc_workout_id)}
           scale={scale}
           authorName={authorName}
+          editableWhenFinalized={handlers.editableWhenFinalized}
           onToggleComplete={(item, next) => handlers.onToggleComplete(slot, item, next)}
           onMoveLift={(itemId, dir) => handlers.onMoveLift(slot, itemId, dir)}
           onToggleFinalize={() => handlers.onToggleFinalize(slot)}

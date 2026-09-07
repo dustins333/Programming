@@ -22,6 +22,12 @@ import { fonts, colors } from "../../lib/theme";
 // Nothing under the wash is tappable. Once a session is finalized, editing it
 // means undoing it first, and tapping the wash is a second route to exactly
 // the same confirm the "Make changes" button opens.
+//
+// The wash is a LIVE-BOARD thing. Reviewing a past board (HubClientColumn's
+// editableWhenFinalized) renders none of this: nobody is reading that from
+// across a gym, and finishing the write-up afterwards is the only reason to
+// open it. The other finalized markers — the olive bar, border and header
+// tint — carry it there instead.
 
 const DONE = "#4d6142";
 export { FINALIZED_WASH };
@@ -105,7 +111,13 @@ export function HubFinalizedWash({ onPress, compact = false }) {
 // Undoing is deliberately two steps: the button says what it is for ("Make
 // changes"), and this says what it will actually do. A one-tap un-finalize on
 // a wall display anyone can reach is a session quietly reopened by a sleeve.
-export function HubUndoFinalizeModal({ visible, clientName, onCancel, onConfirm }) {
+//
+// `editable` is review mode, where undoing is NOT the way in to editing —
+// everything is already writable. The copy has to say so, or a coach who only
+// wanted to add a note undoes the mark for no reason and has to remember to
+// put it back.
+export function HubUndoFinalizeModal({ visible, clientName, onCancel, onConfirm, editable = false }) {
+  const name = clientName ? `${clientName}'s session` : "This session";
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <PressFade
@@ -138,15 +150,18 @@ export function HubUndoFinalizeModal({ visible, clientName, onCancel, onConfirm 
               textAlign: "center",
             }}
           >
-            {clientName ? `${clientName}'s session is marked done.` : "This session is marked done."} Do you want to undo it and make
-            changes?
+            {editable
+              ? `${name} is marked done. You can edit it without undoing anything, so this only clears the finalized mark.`
+              : `${name} is marked done. Do you want to undo it and make changes?`}
           </Text>
 
           <PressFade
             onPress={onConfirm}
             style={{ marginTop: 20, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: colors.primary }}
           >
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "white" }}>Undo and make changes</Text>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "white" }}>
+              {editable ? "Undo finalize" : "Undo and make changes"}
+            </Text>
           </PressFade>
           <PressFade onPress={onCancel} style={{ marginTop: 10, borderRadius: 12, paddingVertical: 13, alignItems: "center" }}>
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: colors.muted }}>Keep it finalized</Text>

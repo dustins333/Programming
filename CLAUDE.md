@@ -7180,6 +7180,53 @@ Library review counts against the real library.
 in the mock. There is no notifications screen in this app, so it would be a
 button that goes nowhere.
 
+## An RLS-filtered write reports success (2026-09-06)
+
+"I turned test2's SPC off and she's still in the live board's picker." The
+picker was right. Her row still read `status: 'active'` because the write
+never landed, and nothing said so.
+
+**The class, and it is not SPC-specific: an UPDATE that RLS filters out
+affects zero rows and returns NO error.** `setSpcStatus` was a bare update
+that only threw on a returned error, so the sequence was toggle reports
+success, `load()` refetches, switch springs quietly back. Look away for that
+second and it reads as if it took. Both `setSpcStatus` and `updateSpcClient`
+now ask for the touched row back (`.select("user_id")`) and throw when none
+comes; every call site already toasted on a throw. **Any bare
+`.update().eq()` in this codebase has the same shape** and is worth the same
+guard wherever a silent no-op would be mistaken for a save. The USING-clause
+half of this is already noted under the 0094 work; this is what it looks like
+from the app side.
+
+Proving it cost nothing and is worth repeating: run the shipped function
+against the live API with the **anon** key. RLS filters the row out, so it
+exercises the exact zero-row path and cannot mutate anything.
+
+**The off switch moved onto the SPC client page**, which partly reverses the
+phase-3 note above ("turning SPC off entirely is the switch on her client
+page"). That page was unreachable for the case that matters: test2 is a
+*coach*, `listMembers()` filters to `role = 'member'`, so a coach's client
+detail page is only reachable through Settings, Team, "Own training". The SPC
+page is where the client actually lives, so it now carries a **Turn SPC off**
+action, and the off state carries **Turn SPC back on** rather than pointing
+elsewhere. `SPC_ENROLLMENT_LABELS` is still active/paused only, deliberately:
+those two are a choice you make *between*, off is a thing you *do*, and a
+select that archives the moment it changes gives no beat to change your mind.
+`confirmTurnSpcOff` is the confirm.
+
+Known and left alone: with SPC off the header pill still reads **Paused**,
+because `deriveSpcState` maps `inactive` onto the paused shape so an off
+client cannot shout "Due now" (0108). Only visible in the moment right after
+switching off, since an inactive client drops off the SPC roster and the page
+is then reachable only by direct link.
+
+**Verification gotcha worth not rediscovering: never dispatch a bare
+`TouchEvent` at react-native-web.** `new TouchEvent("touchstart",
+{bubbles:true})` carries no `touches`, and RNW's responder system reads
+`touch.force`, so it throws "Cannot read properties of undefined (reading
+'force')" into LogBox and looks exactly like an app bug. Mouse/pointer events
+alone are enough to drive a `Pressable`.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
