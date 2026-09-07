@@ -7357,6 +7357,57 @@ reported it as one. **Say so before starting a stubbed dev server, or scope
 the stub so it cannot survive leaving the harness route.** The "restore and
 md5-verify" discipline covers the repo; it does nothing for a running server.
 
+## Any program length, and no way to shorten a live one (2026-09-07)
+
+The SPC publish/reschedule modal offered four lengths (4/5/6/8) plus Ongoing.
+It now carries a dropdown of 1 to 12 weeks plus Ongoing beside those chips.
+**The dropdown always reads the current value, so the chips are shortcuts
+into it rather than a second control** and the two cannot disagree: tapping 6
+makes it say "6 weeks", picking 3 lights no chip. No migration —
+`block_length_weeks` is a plain smallint with no CHECK, and `publishSpcBlock`
+/ `rescheduleSpcProgram` already took any `lengthWeeks`.
+
+**The bug it surfaced was on the reschedule path**, which seeds from a
+program's real length: the old code clamped that seed to those four values
+and fell back to 6, so opening a 3-week program to change its dates showed 6
+and would have silently doubled it on save. A block longer than 12 (a rolling
+one grows a week at a time) now gets its own length appended to the list
+rather than clamped away, the same idiom the start-date options already use
+for "where it is now" — clamping it would shorten the program by accident.
+
+`OptionPicker` moved `components/nutrition/` to `components/`; it is the house
+dropdown pattern and already had a non-nutrition caller.
+
+**The real gap, found straight afterwards and NOT fixed: there is no way to
+shorten a live SPC program at all.** A coach published Jodi Scott a 4-week
+program because 4 was the minimum on offer, and Terra needed it to be 1. The
+Sessions tab's live-program controls are "+ Add a week" and the Ongoing
+toggle, both of which only lengthen. The one control that shortens is "End
+here" on the calendar grid — and that lives in `app/(coach)/spc/[userId].web.js`,
+the legacy page, which `hasLiveWeeklyWorld()` has returned false for on every
+client since the 0105 cutover. So it is unreachable. Worth remembering
+generally: **the cutover left working controls stranded on that legacy page,
+so "the app can already do X" needs checking against whether the screen X
+lives on is still reachable.** The cheap fix is an editable end date on the
+Sessions tab beside "+ Add a week": `setSpcProgramEnd` already does exactly
+this and already recomputes the stored length, and it would work at phone
+width where the old grid was deliberately desktop-only.
+
+Jodi's block was corrected by hand instead (`block_end_date` 2026-10-04 to
+2026-09-13, `block_length_weeks` 4 to 1 — precisely what `trimSpcBlockTo(id, 1)`
+and `setSpcProgramEnd(id, '2026-09-13')` both compute). Safe because nothing
+was logged against it, and because a sessions-format block has no per-week
+workout rows for a trim to delete: all of them are authored week 1 (0105).
+
+**Verified** by driving the modal at 375px and 1280px through a throwaway
+`app/zz-weeks.js` route (deleted): chip and dropdown syncing both directions,
+end dates and singular/plural across 1/3/11/12/ongoing, a 3-week and a 14-week
+block each seeding to their real length, and the publish payload carrying
+`lengthWeeks` as a number rather than the string a web `<select>` hands back —
+`OptionPicker`'s web half returns `e.target.value`, so its option values have
+to be strings on both platforms and be converted at the boundary. Not verified
+behind a real login.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
