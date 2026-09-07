@@ -7003,6 +7003,12 @@ log a real movement on a phone.
 - **Both celebration CTAs are the mint primary now**, and the mid-flow one
   reads "Next movement" rather than "Next test". The label is the only thing
   that differs between them.
+- **No "logging closed" banner on the hub.** Opening the board after
+  benchmark day leads with what she did, not with what she can no longer do.
+  The movement card still explains the lock, at the one moment it is relevant:
+  when she taps in and finds the fields inert. The removed line was also the
+  last user-facing use of "bells" in the feature, which the earlier sweep
+  missed — the word survives only in code comments now.
 - **The results screen's screenshot line is plain text, not a button.** It
   shipped as a mint block that looked exactly like a button and did nothing,
   which is worse than not having it at all — there is no rasterizer here (see

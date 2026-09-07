@@ -25,7 +25,7 @@ import { fonts } from "../../../lib/theme";
 export default function BenchmarkHub() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { status, event, board, last, loggingOpen, reload } = useBenchmark();
+  const { status, event, board, last, reload } = useBenchmark();
 
   if (status === "loading") {
     return (
@@ -167,14 +167,11 @@ export default function BenchmarkHub() {
         </PressFade>
       ) : null}
 
-      {!loggingOpen ? (
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{ fontFamily: fonts.sans, fontSize: 12, color: NEON.ink42, marginTop: 16, textAlign: "center" }}
-        >
-          Logging closed on {formatDateShort(event.benchmark_day)}. Your bells are locked in.
-        </Text>
-      ) : null}
+      {/* No "logging closed" banner here, deliberately. Opening the board
+          after benchmark day should show her what she did, not lead with what
+          she can no longer do. The movement card still explains the lock, at
+          the one moment it is actually relevant: when she taps into a movement
+          and finds the fields inert. */}
     </NeonScreen>
   );
 }
