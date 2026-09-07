@@ -14,6 +14,7 @@ import { MacroDial } from "../../../components/nutrition/MacroDial";
 import { StatTile } from "../../../components/nutrition/StatTile";
 import { RatingSquares } from "../../../components/nutrition/RatingSquares";
 import { NutritionTabHeader } from "../../../components/nutrition/NutritionTabHeader";
+import { WeightTrendSheet } from "../../../components/nutrition/WeightTrendSheet";
 import { formatDateMD } from "../../../lib/formatDate";
 import { PressFade } from "../../../components/PressFade";
 import { fonts, colors, type } from "../../../lib/theme";
@@ -62,7 +63,7 @@ function fmt(value, digits = 0) {
 // The dark averages band. The logged-count chip is the caveat that
 // qualifies every number beside it — three logged days make a "week
 // average" that isn't really one.
-function AveragesBand({ title, loggedCount, averages, weightTrend }) {
+function AveragesBand({ title, loggedCount, averages, weightTrend, onPressTrend }) {
   const stats = [
     { label: "Weight lb", value: fmt(averages.weight, 1) },
     { label: "Steps", value: averages.steps != null ? Math.round(averages.steps).toLocaleString() : "–" },
@@ -71,6 +72,9 @@ function AveragesBand({ title, loggedCount, averages, weightTrend }) {
       label: `${TREND_WEEKS}-wk lb`,
       value: weightTrend !== null ? `${weightTrend > 0 ? "+" : ""}${weightTrend}` : "–",
       color: HERO_OCHRE,
+      // The one stat that's already a trend number is the door into the
+      // chart of it — see the weight tile on Today for the same move.
+      onPress: onPressTrend,
     },
   ];
   return (
@@ -86,20 +90,29 @@ function AveragesBand({ title, loggedCount, averages, weightTrend }) {
         </View>
       </View>
       <View style={{ flexDirection: "row" }}>
-        {stats.map((s) => (
-          <View key={s.label} style={{ flex: 1 }}>
-            <Text numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.display, fontSize: 24, color: s.color ?? HERO_CREAM }}>
-              {s.value}
-            </Text>
-            <Text
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.1}
-              style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.7, textTransform: "uppercase", color: "rgba(247,243,238,0.72)", marginTop: 2 }}
-            >
-              {s.label}
-            </Text>
-          </View>
-        ))}
+        {stats.map((s) => {
+          const Cell = s.onPress ? PressFade : View;
+          const pressProps = s.onPress
+            ? { onPress: s.onPress, accessibilityLabel: "Open your weight trend", hitSlop: { top: 8, bottom: 8, left: 6, right: 6 } }
+            : {};
+          return (
+            <Cell key={s.label} {...pressProps} style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+                <Text numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ flexShrink: 1, fontFamily: fonts.display, fontSize: 24, color: s.color ?? HERO_CREAM }}>
+                  {s.value}
+                </Text>
+                {s.onPress ? <Ionicons name="stats-chart" size={11} color={HERO_OCHRE} /> : null}
+              </View>
+              <Text
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.1}
+                style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 0.7, textTransform: "uppercase", color: "rgba(247,243,238,0.72)", marginTop: 2 }}
+              >
+                {s.label}
+              </Text>
+            </Cell>
+          );
+        })}
       </View>
     </View>
   );
@@ -305,6 +318,7 @@ export default function NutritionWeekly() {
   // list — which is what replaced the old "Prior weeks" list.
   const [weekOffset, setWeekOffset] = useState(0);
   const [expandedDate, setExpandedDate] = useState(null);
+  const [weightTrendOpen, setWeightTrendOpen] = useState(false);
   const scrollViewRef = useRef(null);
   const rowOffsets = useRef({});
 
@@ -390,6 +404,7 @@ export default function NutritionWeekly() {
   };
 
   return (
+    <>
     <ScrollView
       ref={scrollViewRef}
       className="flex-1"
@@ -404,6 +419,7 @@ export default function NutritionWeekly() {
         loggedCount={summary.days.length}
         averages={summary.averages}
         weightTrend={weightTrend}
+        onPressTrend={() => setWeightTrendOpen(true)}
       />
 
       <MacroAverageCard averages={summary.averages} target={target} />
@@ -518,5 +534,14 @@ export default function NutritionWeekly() {
           />
         ))}
     </ScrollView>
+
+    <WeightTrendSheet
+      visible={weightTrendOpen}
+      onClose={() => setWeightTrendOpen(false)}
+      userId={profile.id}
+      today={today}
+      targetEffectiveDate={target?.effective_date ?? null}
+    />
+    </>
   );
 }

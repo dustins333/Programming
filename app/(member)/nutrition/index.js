@@ -21,6 +21,7 @@ import { FinalizePlate } from "../../../components/session/FinalizePlate";
 import { buildNutritionWeekPlate } from "../../../lib/finalizePlate";
 import { MilestoneDetailModal } from "../../../components/nutrition/MilestoneDetailModal";
 import { CalorieOverrideModal } from "../../../components/nutrition/CalorieOverrideModal";
+import { WeightTrendSheet } from "../../../components/nutrition/WeightTrendSheet";
 import { MacroDial } from "../../../components/nutrition/MacroDial";
 import { RatingSquares } from "../../../components/nutrition/RatingSquares";
 import { StatTile } from "../../../components/nutrition/StatTile";
@@ -249,6 +250,7 @@ export default function NutritionToday() {
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
   const notesRef = useRef(null);
   const [calorieModalOpen, setCalorieModalOpen] = useState(false);
+  const [weightTrendOpen, setWeightTrendOpen] = useState(false);
   // Notes is the very last field before Finalize, with little real content
   // below it — measureInWindow-based scrolling (above) can only reveal a
   // field if the ScrollView actually has enough scrollable distance left to
@@ -711,11 +713,33 @@ export default function NutritionToday() {
               scrollViewRef={scrollViewRef}
               scrollOffsetRef={scrollOffsetRef}
               footer={
-                weightDelta !== null ? (
-                  <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansMedium, fontSize: type.caption, color: weightDelta <= 0 ? OLIVE : "#78716c" }}>
-                    {weightDelta <= 0 ? "▼" : "▲"} {Math.abs(weightDelta).toFixed(1)} vs last week
+                /* The delta line IS the way into the trend chart, rather than
+                   a separate button competing for room in a half-width tile:
+                   it's already a one-number version of exactly what the chart
+                   answers, and this is the moment she's typing the number
+                   that moves it. */
+                <PressFade
+                  onPress={() => setWeightTrendOpen(true)}
+                  hitSlop={{ top: 8, bottom: 10, left: 8, right: 8 }}
+                  accessibilityLabel="Open your weight trend"
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.15}
+                    style={{
+                      flexShrink: 1,
+                      fontFamily: fonts.sansMedium,
+                      fontSize: type.caption,
+                      color: weightDelta === null ? colors.muted : weightDelta <= 0 ? OLIVE : "#78716c",
+                    }}
+                  >
+                    {weightDelta === null
+                      ? "Weight trend"
+                      : `${weightDelta <= 0 ? "▼" : "▲"} ${Math.abs(weightDelta).toFixed(1)} vs last week`}
                   </Text>
-                ) : null
+                  <Ionicons name="stats-chart" size={12} color={colors.primaryOnWhite} />
+                </PressFade>
               }
             />
             <StatTile
@@ -794,6 +818,14 @@ export default function NutritionToday() {
       <MilestoneCongratsModal milestone={congratsMilestone} onClose={handleCloseCongrats} />
       <FinalizePlate plate={finalizePlate} onDone={() => setFinalizePlate(null)} />
       <MilestoneDetailModal milestone={selectedMilestone} onClose={() => setSelectedMilestone(null)} />
+
+      <WeightTrendSheet
+        visible={weightTrendOpen}
+        onClose={() => setWeightTrendOpen(false)}
+        userId={profile.id}
+        today={today}
+        targetEffectiveDate={target?.effective_date ?? null}
+      />
       <CalorieOverrideModal
         visible={calorieModalOpen}
         initialValue={values.calories_override}
