@@ -29,6 +29,7 @@ import {
   CARD_BORDER,
   CARD_SHADOW,
   CHEVRON,
+  DASHBOARD_CANVAS,
   ROW_DIVIDER,
 } from "./dashboard/DashboardParts";
 import {
@@ -56,7 +57,7 @@ import { fonts, colors } from "../../lib/theme";
 // The canvas is darker than the phone's #faf8f6 on purpose. With this much
 // white card area a near-white ground made everything float in one plane.
 
-const CANVAS = "#f1ece6";
+const CANVAS = DASHBOARD_CANVAS;
 const MAX_WIDTH = 1240;
 const LOOKUP_LIMIT = 12;
 

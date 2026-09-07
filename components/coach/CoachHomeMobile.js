@@ -25,6 +25,7 @@ import {
   CARD_BORDER,
   CARD_SHADOW,
   CHEVRON,
+  DASHBOARD_CANVAS,
 } from "./dashboard/DashboardParts";
 import {
   buildGroupRows,
@@ -57,7 +58,7 @@ import { fonts, colors } from "../../lib/theme";
 // same facts as tiles ("4 Due now", "Flagship · this week is still drafts"),
 // and a phone has no room to say each of them twice.
 
-const CANVAS = colors.canvas;
+const CANVAS = DASHBOARD_CANVAS;
 const LOOKUP_LIMIT = 25;
 
 function greeting() {

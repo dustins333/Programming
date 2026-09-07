@@ -16,6 +16,15 @@ import { fonts, colors } from "../../../lib/theme";
 // chip, title, subline, right link.
 
 export const CARD_BORDER = "#e1dad1";
+
+// The ground both dashboards sit on. Deliberately NOT colors.canvas
+// (#faf8f6): white cards on that are a 1.06:1 step, so the 11px gutter
+// between two sections reads as the same colour as the sections and they run
+// together. #f1ece6 is ~3x that separation and is what makes a card look
+// like a card. The desktop shipped with it from the start and the phone did
+// not — one constant now, because that is the exact drift this pass exists
+// to stop.
+export const DASHBOARD_CANVAS = "#f1ece6";
 export const DIVIDER = "#ece7e1";
 export const ROW_DIVIDER = "#f4f1ec";
 export const NEUTRAL_TILE = { bg: colors.canvas, border: "#ebe5de" };
