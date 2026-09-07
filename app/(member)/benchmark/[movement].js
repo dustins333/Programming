@@ -51,7 +51,13 @@ export default function BenchmarkMovement() {
 
   const entry = board?.[movement];
   const lastEntry = last?.[movement];
-  const locked = !loggingOpen || !!entry?.completedAt;
+  // Logging being CLOSED is the only thing that locks a movement. Completing
+  // it does not: the button itself says "tap a KB to change", and it used to
+  // be lying — marking complete disabled every input on the screen, so the one
+  // affordance the copy pointed at was the one thing that no longer worked.
+  // She can move the bell, re-key the number and rewrite the note right up
+  // until the benchmark window closes.
+  const locked = !loggingOpen;
   const activeVariant = variant ?? 0;
 
   // Never leave a pending debounce behind on the way out.
@@ -122,16 +128,18 @@ export default function BenchmarkMovement() {
   const canComplete = !!entry?.tier && !!entry?.value && (!lift.load || !!entry.load);
 
   const completeLabel = entry?.completedAt
-    ? "Logged | tap a bell to change"
+    ? "Logged | tap a KB to change"
     : canComplete
       ? `Mark ${lift.name.toLowerCase()} complete`
       : !entry?.tier
         ? "Place your kettlebell first"
         : !entry?.value
-          ? "Type your number on the bell"
+          ? "Type your number on the KB"
           : "Add the load you used";
 
   const markComplete = async () => {
+    // Re-tapping a completed movement does nothing: the celebration is for the
+    // moment she finishes it, and firing it again on an edit would be noise.
     if (!canComplete || entry?.completedAt) return;
     const completedAt = new Date().toISOString();
     patchLocal("this", { completedAt });
@@ -450,7 +458,7 @@ export default function BenchmarkMovement() {
         </Text>
       </PressFade>
 
-      {locked && !entry.completedAt ? (
+      {locked ? (
         <Text
           maxFontSizeMultiplier={1.2}
           style={{ fontFamily: fonts.sans, fontSize: 12, color: NEON.ink42, marginTop: 12, textAlign: "center" }}

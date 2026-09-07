@@ -64,7 +64,7 @@ export default function BenchmarkCard() {
       <NeonScreen insets={insets}>
         <BackRow label="Benchmark Day" onPress={() => router.replace("/(member)/benchmark")} />
         <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: NEON.ink62, marginTop: 24 }}>
-          Couldn't load your card.
+          Couldn't load your results.
         </Text>
       </NeonScreen>
     );
@@ -251,7 +251,7 @@ export default function BenchmarkCard() {
           }}
         >
           <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: NEON.inkOnMint }}>
-            Screenshot this card
+            Screenshot my results
           </Text>
         </View>
         <PressFade

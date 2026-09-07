@@ -39,6 +39,7 @@ import {
   getPreviousBenchmarkEvent,
   getBenchmarkBoard,
   benchmarkPhase,
+  benchmarkWeekState,
   daysUntilBenchmark,
 } from "../../lib/programming/benchmark";
 import { isMessagingEnabledForUser } from "../../lib/programming/messagingSettings";
@@ -1943,7 +1944,7 @@ export default function MemberHome() {
           with the fetch, so a tab left open overnight rolls from countdown to
           live on its own. */}
       {(() => {
-        const phase = benchmarkPhase(benchmark?.event);
+        const phase = benchmarkWeekState(benchmark?.event, benchmark?.board);
         if (phase === "none") return null;
         return (
           <>

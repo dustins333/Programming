@@ -179,7 +179,7 @@ export function BenchmarkWeekCard({ phase, event, board, daysOut, onOpen }) {
     <PressFade
       onPress={onOpen}
       accessibilityRole="button"
-      accessibilityLabel="See your benchmark card"
+      accessibilityLabel="See your Benchmark results"
       style={{ ...CARD, borderWidth: 1.5, borderColor: "#2a2a2a", padding: 18 }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>

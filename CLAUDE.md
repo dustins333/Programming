@@ -6947,6 +6947,49 @@ and the coach settings including the date picker and its out-of-order guard.
 standing limitation. Worth Terra's pass: set a real benchmark's dates, then
 log a real movement on a phone.
 
+**Same-day follow-ups from Terra's first run through it:**
+
+- **A logged movement is editable again, and that was a real bug, not a
+  preference.** `locked` was `!loggingOpen || completedAt`, while the button
+  under it read "Logged | tap a bell to change" — so the copy pointed at the
+  one affordance that marking complete had just switched off. It is
+  `!loggingOpen` now: she can move the kettlebell, re-key the number and
+  rewrite the note right up until the window closes. Re-tapping the button
+  still does nothing (the celebration is for the moment she finishes, not for
+  every correction), and the trailing "logging is closed" note stopped being
+  gated on `!completedAt`, which had hidden it from exactly the people whose
+  entries were locked.
+- **My Week rolls to results the moment the third movement is in**, rather
+  than waiting for midnight. `benchmarkPhase` stays pure date arithmetic;
+  new `benchmarkWeekState(event, board, today)` layers the one rule dates
+  cannot express on top of it, and My Week calls that instead. The fetch
+  still decides whether to load a board from the DATE phase, since the board
+  is what the week state needs to be computed at all.
+- **Nothing is called a card.** The hub's button is "See your Benchmark
+  results"; the results screen says results throughout. The route is still
+  `/benchmark/card` internally.
+- **"bell" is not an abbreviation we use** — it is a kettlebell, or a KB.
+  Full-word "kettlebell" is fine and stays in the placement copy and every
+  accessibility label.
+- The hub's per-movement supporting line ("4 tiers | one bell", "2 variations
+  | 4 tiers") is gone as fluff.
+- **"That is the training showing up." is gone** from the celebration. A tier
+  gain and a variation move now get NO supporting line at all: the pill above
+  already says "Up 1 tier" or names the move, and a sentence of encouragement
+  on top of a number that speaks for itself reads as padding. The two that
+  remain are the two doing real work, since a held tier could otherwise read
+  as failure and a first entry has nothing to compare against.
+- `isWinTone` was deleted, dead since the celebration pill was corrected to
+  always use the lift colour.
+
+**Verified**: the unlock driven for real on a completed movement (re-keyed 28
+to 31, moved the KB to another tier carrying the new value, both notes
+editable), and the closed-window case still locking (number and this-time note
+`readOnly`, the KB refusing to move). **RNW renders `editable={false}` as
+`readOnly`, not `disabled`** — checking `disabled` reports false on a locked
+field and reads like a bug that isn't there. Plus 20 unit assertions over the
+two logic changes, and both My Week states screenshotted on the same date.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

@@ -162,7 +162,7 @@ export default function BenchmarkHub() {
           }}
         >
           <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 14.5, color: NEON.inkOnMint }}>
-            See your benchmark card
+            See your Benchmark results
           </Text>
         </PressFade>
       ) : null}
@@ -224,12 +224,6 @@ function MovementCard({ movement, entry, lastEntry, onOpen }) {
           >
             {lift.name}
           </NeonText>
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{ fontFamily: fonts.sans, fontSize: 11.5, color: NEON.ink5, marginTop: 4 }}
-          >
-            {lift.variants ? `${lift.variants.length} variations | 4 tiers` : "4 tiers | one bell"}
-          </Text>
         </View>
         <Kettlebell
           size={34}
