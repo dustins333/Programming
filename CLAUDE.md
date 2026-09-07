@@ -7412,20 +7412,52 @@ for "where it is now" — clamping it would shorten the program by accident.
 `OptionPicker` moved `components/nutrition/` to `components/`; it is the house
 dropdown pattern and already had a non-nutrition caller.
 
-**The real gap, found straight afterwards and NOT fixed: there is no way to
-shorten a live SPC program at all.** A coach published Jodi Scott a 4-week
-program because 4 was the minimum on offer, and Terra needed it to be 1. The
-Sessions tab's live-program controls are "+ Add a week" and the Ongoing
-toggle, both of which only lengthen. The one control that shortens is "End
-here" on the calendar grid — and that lives in `app/(coach)/spc/[userId].web.js`,
-the legacy page, which `hasLiveWeeklyWorld()` has returned false for on every
-client since the 0105 cutover. So it is unreachable. Worth remembering
-generally: **the cutover left working controls stranded on that legacy page,
-so "the app can already do X" needs checking against whether the screen X
-lives on is still reachable.** The cheap fix is an editable end date on the
-Sessions tab beside "+ Add a week": `setSpcProgramEnd` already does exactly
-this and already recomputes the stored length, and it would work at phone
-width where the old grid was deliberately desktop-only.
+**The real gap, found straight afterwards: there was no way to shorten a live
+SPC program at all.** A coach published Jodi Scott a 4-week program because 4
+was the minimum on offer, and Terra needed it to be 1. The Sessions tab's
+live-program controls were "+ Add a week" and the Ongoing toggle, both of
+which only lengthen. The one control that shortens is "End here" on the
+calendar grid, and that lives in `app/(coach)/spc/[userId].web.js`, the legacy
+page, which `hasLiveWeeklyWorld()` has returned false for on every client
+since the 0105 cutover. So it was unreachable. Worth remembering generally:
+**the cutover left working controls stranded on that legacy page, so "the app
+can already do X" needs checking against whether the screen X lives on is
+still reachable.**
+
+**Fixed the same day by rebuilding the Sessions tab's dates band as
+`ProgramDatesPanel`** (the old one was a five-item flex-wrap row that read as
+slapped together). Terra's own layout: Ongoing switch top right, STARTS and
+ENDS as two equal read-only boxes, and two matching dashed buttons under them
+— "+ Add a week" and "End early", the second opening a picker that asks when.
+The panel is peach (`#fdf6f2` / `#f0ddd2`) rather than a white card, so it
+reads as chrome for the whole run instead of one more session.
+
+Two decisions worth keeping. **The ENDS box is a plain read-out, not a
+dropdown**: it was built as one first, and a `<select>` shows whatever its
+selected option's text is, so a list useful enough to pick from ("Sun Oct 4 ·
+4 weeks") made the two boxes read as different kinds of thing. The detail
+belongs in the list you open, not in the field. And **`endDateOptions` only
+offers dates EARLIER than the current end when reached from "End early"** —
+lengthening is "+ Add a week", and a picker that quietly did both would make
+that button's name a lie.
+
+`endDateOptions` is exported and pure so it can be tested without rendering.
+Its three constraints: never before the week in progress finishes (a
+not-yet-started program's floor is its own first Sunday instead), never on or
+after a program already queued behind it (`setSpcProgramEnd` would reject the
+overlap anyway — better not to offer the date than explain the error), and
+twelve Sundays from the soonest legal one, matching the publish dropdown's
+range. **The horizon is measured from `earliest`, not from the start**, so a
+program that has been running for months still offers twelve real dates ahead
+of it rather than a list entirely in the past.
+
+**An ongoing program had no way to be ended on a date you choose either** —
+Terra's catch. The Ongoing toggle restores whatever length it was stored with,
+which is a guess. It now gets a "Set an end date" button opening the same
+picker, unfiltered since there is no current end to be earlier than. Picking a
+date IS the confirmation: every row states the total length it leaves, the
+header says what does and doesn't change, and nothing is deleted either way,
+so a `confirmShortenProgram` dialog was written and then dropped as friction.
 
 Jodi's block was corrected by hand instead (`block_end_date` 2026-10-04 to
 2026-09-13, `block_length_weeks` 4 to 1 — precisely what `trimSpcBlockTo(id, 1)`

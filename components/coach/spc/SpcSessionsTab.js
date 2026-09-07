@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Modal, ActivityIndicator, Switch, Platform } from "react-native";
+import { View, Text, TextInput, Modal, ActivityIndicator, Switch, Platform, ScrollView } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../../PressFade";
@@ -342,6 +342,204 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
           <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>{note}</Text>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------ dates panel */
+
+// Every Sunday this program could legally end on, newest constraint first:
+//  - never before the week in progress finishes, so she can't lose a week she
+//    is training in right now (a not-yet-started program's floor is its own
+//    first Sunday instead);
+//  - never on or after a program already queued behind it, which
+//    setSpcProgramEnd would reject as an overlap anyway — better not to offer
+//    the date than to explain the error afterwards.
+// The stored end joins the list whatever it is, so the box can always show the
+// truth rather than snapping to something it isn't.
+export function endDateOptions({ startDate, currentEnd, today, nextStart }) {
+  const firstSunday = addDays(startDate, 6);
+  const thisSunday = addDays(mondayOnOrBefore(today), 6);
+  const earliest = firstSunday > thisSunday ? firstSunday : thisSunday;
+  // Twelve Sundays from the soonest legal one, matching the publish dropdown's
+  // range. Anything longer is what Ongoing is for. Measured from `earliest`
+  // rather than from the start, so a program that has already been running for
+  // months still offers twelve real dates ahead of it.
+  const horizon = addDays(earliest, 11 * 7);
+  const hardCap = nextStart ? addDays(nextStart, -1) : null;
+  const cap = hardCap && hardCap < horizon ? hardCap : horizon;
+  const dates = [];
+  for (let d = earliest; d <= cap; d = addDays(d, 7)) dates.push(d);
+  if (currentEnd && !dates.includes(currentEnd)) {
+    dates.push(currentEnd);
+    dates.sort();
+  }
+  return dates.map((d) => {
+    const days = Math.round((new Date(`${d}T12:00:00`) - new Date(`${startDate}T12:00:00`)) / 86400000) + 1;
+    const weeks = Math.max(1, Math.ceil(days / 7));
+    // `short` is what the closed field shows, so it reads exactly like the
+    // start beside it; the length only appears in the open list, where it is
+    // the thing you are actually choosing between.
+    return { value: d, weeks, short: sunFmt(d), label: `${sunFmt(d)} · ${weeks} ${weeks === 1 ? "week" : "weeks"}` };
+  });
+}
+
+// Two callers, one list. From "End early" it offers only dates EARLIER than
+// the one the program has — going the other way is "+ Add a week", and a
+// picker that quietly did both would make that button's name a lie. From an
+// ongoing program there is no end to be earlier than, so it offers all of
+// them. Picking here IS the confirmation: every row states the length it
+// leaves, the header says what does and doesn't change, and nothing is
+// deleted either way, so a second dialog on top would be friction.
+function EndDateModal({ visible, onClose, options, currentEnd, onPick }) {
+  if (!visible) return null;
+  const earlier = currentEnd ? options.filter((o) => o.value < currentEnd) : options;
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <PressFade onPress={onClose} pressedOpacity={1} style={{ flex: 1, backgroundColor: "rgba(42,33,28,0.4)", alignItems: "center", justifyContent: "center", padding: 22 }}>
+        <PressFade onPress={() => {}} pressedOpacity={1} style={{ width: "100%", maxWidth: 380, backgroundColor: "#fff", borderRadius: 16, padding: 18, maxHeight: "80%" }}>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 16, color: "#2a211c" }}>When should it end?</Text>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", marginTop: 5 }}>
+            Her sessions and everything she's logged stay as they are. She'll be due a new program the Monday after.
+          </Text>
+          <ScrollView style={{ marginTop: 14 }} showsVerticalScrollIndicator={false}>
+            {earlier.map((o) => (
+              <PressFade
+                key={o.value}
+                onPress={() => onPick(o.value)}
+                style={{ borderWidth: 1, borderColor: "#e3d5cb", borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}
+              >
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: "#2a211c" }}>{o.short}</Text>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
+                  {o.weeks} {o.weeks === 1 ? "week" : "weeks"} total
+                </Text>
+              </PressFade>
+            ))}
+          </ScrollView>
+          <PressFade onPress={onClose} style={{ alignSelf: "flex-end", paddingVertical: 10, paddingHorizontal: 6, marginTop: 4 }}>
+            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: "#78716c" }}>Cancel</Text>
+          </PressFade>
+        </PressFade>
+      </PressFade>
+    </Modal>
+  );
+}
+
+// The program's own dates, deliberately NOT dressed as a session card: it is
+// chrome for the whole run, and reading as one more white card next to the
+// sessions is what made the old flex-wrap band look slapped together. Both
+// dates are plain read-outs; the two buttons under them are what change one.
+function ProgramDatesPanel({ block, lapsed, notStarted, statusLine, nextStart, today, busy, onSetEnd, onAddWeek, onOngoing }) {
+  const ongoing = !block.block_end_date;
+  const [endOpen, setEndOpen] = useState(false);
+  const options = useMemo(
+    () => endDateOptions({ startDate: block.block_start_date, currentEnd: block.block_end_date, today, nextStart }),
+    [block.block_start_date, block.block_end_date, today, nextStart]
+  );
+  // Nothing earlier to move to (a one-week program, or one already ending this
+  // Sunday) means the button would open an empty list.
+  const canEndEarly = !ongoing && options.some((o) => o.value < block.block_end_date);
+
+  const fieldBox = {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e3d5cb",
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    justifyContent: "center",
+    minHeight: 38,
+  };
+  const action = {
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "#dcc9bf",
+    borderRadius: 9,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
+  };
+  const dateText = { fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" };
+
+  return (
+    <View
+      style={{
+        backgroundColor: lapsed ? "#fdf8ec" : "#fdf6f2",
+        borderWidth: 1,
+        borderColor: lapsed ? "#ecd9ab" : "#f0ddd2",
+        borderRadius: 14,
+        padding: 14,
+        marginTop: 14,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <Eyebrow>PROGRAM DATES</Eyebrow>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+          <Switch
+            value={ongoing}
+            onValueChange={onOngoing}
+            disabled={busy}
+            trackColor={{ true: colors.primary, false: "#d9d4cd" }}
+            thumbColor="#fff"
+            {...(Platform.OS === "web" ? { activeThumbColor: "#fff" } : {})}
+          />
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e" }}>Ongoing</Text>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: "row", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
+        <View style={{ flex: 1, minWidth: 132 }}>
+          <Eyebrow style={{ marginBottom: 5 }}>STARTS</Eyebrow>
+          {/* Read-only on purpose: moving the start of a program she is
+              already training in is a different, riskier action, and the
+              reschedule modal already owns it for one that hasn't begun. */}
+          <View style={fieldBox}>
+            <Text style={dateText}>{monFmt(block.block_start_date)}</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, minWidth: 132 }}>
+          <Eyebrow style={{ marginBottom: 5 }}>ENDS</Eyebrow>
+          <View style={fieldBox}>
+            <Text style={ongoing ? { ...dateText, color: "#78716c" } : dateText}>
+              {ongoing ? "No end date" : sunFmt(block.block_end_date)}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+        {/* Ongoing had no way to be ended on a date you choose: the toggle
+            restores whatever length it was stored with, which is a guess. */}
+        {ongoing ? (
+          <PressFade onPress={() => setEndOpen(true)} disabled={busy} style={{ ...action, opacity: busy ? 0.5 : 1 }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>Set an end date</Text>
+          </PressFade>
+        ) : (
+          <>
+            <PressFade onPress={onAddWeek} disabled={busy} style={{ ...action, opacity: busy ? 0.5 : 1 }}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>+ Add a week</Text>
+            </PressFade>
+            {canEndEarly ? (
+              <PressFade onPress={() => setEndOpen(true)} disabled={busy} style={{ ...action, opacity: busy ? 0.5 : 1 }}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>End early</Text>
+              </PressFade>
+            ) : null}
+          </>
+        )}
+      </View>
+
+      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: lapsed ? "#9a6b1f" : "#78716c", marginTop: 11 }}>{statusLine}</Text>
+
+      <EndDateModal
+        visible={endOpen}
+        options={options}
+        currentEnd={block.block_end_date}
+        onClose={() => setEndOpen(false)}
+        onPick={(d) => {
+          setEndOpen(false);
+          onSetEnd(d);
+        }}
+      />
     </View>
   );
 }
@@ -757,6 +955,31 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
     }
   };
 
+  // Pulling the end in is the half that had no control at all: "+ Add a week"
+  // and the Ongoing toggle only ever lengthen, and "End here" lives on the
+  // legacy client page that hasLiveWeeklyWorld() has returned false for since
+  // the 0105 cutover, so it is unreachable. Shortening asks first; extending
+  // takes nothing away, so it doesn't.
+  // Pulling the end in is the half that had no control at all: "+ Add a week"
+  // and the Ongoing toggle only ever lengthen, and "End here" lives on the
+  // legacy client page that hasLiveWeeklyWorld() has returned false for since
+  // the 0105 cutover, so it is unreachable. The picker is the deliberate step;
+  // nothing is deleted here either way (a sessions-format program has one row
+  // per session for the whole run, 0105), so it needs no dialog on top.
+  const handleSetEnd = async (endDate) => {
+    if (!current || endDate === current.block_end_date) return;
+    setBusy(true);
+    try {
+      const { lengthWeeks } = await setSpcProgramEnd(current.id, endDate);
+      toastSuccess(`Ends ${sunFmt(endDate)} · ${lengthWeeks} ${lengthWeeks === 1 ? "week" : "weeks"}.`);
+      onChanged();
+    } catch (err) {
+      toastError("Couldn't change the end date", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleOngoingToggle = async (on) => {
     try {
       if (on) {
@@ -950,57 +1173,26 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
         <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
       ) : (
         <>
-          {/* Dates band */}
-          <View
-            style={{
-              backgroundColor: "#fff",
-              borderWidth: 1,
-              borderColor: lapsed ? "#ecd9ab" : CARD_BORDER,
-              borderRadius: 14,
-              padding: 14,
-              marginTop: 14,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            <Eyebrow>DATES</Eyebrow>
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }}>
-              {monFmt(current.block_start_date)} →{" "}
-              {current.block_end_date ? sunFmt(current.block_end_date) : "No end date"}
-              {current.block_end_date ? (
-                <Text style={{ fontFamily: fonts.sans, color: "#78716c" }}> · {current.block_length_weeks} weeks</Text>
-              ) : null}
-            </Text>
-            {current.block_end_date ? (
-              <PressFade
-                onPress={handleAddWeek}
-                style={{ borderWidth: 1.5, borderStyle: "dashed", borderColor: "#dcc9bf", borderRadius: 9, paddingVertical: 6, paddingHorizontal: 11 }}
-              >
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>+ Add a week</Text>
-              </PressFade>
-            ) : null}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-              <Switch
-                value={!current.block_end_date}
-                onValueChange={handleOngoingToggle}
-                trackColor={{ true: colors.primary, false: "#d9d4cd" }}
-                thumbColor="#fff"
-                {...(Platform.OS === "web" ? { activeThumbColor: "#fff" } : {})}
-              />
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e" }}>Ongoing</Text>
-            </View>
-            <Text style={{ flex: 1, minWidth: 160, textAlign: "right", fontFamily: fonts.sans, fontSize: 12, color: lapsed ? "#9a6b1f" : "#78716c" }}>
-              {currentNotStarted
-                ? `Waiting to start · nothing is due`
+          <ProgramDatesPanel
+            block={current}
+            lapsed={lapsed}
+            notStarted={currentNotStarted}
+            today={today}
+            busy={busy}
+            nextStart={upcomingQueued && upcoming.block_start_date > current.block_start_date ? upcoming.block_start_date : null}
+            onSetEnd={handleSetEnd}
+            onAddWeek={handleAddWeek}
+            onOngoing={handleOngoingToggle}
+            statusLine={
+              currentNotStarted
+                ? "Waiting to start · nothing is due"
                 : lapsed
                   ? `Ended ${sunFmt(current.block_end_date)} · still live to her until you publish something new`
                   : current.block_end_date
                     ? `Week ${weekNumber} of ${current.block_length_weeks} · she's logged ${loggedCount} of ${expected} so far`
-                    : `Week ${weekNumber} · runs until you set an end date`}
-            </Text>
-          </View>
+                    : `Week ${weekNumber} · runs until you set an end date`
+            }
+          />
 
           {currentNotStarted ? (
             <View style={{ marginTop: 12 }}>
