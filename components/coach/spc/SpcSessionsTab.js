@@ -384,16 +384,16 @@ export function endDateOptions({ startDate, currentEnd, today, nextStart }) {
   });
 }
 
-// Two callers, one list. From "End early" it offers only dates EARLIER than
-// the one the program has — going the other way is "+ Add a week", and a
-// picker that quietly did both would make that button's name a lie. From an
-// ongoing program there is no end to be earlier than, so it offers all of
-// them. Picking here IS the confirmation: every row states the length it
-// leaves, the header says what does and doesn't change, and nothing is
-// deleted either way, so a second dialog on top would be friction.
+// Opened by the ENDS box, which is the only thing that changes an end date by
+// hand. It offers every legal Sunday in both directions rather than only
+// earlier ones: the box is a neutral field, not a button whose name promises
+// a direction. Picking IS the confirmation — every row states the length it
+// leaves, the header says what does and doesn't change, and nothing is deleted
+// either way (a sessions-format program has one row per session for the whole
+// run, 0105), so a dialog on top would be friction.
 function EndDateModal({ visible, onClose, options, currentEnd, onPick }) {
   if (!visible) return null;
-  const earlier = currentEnd ? options.filter((o) => o.value < currentEnd) : options;
+
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <PressFade onPress={onClose} pressedOpacity={1} style={{ flex: 1, backgroundColor: "rgba(42,33,28,0.4)", alignItems: "center", justifyContent: "center", padding: 22 }}>
@@ -403,13 +403,25 @@ function EndDateModal({ visible, onClose, options, currentEnd, onPick }) {
             Her sessions and everything she's logged stay as they are. She'll be due a new program the Monday after.
           </Text>
           <ScrollView style={{ marginTop: 14 }} showsVerticalScrollIndicator={false}>
-            {earlier.map((o) => (
+            {options.map((o) => (
               <PressFade
                 key={o.value}
                 onPress={() => onPick(o.value)}
-                style={{ borderWidth: 1, borderColor: "#e3d5cb", borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}
+                style={{
+                  borderWidth: o.value === currentEnd ? 1.5 : 1,
+                  borderColor: o.value === currentEnd ? colors.primary : "#e3d5cb",
+                  backgroundColor: o.value === currentEnd ? "#fdf6f2" : "#fff",
+                  borderRadius: 10,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  marginBottom: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                }}
               >
-                <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: "#2a211c" }}>{o.short}</Text>
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 14, color: o.value === currentEnd ? colors.primaryOnWhite : "#2a211c" }}>{o.short}</Text>
                 <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
                   {o.weeks} {o.weeks === 1 ? "week" : "weeks"} total
                 </Text>
@@ -429,17 +441,13 @@ function EndDateModal({ visible, onClose, options, currentEnd, onPick }) {
 // chrome for the whole run, and reading as one more white card next to the
 // sessions is what made the old flex-wrap band look slapped together. Both
 // dates are plain read-outs; the two buttons under them are what change one.
-function ProgramDatesPanel({ block, lapsed, notStarted, statusLine, nextStart, today, busy, onSetEnd, onAddWeek, onOngoing }) {
+function ProgramDatesPanel({ block, lapsed, statusLine, nextStart, today, busy, onSetEnd, onAddWeek, onOngoing }) {
   const ongoing = !block.block_end_date;
   const [endOpen, setEndOpen] = useState(false);
   const options = useMemo(
     () => endDateOptions({ startDate: block.block_start_date, currentEnd: block.block_end_date, today, nextStart }),
     [block.block_start_date, block.block_end_date, today, nextStart]
   );
-  // Nothing earlier to move to (a one-week program, or one already ending this
-  // Sunday) means the button would open an empty list.
-  const canEndEarly = !ongoing && options.some((o) => o.value < block.block_end_date);
-
   const fieldBox = {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -499,33 +507,28 @@ function ProgramDatesPanel({ block, lapsed, notStarted, statusLine, nextStart, t
         </View>
         <View style={{ flex: 1, minWidth: 132 }}>
           <Eyebrow style={{ marginBottom: 5 }}>ENDS</Eyebrow>
-          <View style={fieldBox}>
-            <Text style={ongoing ? { ...dateText, color: "#78716c" } : dateText}>
-              {ongoing ? "No end date" : sunFmt(block.block_end_date)}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-        {/* Ongoing had no way to be ended on a date you choose: the toggle
-            restores whatever length it was stored with, which is a guess. */}
-        {ongoing ? (
-          <PressFade onPress={() => setEndOpen(true)} disabled={busy} style={{ ...action, opacity: busy ? 0.5 : 1 }}>
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>Set an end date</Text>
+          {/* Shows just the date, exactly like the start beside it, and opens
+              the list where the length each date would make is the thing you
+              are choosing between. A <select> could not do both: what it shows
+              closed is whatever the selected option's text is, so a list
+              useful enough to pick from made the two boxes read as different
+              kinds of thing. Ongoing opens it too — that is how an ongoing
+              program gets an end date you actually choose, where the toggle
+              only restores whatever length it was stored with. */}
+          <PressFade onPress={() => setEndOpen(true)} disabled={busy}>
+            <View style={{ ...fieldBox, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, opacity: busy ? 0.5 : 1 }}>
+              <Text numberOfLines={1} style={ongoing ? { ...dateText, color: "#78716c" } : dateText}>
+                {ongoing ? "No end date" : sunFmt(block.block_end_date)}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color="#a8a29e" />
+            </View>
           </PressFade>
-        ) : (
-          <>
-            <PressFade onPress={onAddWeek} disabled={busy} style={{ ...action, opacity: busy ? 0.5 : 1 }}>
+          {ongoing ? null : (
+            <PressFade onPress={onAddWeek} disabled={busy} style={{ ...action, alignSelf: "flex-start", marginTop: 8, opacity: busy ? 0.5 : 1 }}>
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>+ Add a week</Text>
             </PressFade>
-            {canEndEarly ? (
-              <PressFade onPress={() => setEndOpen(true)} disabled={busy} style={{ ...action, opacity: busy ? 0.5 : 1 }}>
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>End early</Text>
-              </PressFade>
-            ) : null}
-          </>
-        )}
+          )}
+        </View>
       </View>
 
       <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: lapsed ? "#9a6b1f" : "#78716c", marginTop: 11 }}>{statusLine}</Text>
@@ -1176,7 +1179,6 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
           <ProgramDatesPanel
             block={current}
             lapsed={lapsed}
-            notStarted={currentNotStarted}
             today={today}
             busy={busy}
             nextStart={upcomingQueued && upcoming.block_start_date > current.block_start_date ? upcoming.block_start_date : null}
