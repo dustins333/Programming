@@ -5218,6 +5218,56 @@ restored and md5-verified byte-identical). **Not verified behind a real login** 
 standing limitation. Worth Terra's pass: open a real board she ran, confirm the
 girls' lifts are there, and add a note to one.
 
+### A finalized session stays editable in review (2026-09-06)
+
+Terra opened a past board to add notes and found the finalized column washed
+green with a "Make changes" button in the middle of it: the only way to write
+one up was to undo the finalize and remember to put it back. Her words, and
+they are the whole scope: *"shouldn't have to unfinalize to do so."*
+
+**The lock was never about finalizing, it was about the wall.** A board anyone
+walks past needs a done state readable from across the gym and safe from a
+sleeve, which is what `HubFinalizedOverlay`'s own header says. Neither is true
+of a board that finished this morning on a coach's phone, where finishing the
+write-up is the only reason to open it at all. So review mode drops the wash
+and keeps every other finalized marker — the olive bar, border and header tint
+already render independently of it, and were carrying the state anyway.
+
+The footer had to change with it: `Make changes` is a lie once nothing is
+locked. It becomes a **`Finalized · still editable`** pill with undo demoted to
+a quiet link, and `HubUndoFinalizeModal` gained an `editable` prop so the
+dialog says the same thing. Without that, a coach who only wanted to leave a
+note clears the mark for no reason. **A column that was never finalized keeps
+its normal Finalize button** — reviewing a board where somebody forgot to tap
+it is a real case.
+
+**The flag is `useHubBoard`'s `reviewMode`, exposed for this and threaded
+through `HubLiveSession`/`HubBoard` as `editableWhenFinalized` — NOT `scale`.**
+The live coach phone is also `scale="phone"`, so keying off it would have
+unlocked the running board too. The wall shares `HubClientColumn` with both.
+
+**The collapse-on-finalize effect is deliberately unchanged**, and its comment
+now says why it survives its own original reason. In review there is no wash to
+strand an open card under, but collapsing is what cancels the 700ms debounce
+and flushes a half-typed set. That also settles the one race Terra raised — a
+client tapping Finalize on the board while a coach is mid-edit on her phone:
+the poll's edit-freeze protects only `logsByExerciseId` for the lift being
+typed into, so `finalized` comes through within ~3s, the effect fires, and the
+pending sets AND note are written before the wash drops. Verified by reading
+the merge in `refreshBoard`, not assumed. Nothing is lost; the card just shuts.
+
+**Left alone by Terra's own call**: the live coach phone has the same friction
+(finalize from your phone, then want to add a note). Her reasoning is that the
+coach is standing at the board with the client, especially now the hub takes
+the hardware keyboard sitting next to the touchscreen.
+
+Verified at 375px through a throwaway `app/zz-hubreview.js` (deleted) against a
+finalized column: expanding a lift works, typing a set fires `SAVE SETS` on the
+debounce, collapsing fires `SAVE NOTE` with body and author, and toggling back
+to live restores the wash with `elementFromPoint` over the lift returning
+`FINALIZED`. `npm run build` + `check:routes` clean, scope pass clean. **Not
+verified behind a real login** — standing limitation.
+
 ## Ongoing programs broke every screen that reads a block (2026-08-30)
 
 Reviewing a staged group showed **"invalid input syntax for type date:
@@ -9507,6 +9557,7 @@ this was committed.
 - **`git push` is NOT reliably available even in a session where Supabase/Vercel/EAS CLIs are authenticated** — hit this for real 2026-08-07 (the Web Push session): `git push origin main` failed with `could not read Username for 'https://github.com': Device not configured` (no reachable `osxkeychain` entry for github.com, no `gh` CLI installed). Don't assume a push will succeed just because other tool auth has — commit locally, then explicitly tell the user the commit is local-only and ask them to push (or fix git credentials) rather than silently treating "committed" as "deployed." This matters more than usual for this project specifically, since Vercel's connected-repo auto-deploy is the *only* deploy path (see the "real Vercel-deploy lesson" note above) — a local-only commit means nothing shipped at all, not even a stale-but-present deploy.
 
 - **Never commit unless Terra explicitly asks, and when you do, stage only the exact files you changed — never `git add -A`, `git add .`, or `git commit -a`.** Terra frequently runs **several sessions against this same working tree at once**, so at any moment another session may have unrelated files mid-edit, including throwaway test harnesses. Blanket staging sweeps them into your commit. This caused a real near-miss on 2026-08-10: a commit meant only for `lib/webAutofillSuppression.js` staged everything modified and picked up a temporary visual harness that had been mounted on `app/(auth)/login.js` (the standing preview trick documented above), plus two other files from a parallel session. That harness `return`s a static swatch page **before** the real login form — had it been pushed, every web user would have hit a dead sign-in screen. It was caught only because the other session went to revert its harness and found it already committed. Two habits prevent it: don't commit unasked, and always `git add <specific paths>`. Also worth a `git status` glance before committing — if files you never touched are modified, another session owns them, so leave them alone.
+  - **And a third: stage and commit in ONE go, because staged files are not safe to leave sitting.** The hazard runs both ways. On 2026-09-06 five `components/hub/*` files were staged and then discussed with Terra for a couple of turns before committing; a parallel session ran its own blanket `git add` in that window and swept all five into **its** commit, which is named for a CLAUDE.md note. Nothing was lost and the code is intact, but it is filed under a message describing one of six files. **Do not rewrite another session's commit to fix this** — it is theirs and they may still be mid-flight. An empty follow-up commit carrying the real reasoning and naming the sweeping commit is the non-destructive repair (`d846fb3` → `0362797`), and it keeps the explanation next to the change in `git log`.
 
 - **Test a pure helper against REAL data by running the shipped source, not a paraphrase.** `lib/programming/workouts.js`'s ordering helper was verified by reading the file in Node, slicing the function's own text out of it, `eval`ing that, and feeding it 38 real rows pulled from a live session in deliberately shuffled order — then comparing against the order a SQL query over the same block predicts. Copying the logic into a test file proves the copy works; this proves the shipped code does. Cheap whenever the thing under test is a pure function that doesn't need the Supabase client.
 
