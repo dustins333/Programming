@@ -458,6 +458,9 @@ function ProgramDatesPanel({ block, lapsed, statusLine, nextStart, today, busy, 
     justifyContent: "center",
     minHeight: 38,
   };
+  // White means "you can tap this" — so the one box that does nothing is
+  // washed back toward the panel, and only ENDS reads as a control.
+  const readOnlyBox = { ...fieldBox, backgroundColor: "#f6f1ec", borderColor: "#e8ddd4" };
   const action = {
     borderWidth: 1.5,
     borderStyle: "dashed",
@@ -501,7 +504,7 @@ function ProgramDatesPanel({ block, lapsed, statusLine, nextStart, today, busy, 
           {/* Read-only on purpose: moving the start of a program she is
               already training in is a different, riskier action, and the
               reschedule modal already owns it for one that hasn't begun. */}
-          <View style={fieldBox}>
+          <View style={readOnlyBox}>
             <Text style={dateText}>{monFmt(block.block_start_date)}</Text>
           </View>
         </View>

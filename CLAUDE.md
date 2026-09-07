@@ -7432,8 +7432,10 @@ under the ENDS box. The panel is peach (`#fdf6f2` / `#f0ddd2`) rather than a
 white card, so it reads as chrome for the whole run instead of one more
 session.
 
-**STARTS is a read-out; ENDS is the same box with a chevron, and tapping it
-opens the list.** That shape was arrived at by building it wrong first: as a
+**STARTS is a read-out washed back toward the panel (`#f6f1ec`); ENDS is the
+same box left white, with a chevron, and tapping it opens the list.** White is
+what says "you can tap this" here, so the box that does nothing must not be
+it. That shape was arrived at by building it wrong first: as a
 `<select>`, whose closed text is necessarily its selected option's text, so a
 list useful enough to pick from ("Sun Oct 4 · 4 weeks") made the two boxes read
 as different kinds of thing. The date belongs in the field and the length it
