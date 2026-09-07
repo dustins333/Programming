@@ -396,15 +396,26 @@ export function SpcRosterMobile() {
   const router = useRouter();
   const { profile } = useAuth();
 
-  // The dashboard's SPC rows link here with ?status= ("Due now" → this page
-  // showing only those). This screen is a native tab and stays mounted, so the
-  // initializer alone would miss a second arrival with a different status.
+  // The dashboard's SPC tiles link here with ?status= ("Due now" → this page
+  // showing only those) and ?coach= ("No coach" → the unowned ones). This
+  // screen is a native tab and stays mounted, so the initializer alone would
+  // miss a second arrival carrying different values.
   const params = useLocalSearchParams();
   // Old dashboard links can carry retired state keys (the pre-simplification
   // taxonomy) — an unknown key would filter everything to zero rows, so only
   // a current state name is accepted.
   const validStatus = (raw) => (typeof raw === "string" && SPC_STATES[raw] ? raw : null);
+  // Only the two named filters, never an arbitrary id: matchesCoachFilter
+  // treats an unknown coach as matching nobody, so a stale link would render
+  // an empty roster with no way to tell that from "you have no SPC clients".
+  const validCoach = (raw) => (raw === COACH_FILTER_UNASSIGNED || raw === COACH_FILTER_MINE ? raw : null);
   const rawStatusParam = typeof params.status === "string" ? params.status : "";
+  const rawCoachParam = typeof params.coach === "string" ? params.coach : "";
+  // The two are ONE deep link, not two independent questions — same joined
+  // signature the Clients roster uses for its own pair of params. Asking
+  // separately is how a link that changes only the coach gets treated as
+  // already handled.
+  const linkParam = `${rawStatusParam}|${rawCoachParam}`;
 
   // Where this coach was last time they were on this screen, this session.
   // Read lazily so it's the value at mount, not whatever a later render sees.
@@ -412,18 +423,28 @@ export function SpcRosterMobile() {
   // A dashboard link carrying a status this screen hasn't reconciled yet is a
   // deliberate "show me these" and outranks anything remembered. Coming back
   // from a client's page re-enters on the same URL, which is not that.
-  const statusParamIsNew = !savedView || savedView.statusParam !== rawStatusParam;
+  const statusParamIsNew = !savedView || savedView.statusParam !== linkParam;
 
   const [roster, setRoster] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [search, setSearch] = useState(statusParamIsNew ? "" : savedView.search ?? "");
-  const [coachFilter, setCoachFilter] = useState(savedView?.coachFilter ?? null);
+  const [coachFilter, setCoachFilter] = useState(
+    statusParamIsNew && rawCoachParam ? validCoach(rawCoachParam) : (savedView?.coachFilter ?? null)
+  );
   // Opens filtered to you when any of these clients are yours (the token
   // above the list says so, and clearing it is one tap). Applied once, and
   // only on the session's first visit — a coach who switched to All must not
   // have it put back, either by this screen's refetch-on-every-focus or by
   // the remount that web does on the way back from a client's page.
-  const coachDefaultApplied = useRef(Boolean(savedView?.coachDefaultApplied));
+  // ANY dashboard deep link suppresses load()'s opens-filtered-to-you default.
+  // A coach param obviously does — it names the filter. A status param does
+  // too, and less obviously: the dashboard's SPC tiles count the whole gym
+  // (the roster's own status tiles do as well), so landing "4 Due now" on a
+  // list quietly narrowed to this coach's clients would show fewer than the
+  // number that was tapped. A tile and the list it opens have to agree.
+  const coachDefaultApplied = useRef(
+    Boolean(savedView?.coachDefaultApplied) || Boolean(statusParamIsNew && (rawCoachParam || rawStatusParam))
+  );
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sort, setSort] = useState(savedView?.sort ?? "name");
   const [dir, setDir] = useState(savedView?.dir ?? 1);
@@ -431,14 +452,14 @@ export function SpcRosterMobile() {
   const [statusFilter, setStatusFilter] = useState(
     statusParamIsNew ? validStatus(rawStatusParam) : savedView.statusFilter ?? null
   );
-  const appliedStatusParamRef = useRef(rawStatusParam);
+  const appliedStatusParamRef = useRef(linkParam);
   const scrollProps = useRosterScrollRestore(SPC_ROSTER_VIEW, { enabled: !statusParamIsNew });
   useEffect(() => {
-    const raw = typeof params.status === "string" ? params.status : "";
-    if (appliedStatusParamRef.current === raw) return;
-    appliedStatusParamRef.current = raw;
-    setStatusFilter(validStatus(raw));
-  }, [params.status]);
+    if (appliedStatusParamRef.current === linkParam) return;
+    appliedStatusParamRef.current = linkParam;
+    setStatusFilter(validStatus(rawStatusParam));
+    if (rawCoachParam) setCoachFilter(validCoach(rawCoachParam));
+  }, [linkParam, rawStatusParam, rawCoachParam]);
 
   // Remember the view for the rest of the session. Scroll is written
   // separately, from onScroll, so it isn't tied to a re-render.
@@ -451,7 +472,7 @@ export function SpcRosterMobile() {
       dir,
       statusParam: appliedStatusParamRef.current,
     });
-  }, [search, coachFilter, statusFilter, sort, dir, rawStatusParam]);
+  }, [search, coachFilter, statusFilter, sort, dir, linkParam]);
 
   const load = useCallback(async () => {
     // Clear any previous failure first — without this a successful Retry

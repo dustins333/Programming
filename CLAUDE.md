@@ -7035,6 +7035,151 @@ editable), and the closed-window case still locking (number and this-time note
 field and reads like a bug that isn't there. Plus 20 unit assertions over the
 two logic changes, and both My Week states screenshotted on the same date.
 
+## Coach dashboard redesign: the two views say the same thing (2026-09-06)
+
+A handoff (`design_handoff_coach_dashboard/` — README + two `.dc.html`
+prototypes + 3 screenshots) rebuilds both coach home screens. Same "the HTML
+is a reference, never copied in" rule as every prior handoff. **No migration,
+no new table, no new column** — every figure already had a query behind it.
+
+**The premise, and the thing to protect going forward**: the phone and the
+desktop had drifted. A figure on one was missing from the other, and where
+both showed something they did not always mean the same thing — the desktop's
+"TODAY IN THE GYM" was sessions / nutrition / PRs / unread while the phone's
+band was sessions today / this week / girls in / girls not in. That happened
+because each screen derived its own numbers inline. **`lib/programming/
+dashboardModel.js` is now the single derivation** (SPC tiles, nutrition
+tiles, group rows, quick-pick tiles, the payroll row, every subline), both
+screens render it, and `components/coach/dashboard/*` is one set of
+primitives where `wide` is the only difference between phone and desk. Adding
+a figure to one view and not the other now takes deliberate effort.
+
+**The four tap-through module cards are gone.** SPC / Nutrition / Group /
+Library review were summary tiles that opened a detail sheet — you had to open
+SPC to find out four people were behind. Each is an always-expanded section
+now, modelled on the gym band, which is the one block Terra asked to leave
+alone (it ships byte-identical on the phone; `wide` adds the desktop row).
+**There is no collapse state and nothing to persist** — an explicit decision.
+
+**Gating is absence, not disablement**, everywhere. A gated tile is not
+rendered and its flex siblings stretch: a nutrition-only coach gets three
+quick-pick tiles at a third of the width each rather than five with two dead
+ones. Verified by driving `?role=nutrition` through the harness.
+
+**Removed from the desktop, deliberately, and the code with them**: the
+Resume hero (guessed at intent, usually wrong), the four launch cards (a menu
+duplicating the sidebar) and the roster count chips. `lib/programming/
+resume.js`, `buildLaunchCards` + its five card builders, `launchColumns`,
+`listActiveBlockReadiness` and `components/coach/SessionsTodayModal.js` are
+all deleted after verifying zero references. That takes `getResumeTarget`'s
+whole query fan-out off every dashboard load — and it is why **nothing reads
+`group_workouts.last_edited_by` (migration 0052) any more**. The desktop's
+"sessions today" tile now opens the same `GymWeekModal` the phone does, which
+is what made SessionsTodayModal dead.
+
+**Deliberately NOT on the phone, and worth knowing before "fixing" it**: the
+Needs You task list and the roster chips. The README's mobile order is an
+explicit 11-item list with neither in it, and the sections carry the same
+facts as tiles. **The one real loss is `unassignedCount`** ("3 clients not
+enrolled in anything"), which now has no mobile home at all — flagged to
+Terra rather than inventing a 12th block.
+
+**Two places the two prototypes disagreed with each other, resolved toward
+consistency** (which is the whole point of the pass): the nutrition tiles run
+Logged today / Check-ins / Not seen on both, not the phone mock's Logged /
+Not seen / Check-ins; and the mobile Library review row says "Library review"
+rather than the mock's "· added by 3 coaches", because the author count needs
+`listPendingExercises` and the phone should not pay two queries for a
+subline.
+
+**`colors.ink` (`#33251f`) and `colors.text` (`#2a211c`) are real tokens
+now.** Both were repeated as literals in a dozen files; the handoff names
+them as tokens. Added to `lib/theme.js` and used by the new code only — the
+rest of the app was not swept.
+
+**New, all cheap and all isolated**: `spcStates`/`spcNoCoach` and
+`nutritionNotSeen` on `getCoachDashboardStats` (derived from rosters it
+already fetches — no new query), `weekNumber`/`blockLengthWeeks` on the group
+dashboard rows (already computed, previously thrown away), `stagedCount` on
+`getLaunchpadExtras` (one indexed read, so the SPC action row can say
+"2 staged for later" instead of a generic invitation), `pending` rows from
+`usePendingDocuments` (already fetched, previously discarded), and
+`lib/programming/useLibraryReview.js` — **reviewer-only and it does not query
+at all for anyone else**, because a non-reviewer CAN read pending rows
+(`is_staff()`) and would light up a section they cannot act on.
+
+**`CoachShell` gained an optional `headerAccessory`** — the quick-pick row.
+On mobile web it renders inside the app bar's own white container (the border
+moved to the outer container so there is ONE border under the pair, not two);
+on native, which has no app bar here at all, it becomes the same white block
+pinned above the screen's ScrollView. Desktop ignores it — the sidebar
+already carries every one of those destinations. Nothing else passes the prop.
+
+**A tile that counts the gym must not open a list narrowed to one coach.**
+The SPC roster opens filtered to "mine + unassigned" when a coach has clients
+(`defaultCoachFilter`), so tapping "4 Due now" would have landed on a list
+showing fewer than the number tapped. Both roster screens now treat **any**
+dashboard deep link as suppressing that default, and `?status=` and the new
+`?coach=` are one joined signature (`"status|coach"`), not two independent
+questions — the same shape the Clients roster already uses for its own pair.
+Asking separately is how a link that changes only the coach gets treated as
+already handled. `?coach=` accepts only `mine`/`__unassigned`: an arbitrary
+id would render an empty roster with no way to tell that from "you have no
+SPC clients". `app/(coach)/spc/live.js` also learned `?staging=new`, the same
+detour with nothing to load, so the desktop's "Stage another" works while a
+board is already running.
+
+### A real crash, and the check that would have caught it
+
+`DashboardSheet` imported `TONE_INK` from `DashboardParts`, which does not
+export it. **A missing named export is a valid identifier that is simply
+`undefined` at runtime** — `expo export` is clean, a Babel parse is clean, an
+unresolved-identifier pass is clean, and a screenshot looks fine right up
+until something reads a property off it. It only surfaced by tapping a sheet
+row that passes a `tone` (the nutrition-today rows do not), where
+`AppErrorBoundary` named the component and the property exactly.
+
+Worth adding to the standing verification bar for any pass that moves code
+between modules: **walk every relative `import` and assert the source
+actually exports each named specifier.** ~40 lines of `@babel/parser` +
+`@babel/traverse` (collect `ExportNamedDeclaration`/`ExportAllDeclaration`/
+`ExportDefaultDeclaration` names per file, resolve `./x` against
+`x`/`x.js`/`x.web.js`/`x/index.js`, treat an unfollowable `export * from` as
+"anything goes"). Run over the whole app it came back clean apart from this
+one, so it is cheap to run broadly.
+
+**Second lesson, from the same bug**: restoring a mid-session backup silently
+reverted the fix, because the backup predated it. After restoring any stubbed
+file, `git diff` it against HEAD rather than trusting the md5 — an md5 that
+matches the backup proves only that the restore worked, not that the file is
+the version you meant.
+
+**Verification.** `npm run build` + `check:routes` clean; a Babel parse,
+unresolved-identifier and unused-import pass over every touched file; the
+missing-export sweep above across all of `app/`+`components/`+`lib/`; and
+both screens driven for real at 1440×950 and 390×844 through a throwaway
+`app/zz-dash.js` with the data hooks stubbed — admin, `?role=nutrition`, the
+idle and running board states, both sheets at both widths (bottom sheet on
+the phone, centred card on desktop), and all four SPC tiles measured as
+exactly equal boxes (150×109, one top) with no horizontal page overflow. The
+roster deep links were driven separately through `app/zz-roster.js`: no param
+keeps the "mine + unassigned" default (3 of 4 rows), `?status=dueNow` shows
+the gym-wide 2, `?coach=__unassigned` shows the 1. Harnesses deleted, every
+stubbed file restored and confirmed identical to HEAD, console clean on a
+**fresh** tab (the pane's log accumulates stale errors across HMR — the
+earlier stubbed `useAuth` returned a new object per render and left hundreds
+of "Maximum update depth" errors in the buffer that had nothing to do with
+the shipped code).
+
+**Not verified**: any of it behind a real login, and none of it on native —
+standing limitation. Worth Terra's pass on the quick-pick row on a real
+phone, a real "Due now" tap landing on the right roster, and the desktop's
+Library review counts against the real library.
+
+**Not built, and flagged rather than invented**: the app bar's **bell** icon
+in the mock. There is no notifications screen in this app, so it would be a
+button that goes nowhere.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:

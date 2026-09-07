@@ -2,46 +2,63 @@ import { useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, TextInput, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { todayInBoise } from "../../lib/boiseDate";
-import { computeAttentionItems, filterDismissedItems } from "../../lib/programming/coachDashboard";
-import { decorateAttentionItems, filterAttentionByPermission, CARD_TONES } from "../../lib/programming/launchpad";
-import { dismissAttentionItem } from "../../lib/programming/dashboardDismissals";
 import { useCoachDashboard } from "../../lib/programming/useCoachDashboard";
-import { LiveSessionStrip, useOpenHubSession } from "./LiveSessionStrip";
+import { usePendingDocuments } from "../../lib/programming/usePendingDocuments";
+import { usePendingExerciseReviews } from "../../lib/programming/usePendingExerciseReviews";
+import { useOpenHubSession } from "./LiveSessionStrip";
 import { FinalizePrompt } from "../payroll/FinalizePrompt";
 import { listMembers } from "../../lib/programming/clients";
-import { formatDateMDY } from "../../lib/formatDate";
 import { CoachShell } from "../CoachShell";
 import { PressFade } from "../PressFade";
 import { GymWeekModal } from "./GymWeekModal";
+import { QuickPickBar } from "./QuickPickBar";
+import { GymBand } from "./dashboard/GymBand";
+import { SpcActionRow } from "./dashboard/SpcActionRow";
+import { DashboardSheet, SheetRow, SheetEmpty } from "./dashboard/DashboardSheet";
+import { NutritionTodayList } from "./dashboard/NutritionTodayList";
+import {
+  ModuleCard,
+  ModuleHeader,
+  SubTileRow,
+  GroupProgramRow,
+  CountRow,
+  CARD_BORDER,
+  CARD_SHADOW,
+  CHEVRON,
+} from "./dashboard/DashboardParts";
+import {
+  buildGroupRows,
+  buildNutritionTiles,
+  buildQuickPickTiles,
+  buildSpcTiles,
+  groupSubline,
+  nutritionSubline,
+  spcSubline,
+} from "../../lib/programming/dashboardModel";
 import { useKeyboardInset } from "../../lib/useKeyboardInset";
 import { fonts, colors } from "../../lib/theme";
 
 // Coach home on a phone — the mobile web (PWA) build and the native app both
-// land here. This is NOT the desktop screen reflowed; it answers a different
-// question.
+// land here (design_handoff_coach_dashboard, 4a).
 //
-// A coach opens this between clients, on the gym floor, standing up. So:
+// A coach opens this between clients, on the gym floor, standing up. So it
+// answers "what needs me today", puts the four places they go constantly one
+// tap away in the app bar, and then gives every module's real numbers without
+// a tap.
 //
-//   - The pulse band reads today's gym in three numbers and is deliberately
-//     INERT. It's a glance, not a task list.
-//   - Then the one thing worth doing from a phone more than anything else:
-//     pull up a client.
-//   - Then four square cards, one per area of the gym. Each carries a count,
-//     and opens a sheet listing the actual people or programs behind that
-//     count — every row of which navigates. A number you can't drill into is
-//     just decoration.
-//   - Resume is deliberately absent. Desktop leads with "get back into the
-//     session you were editing"; nobody builds programs on a phone.
-//   - So is Quiet 7+ days, and every other watchlist figure. See
-//     computeAttentionItems — a rolling number nobody is sitting and
-//     watching is noise on a screen this small. It lives on the Clients
-//     roster as a filter chip, where you go looking for it.
+// The four tap-through module CARDS this replaces were summary tiles that
+// opened a detail sheet — you had to open SPC to find out four people were
+// behind. Every module is an always-expanded section now, modelled on the
+// gym band, which is the one block Terra asked to leave alone. There is no
+// collapse state and nothing to persist: that was an explicit decision.
+//
+// Deliberately NOT here, and both are on the desktop instead: the Needs You
+// task list, and the roster count chips. This screen's sections carry the
+// same facts as tiles ("4 Due now", "Flagship · this week is still drafts"),
+// and a phone has no room to say each of them twice.
 
-const CANVAS = "#faf8f6";
-const CARD_BORDER = "#ece7e1";
-const BAND_BG = "#33251f";
-const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.045, shadowRadius: 14 };
+const CANVAS = colors.canvas;
+const LOOKUP_LIMIT = 25;
 
 function greeting() {
   const hour = Number(new Date().toLocaleString("en-US", { timeZone: "America/Boise", hour: "2-digit", hour12: false }));
@@ -54,336 +71,12 @@ function formatToday() {
   return new Date().toLocaleDateString("en-US", { timeZone: "America/Boise", weekday: "long", month: "short", day: "numeric" });
 }
 
-function roundWeight(w) {
-  return w === null || w === undefined ? null : Math.round(w * 10) / 10;
-}
-
-/* ------------------------------------------------------------- pulse band */
-
-// A figure that failed to load renders as an em-dash, never 0 — a broken
-// query must not be able to say "0 sessions logged", which is a number a
-// coach would act on. getGymWeek returns null for exactly this reason.
-//
-// Every tile opens the list behind it, so each one is a real button and gets
-// a faint fill to say so. A bare number in a dark band reads as a readout;
-// four of them side by side with nothing to press is how a coach never finds
-// out they were tappable at all.
-function PulseFigure({ value, label, onPress, alert }) {
-  const missing = value === null || value === undefined;
-  const lit = alert && !missing && value > 0;
-  return (
-    <PressFade
-      onPress={onPress}
-      accessibilityLabel={`${label}: open the list`}
-      style={{
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        paddingVertical: 11,
-        paddingHorizontal: 6,
-        borderRadius: 13,
-        backgroundColor: "rgba(247,243,238,.055)",
-      }}
-    >
-      <Text
-        style={{
-          fontFamily: fonts.display,
-          fontSize: 26,
-          color: missing ? "rgba(247,243,238,.35)" : lit ? "#e8a288" : "#f7f3ee",
-          lineHeight: 30,
-        }}
-      >
-        {missing ? "–" : value}
-      </Text>
-      <Text
-        numberOfLines={2}
-        maxFontSizeMultiplier={1.15}
-        style={{ fontFamily: fonts.sans, fontSize: 10.5, color: "rgba(247,243,238,.62)", textAlign: "center", marginTop: 3, letterSpacing: 0.4 }}
-      >
-        {label}
-      </Text>
-    </PressFade>
-  );
-}
-
-function PulseBand({ gym, onOpen }) {
-  return (
-    <View style={{ backgroundColor: BAND_BG, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 12, overflow: "hidden" }}>
-      {/* Corner warmth only. The desktop hero uses a 190px blob, but this
-          band is ~347 wide — at that size the circle covered the whole third
-          column and read as a hard-edged block, not a glow. */}
-      <View
-        pointerEvents="none"
-        style={{ position: "absolute", right: -62, top: -74, width: 132, height: 132, borderRadius: 99, backgroundColor: "rgba(190,172,149,.07)" }}
-      />
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.1, color: "rgba(247,243,238,.5)", marginBottom: 10 }}
-      >
-        IN THE GYM
-      </Text>
-      <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <PulseFigure value={gym?.sessions} label="sessions today" onPress={() => onOpen("sessionsToday")} />
-          <PulseFigure value={gym?.sessionsWeek} label="sessions this week" onPress={() => onOpen("sessionsWeek")} />
-        </View>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <PulseFigure value={gym?.membersWeek} label="girls in this week" onPress={() => onOpen("membersWeek")} />
-          {/* The only one that lights up. The other three are a picture of
-              the week; this is the one a coach picks up the phone about. */}
-          <PulseFigure value={gym?.membersNotSeen} label="girls not in this week" onPress={() => onOpen("membersNotSeen")} alert />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-/* -------------------------------------------------------------- stat cards */
-
-// Square, two per row.
-//
-// `tone` accents the border and icon so a card reads as needing attention
-// without being opened — but it only colours the COUNT when `countIsIssue`
-// says the number itself is the problem. On SPC, 3 means three clients in
-// trouble and red is the truth. On Group, 3 is how many programs exist, and
-// on Payroll it's how many people are in; painting those amber said "3 bad
-// things" about a number that isn't a count of bad things at all.
-//
-// `hideCount` drops the number entirely, for a card that is purely a button
-// (a non-admin's Payroll card, which deliberately carries no figures — see
-// the payroll section of the page below).
-function StatCard({ icon, label, count, caption, tone, countIsIssue, hideCount, onPress }) {
-  const missing = count === null || count === undefined;
-  const accent = tone && tone !== "ok" ? CARD_TONES[tone] : null;
-  const countColor = missing ? "#c9c4bd" : countIsIssue && accent ? accent : "#2a211c";
-  return (
-    <PressFade
-      onPress={onPress}
-      style={{
-        flexGrow: 1,
-        flexBasis: "47%",
-        minWidth: 150,
-        backgroundColor: "white",
-        borderWidth: 1,
-        borderColor: accent ?? CARD_BORDER,
-        borderRadius: 16,
-        padding: 14,
-        minHeight: 132,
-        justifyContent: "space-between",
-        ...CARD_SHADOW,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Ionicons name={icon} size={18} color={accent ?? colors.primary} />
-        <Ionicons name="chevron-forward" size={15} color="#c9c4bd" />
-      </View>
-      <View>
-        {hideCount ? null : (
-          <Text style={{ fontFamily: fonts.display, fontSize: 32, lineHeight: 36, color: countColor }}>
-            {missing ? "—" : count}
-          </Text>
-        )}
-        <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c", marginTop: 1 }}>
-          {label}
-        </Text>
-        <Text numberOfLines={2} maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginTop: 2 }}>
-          {caption}
-        </Text>
-      </View>
-    </PressFade>
-  );
-}
-
-/* ------------------------------------------------------------------ sheets */
-
-// `footerLabel`/`onFooterPress` render a pinned link below the list — the
-// "just take me to the whole module" escape hatch, so a sheet is never a
-// dead end when the thing you want isn't one of the listed rows. Outside the
-// ScrollView so a long list can't push it off the bottom.
-function Sheet({ visible, onClose, title, subtitle, footerLabel, onFooterPress, children }) {
-  const { keyboardInset, visibleHeight } = useKeyboardInset();
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable
-        onPress={onClose}
-        style={{ flex: 1, justifyContent: "flex-end", paddingBottom: keyboardInset, backgroundColor: "rgba(68,64,60,0.35)" }}
-      >
-        <Pressable
-          onPress={(e) => e.stopPropagation?.()}
-          style={{
-            backgroundColor: CANVAS,
-            borderTopLeftRadius: 22,
-            borderTopRightRadius: 22,
-            paddingHorizontal: 16,
-            paddingTop: 14,
-            paddingBottom: 26,
-            // px off the VISIBLE height on web, so the sheet keeps the same
-            // proportion of what's on screen instead of 85% of a layout
-            // viewport that never shrank. Falls back to the percentage on
-            // native, where the modal isn't position:fixed to begin with.
-            maxHeight: visibleHeight ? Math.round(visibleHeight * 0.85) : "85%",
-          }}
-        >
-          <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 99, backgroundColor: "#dcd6ce", marginBottom: 14 }} />
-          <Text style={{ fontFamily: fonts.display, fontSize: 19, color: colors.primary }}>{title}</Text>
-          {subtitle ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", marginTop: 2 }}>{subtitle}</Text>
-          ) : null}
-          <ScrollView style={{ marginTop: 12 }} keyboardShouldPersistTaps="handled">
-            {children}
-          </ScrollView>
-          {footerLabel ? (
-            <PressFade
-              onPress={onFooterPress}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                marginTop: 12,
-                paddingVertical: 13,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.primary,
-                backgroundColor: "#fdf6f2",
-              }}
-            >
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: colors.primaryOnWhite }}>{footerLabel}</Text>
-              <Ionicons name="arrow-forward" size={15} color={colors.primaryOnWhite} />
-            </PressFade>
-          ) : null}
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-// Every row in every sheet navigates — that's the point of opening one.
-function SheetRow({ title, detail, trailing, tone, onPress }) {
-  return (
-    <PressFade
-      onPress={onPress}
-      style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: CARD_BORDER }}
-    >
-      {tone ? <View style={{ width: 8, height: 8, borderRadius: 99, backgroundColor: CARD_TONES[tone] ?? CARD_TONES.ok }} /> : null}
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14.5, color: "#2a211c" }}>
-          {title}
-        </Text>
-        {detail ? (
-          <Text numberOfLines={2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c", marginTop: 1 }}>
-            {detail}
-          </Text>
-        ) : null}
-      </View>
-      {typeof trailing === "string" ? (
-        <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c" }}>{trailing}</Text>
-      ) : (
-        trailing ?? null
-      )}
-      <Ionicons name="chevron-forward" size={15} color="#c9c4bd" />
-    </PressFade>
-  );
-}
-
-// Today's weigh-in only means something against the trend it sits in, so
-// the average, today's number and the gap between them read as one group
-// on the right edge. They used to sit on opposite sides of the row — the
-// 7-day average buried in the subtitle under the client's name — which
-// made the comparison a scan across the full width of the phone.
-//
-// The column labels are a single header above the list rather than a pair
-// on every row: repeating them cost enough width to truncate real client
-// names ("Lauren Bottelbe…"), and a table only needs its headings once.
-// Units are dropped for the same reason — every number here is lb.
-//
-// The average is over the same 7-day window used everywhere else in the
-// app, which includes today, so the delta is slightly conservative:
-// today's number is one seventh of the figure it's measured against.
-// Sized off measured text, not guessed: the widest real client name
-// ("Lauren Bottelberghe") needs 156px, and these columns are what's
-// left over. The values are far narrower than the headings were, so
-// the labels are abbreviated to buy the name row back its space.
-const WEIGH_COL = 44;
-const DELTA_COL = 38;
-const WEIGH_GAP = 6;
-
-function WeighInHeader() {
-  const label = {
-    fontFamily: fonts.sansBold,
-    fontSize: 8.5,
-    color: "#a8a29e",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    textAlign: "right",
-  };
-  return (
-    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: WEIGH_GAP, paddingBottom: 5 }}>
-      <View style={{ flex: 1, minWidth: 0 }} />
-      <Text maxFontSizeMultiplier={1} style={{ ...label, width: WEIGH_COL }}>
-        7d avg
-      </Text>
-      <Text maxFontSizeMultiplier={1} style={{ ...label, width: WEIGH_COL }}>
-        Today
-      </Text>
-      <Text maxFontSizeMultiplier={1} style={{ ...label, width: DELTA_COL }}>
-        +/−
-      </Text>
-      {/* matches SheetRow's chevron so the columns line up with the rows */}
-      <View style={{ width: 15 }} />
-    </View>
-  );
-}
-
-function WeighInTrailing({ avgWeight, weightToday }) {
-  const avg = roundWeight(avgWeight);
-  const today = roundWeight(weightToday);
-  const delta = avg !== null && today !== null ? Math.round((today - avg) * 10) / 10 : null;
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: WEIGH_GAP }}>
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={{ width: WEIGH_COL, textAlign: "right", fontFamily: fonts.sans, fontSize: 13, color: "#78716c" }}
-      >
-        {avg !== null ? avg.toFixed(1) : "—"}
-      </Text>
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={{ width: WEIGH_COL, textAlign: "right", fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}
-      >
-        {today !== null ? today.toFixed(1) : "—"}
-      </Text>
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={{
-          width: DELTA_COL,
-          textAlign: "right",
-          fontFamily: fonts.sansSemiBold,
-          fontSize: 12.5,
-          // Down is olive, up is clay — the same pairing the nutrition
-          // dashboard's own weight-change line already uses.
-          color: delta === null ? "#c9c4bd" : delta < 0 ? "#4d6142" : delta > 0 ? "#8a5a2e" : "#78716c",
-        }}
-      >
-        {delta === null ? "—" : delta === 0 ? "0.0" : `${delta < 0 ? "↓" : "↑"}${Math.abs(delta).toFixed(1)}`}
-      </Text>
-    </View>
-  );
-}
-
-function SheetEmpty({ children }) {
-  return (
-    <Text style={{ fontFamily: fonts.sans, fontSize: 13.5, color: "#78716c", paddingVertical: 16 }}>{children}</Text>
-  );
-}
-
 /* ----------------------------------------------------------- client lookup */
 
-// The phone-only affordance the desktop dashboard has no equivalent of, and
-// the reason it sits directly under the band rather than among the cards:
-// looking someone up is the single most common thing to want on a gym floor.
-const LOOKUP_LIMIT = 25;
-
+// The phone-only affordance the desktop answers with a header search field,
+// and the reason it sits directly under the payroll prompt rather than among
+// the modules: looking someone up is the single most common thing to want on
+// a gym floor, and it used to be buried below them.
 function ClientLookupSheet({ visible, onClose, router }) {
   const [query, setQuery] = useState("");
   const [members, setMembers] = useState(null);
@@ -394,8 +87,7 @@ function ClientLookupSheet({ visible, onClose, router }) {
   // onShow fires when the slide animation finishes, so anyone who started
   // typing during the slide hit `members === null` and got a spinner instead
   // of matches. It read as "the filter doesn't work"; the filter was fine,
-  // there was just nothing to filter yet. Starting here overlaps the fetch
-  // with the animation instead of queueing behind it.
+  // there was just nothing to filter yet.
   useEffect(() => {
     if (!visible || members) return;
     let cancelled = false;
@@ -461,18 +153,16 @@ function ClientLookupSheet({ visible, onClose, router }) {
             style={{
               fontFamily: fonts.sans,
               // 16, not 15. iOS Safari auto-zooms any field under 16px on
-              // focus. WebKeyboardViewport pins maximum-scale to suppress
-              // that, but not tripping it at all is stronger than unwinding
-              // it — and a zoom that fails to unwind in a standalone PWA
+              // focus, and a zoom that fails to unwind in a standalone PWA
               // leaves the app askew with no browser chrome to reset from.
               fontSize: 16,
               backgroundColor: "white",
               borderWidth: 1,
-              borderColor: CARD_BORDER,
+              borderColor: "#ece7e1",
               borderRadius: 12,
               paddingHorizontal: 13,
               paddingVertical: 11,
-              color: "#2a211c",
+              color: colors.text,
             }}
           />
           <ScrollView style={{ marginTop: 12 }} keyboardShouldPersistTaps="handled">
@@ -502,41 +192,21 @@ function ClientLookupSheet({ visible, onClose, router }) {
   );
 }
 
-/* -------------------------------------------------------------- roster strip */
-
-function RosterChip({ label, value, accent, onPress }) {
-  return (
-    <PressFade
-      onPress={onPress}
-      style={{
-        borderWidth: 1,
-        borderColor: accent ? colors.primary : CARD_BORDER,
-        backgroundColor: accent ? "#fdf6f2" : "white",
-        borderRadius: 999,
-        paddingVertical: 7,
-        paddingHorizontal: 13,
-      }}
-    >
-      <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 12, color: accent ? colors.primaryOnWhite : "#44403c" }}>
-        {label} <Text style={{ fontFamily: fonts.sansBold, color: accent ? colors.primaryOnWhite : "#2a211c" }}>{value}</Text>
-      </Text>
-    </PressFade>
-  );
-}
-
 /* --------------------------------------------------------------------- page */
 
 export function CoachHomeMobile() {
   const router = useRouter();
   const [lookupOpen, setLookupOpen] = useState(false);
-  // Which of the four pulse tiles is open, or null. One piece of state
-  // rather than four booleans — they are mutually exclusive by definition.
-  const [pulseView, setPulseView] = useState(null);
-  const [sheet, setSheet] = useState(null); // "nutrition" | "spc" | "group" | "payroll"
-  const { profile, stats, extras, dismissals, setDismissals, nutritionToday, loadError, reload: load } = useCoachDashboard();
-  // A hook, so it sits above the loading/error returns below.
+  // Which gym-band tile is open, or null. One piece of state rather than
+  // four booleans — they're mutually exclusive by definition.
+  const [gymView, setGymView] = useState(null);
+  const [sheet, setSheet] = useState(null); // "nutritionToday" | "notSeen"
+  const { profile, stats, extras, nutritionToday, loadError, reload: load } = useCoachDashboard();
+  // Hooks, so they sit above the loading/error returns below.
   const canSeeHub = profile?.role === "admin" || Boolean(profile?.can_view_spc);
   const openHub = useOpenHubSession(canSeeHub);
+  const { count: pendingDocuments, pending: pendingDocumentRows } = usePendingDocuments();
+  const { count: pendingReviews } = usePendingExerciseReviews();
 
   if (loadError) {
     return (
@@ -563,33 +233,28 @@ export function CoachHomeMobile() {
     );
   }
 
-  const safeExtras = extras ?? { blocks: [], resume: null, gym: {}, coachCount: 0, payroll: null, finalizePrompt: null };
-  const attentionItems = decorateAttentionItems(
-    filterAttentionByPermission(filterDismissedItems(computeAttentionItems(stats), dismissals, todayInBoise()), profile)
-  );
-
+  const safeExtras = extras ?? { gym: {}, stagedCount: null, payroll: null, finalizePrompt: null };
   const isAdmin = profile?.role === "admin";
   const canSpc = isAdmin || Boolean(profile?.can_view_spc);
   const canNutrition = isAdmin || Boolean(profile?.can_view_nutrition);
 
-  const spcIssues = stats.spcIssues ?? [];
-  const groupPrograms = stats.groupDashboard ?? [];
-  const groupIssueCount = groupPrograms.filter((p) => p.unpublishedThisWeek || !p.hasActiveBlock).length;
-  const payroll = safeExtras.payroll;
-  const payrollOutstanding = (payroll?.staffStatus ?? []).filter((s) => !s.submitted);
+  const spcTiles = buildSpcTiles(stats);
+  const nutritionTiles = buildNutritionTiles(stats, nutritionToday);
+  const groupRows = buildGroupRows(stats);
+  const quickPick = buildQuickPickTiles({
+    profile,
+    stats,
+    liveSession: openHub,
+    finalizePrompt: safeExtras.finalizePrompt,
+  });
+  const notSeen = stats.nutritionNotSeen ?? [];
 
-  const handleDismiss = (item) => {
-    // Optimistic — the row goes immediately, the write follows. A failed
-    // write just means the row is back on the next load, which is better
-    // than the UI claiming a dismissal that didn't stick.
-    setDismissals((prev) => ({ ...prev, [item.key]: { signature: item.signature, dismissedAt: new Date().toISOString() } }));
-    dismissAttentionItem(item.key, item.signature, profile?.id).catch((err) => {
-      console.error("Failed to dismiss attention item:", err);
-    });
+  // A sub-tile either navigates or opens its list. Both are "get behind this
+  // number", which is the promise every figure on this page makes.
+  const openTile = (tile) => {
+    if (tile.route) router.push(tile.route);
+    else if (tile.sheet) setSheet(tile.sheet);
   };
-
-  const goToClients = (programParam) =>
-    router.push(programParam ? `/(coach)/clients?program=${programParam}` : "/(coach)/clients");
 
   const go = (route) => {
     setSheet(null);
@@ -597,8 +262,8 @@ export function CoachHomeMobile() {
   };
 
   return (
-    <CoachShell>
-      <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerStyle={{ padding: 14, paddingBottom: 34, gap: 14 }}>
+    <CoachShell headerAccessory={<QuickPickBar tiles={quickPick} onPress={(tile) => router.push(tile.route)} />}>
+      <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerStyle={{ padding: 13, paddingBottom: 34, gap: 11 }}>
         <View>
           <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 1.1, color: "#a8a29e" }}>
             {formatToday().toUpperCase()}
@@ -608,13 +273,8 @@ export function CoachHomeMobile() {
           </Text>
         </View>
 
-        {canSeeHub ? <LiveSessionStrip session={openHub} compact /> : null}
-
-        {/* Above the pulse band on purpose: it's the one thing on this
-            screen with a deadline attached to it. */}
+        {/* The one thing on this screen with a deadline attached to it. */}
         <FinalizePrompt prompt={safeExtras.finalizePrompt} />
-
-        <PulseBand gym={safeExtras.gym} onOpen={setPulseView} />
 
         <PressFade
           onPress={() => setLookupOpen(true)}
@@ -626,134 +286,100 @@ export function CoachHomeMobile() {
             borderWidth: 1,
             borderColor: CARD_BORDER,
             borderRadius: 14,
-            paddingVertical: 14,
-            paddingHorizontal: 14,
+            paddingVertical: 13,
+            paddingHorizontal: 13,
             ...CARD_SHADOW,
           }}
         >
           <Ionicons name="search-outline" size={19} color={colors.primary} />
-          <Text style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 14.5, color: "#2a211c" }}>Find a client</Text>
-          <Ionicons name="chevron-forward" size={16} color="#c9c4bd" />
+          <Text style={{ flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 14.5, color: colors.text }}>Find a client</Text>
+          <Ionicons name="chevron-forward" size={16} color={CHEVRON} />
         </PressFade>
 
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 11 }}>
-          {canNutrition ? (
-            <StatCard
-              icon="restaurant-outline"
-              label="Nutrition"
-              count={nutritionToday ? nutritionToday.loggedCount : null}
-              caption={nutritionToday ? `of ${nutritionToday.totalCount} logged today` : "Couldn't load"}
-              onPress={() => setSheet("nutrition")}
-            />
-          ) : null}
-          {canSpc ? (
-            <StatCard
-              icon="barbell-outline"
-              label="SPC"
-              count={spcIssues.length}
-              caption={
-                spcIssues.length === 0 ? (isAdmin ? "Everyone covered" : "Yours are covered") : "need attention"
-              }
-              tone={spcIssues.some((i) => i.severity === 0) ? "urgent" : spcIssues.length ? "warn" : "ok"}
-              countIsIssue
-              onPress={() => setSheet("spc")}
-            />
-          ) : null}
-          <StatCard
-            icon="calendar-outline"
-            label="Group"
-            count={groupPrograms.length}
-            caption={
-              groupPrograms.length === 0
-                ? "No programs yet"
-                : groupIssueCount === 0
-                  ? "All published"
-                  : `${groupIssueCount} need${groupIssueCount === 1 ? "s" : ""} attention`
-            }
-            tone={groupIssueCount ? "warn" : "ok"}
-            onPress={() => setSheet("group")}
-          />
-          {/* Admin gets the team's submission state and a sheet naming who's
-              still out. A coach gets a plain button straight to their own
-              entry screen and NO figures at all — the whole point of the
-              split is that the rest of the team's payroll isn't a coach's
-              business, so there's nothing here to open. */}
-          {isAdmin ? (
-            <StatCard
-              icon="cash-outline"
-              label="Payroll"
-              count={payroll ? payroll.submittedCount : null}
-              caption={payroll ? `of ${payroll.staffCount} submitted` : "Couldn't load"}
-              tone={payrollOutstanding.length ? "warn" : "ok"}
-              onPress={() => setSheet("payroll")}
-            />
-          ) : (
-            <StatCard
-              icon="cash-outline"
-              label="Log payroll"
-              hideCount
-              caption="Add your hours for this period"
-              onPress={() => router.push("/(coach)/payroll/entries")}
-            />
-          )}
-        </View>
+        <GymBand gym={safeExtras.gym} onOpen={setGymView} />
 
-        {attentionItems.length ? (
-          <View style={{ gap: 9 }}>
-            {attentionItems.map((item) => (
-              <View
-                key={item.key}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: "white",
-                  borderWidth: 1,
-                  borderColor: CARD_BORDER,
-                  borderRadius: 14,
-                  ...CARD_SHADOW,
-                }}
-              >
-                <PressFade
-                  onPress={() => router.push(item.route)}
-                  style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 13, paddingHorizontal: 14, minHeight: 60 }}
-                >
-                  <View style={{ width: 8, height: 8, borderRadius: 99, backgroundColor: CARD_TONES[item.tone] ?? CARD_TONES.ok }} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={2} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#2a211c" }}>
-                      {item.title}
-                    </Text>
-                    <Text numberOfLines={2} style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c", marginTop: 2 }}>
-                      {item.subtitle}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#c9c4bd" />
-                </PressFade>
-                <Pressable onPress={() => handleDismiss(item)} hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }} style={{ paddingRight: 12, paddingLeft: 2 }}>
-                  <Ionicons name="close" size={16} color="#c9c4bd" />
-                </Pressable>
-              </View>
-            ))}
-          </View>
+        {canSpc ? (
+          <ModuleCard>
+            <ModuleHeader
+              icon="clipboard"
+              title="SPC"
+              subline={spcSubline(stats)}
+              linkLabel="Open SPC ›"
+              onLink={() => router.push("/(coach)/spc")}
+            />
+            <SpcActionRow
+              session={openHub}
+              stagedCount={safeExtras.stagedCount}
+              onPress={() => router.push(openHub ? "/(coach)/spc/live" : "/(coach)/spc/live?tab=start")}
+            />
+            <SubTileRow tiles={spcTiles} onOpen={openTile} />
+          </ModuleCard>
         ) : null}
 
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <RosterChip label="Total" value={stats.totalMembers} onPress={() => goToClients(null)} />
-          {(stats.groupProgramCounts ?? []).map((p) => (
-            <RosterChip key={p.id} label={p.name} value={p.count} onPress={() => goToClients(p.id)} />
-          ))}
-          <RosterChip label="SPC" value={stats.spcCount} onPress={() => goToClients("spc")} />
-          <RosterChip label="Nutrition" value={stats.nutritionCount} onPress={() => goToClients("nutrition")} />
-          {stats.unassignedCount > 0 ? (
-            <RosterChip label="Unassigned" value={stats.unassignedCount} accent onPress={() => goToClients("unassigned")} />
-          ) : null}
-        </View>
+        {canNutrition ? (
+          <ModuleCard>
+            <ModuleHeader
+              icon="restaurant"
+              title="Nutrition"
+              subline={nutritionSubline(stats)}
+              linkLabel="Open Nutrition ›"
+              onLink={() => router.push("/(coach)/nutrition")}
+            />
+            <SubTileRow tiles={nutritionTiles} onOpen={openTile} />
+          </ModuleCard>
+        ) : null}
+
+        {/* No gate — there is no group permission flag in the codebase. */}
+        <ModuleCard>
+          <ModuleHeader
+            icon="barbell"
+            title="Group"
+            subline={groupSubline(groupRows)}
+            linkLabel="Open grid ›"
+            onLink={() => router.push("/(coach)/blocks")}
+            divider={false}
+          />
+          {groupRows.length === 0 ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted, paddingTop: 8 }}>No group programs yet.</Text>
+          ) : (
+            groupRows.map((row, i) => (
+              <GroupProgramRow
+                key={row.key}
+                row={row}
+                first={i === 0}
+                last={i === groupRows.length - 1}
+                onPress={() => router.push(row.route)}
+              />
+            ))
+          )}
+        </ModuleCard>
+
+        {/* Notifications, not modules — these two disappear entirely at zero
+            rather than rendering an empty section. */}
+        {pendingReviews > 0 ? (
+          <CountRow
+            count={pendingReviews}
+            title={`${pendingReviews} exercise${pendingReviews === 1 ? "" : "s"} waiting on you`}
+            subtitle="Library review"
+            onPress={() => router.push("/(coach)/exercises/review")}
+          />
+        ) : null}
+
+        {pendingDocuments > 0 ? (
+          <CountRow
+            count={pendingDocuments}
+            title={`${pendingDocuments} document${pendingDocuments === 1 ? "" : "s"} to read & sign`}
+            subtitle={pendingDocumentRows.slice(0, 2).map((d) => d.title).join(" · ")}
+            onPress={() => router.push("/(coach)/documents")}
+          />
+        ) : null}
       </ScrollView>
 
       <ClientLookupSheet visible={lookupOpen} onClose={() => setLookupOpen(false)} router={router} />
-      <GymWeekModal visible={pulseView !== null} view={pulseView} week={safeExtras.gym?.week ?? null} onClose={() => setPulseView(null)} />
+      <GymWeekModal visible={gymView !== null} view={gymView} week={safeExtras.gym?.week ?? null} onClose={() => setGymView(null)} />
 
-      <Sheet
-        visible={sheet === "nutrition"}
+      <DashboardSheet
+        visible={sheet === "nutritionToday"}
         onClose={() => setSheet(null)}
         title="Logged today"
         subtitle={
@@ -764,124 +390,31 @@ export function CoachHomeMobile() {
         footerLabel="Open Nutrition"
         onFooterPress={() => go("/(coach)/nutrition")}
       >
-        {!nutritionToday ? (
-          <SheetEmpty>Couldn't load today's nutrition.</SheetEmpty>
-        ) : nutritionToday.rows.length === 0 ? (
-          <SheetEmpty>No one has logged anything yet today.</SheetEmpty>
-        ) : (
-          <>
-            <WeighInHeader />
-            {nutritionToday.rows.map((r) => {
-            // "still logging" only shows on open days — it explains why a
-            // number might still move, where "finalized" on all the rest
-            // would just be noise. The weights themselves are grouped on
-            // the right; see WeighInTrailing.
-            return (
-              <SheetRow
-                key={r.userId}
-                title={r.name}
-                detail={r.finalized ? null : "still logging"}
-                trailing={<WeighInTrailing avgWeight={r.avgWeight} weightToday={r.weightToday} />}
-                onPress={() => go(`/(coach)/nutrition/clients/${r.userId}`)}
-              />
-            );
-            })}
-          </>
-        )}
-      </Sheet>
+        <NutritionTodayList nutritionToday={nutritionToday} onOpenClient={(id) => go(`/(coach)/nutrition/clients/${id}`)} />
+      </DashboardSheet>
 
-      <Sheet
-        visible={sheet === "spc"}
+      <DashboardSheet
+        visible={sheet === "notSeen"}
         onClose={() => setSheet(null)}
-        title="SPC attention"
-        subtitle={spcIssues.length ? "Worst first" : null}
-        footerLabel="Open SPC"
-        onFooterPress={() => go("/(coach)/spc")}
+        title="Not seen in 7 days"
+        subtitle="No log and no weigh-in since this day last week"
+        footerLabel="Open Nutrition"
+        onFooterPress={() => go("/(coach)/nutrition")}
       >
-        {spcIssues.length === 0 ? (
-          <SheetEmpty>
-            {isAdmin
-              ? "Every SPC client has a current block. Nothing to do."
-              : "Every SPC client you're on has a current block. Nothing to do."}
-          </SheetEmpty>
+        {notSeen.length === 0 ? (
+          <SheetEmpty>Everyone's put something in this week.</SheetEmpty>
         ) : (
-          spcIssues.map((c) => (
+          notSeen.map((c) => (
             <SheetRow
               key={c.userId}
-              tone={c.severity === 0 ? "urgent" : "warn"}
+              tone="warn"
               title={c.name}
-              detail={c.coachName ? `${c.reason} · ${c.coachName}` : c.reason}
-              onPress={() => go(`/(coach)/spc/${c.userId}`)}
+              detail={c.coachName}
+              onPress={() => go(`/(coach)/nutrition/clients/${c.userId}`)}
             />
           ))
         )}
-      </Sheet>
-
-      <Sheet
-        visible={sheet === "group"}
-        onClose={() => setSheet(null)}
-        title="Group programs"
-        footerLabel="Open Group Programs"
-        onFooterPress={() => go("/(coach)/blocks")}
-      >
-        {groupPrograms.length === 0 ? (
-          <SheetEmpty>No group programs yet.</SheetEmpty>
-        ) : (
-          groupPrograms.map((p) => {
-            const bits = [];
-            if (!p.hasActiveBlock) bits.push("No active block");
-            else if (p.daysUntilEnd !== null)
-              bits.push(`${p.daysUntilEnd} day${p.daysUntilEnd === 1 ? "" : "s"} left in block`);
-            if (p.unpublishedThisWeek) bits.push("this week unpublished");
-            else if (p.unpublishedNextWeek) bits.push("next week unpublished");
-            if (p.hasActiveBlock && !p.hasNextWeekBlock) bits.push("nothing queued after");
-            return (
-              <SheetRow
-                key={p.programId}
-                tone={p.unpublishedThisWeek || !p.hasActiveBlock ? "urgent" : p.unpublishedNextWeek ? "warn" : "ok"}
-                title={p.name}
-                detail={bits.join(" · ")}
-                onPress={() => go(`/(coach)/blocks?program=${p.programId}`)}
-              />
-            );
-          })
-        )}
-      </Sheet>
-
-      {/* Admin-only. A coach's Payroll card navigates directly and never
-          opens this. */}
-      <Sheet
-        visible={sheet === "payroll"}
-        onClose={() => setSheet(null)}
-        title="Payroll"
-        subtitle={payroll ? `Period ends ${formatDateMDY(payroll.periodEnd)}` : null}
-        footerLabel="Review this period"
-        // Report, not the This-period review table. Report computes totals
-        // live off the entries (computeTotalsByStaff), so it answers "how
-        // much has been keyed so far" — which is the number worth glancing
-        // at mid-period. The review table leads with approval state, and an
-        // approved total says nothing about what's still coming in.
-        onFooterPress={() => go("/(coach)/payroll/admin/report")}
-      >
-        {!payroll ? (
-          <SheetEmpty>Couldn't load this pay period.</SheetEmpty>
-        ) : (payroll.staffStatus ?? []).length === 0 ? (
-          <SheetEmpty>No staff to review.</SheetEmpty>
-        ) : (
-          // Every row goes to the review table, not to an entry screen — an
-          // admin looking at who's outstanding wants to approve or chase,
-          // not to log hours.
-          payroll.staffStatus.map((s) => (
-            <SheetRow
-              key={s.id}
-              tone={s.submitted ? "ok" : "warn"}
-              title={s.name}
-              detail={s.submitted ? "Submitted" : "Not submitted yet"}
-              onPress={() => go("/(coach)/payroll/admin/periods")}
-            />
-          ))
-        )}
-      </Sheet>
+      </DashboardSheet>
     </CoachShell>
   );
 }

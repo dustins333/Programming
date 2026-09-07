@@ -333,7 +333,7 @@ export function NavList({ profile, pathname, messagingEnabled, badges, onNavigat
 // does). Below MOBILE_BREAKPOINT: a compact header + slide-in drawer,
 // same NavList content as the sidebar. At or above it: the original
 // persistent 232px sidebar, unchanged.
-export function CoachShell({ children }) {
+export function CoachShell({ children, headerAccessory }) {
   const { profile, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -372,13 +372,30 @@ export function CoachShell({ children }) {
   // fixed once on the member side's My Week screen). This single wrapper
   // covers every screen that opts into CoachShell instead of patching each
   // one individually.
+  // `headerAccessory` is the dashboard's quick-pick row. It renders inside
+  // the app bar's own white container on mobile web, and — since native has
+  // no app bar here at all — as the same white block pinned above the
+  // screen's scroll view. Either way it stays put while the page moves under
+  // it, which is the whole reason it isn't just the first thing in the page.
+  // Desktop ignores it: the sidebar already carries every one of those
+  // destinations.
   if (Platform.OS !== "web") {
-    return <View style={{ flex: 1, paddingTop: insets.top }}>{children}</View>;
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        {headerAccessory ? (
+          <View style={{ backgroundColor: "white", paddingTop: 10, borderBottomWidth: 1, borderBottomColor: "#e7e5e4" }}>
+            {headerAccessory}
+          </View>
+        ) : null}
+        <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
+      </View>
+    );
   }
 
   if (width < MOBILE_BREAKPOINT) {
     return (
       <View style={{ flex: 1, backgroundColor: "#f6f1ec" }}>
+        <View style={{ backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#e7e5e4" }}>
         <View
           style={{
             flexDirection: "row",
@@ -387,9 +404,6 @@ export function CoachShell({ children }) {
             paddingTop: insets.top + 10,
             paddingBottom: 10,
             paddingHorizontal: 14,
-            backgroundColor: "white",
-            borderBottomWidth: 1,
-            borderBottomColor: "#e7e5e4",
           }}
         >
           <Pressable onPress={() => setDrawerOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -421,6 +435,8 @@ export function CoachShell({ children }) {
           <Text style={{ fontFamily: fonts.display, color: colors.primary, fontSize: 16 }} numberOfLines={1}>
             Kova Strength
           </Text>
+        </View>
+        {headerAccessory}
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>{children}</View>

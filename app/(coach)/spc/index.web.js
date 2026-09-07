@@ -7,6 +7,7 @@ import {
   defaultCoachFilter,
   matchesCoachFilter,
   COACH_FILTER_MINE,
+  COACH_FILTER_UNASSIGNED,
 } from "../../../lib/programming/spcRoster";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { SpcRosterMobile } from "../../../components/coach/SpcRosterMobile";
@@ -249,6 +250,12 @@ function SpcRosterDesktop() {
   const { profile } = useAuth();
   const params = useLocalSearchParams();
   const rawStatusParam = typeof params.status === "string" ? params.status : "";
+  const rawCoachParam = typeof params.coach === "string" ? params.coach : "";
+  // Status and coach are ONE deep link from the dashboard, not two
+  // independent questions — same joined signature the Clients roster uses.
+  // Asking separately is how a link that changes only the coach gets treated
+  // as already handled.
+  const linkParam = `${rawStatusParam}|${rawCoachParam}`;
 
   // Where this coach was last time they were on this screen, this session.
   // Web pushes /spc/<userId> as a new screen and unmounts this one, so without
@@ -258,10 +265,14 @@ function SpcRosterDesktop() {
   // A dashboard link carrying a status this screen hasn't reconciled yet is a
   // deliberate "show me these" and outranks anything remembered. Coming back
   // from a client's page re-enters on the same URL, which is not that.
-  const statusParamIsNew = !savedView || savedView.statusParam !== rawStatusParam;
+  const statusParamIsNew = !savedView || savedView.statusParam !== linkParam;
   // Old dashboard links can carry retired state keys — an unknown key would
   // filter everything to zero, so only a current state name is accepted.
   const validStatus = (raw) => (SPC_STATES[raw] ? raw : null);
+  // Only the two named filters, never an arbitrary id: matchesCoachFilter
+  // treats an unknown coach as matching nobody, so a stale link would render
+  // an empty roster with no way to tell that from "you have no SPC clients".
+  const validCoach = (raw) => (raw === COACH_FILTER_UNASSIGNED || raw === COACH_FILTER_MINE ? raw : null);
 
   const [rows, setRows] = useState([]);
   const [ready, setReady] = useState(false);
@@ -272,13 +283,23 @@ function SpcRosterDesktop() {
   // null means every coach, same as the phone roster — matchesCoachFilter
   // already treats them as one thing, and sharing the shape is what lets both
   // widths remember one view rather than two that drift.
-  const [coachFilter, setCoachFilter] = useState(savedView?.coachFilter ?? null);
+  const [coachFilter, setCoachFilter] = useState(
+    statusParamIsNew && rawCoachParam ? validCoach(rawCoachParam) : (savedView?.coachFilter ?? null)
+  );
   // Applied once, after the rows land — the default needs to know whether
   // this coach has any SPC clients at all, and both the roster and the
   // profile arrive async. Once it's been applied this session it stays
   // applied, so neither the refocus reload nor the remount on the way back
   // from a client's page can put it back after a coach switched to All.
-  const coachDefaultApplied = useRef(Boolean(savedView?.coachDefaultApplied));
+  // ANY dashboard deep link suppresses load()'s opens-filtered-to-you default.
+  // A coach param obviously does — it names the filter. A status param does
+  // too, and less obviously: the dashboard's SPC tiles count the whole gym
+  // (the roster's own status tiles do as well), so landing "4 Due now" on a
+  // list quietly narrowed to this coach's clients would show fewer than the
+  // number that was tapped. A tile and the list it opens have to agree.
+  const coachDefaultApplied = useRef(
+    Boolean(savedView?.coachDefaultApplied) || Boolean(statusParamIsNew && (rawCoachParam || rawStatusParam))
+  );
   const [search, setSearch] = useState(statusParamIsNew ? "" : savedView.search ?? "");
   const [sort, setSort] = useState(savedView?.sort ?? "name");
   const [dir, setDir] = useState(savedView?.dir ?? 1);
@@ -289,12 +310,13 @@ function SpcRosterDesktop() {
   // and the remembered-view effect below would otherwise record the new param
   // against the old filter — making the next visit treat a genuine deep link
   // as already handled.
-  const appliedStatusParamRef = useRef(rawStatusParam);
+  const appliedStatusParamRef = useRef(linkParam);
   useEffect(() => {
-    if (appliedStatusParamRef.current === rawStatusParam) return;
-    appliedStatusParamRef.current = rawStatusParam;
+    if (appliedStatusParamRef.current === linkParam) return;
+    appliedStatusParamRef.current = linkParam;
     setStatusFilter(validStatus(rawStatusParam));
-  }, [rawStatusParam]);
+    if (rawCoachParam) setCoachFilter(validCoach(rawCoachParam));
+  }, [linkParam, rawStatusParam, rawCoachParam]);
 
   // Remember the view for the rest of the session. Scroll is written
   // separately, from onScroll, so it isn't tied to a re-render.
@@ -307,7 +329,7 @@ function SpcRosterDesktop() {
       dir,
       statusParam: appliedStatusParamRef.current,
     });
-  }, [search, coachFilter, statusFilter, sort, dir, rawStatusParam]);
+  }, [search, coachFilter, statusFilter, sort, dir, linkParam]);
 
   const load = useCallback(async () => {
     try {

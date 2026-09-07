@@ -1,39 +1,64 @@
-import { useState } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { todayInBoise, dayOfWeekInBoise } from "../../lib/boiseDate";
 import { computeAttentionItems, filterDismissedItems } from "../../lib/programming/coachDashboard";
-import { buildLaunchCards, decorateAttentionItems, filterAttentionByPermission, CARD_TONES } from "../../lib/programming/launchpad";
+import { decorateAttentionItems, filterAttentionByPermission, weekdayOf, CARD_TONES } from "../../lib/programming/launchpad";
 import { dismissAttentionItem } from "../../lib/programming/dashboardDismissals";
 import { useCoachDashboard } from "../../lib/programming/useCoachDashboard";
-import { LiveSessionStrip, useOpenHubSession } from "./LiveSessionStrip";
+import { usePendingDocuments } from "../../lib/programming/usePendingDocuments";
+import { useLibraryReview } from "../../lib/programming/useLibraryReview";
+import { useOpenHubSession } from "./LiveSessionStrip";
 import { FinalizePrompt } from "../payroll/FinalizePrompt";
-import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
-import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
-import { SessionPreviewModal } from "../../components/SessionPreviewModal";
-import { SessionsTodayModal } from "./SessionsTodayModal";
-import { CoachShell } from "../../components/CoachShell";
-import { PressFade } from "../../components/PressFade";
+import { listMembers } from "../../lib/programming/clients";
+import { CoachShell } from "../CoachShell";
+import { PressFade } from "../PressFade";
+import { GymWeekModal } from "./GymWeekModal";
+import { GymBand } from "./dashboard/GymBand";
+import { SpcActionRow } from "./dashboard/SpcActionRow";
+import { DashboardSheet, SheetRow, SheetEmpty } from "./dashboard/DashboardSheet";
+import { NutritionTodayList } from "./dashboard/NutritionTodayList";
+import {
+  ModuleCard,
+  ModuleHeader,
+  SubTileRow,
+  GroupProgramRow,
+  CountRow,
+  Eyebrow,
+  CARD_BORDER,
+  CARD_SHADOW,
+  CHEVRON,
+  ROW_DIVIDER,
+} from "./dashboard/DashboardParts";
+import {
+  buildGroupRows,
+  buildNutritionTiles,
+  buildPayrollRow,
+  buildSpcTiles,
+  groupSubline,
+  nutritionSubline,
+  spcSubline,
+  TONE_INK,
+} from "../../lib/programming/dashboardModel";
 import { fonts, colors } from "../../lib/theme";
-import { toastError } from "../../lib/toast";
 
-// Coach web dashboard — the launchpad (design_handoff_coach_web_v2, 1a/2a/2b).
+// Coach home at desk width (design_handoff_coach_dashboard, 2a).
 //
-// This is not a report. The premise of the redesign is that a coach
-// programs in the gaps between clients, so the page's job is to put them
-// back inside whatever they were last in, then offer the small number of
-// routes that are actually theirs, and only then say what needs them. The
-// roster counts that used to open the page survive as one strip at the
-// bottom — still clickable, no longer the headline.
+// Same job as the phone, plus Needs You — which has the room to be worked
+// here and doesn't on a phone.
+//
+// GONE, and deliberately not ported: the Resume hero, which guessed at
+// intent and was usually wrong; the four launch cards, which were a menu
+// duplicating the sidebar; and the roster count chips, which were the old
+// headline and say nothing the modules don't.
+//
+// The canvas is darker than the phone's #faf8f6 on purpose. With this much
+// white card area a near-white ground made everything float in one plane.
 
-const CANVAS = "#faf8f6";
-const CARD_BORDER = "#ece7e1";
-const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.045, shadowRadius: 14 };
-const RESUME_BG = "#33251f";
-const RESUME_INK = "#f7f3ee";
-const RESUME_MUTED = "#beac95";
+const CANVAS = "#f1ece6";
 const MAX_WIDTH = 1240;
+const LOOKUP_LIMIT = 12;
 
 const WEEKDAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -55,204 +80,168 @@ function greeting() {
   return "Good evening";
 }
 
-function Eyebrow({ children, color = "#a8a29e", style }) {
-  return (
-    <Text style={[{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.4, color }, style]}>{children}</Text>
-  );
+// "Week of Sep 1" — the Monday the gym band's week figures are counted from.
+function weekOfLabel(week) {
+  if (!week?.weekStart) return null;
+  const [, month, day] = week.weekStart.split("-").map(Number);
+  const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `Week of ${MONTH_SHORT[month - 1]} ${day}`;
 }
 
-function Dot({ tone }) {
-  return <View style={{ width: 7, height: 7, borderRadius: 99, backgroundColor: CARD_TONES[tone] ?? CARD_TONES.ok }} />;
-}
+/* ---------------------------------------------------------- header search */
 
-/* ---------------------------------------------------------------- resume */
+// New on desktop: the client lookup used to be phone-only. Inline results
+// rather than a modal — there is room for them here, and a dialog to type a
+// name into is a step this width doesn't need.
+function ClientSearch({ router }) {
+  const [query, setQuery] = useState("");
+  const [members, setMembers] = useState(null);
 
-function ResumeCard({ resume, router, onPreview }) {
-  // Nothing to resume into is a real state, not an error — a coach who has
-  // never opened the builder, or whose last edit predates the edit-tracking
-  // migration. It still leads with a route rather than an apology.
-  if (!resume) {
-    return (
-      <View style={{ backgroundColor: RESUME_BG, borderRadius: 20, padding: 24 }}>
-        <Eyebrow color={RESUME_MUTED}>NOTHING OPEN RIGHT NOW</Eyebrow>
-        <Text style={{ fontFamily: fonts.display, fontSize: 29, color: RESUME_INK, marginTop: 10, marginBottom: 6 }}>
-          Start where the gaps are
-        </Text>
-        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "rgba(247,243,238,.6)", marginBottom: 18 }}>
-          Once you open a session, it waits for you here.
-        </Text>
-        <PressFade
-          onPress={() => router.push("/(coach)/blocks")}
-          style={{ alignSelf: "flex-start", backgroundColor: RESUME_INK, borderRadius: 9, paddingVertical: 11, paddingHorizontal: 20 }}
-        >
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: RESUME_BG }}>Open the grid</Text>
-        </PressFade>
-      </View>
-    );
-  }
+  useEffect(() => {
+    // Only once the coach actually starts typing, so the roster isn't fetched
+    // on every dashboard load for a field most visits never touch.
+    if (!query.trim() || members) return;
+    let cancelled = false;
+    listMembers()
+      .then((rows) => !cancelled && setMembers(rows))
+      .catch(() => !cancelled && setMembers([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [query, members]);
+
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || !members) return [];
+    return members
+      .filter((m) => (m.name ?? "").toLowerCase().includes(q) || (m.email ?? "").toLowerCase().includes(q))
+      .slice(0, LOOKUP_LIMIT);
+  }, [members, query]);
+
+  const open = query.trim().length > 0;
 
   return (
-    <View style={{ backgroundColor: RESUME_BG, borderRadius: 20, padding: 24, flexDirection: "row", gap: 26, overflow: "hidden" }}>
-      {/* Soft highlight in the corner, purely decorative — same treatment
-          the member app's hero bar uses. */}
+    <View style={{ width: 300 }}>
       <View
-        pointerEvents="none"
-        style={{ position: "absolute", right: -50, top: -60, width: 190, height: 190, borderRadius: 99, backgroundColor: "rgba(190,172,149,.11)" }}
-      />
-
-      <View style={{ flex: 1.15, minWidth: 0 }}>
-        <Eyebrow color={RESUME_MUTED}>PICK UP WHERE YOU LEFT OFF</Eyebrow>
-        <Text style={{ fontFamily: fonts.display, fontSize: 29, color: RESUME_INK, lineHeight: 32, marginTop: 10, marginBottom: 6 }}>
-          {resume.title}
-        </Text>
-        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "rgba(247,243,238,.6)", marginBottom: 18 }}>
-          {resume.detail}
-        </Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <PressFade
-            onPress={() => router.push(resume.primary.route)}
-            style={{ backgroundColor: RESUME_INK, borderRadius: 9, paddingVertical: 11, paddingHorizontal: 20 }}
-          >
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: RESUME_BG }}>{resume.primary.label}</Text>
-          </PressFade>
-          {resume.secondary ? (
-            <PressFade
-              onPress={() => onPreview(resume.secondary)}
-              style={{ borderWidth: 1, borderColor: "rgba(247,243,238,.28)", borderRadius: 9, paddingVertical: 11, paddingHorizontal: 16 }}
-            >
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: RESUME_INK }}>{resume.secondary.label}</Text>
-            </PressFade>
-          ) : null}
-        </View>
-      </View>
-
-      <View style={{ width: 1, backgroundColor: "rgba(247,243,238,.13)" }} />
-
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Eyebrow color={RESUME_MUTED}>{resume.queueTitle}</Eyebrow>
-        <View style={{ marginTop: 11 }}>
-          {resume.queue.length === 0 ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "rgba(247,243,238,.5)", paddingVertical: 9 }}>
-              Nothing else outstanding here.
-            </Text>
-          ) : (
-            resume.queue.map((item, i) => (
-              <PressFade
-                key={item.key}
-                onPress={() => router.push(item.route)}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingVertical: 9,
-                  borderBottomWidth: i === resume.queue.length - 1 ? 0 : 1,
-                  borderBottomColor: "rgba(247,243,238,.09)",
-                }}
-              >
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: RESUME_INK }} numberOfLines={1}>
-                  {item.label}
-                </Text>
-                <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "rgba(247,243,238,.5)" }}>{item.detail}</Text>
-              </PressFade>
-            ))
-          )}
-        </View>
-        {resume.queueAction ? (
-          <PressFade onPress={() => router.push(resume.queueAction.route)} style={{ marginTop: 11, alignSelf: "flex-start" }}>
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: RESUME_MUTED }}>{resume.queueAction.label}</Text>
-          </PressFade>
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          backgroundColor: "white",
+          borderWidth: 1,
+          borderColor: CARD_BORDER,
+          borderRadius: 11,
+          paddingVertical: 11,
+          paddingHorizontal: 13,
+          ...CARD_SHADOW,
+        }}
+      >
+        <Ionicons name="search-outline" size={17} color={colors.primary} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Find a client"
+          placeholderTextColor={colors.hint}
+          autoCorrect={false}
+          autoCapitalize="none"
+          style={{ flex: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: 13.5, color: colors.text, outlineStyle: "none" }}
+        />
+        {open ? (
+          <Pressable onPress={() => setQuery("")} hitSlop={8} accessibilityLabel="Clear search">
+            <Ionicons name="close" size={15} color={CHEVRON} />
+          </Pressable>
         ) : null}
       </View>
+
+      {open ? (
+        <View
+          style={{
+            // Absolute so the results hang over the page rather than pushing
+            // the payroll banner and the gym band down as you type.
+            position: "absolute",
+            top: 48,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+            backgroundColor: "white",
+            borderWidth: 1,
+            borderColor: CARD_BORDER,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 4,
+            maxHeight: 320,
+            ...CARD_SHADOW,
+          }}
+        >
+          {!members ? (
+            <ActivityIndicator color={colors.primary} style={{ marginVertical: 14 }} />
+          ) : rows.length === 0 ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, paddingVertical: 12 }}>
+              No clients match "{query.trim()}".
+            </Text>
+          ) : (
+            <ScrollView style={{ maxHeight: 312 }}>
+              {rows.map((m) => (
+                <SheetRow
+                  key={m.id}
+                  title={m.name ?? "Unnamed"}
+                  detail={m.email}
+                  onPress={() => {
+                    setQuery("");
+                    router.push(`/(coach)/clients/${m.id}`);
+                  }}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      ) : null}
     </View>
-  );
-}
-
-/* ----------------------------------------------------------- launch cards */
-
-export // Column count is computed from the measured width rather than left to
-// flex-wrap. A plain flexBasis can't win both ends of the range: whatever
-// value fits four across on a 1280 laptop also fits three across in the
-// drawer-width layout, stranding the fourth card alone on its own row.
-// Four or two, never three-and-a-widow.
-function launchColumns(windowWidth) {
-  const content = windowWidth >= 768 ? windowWidth - 304 : windowWidth - 72;
-  if (content >= 940) return 4;
-  if (content >= 620) return 2;
-  return 1;
-}
-const COLUMN_BASIS = { 4: "23%", 2: "48%", 1: "100%" };
-
-function LaunchCard({ card, router, columns }) {
-  return (
-    <PressFade
-      onPress={() => router.push(card.route)}
-      style={{
-        flexGrow: 1,
-        flexBasis: COLUMN_BASIS[columns],
-        // A coach with only two cards gets two normal-sized cards, not two
-        // half-page slabs — the handoff caps them at 290 for exactly this.
-        maxWidth: columns === 1 ? undefined : 330,
-        backgroundColor: "#fff",
-        borderWidth: 1,
-        borderColor: CARD_BORDER,
-        borderRadius: 16,
-        paddingVertical: 17,
-        paddingHorizontal: 18,
-        ...CARD_SHADOW,
-      }}
-    >
-      <Eyebrow>{card.eyebrow}</Eyebrow>
-      <Text style={{ fontFamily: fonts.display, fontSize: 19, color: "#2a211c", lineHeight: 22, marginTop: 9, marginBottom: 8 }}>
-        {card.title}
-      </Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 14 }}>
-        <Dot tone={card.tone} />
-        <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c", flex: 1 }} numberOfLines={2}>
-          {card.status}
-        </Text>
-      </View>
-      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>{card.action}</Text>
-    </PressFade>
   );
 }
 
 /* -------------------------------------------------------------- needs you */
 
+// Kept exactly as it behaved before — severity order, verb button, dismiss ×
+// — and moved to the right rail where the width suits a task list. The header
+// is a dark band so it reads as the tasks rather than a fourth module.
 function NeedsYou({ items, router, onDismiss }) {
   return (
-    <View
-      style={{ flex: 1.55, minWidth: 420, backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 16, overflow: "hidden", ...CARD_SHADOW }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingTop: 15, paddingBottom: 12 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
-          <Eyebrow>NEEDS YOU</Eyebrow>
-          {items.length > 0 ? (
-            <View style={{ backgroundColor: "#fdece5", borderRadius: 99, paddingVertical: 2, paddingHorizontal: 8 }}>
-              <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#b23a22" }}>{items.length}</Text>
-            </View>
-          ) : null}
-        </View>
-        <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-          {items.length > 0 ? "Sorted by what breaks first" : ""}
-        </Text>
+    <View style={{ backgroundColor: "white", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 16, overflow: "hidden", ...CARD_SHADOW }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 11, backgroundColor: colors.ink, paddingVertical: 14, paddingHorizontal: 18 }}>
+        <Ionicons name="alert-circle" size={19} color="#e8a288" />
+        <Text style={{ flex: 1, fontFamily: fonts.display, fontSize: 19, lineHeight: 21, color: "#f7f3ee" }}>Needs you</Text>
+        {items.length > 0 ? (
+          <View style={{ backgroundColor: "rgba(232,162,136,.18)", borderRadius: 99, paddingVertical: 3, paddingHorizontal: 10 }}>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 11.5, color: "#f0b79f" }}>{items.length}</Text>
+          </View>
+        ) : null}
       </View>
 
       {items.length === 0 ? (
-        <View style={{ borderTopWidth: 1, borderTopColor: "#f4f1ec", padding: 22 }}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>Nothing's on fire.</Text>
+        <View style={{ padding: 22 }}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: colors.text }}>Nothing's on fire.</Text>
           <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", marginTop: 3 }}>
             Every program is published and every check-in is read.
           </Text>
         </View>
       ) : (
-        items.map((item) => (
+        items.map((item, i) => (
           <View
             key={item.key}
-            style={{ borderTopWidth: 1, borderTopColor: "#f4f1ec", flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 13 }}
+            style={{
+              borderTopWidth: i === 0 ? 0 : 1,
+              borderTopColor: ROW_DIVIDER,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              paddingHorizontal: 18,
+              paddingVertical: 13,
+            }}
           >
-            <Dot tone={item.tone} />
+            <View style={{ width: 7, height: 7, borderRadius: 99, backgroundColor: CARD_TONES[item.tone] ?? CARD_TONES.ok }} />
             <Pressable style={{ flex: 1, minWidth: 0 }} onPress={() => router.push(item.route)}>
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c" }}>{item.title}</Text>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.text }}>{item.title}</Text>
               <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 2 }}>{item.subtitle}</Text>
             </Pressable>
             <PressFade
@@ -261,8 +250,8 @@ function NeedsYou({ items, router, onDismiss }) {
             >
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#44403c" }}>{item.verb}</Text>
             </PressFade>
-            <Pressable onPress={() => onDismiss(item)} hitSlop={8} style={{ paddingHorizontal: 2 }}>
-              <Text style={{ color: "#c9c4bd", fontSize: 15 }}>×</Text>
+            <Pressable onPress={() => onDismiss(item)} hitSlop={8} style={{ paddingHorizontal: 2 }} accessibilityLabel="Dismiss">
+              <Text style={{ color: CHEVRON, fontSize: 15 }}>×</Text>
             </Pressable>
           </View>
         ))
@@ -271,87 +260,38 @@ function NeedsYou({ items, router, onDismiss }) {
   );
 }
 
-/* ------------------------------------------------------------ today panel */
+/* ---------------------------------------------------------------- payroll */
 
-function TodayRow({ label, value, suffix, valueColor = "#2a211c", onPress }) {
-  const Row = onPress ? PressFade : View;
-  return (
-    <Row
-      {...(onPress ? { onPress, accessibilityLabel: `${label}: open details` } : {})}
-      style={{
-        borderTopWidth: 1,
-        borderTopColor: "#f4f1ec",
-        paddingHorizontal: 18,
-        paddingVertical: 12,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}
-    >
-      <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#44403c" }}>{label}</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <Text style={{ fontFamily: fonts.display, fontSize: 19, color: valueColor }}>
-          {value}
-          {suffix ? <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#a8a29e" }}>{suffix}</Text> : null}
-        </Text>
-        {onPress ? <Ionicons name="chevron-forward" size={14} color="#c9c4bd" /> : null}
-      </View>
-    </Row>
-  );
-}
-
-// A figure that failed to load shows an em-dash, never 0 — "0 sessions
-// logged" is a number a coach would act on, and a broken query must not be
-// able to say it.
-const show = (n) => (n == null ? "—" : String(n));
-
-function TodayPanel({ gym, nutritionOnly, onOpenSessions }) {
-  const rows = nutritionOnly
-    ? [
-        { label: "Logged today", value: show(gym.nutrition?.logged), suffix: gym.nutrition ? ` / ${gym.nutrition.total}` : null },
-        { label: "Check-ins waiting", value: show(gym.checkinsWaiting) },
-        { label: "Quiet 7+ days", value: show(gym.quiet) },
-        { label: "Unread messages", value: show(gym.unread) },
-      ]
-    : [
-        { label: "Sessions logged", value: show(gym.sessions), onPress: onOpenSessions },
-        { label: "Nutrition logged", value: show(gym.nutrition?.logged), suffix: gym.nutrition ? ` / ${gym.nutrition.total}` : null },
-        { label: "New PRs", value: show(gym.prs), valueColor: "#4d6142" },
-        { label: "Unread messages", value: show(gym.unread) },
-      ];
-
-  return (
-    <View
-      style={{ flex: 1, minWidth: 260, backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 16, overflow: "hidden", ...CARD_SHADOW }}
-    >
-      <View style={{ paddingHorizontal: 18, paddingTop: 15, paddingBottom: 12 }}>
-        <Eyebrow>TODAY IN THE GYM</Eyebrow>
-      </View>
-      {rows.map((row) => (
-        <TodayRow key={row.label} {...row} />
-      ))}
-    </View>
-  );
-}
-
-/* ----------------------------------------------------------- roster strip */
-
-function RosterChip({ label, value, accent, onPress }) {
+function PayrollRow({ row, router }) {
   return (
     <PressFade
-      onPress={onPress}
+      onPress={() => router.push(row.route)}
       style={{
-        backgroundColor: accent ? "#fdf6f2" : "#fff",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 14,
+        backgroundColor: "white",
         borderWidth: 1,
-        borderColor: accent ? "#eddcd2" : CARD_BORDER,
-        borderRadius: 99,
-        paddingVertical: 6,
-        paddingHorizontal: 14,
+        borderColor: CARD_BORDER,
+        borderRadius: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        ...CARD_SHADOW,
       }}
     >
-      <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: accent ? colors.primaryOnWhite : "#44403c" }}>
-        {label} <Text style={{ fontFamily: fonts.sansBold, color: accent ? colors.primaryOnWhite : "#2a211c" }}>{value}</Text>
-      </Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Eyebrow color={colors.primaryOnWhite} style={{ letterSpacing: 1.4 }}>
+          PAYROLL
+        </Eyebrow>
+        <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: colors.muted, marginTop: 3 }}>{row.detail}</Text>
+      </View>
+      {row.figure ? (
+        <Text style={{ fontFamily: fonts.display, fontSize: 26, lineHeight: 28, color: TONE_INK[row.tone] ?? colors.text }}>
+          {row.figure}
+          {row.suffix ? <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: colors.muted }}>{row.suffix}</Text> : null}
+        </Text>
+      ) : null}
+      <Ionicons name="chevron-forward" size={16} color={CHEVRON} />
     </PressFade>
   );
 }
@@ -360,41 +300,14 @@ function RosterChip({ label, value, accent, onPress }) {
 
 export function CoachHomeDesktop() {
   const router = useRouter();
-  const [preview, setPreview] = useState(null);
-  const [sessionsOpen, setSessionsOpen] = useState(false);
-  const { width } = useWindowDimensions();
-  const { profile, stats, extras, dismissals, setDismissals, loadError, reload: load } = useCoachDashboard();
-  // Above the early returns, because it's a hook. Enabled off the profile the
-  // dashboard already has rather than a second read.
+  const [gymView, setGymView] = useState(null);
+  const [sheet, setSheet] = useState(null);
+  const { profile, stats, extras, dismissals, setDismissals, nutritionToday, loadError, reload: load } = useCoachDashboard();
+  // Hooks, so they sit above the early returns.
   const canSpc = profile?.role === "admin" || Boolean(profile?.can_view_spc);
   const openHub = useOpenHubSession(canSpc);
-
-  const openPreview = async ({ previewWorkoutId, previewKind }) => {
-    setPreview({ loading: true, title: "Preview", warmups: [], exercises: [] });
-    try {
-      const [warmups, exercises] =
-        previewKind === "spc"
-          ? await Promise.all([listSpcWarmups(previewWorkoutId), listSpcWorkoutExercises(previewWorkoutId)])
-          : await Promise.all([listWarmups(previewWorkoutId), listWorkoutExercises(previewWorkoutId)]);
-      setPreview({
-        loading: false,
-        title: extras?.resume?.title ?? "Session preview",
-        subtitle: "Exactly what the member sees",
-        // SessionPreviewModal takes warmups as plain strings and exercises
-        // as {id, name, detail} — the same shape the member Today screen
-        // already feeds it, so this stays the one preview component.
-        warmups: warmups.map((w) => w.exercises?.name ?? w.label ?? "Warm-up"),
-        exercises: exercises.map((e) => ({
-          id: e.id,
-          name: e.exercises?.name ?? "Exercise",
-          detail: [e.sets ? `${e.sets} ×` : null, e.reps].filter(Boolean).join(" "),
-        })),
-      });
-    } catch (err) {
-      setPreview(null);
-      toastError("Couldn't load the preview", err);
-    }
-  };
+  const { count: pendingDocuments, pending: pendingDocumentRows } = usePendingDocuments();
+  const library = useLibraryReview();
 
   if (loadError) {
     return (
@@ -421,96 +334,234 @@ export function CoachHomeDesktop() {
     );
   }
 
-  const safeExtras = extras ?? { blocks: [], resume: null, gym: {}, coachCount: 0, payroll: null, finalizePrompt: null };
-  const cards = buildLaunchCards({ profile, stats, extras: safeExtras });
+  const safeExtras = extras ?? { gym: {}, stagedCount: null, payroll: null, finalizePrompt: null };
+  const isAdmin = profile?.role === "admin";
+  const canNutrition = isAdmin || Boolean(profile?.can_view_nutrition);
 
   const attentionItems = decorateAttentionItems(
     filterAttentionByPermission(filterDismissedItems(computeAttentionItems(stats), dismissals, todayInBoise()), profile)
   );
 
-  const isAdmin = profile?.role === "admin";
-  // Same inference as launchpad.js's programsSessions() — no
-  // can_view_programs flag exists, so "does no programming" is read off
-  // the two programming-side flags that do (SPC, and library reviewing).
-  const nutritionOnly =
-    !isAdmin && Boolean(profile?.can_view_nutrition) && !profile?.can_view_spc && !profile?.can_view_exercise_library;
+  const spcTiles = buildSpcTiles(stats);
+  const nutritionTiles = buildNutritionTiles(stats, nutritionToday);
+  const groupRows = buildGroupRows(stats);
+  const payrollRow = buildPayrollRow({
+    profile,
+    payroll: safeExtras.payroll,
+    closesOn: safeExtras.payroll ? weekdayOf(safeExtras.payroll.periodEnd) : null,
+  });
+  const notSeen = stats.nutritionNotSeen ?? [];
 
   const handleDismiss = (item) => {
     // Optimistic — the row goes immediately, the write follows. A failed
-    // write just means the row is back on the next load, which is better
-    // than the UI claiming a dismissal that didn't stick.
+    // write just means the row is back on the next load, which is better than
+    // the UI claiming a dismissal that didn't stick.
     setDismissals((prev) => ({ ...prev, [item.key]: { signature: item.signature, dismissedAt: new Date().toISOString() } }));
     dismissAttentionItem(item.key, item.signature, profile?.id).catch((err) => {
       console.error("Failed to dismiss attention item:", err);
     });
   };
 
-  const goToClients = (programParam) =>
-    router.push(programParam ? `/(coach)/clients?program=${programParam}` : "/(coach)/clients");
+  const openTile = (tile) => {
+    if (tile.route) router.push(tile.route);
+    else if (tile.sheet) setSheet(tile.sheet);
+  };
+
+  const go = (route) => {
+    setSheet(null);
+    router.push(route);
+  };
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1" style={{ backgroundColor: CANVAS }} contentContainerStyle={{ paddingHorizontal: 36, paddingVertical: 26 }}>
-        <View style={{ maxWidth: MAX_WIDTH, width: "100%" }}>
-          <Eyebrow style={{ marginBottom: 7 }}>{formatToday()}</Eyebrow>
-          <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primary, lineHeight: 34, marginBottom: 22 }}>
-            {greeting()}, {profile?.name?.split(" ")[0] ?? "coach"}
-          </Text>
-
-          {canSpc ? (
-            <View style={{ marginBottom: 16 }}>
-              <LiveSessionStrip session={openHub} />
+      <ScrollView
+        className="flex-1"
+        style={{ backgroundColor: CANVAS }}
+        contentContainerStyle={{ paddingHorizontal: 36, paddingTop: 26, paddingBottom: 40 }}
+      >
+        <View style={{ maxWidth: MAX_WIDTH, width: "100%", gap: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 24, zIndex: 10 }}>
+            <View style={{ flexShrink: 1, minWidth: 0 }}>
+              <Eyebrow style={{ letterSpacing: 1.4 }}>{formatToday()}</Eyebrow>
+              <Text style={{ fontFamily: fonts.display, fontSize: 30, color: colors.primary, lineHeight: 34, marginTop: 7 }}>
+                {greeting()}, {profile?.name?.split(" ")[0] ?? "coach"}
+              </Text>
             </View>
-          ) : null}
-
-          {safeExtras.finalizePrompt ? (
-            <View style={{ marginBottom: 16 }}>
-              <FinalizePrompt prompt={safeExtras.finalizePrompt} />
-            </View>
-          ) : null}
-
-          <ResumeCard resume={safeExtras.resume} router={router} onPreview={openPreview} />
-
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 16 }}>
-            {cards.map((card) => (
-              <LaunchCard key={card.key} card={card} router={router} columns={launchColumns(width)} />
-            ))}
+            <ClientSearch router={router} />
           </View>
 
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 16, alignItems: "flex-start" }}>
-            <NeedsYou items={attentionItems} router={router} onDismiss={handleDismiss} />
-            <TodayPanel
-              gym={{ ...(safeExtras.gym ?? {}), checkinsWaiting: stats.checkinsToReview }}
-              nutritionOnly={nutritionOnly}
-              onOpenSessions={() => setSessionsOpen(true)}
-            />
-          </View>
+          <FinalizePrompt prompt={safeExtras.finalizePrompt} />
 
-          <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9, marginTop: 16 }}>
-            <Eyebrow style={{ marginRight: 2 }}>ROSTER</Eyebrow>
-            <RosterChip label="Total" value={stats.totalMembers} onPress={() => goToClients(null)} />
-            {(stats.groupProgramCounts ?? []).map((p) => (
-              <RosterChip key={p.id} label={p.name} value={p.count} onPress={() => goToClients(p.id)} />
-            ))}
-            <RosterChip label="SPC" value={stats.spcCount} onPress={() => goToClients("spc")} />
-            <RosterChip label="Nutrition" value={stats.nutritionCount} onPress={() => goToClients("nutrition")} />
-            {stats.unassignedCount > 0 ? (
-              <RosterChip label="Unassigned" value={stats.unassignedCount} accent onPress={() => goToClients("unassigned")} />
-            ) : null}
+          <GymBand
+            gym={safeExtras.gym}
+            wide
+            note={[weekOfLabel(safeExtras.gym?.week), "every tile opens its list"].filter(Boolean).join(" · ")}
+            onOpen={setGymView}
+          />
+
+          <View style={{ flexDirection: "row", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+            {/* Left: the modules — the same three the phone shows, wider. */}
+            <View style={{ flex: 1.55, minWidth: 420, gap: 16 }}>
+              {canSpc ? (
+                <ModuleCard wide>
+                  <ModuleHeader
+                    wide
+                    icon="clipboard"
+                    title="SPC"
+                    subline={spcSubline(stats)}
+                    linkLabel="Open SPC →"
+                    onLink={() => router.push("/(coach)/spc")}
+                  />
+                  <SpcActionRow
+                    wide
+                    session={openHub}
+                    stagedCount={safeExtras.stagedCount}
+                    onPress={() => router.push(openHub ? "/(coach)/spc/live" : "/(coach)/spc/live?tab=start")}
+                    onStageAnother={() => router.push("/(coach)/spc/live?staging=new")}
+                  />
+                  <SubTileRow wide tiles={spcTiles} onOpen={openTile} />
+                </ModuleCard>
+              ) : null}
+
+              {canNutrition ? (
+                <ModuleCard wide>
+                  <ModuleHeader
+                    wide
+                    icon="restaurant"
+                    title="Nutrition"
+                    subline={nutritionSubline(stats)}
+                    linkLabel="Open Nutrition →"
+                    onLink={() => router.push("/(coach)/nutrition")}
+                  />
+                  <SubTileRow wide tiles={nutritionTiles} onOpen={openTile} />
+                </ModuleCard>
+              ) : null}
+
+              <ModuleCard wide>
+                <ModuleHeader
+                  wide
+                  icon="barbell"
+                  title="Group"
+                  subline={groupSubline(groupRows)}
+                  linkLabel="Open the grid →"
+                  onLink={() => router.push("/(coach)/blocks")}
+                  divider={false}
+                />
+                {groupRows.length === 0 ? (
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, paddingTop: 10 }}>
+                    No group programs yet.
+                  </Text>
+                ) : (
+                  groupRows.map((row, i) => (
+                    <GroupProgramRow
+                      key={row.key}
+                      wide
+                      row={row}
+                      first={i === 0}
+                      last={i === groupRows.length - 1}
+                      onPress={() => router.push(row.route)}
+                    />
+                  ))
+                )}
+              </ModuleCard>
+            </View>
+
+            {/* Right: what needs doing, then the small stuff. */}
+            <View style={{ flex: 1, minWidth: 320, gap: 16 }}>
+              <NeedsYou items={attentionItems} router={router} onDismiss={handleDismiss} />
+
+              {library.reviewer ? (
+                <ModuleCard wide>
+                  <ModuleHeader
+                    wide
+                    icon="checkmark-done"
+                    title="Library review"
+                    subline="You're a reviewer"
+                    linkLabel="Open queue →"
+                    onLink={() => router.push("/(coach)/exercises/review")}
+                  />
+                  <SubTileRow
+                    wide
+                    tiles={[
+                        {
+                          key: "pending",
+                          figure: library.pendingCount,
+                          label: "New exercises",
+                          caption:
+                            library.authorCount === null
+                              ? ""
+                              : `added by ${library.authorCount} coach${library.authorCount === 1 ? "" : "es"}`,
+                          tone: library.pendingCount ? "warn" : "plain",
+                          route: "/(coach)/exercises/review",
+                        },
+                        {
+                          key: "dupes",
+                          figure: library.dupeCount,
+                          label: "Likely dupes",
+                          caption: "merge or keep both",
+                          tone: "plain",
+                          route: "/(coach)/exercises/merge",
+                        },
+                    ]}
+                    onOpen={openTile}
+                  />
+                </ModuleCard>
+              ) : null}
+
+              {pendingDocuments > 0 ? (
+                <CountRow
+                  wide
+                  count={pendingDocuments}
+                  title={`${pendingDocuments} to read & sign`}
+                  subtitle={pendingDocumentRows.slice(0, 2).map((d) => d.title).join(" · ")}
+                  onPress={() => router.push("/(coach)/documents")}
+                />
+              ) : null}
+
+              <PayrollRow row={payrollRow} router={router} />
+            </View>
           </View>
         </View>
 
-        <SessionPreviewModal
-          visible={Boolean(preview)}
-          onClose={() => setPreview(null)}
-          loading={preview?.loading}
-          title={preview?.title}
-          subtitle={preview?.subtitle}
-          warmups={preview?.warmups ?? []}
-          exercises={preview?.exercises ?? []}
-        />
+        <GymWeekModal visible={gymView !== null} view={gymView} week={safeExtras.gym?.week ?? null} onClose={() => setGymView(null)} />
 
-        <SessionsTodayModal visible={sessionsOpen} onClose={() => setSessionsOpen(false)} />
+        <DashboardSheet
+          visible={sheet === "nutritionToday"}
+          onClose={() => setSheet(null)}
+          title="Logged today"
+          subtitle={
+            nutritionToday
+              ? `${nutritionToday.loggedCount} of ${nutritionToday.totalCount} active clients · ${nutritionToday.finalizedCount} finalized`
+              : null
+          }
+          footerLabel="Open Nutrition"
+          onFooterPress={() => go("/(coach)/nutrition")}
+        >
+          <NutritionTodayList nutritionToday={nutritionToday} onOpenClient={(id) => go(`/(coach)/nutrition/clients/${id}`)} />
+        </DashboardSheet>
+
+        <DashboardSheet
+          visible={sheet === "notSeen"}
+          onClose={() => setSheet(null)}
+          title="Not seen in 7 days"
+          subtitle="No log and no weigh-in since this day last week"
+          footerLabel="Open Nutrition"
+          onFooterPress={() => go("/(coach)/nutrition")}
+        >
+          {notSeen.length === 0 ? (
+            <SheetEmpty>Everyone's put something in this week.</SheetEmpty>
+          ) : (
+            notSeen.map((c) => (
+              <SheetRow
+                key={c.userId}
+                tone="warn"
+                title={c.name}
+                detail={c.coachName}
+                onPress={() => go(`/(coach)/nutrition/clients/${c.userId}`)}
+              />
+            ))
+          )}
+        </DashboardSheet>
       </ScrollView>
     </CoachShell>
   );

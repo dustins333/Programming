@@ -296,6 +296,15 @@ export default function SpcLiveSessions() {
       // exists, i.e. always when you are editing one. Edit therefore landed
       // straight back on the list it came from, every time.
       setStagingAside(true);
+      // `?staging=new` is the same detour with nothing to load: the coach
+      // dashboard's "Stage another" lands here while a board is already
+      // running, where the on-screen circle is otherwise the only way in.
+      if (editId === "new") {
+        setEditing(null);
+        return () => {
+          cancelled = true;
+        };
+      }
       // A failed read must not strand the coach on a blank picker — it falls
       // back to building a new group, which is never destructive.
       getStagedSession(editId)

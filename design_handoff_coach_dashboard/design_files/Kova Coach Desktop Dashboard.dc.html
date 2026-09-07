@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet">
+<script type="module" src="https://cdn.jsdelivr.net/npm/ionicons@7.4.0/dist/ionicons/ionicons.esm.js"></script>
+<script nomodule src="https://cdn.jsdelivr.net/npm/ionicons@7.4.0/dist/ionicons/ionicons.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: #edE8e2; }
+  a { color: #8a5140; text-decoration: none; }
+  a:hover { color: #a46a57; }
+  ion-icon { display: block; flex: none; }
+</style>
+</helmet>
+
+<section style="padding:44px 48px 64px;display:flex;flex-direction:column;gap:26px;font-family:Montserrat,sans-serif">
+  <div>
+    <div style="font-family:Montserrat;font-weight:700;font-size:10px;letter-spacing:1.4px;color:#a8a29e">TURN 2 · COACH DASHBOARD, DESKTOP</div>
+    <div style="font-family:'Protest Strike',sans-serif;font-size:30px;color:#a46a57;margin-top:6px">Same modules, laid out for width</div>
+    <div style="font-family:Montserrat;font-size:13px;color:#6f6862;margin-top:6px;max-width:760px;text-wrap:pretty">Resume ("pick up where you left off") and the four launch cards (Program / Ship / Pay / Run the gym) are gone. In the gym now carries the exact four figures the phone does. Needs You stays, on the right, where it can be worked. <a href="#2a">2a</a> is the whole screen inside the real sidebar.</div>
+  </div>
+
+  <div id="2a" style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:baseline;gap:10px">
+      <span style="font-family:'Protest Strike',sans-serif;font-size:15px;color:#fff;background:#33251f;border-radius:7px;padding:3px 9px">2a</span>
+      <span style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c">Desktop — 1440 × sidebar 232, content capped at 1240</span>
+    </div>
+
+    <div style="width:1440px;display:flex;background:#f6f1ec;border:1px solid #dcd6ce;border-radius:14px;overflow:hidden;box-shadow:0 18px 44px rgba(68,64,60,.10)">
+
+      <!-- sidebar: CoachShell.js, NAV_SECTIONS verbatim -->
+      <div style="width:232px;flex:none;background:#fff;border-right:1px solid #e7e5e4;padding:24px 16px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;padding:0 8px;margin-bottom:28px">
+          <img src="assets/kova-logo.jpg" alt="Kova Strength" style="width:32px;height:32px;border-radius:16px;object-fit:cover">
+          <span style="font-family:'Protest Strike',sans-serif;font-size:18px;color:#a46a57">Kova Strength</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;background:#fdf6f2;margin-bottom:4px">
+          <ion-icon name="home" style="font-size:18px;color:#8a5140"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:600;font-size:14px;color:#8a5140;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Dashboard</span>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;margin:12px 0 4px">
+          <span style="font-family:Montserrat;font-weight:600;font-size:11px;letter-spacing:.8px;color:#78716c">CLIENTS</span>
+          <ion-icon name="chevron-down" style="font-size:14px;color:#a8a29e"></ion-icon>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="people-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">All Clients</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="chatbubbles-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Messages</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="barbell-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Group</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="clipboard-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">SPC</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="restaurant-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Nutrition</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="school-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Coach Prep</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="trophy-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">CCrew</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="library-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Exercise Library</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="documents-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Templates</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="checkmark-done-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Library Review</span>
+          <span style="min-width:20px;padding:2px 6px;border-radius:999px;background:#a46a57;color:#fff;font-family:Montserrat;font-weight:700;font-size:11px;text-align:center">7</span>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;margin:12px 0 4px">
+          <span style="font-family:Montserrat;font-weight:600;font-size:11px;letter-spacing:.8px;color:#78716c">COACH</span>
+          <ion-icon name="chevron-down" style="font-size:14px;color:#a8a29e"></ion-icon>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="fitness-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">My Training</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="cash-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Payroll</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="document-text-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Documents</span>
+          <span style="min-width:20px;padding:2px 6px;border-radius:999px;background:#a46a57;color:#fff;font-family:Montserrat;font-weight:700;font-size:11px;text-align:center">2</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="body-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Member View</span>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;margin:12px 0 4px">
+          <span style="font-family:Montserrat;font-weight:600;font-size:11px;letter-spacing:.8px;color:#78716c">ADMIN</span>
+          <ion-icon name="chevron-down" style="font-size:14px;color:#a8a29e"></ion-icon>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="megaphone-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Announcements</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="calendar-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Events</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-left:12px;margin-bottom:4px">
+          <ion-icon name="videocam-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Help Videos</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;margin-top:12px;margin-bottom:4px">
+          <ion-icon name="settings-outline" style="font-size:18px;color:#78716c"></ion-icon>
+          <span style="flex:1;font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Settings</span>
+        </div>
+
+        <div style="flex:1"></div>
+        <div style="border-top:1px solid #e7e5e4;padding-top:16px;margin-top:16px">
+          <div style="font-family:Montserrat;font-size:12px;color:#a8a29e;padding:0 8px;margin-bottom:8px">Terra Kova</div>
+          <div style="display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px">
+            <ion-icon name="log-out-outline" style="font-size:18px;color:#78716c"></ion-icon>
+            <span style="font-family:Montserrat;font-weight:500;font-size:14px;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Sign out</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- content -->
+      <div style="flex:1;min-width:0;background:#f1ece6;padding:26px 36px 40px">
+        <div style="max-width:1240px;display:flex;flex-direction:column;gap:16px">
+
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px">
+            <div>
+              <div style="font-family:Montserrat;font-weight:700;font-size:10px;letter-spacing:1.4px;color:#a8a29e">SUNDAY, SEP 6</div>
+              <div style="font-family:'Protest Strike',sans-serif;font-size:30px;line-height:34px;color:#a46a57;margin-top:7px">Good morning, Terra</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;width:300px;background:#fff;border:1px solid #ece7e1;border-radius:11px;padding:11px 13px;box-shadow:0 1px 2px rgba(68,64,60,.05),0 10px 24px rgba(68,64,60,.055)">
+              <ion-icon name="search-outline" style="font-size:17px;color:#a46a57"></ion-icon>
+              <span style="flex:1;font-family:Montserrat;font-size:13.5px;color:#9a9187">Find a client</span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;background:#fdf1ea;border:1.5px solid #e0b6a5;border-radius:14px;padding:13px 14px">
+            <ion-icon name="alert-circle" style="font-size:21px;color:#b23a22"></ion-icon>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:Montserrat;font-weight:600;font-size:13.5px;color:#b23a22">Payroll not submitted</div>
+              <div style="font-family:Montserrat;font-size:12px;color:#78716c;margin-top:2px">Aug 16 – 31 | tap to review and finalize</div>
+            </div>
+            <ion-icon name="chevron-forward" style="font-size:17px;color:#b23a22"></ion-icon>
+          </div>
+
+          <!-- IN THE GYM — the same four figures the phone shows -->
+          <div style="position:relative;background:#33251f;border-radius:20px;padding:18px 20px;overflow:hidden">
+            <div style="position:absolute;right:-50px;top:-60px;width:190px;height:190px;border-radius:99px;background:rgba(190,172,149,.11)"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px">
+              <span style="font-family:Montserrat;font-weight:700;font-size:10px;letter-spacing:1.4px;color:#beac95">IN THE GYM</span>
+              <span style="font-family:Montserrat;font-size:11.5px;color:rgba(247,243,238,.5)">Week of Sep 1 · every tile opens its list</span>
+            </div>
+            <div style="display:flex;gap:12px">
+              <div style="flex:1;min-width:0;padding:16px 18px;border-radius:14px;background:rgba(247,243,238,.055)">
+                <div style="font-family:'Protest Strike',sans-serif;font-size:38px;line-height:40px;color:#f7f3ee">34</div>
+                <div style="font-family:Montserrat;font-size:12px;color:rgba(247,243,238,.62);letter-spacing:.4px;margin-top:5px">sessions today</div>
+              </div>
+              <div style="flex:1;min-width:0;padding:16px 18px;border-radius:14px;background:rgba(247,243,238,.055)">
+                <div style="font-family:'Protest Strike',sans-serif;font-size:38px;line-height:40px;color:#f7f3ee">128</div>
+                <div style="font-family:Montserrat;font-size:12px;color:rgba(247,243,238,.62);letter-spacing:.4px;margin-top:5px">sessions this week</div>
+              </div>
+              <div style="flex:1;min-width:0;padding:16px 18px;border-radius:14px;background:rgba(247,243,238,.055)">
+                <div style="font-family:'Protest Strike',sans-serif;font-size:38px;line-height:40px;color:#f7f3ee">96</div>
+                <div style="font-family:Montserrat;font-size:12px;color:rgba(247,243,238,.62);letter-spacing:.4px;margin-top:5px">girls in this week</div>
+              </div>
+              <div style="flex:1;min-width:0;padding:16px 18px;border-radius:14px;background:rgba(247,243,238,.055)">
+                <div style="font-family:'Protest Strike',sans-serif;font-size:38px;line-height:40px;color:#e8a288">11</div>
+                <div style="font-family:Montserrat;font-size:12px;color:rgba(247,243,238,.62);letter-spacing:.4px;margin-top:5px">girls not in this week</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:16px;align-items:flex-start">
+
+            <!-- left: the modules -->
+            <div style="flex:1.55;min-width:420px;display:flex;flex-direction:column;gap:16px">
+
+              <sc-if value="{{ showSpc }}" hint-placeholder-val="{{ true }}">
+              <div style="background:#fff;border:1px solid #e1dad1;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(68,64,60,.05),0 10px 24px rgba(68,64,60,.055)">
+                <div style="display:flex;align-items:center;gap:12px;padding-bottom:13px;margin-bottom:14px;border-bottom:1px solid #ece7e1">
+                  <span style="width:30px;height:30px;border-radius:9px;background:#f4e7e0;display:flex;align-items:center;justify-content:center">
+                    <ion-icon name="clipboard" style="font-size:16px;color:#8a5140"></ion-icon>
+                  </span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:19px;line-height:21px;color:#2a211c">SPC</div>
+                    <div style="font-family:Montserrat;font-size:12px;color:#6f6862;margin-top:1px">74 clients · 4 behind</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12.5px;color:#8a5140">Open SPC →</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;background:#33251f;border-radius:14px;padding:14px 15px;margin-bottom:13px">
+                  <span style="width:34px;height:34px;border-radius:99px;background:rgba(247,243,238,.14);display:flex;align-items:center;justify-content:center">
+                    <ion-icon name="radio" style="font-size:19px;color:#f7f3ee"></ion-icon>
+                  </span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:Montserrat;font-weight:700;font-size:15px;color:#f7f3ee">Board running · 3 clients</div>
+                    <div style="font-family:Montserrat;font-size:12px;color:rgba(247,243,238,.6);margin-top:2px">Kayla is running it · open the board</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12.5px;color:#f7f3ee;border:1px solid rgba(247,243,238,.28);border-radius:9px;padding:9px 15px">Stage another</span>
+                </div>
+                <div style="display:flex;gap:11px">
+                  <div style="flex:1;min-width:0;background:#fdece5;border:1px solid #f6ddd3;border-radius:13px;padding:13px 14px">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:30px;line-height:32px;color:#b23a22">4</div>
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c;margin-top:4px">Due now</div>
+                    <div style="font-family:Montserrat;font-size:11px;color:#6f6862;margin-top:2px">ended, nothing queued</div>
+                  </div>
+                  <div style="flex:1;min-width:0;background:#faf8f6;border:1px solid #ebe5de;border-radius:13px;padding:13px 14px">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:30px;line-height:32px;color:#8a5a2e">6</div>
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c;margin-top:4px">Due soon</div>
+                    <div style="font-family:Montserrat;font-size:11px;color:#6f6862;margin-top:2px">in their final week</div>
+                  </div>
+                  <div style="flex:1;min-width:0;background:#faf8f6;border:1px solid #ebe5de;border-radius:13px;padding:13px 14px">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:30px;line-height:32px;color:#4d6142">61</div>
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c;margin-top:4px">Good to go</div>
+                    <div style="font-family:Montserrat;font-size:11px;color:#6f6862;margin-top:2px">running or queued up</div>
+                  </div>
+                  <div style="flex:1;min-width:0;background:#faf8f6;border:1px solid #ebe5de;border-radius:13px;padding:13px 14px">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:30px;line-height:32px;color:#2a211c">3</div>
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c;margin-top:4px">No coach</div>
+                    <div style="font-family:Montserrat;font-size:11px;color:#6f6862;margin-top:2px">nobody owns them</div>
+                  </div>
+                </div>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ showNutrition }}" hint-placeholder-val="{{ true }}">
+              <div style="background:#fff;border:1px solid #e1dad1;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(68,64,60,.05),0 10px 24px rgba(68,64,60,.055)">
+                <div style="display:flex;align-items:center;gap:12px;padding-bottom:13px;margin-bottom:14px;border-bottom:1px solid #ece7e1">
+                  <span style="width:30px;height:30px;border-radius:9px;background:#f4e7e0;display:flex;align-items:center;justify-content:center">
+                    <ion-icon name="restaurant" style="font-size:16px;color:#8a5140"></ion-icon>
+                  </span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:19px;line-height:21px;color:#2a211c">Nutrition</div>
+                    <div style="font-family:Montserrat;font-size:12px;color:#6f6862;margin-top:1px">58 active clients</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12.5px;color:#8a5140">Open Nutrition →</span>
+                </div>
+                <div style="display:flex;gap:11px">
+                  <div style="flex:1;min-width:0;background:#faf8f6;border:1px solid #ebe5de;border-radius:13px;padding:13px 14px">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:30px;line-height:32px;color:#2a211c">41<span style="font-family:Montserrat;font-weight:600;font-size:13px;color:#a8a29e"> /58</span></div>
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c;margin-top:4px">Logged today</div>
+                    <div style="font-family:Montserrat;font-size:11px;color:#6f6862;margin-top:2px">33 already finalized</div>
+                  </div>
+                  <div style="flex:1;min-width:0;background:#fdece5;border:1px solid #f6ddd3;border-radius:13px;padding:13px 14px">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:30px;line-height:32px;color:#b23a22">12</div>
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c;margin-top:4px">Check-ins waiting</div>
+                    <div style="font-family:Montserrat;font-size:11px;color:#6f6862;margin-top:2px">submitted, not reviewed</div>
+                  </div>
+                  <div style="flex:1;min-width:0;background:#faf8f6;border:1px solid #ebe5de;border-radius:13px;padding:13px 14px">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:30px;line-height:32px;color:#8a5a2e">9</div>
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c;margin-top:4px">Not seen in 7 days</div>
+                    <div style="font-family:Montserrat;font-size:11px;color:#6f6862;margin-top:2px">no log, no weigh-in</div>
+                  </div>
+                </div>
+              </div>
+              </sc-if>
+
+              <div style="background:#fff;border:1px solid #e1dad1;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(68,64,60,.05),0 10px 24px rgba(68,64,60,.055)">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+                  <span style="width:30px;height:30px;border-radius:9px;background:#f4e7e0;display:flex;align-items:center;justify-content:center">
+                    <ion-icon name="barbell" style="font-size:16px;color:#8a5140"></ion-icon>
+                  </span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:19px;line-height:21px;color:#2a211c">Group</div>
+                    <div style="font-family:Montserrat;font-size:12px;color:#6f6862;margin-top:1px">3 programs · 1 needs you</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12.5px;color:#8a5140">Open the grid →</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-top:1px solid #f4f1ec">
+                  <span style="width:8px;height:8px;border-radius:99px;background:#b23a22;display:block"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:Montserrat;font-weight:600;font-size:14px;color:#2a211c">Flagship</div>
+                    <div style="font-family:Montserrat;font-size:11.5px;color:#6f6862;margin-top:2px">Week 4 of 4 · this week is still drafts · nothing queued after</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-size:11.5px;color:#6f6862">62 clients</span>
+                  <span style="font-family:Montserrat;font-weight:700;font-size:12px;color:#b23a22;width:56px;text-align:right">5d left</span>
+                  <ion-icon name="chevron-forward" style="font-size:15px;color:#c9c4bd"></ion-icon>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-top:1px solid #f4f1ec">
+                  <span style="width:8px;height:8px;border-radius:99px;background:#8a5a2e;display:block"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:Montserrat;font-weight:600;font-size:14px;color:#2a211c">Better With Age</div>
+                    <div style="font-family:Montserrat;font-size:11.5px;color:#6f6862;margin-top:2px">Week 2 of 4 · published through Sunday</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-size:11.5px;color:#6f6862">31 clients</span>
+                  <span style="font-family:Montserrat;font-weight:700;font-size:12px;color:#8a5a2e;width:56px;text-align:right">16d left</span>
+                  <ion-icon name="chevron-forward" style="font-size:15px;color:#c9c4bd"></ion-icon>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;padding:13px 0 4px;border-top:1px solid #f4f1ec">
+                  <span style="width:8px;height:8px;border-radius:99px;background:#4d6142;display:block"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:Montserrat;font-weight:600;font-size:14px;color:#2a211c">Barbell Club</div>
+                    <div style="font-family:Montserrat;font-size:11.5px;color:#6f6862;margin-top:2px">Ongoing · everything published · auto-extends weekly</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-size:11.5px;color:#6f6862">14 clients</span>
+                  <span style="font-family:Montserrat;font-weight:700;font-size:12px;color:#4d6142;width:56px;text-align:right">ongoing</span>
+                  <ion-icon name="chevron-forward" style="font-size:15px;color:#c9c4bd"></ion-icon>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- right: needs you, then the small stuff -->
+            <div style="flex:1;min-width:320px;display:flex;flex-direction:column;gap:16px">
+
+              <div style="background:#fff;border:1px solid #e1dad1;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(68,64,60,.05),0 10px 24px rgba(68,64,60,.055)">
+                <div style="display:flex;align-items:center;gap:11px;background:#33251f;padding:14px 18px">
+                  <ion-icon name="alert-circle" style="font-size:19px;color:#e8a288"></ion-icon>
+                  <span style="flex:1;font-family:'Protest Strike',sans-serif;font-size:19px;line-height:21px;color:#f7f3ee">Needs you</span>
+                  <span style="background:rgba(232,162,136,.18);border-radius:99px;padding:3px 10px;font-family:Montserrat;font-weight:700;font-size:11.5px;color:#f0b79f">5</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;padding:13px 18px">
+                  <span style="width:7px;height:7px;border-radius:99px;background:#b23a22;display:block"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c">Flagship: this week isn't published</div>
+                    <div style="font-family:Montserrat;font-size:11.5px;color:#a8a29e;margin-top:2px">Sessions are still drafts</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12px;color:#44403c;border:1px solid #d9d4cd;border-radius:8px;padding:6px 13px">Open grid</span>
+                  <span style="font-family:Montserrat;font-size:15px;color:#c9c4bd">×</span>
+                </div>
+                <div style="border-top:1px solid #f4f1ec;display:flex;align-items:center;gap:12px;padding:13px 18px">
+                  <span style="width:7px;height:7px;border-radius:99px;background:#b23a22;display:block"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c">Flagship: block ends in 5 days</div>
+                    <div style="font-family:Montserrat;font-size:11.5px;color:#a8a29e;margin-top:2px">Nothing queued to start after it</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12px;color:#44403c;border:1px solid #d9d4cd;border-radius:8px;padding:6px 13px">Open grid</span>
+                  <span style="font-family:Montserrat;font-size:15px;color:#c9c4bd">×</span>
+                </div>
+                <div style="border-top:1px solid #f4f1ec;display:flex;align-items:center;gap:12px;padding:13px 18px">
+                  <span style="width:7px;height:7px;border-radius:99px;background:#b23a22;display:block"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c">Roxy Alvarez needs a new SPC program</div>
+                    <div style="font-family:Montserrat;font-size:11.5px;color:#a8a29e;margin-top:2px">Ended Aug 30, nothing queued · draft already started</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12px;color:#44403c;border:1px solid #d9d4cd;border-radius:8px;padding:6px 13px">Build it</span>
+                  <span style="font-family:Montserrat;font-size:15px;color:#c9c4bd">×</span>
+                </div>
+                <div style="border-top:1px solid #f4f1ec;display:flex;align-items:center;gap:12px;padding:13px 18px">
+                  <span style="width:7px;height:7px;border-radius:99px;background:#b23a22;display:block"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c">Kenzie Ward needs a new SPC program</div>
+                    <div style="font-family:Montserrat;font-size:11.5px;color:#a8a29e;margin-top:2px">Final week complete, nothing queued</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12px;color:#44403c;border:1px solid #d9d4cd;border-radius:8px;padding:6px 13px">Build it</span>
+                  <span style="font-family:Montserrat;font-size:15px;color:#c9c4bd">×</span>
+                </div>
+                <div style="border-top:1px solid #f4f1ec;display:flex;align-items:center;gap:12px;padding:13px 18px">
+                  <span style="width:7px;height:7px;border-radius:99px;background:#8a5a2e;display:block"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:Montserrat;font-weight:600;font-size:13px;color:#2a211c">3 clients not enrolled in anything</div>
+                    <div style="font-family:Montserrat;font-size:11.5px;color:#a8a29e;margin-top:2px">Linked but not assigned to a program or nutrition</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12px;color:#44403c;border:1px solid #d9d4cd;border-radius:8px;padding:6px 13px">Assign</span>
+                  <span style="font-family:Montserrat;font-size:15px;color:#c9c4bd">×</span>
+                </div>
+              </div>
+
+              <sc-if value="{{ showExerciseReview }}" hint-placeholder-val="{{ true }}">
+              <div style="background:#fff;border:1px solid #e1dad1;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(68,64,60,.05),0 10px 24px rgba(68,64,60,.055)">
+                <div style="display:flex;align-items:center;gap:12px;padding-bottom:12px;margin-bottom:13px;border-bottom:1px solid #ece7e1">
+                  <span style="width:30px;height:30px;border-radius:9px;background:#f4e7e0;display:flex;align-items:center;justify-content:center">
+                    <ion-icon name="checkmark-done" style="font-size:16px;color:#8a5140"></ion-icon>
+                  </span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:19px;line-height:21px;color:#2a211c">Library review</div>
+                    <div style="font-family:Montserrat;font-size:12px;color:#6f6862;margin-top:1px">You're a reviewer</div>
+                  </div>
+                  <span style="font-family:Montserrat;font-weight:600;font-size:12.5px;color:#8a5140">Open queue →</span>
+                </div>
+                <div style="display:flex;gap:11px">
+                  <div style="flex:1;min-width:0;background:#faf8f6;border:1px solid #ebe5de;border-radius:13px;padding:12px 13px">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:28px;line-height:30px;color:#8a5a2e">7</div>
+                    <div style="font-family:Montserrat;font-weight:600;font-size:12.5px;color:#2a211c;margin-top:4px">New exercises</div>
+                    <div style="font-family:Montserrat;font-size:11px;color:#6f6862;margin-top:2px">added by 3 coaches</div>
+                  </div>
+                  <div style="flex:1;min-width:0;background:#faf8f6;border:1px solid #ebe5de;border-radius:13px;padding:12px 13px">
+                    <div style="font-family:'Protest Strike',sans-serif;font-size:28px;line-height:30px;color:#2a211c">2</div>
+                    <div style="font-family:Montserrat;font-weight:600;font-size:12.5px;color:#2a211c;margin-top:4px">Likely dupes</div>
+                    <div style="font-family:Montserrat;font-size:11px;color:#6f6862;margin-top:2px">merge or keep both</div>
+                  </div>
+                </div>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ showDocsReview }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e1dad1;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(68,64,60,.05),0 10px 24px rgba(68,64,60,.055)">
+                <span style="min-width:28px;height:24px;padding:0 8px;border-radius:99px;background:#a46a57;color:#fff;font-family:Montserrat;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center">2</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-family:Montserrat;font-weight:700;font-size:10px;letter-spacing:1.4px;color:#8a5140">DOCUMENTS</div>
+                  <div style="font-family:Montserrat;font-weight:600;font-size:14px;color:#2a211c;margin-top:4px">2 to read &amp; sign</div>
+                  <div style="font-family:Montserrat;font-size:11.5px;color:#6f6862;margin-top:2px">Floor SOP v3 · Injury reporting</div>
+                </div>
+                <ion-icon name="chevron-forward" style="font-size:16px;color:#c9c4bd"></ion-icon>
+              </div>
+              </sc-if>
+
+              <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e1dad1;border-radius:16px;padding:14px 16px;box-shadow:0 1px 2px rgba(68,64,60,.05),0 10px 24px rgba(68,64,60,.055)">
+                <div style="flex:1;min-width:0">
+                  <div style="font-family:Montserrat;font-weight:700;font-size:10px;letter-spacing:1.4px;color:#8a5140">PAYROLL</div>
+                  <div style="font-family:Montserrat;font-size:11.5px;color:#6f6862;margin-top:3px">Closes Sunday →</div>
+                </div>
+                <div style="font-family:'Protest Strike',sans-serif;font-size:26px;line-height:28px;color:#2a211c">4<span style="font-family:Montserrat;font-weight:600;font-size:13px;color:#6f6862"> /7 in</span></div>
+                <ion-icon name="chevron-forward" style="font-size:16px;color:#c9c4bd"></ion-icon>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div style="width:760px;background:#f7f4f0;border:1px solid #e4ded6;border-radius:14px;padding:14px 16px">
+      <div style="font-family:Montserrat;font-weight:700;font-size:9.5px;letter-spacing:1.2px;color:#a8a29e;margin-bottom:7px">WHAT CHANGED, AND WHAT NOW MATCHES THE PHONE</div>
+      <div style="font-family:Montserrat;font-size:11.5px;color:#44403c;line-height:1.7">Gone: the Resume hero ("pick up where you left off") and the four launch cards — Program, Ship, Pay, Run the gym. Nobody starts their day inside a card that guesses.<br>Matched: In the gym is now the same four figures as mobile — sessions today, sessions this week, girls in this week, girls not in this week — instead of the old sessions / nutrition / PRs / unread set that answered a different question.<br>Kept: Needs You, unchanged in behavior (severity order, verb button, dismiss ×), moved to the right rail where the width suits a task list.<br>Shared with mobile: SPC, Nutrition, Group, Library Review, Documents, Payroll — identical data, identical gating, wider tiles.<br>New on desktop: Find a client in the header, so the lookup isn't phone-only.<br>Member View stays phone-only — the sidebar already carries it here, and it's a mobile job.<br>Dropped from both: the roster count chips. They were the old headline and now say nothing the modules don't.</div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;admin&quot;,&quot;spc_coach&quot;,&quot;nutrition_coach&quot;],&quot;default&quot;:&quot;admin&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Permission gating&quot;},&quot;showExerciseReview&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Permission gating&quot;},&quot;showDocsReview&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Permission gating&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const role = this.props.role ?? "admin";
+    const admin = role === "admin";
+    return {
+      showSpc: admin || role === "spc_coach",
+      showNutrition: admin || role === "nutrition_coach",
+      showExerciseReview: (this.props.showExerciseReview ?? true) && (admin || role === "spc_coach"),
+      showDocsReview: this.props.showDocsReview ?? true,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
