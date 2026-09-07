@@ -7357,6 +7357,24 @@ reported it as one. **Say so before starting a stubbed dev server, or scope
 the stub so it cannot survive leaving the harness route.** The "restore and
 md5-verify" discipline covers the repo; it does nothing for a running server.
 
+**Same shared surface, second failure mode, one day later: Terra read a
+harness SCREENSHOT as her own app and drew a real conclusion from fake data.**
+The coach-dashboard harness stubbed `getFinalizePrompt` with the design mock's
+placeholder range, so the payroll banner said "Aug 16 – 31". She reasonably
+asked why she was being nagged about a period that isn't even a pay period —
+and she was right that it isn't: real periods are 14 days Thu→Wed off the
+`payroll_period_anchor_date` anchor (2025-10-02), so Aug 16–31 is 16 days
+starting on a Sunday and could never exist. Nothing was wrong with the app;
+the number came from me.
+
+The stub-leak fix (say so before starting a server) does not cover this one,
+because the Browser pane is hers whether or not she is signed in — she sees
+what I drive. **So: when a screenshot comes from a harness, say the data is
+fake in the same message as the picture, not just at the end of the session.**
+Worth remembering too that a plausible-looking placeholder is worse than an
+obviously fake one — the handoff mock's own "Aug 16 – 31" read as real
+because it was formatted exactly like the real thing.
+
 ## Any program length, and no way to shorten a live one (2026-09-07)
 
 The SPC publish/reschedule modal offered four lengths (4/5/6/8) plus Ongoing.
