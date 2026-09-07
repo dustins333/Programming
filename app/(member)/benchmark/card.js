@@ -232,46 +232,47 @@ export default function BenchmarkCard() {
         </View>
       </Animated.View>
 
-      {/* The design's primary is "Save to photos". There is no rasterizer in
-          this app — react-native-view-shot is a native dependency, and every
-          real user is on the installed PWA where a native module never
-          arrives. So the button says what it actually does. The card above is
-          built to be screenshot-clean for exactly this reason, the same way
-          the coach's photo-compare board is. */}
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-        <View
-          style={{
-            flex: 1,
-            height: 50,
-            borderRadius: 14,
-            backgroundColor: NEON.mint,
-            alignItems: "center",
-            justifyContent: "center",
-            ...glow(NEON.mintRgb, { radius: 22, opacity: 0.4 }),
-          }}
-        >
-          <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: NEON.inkOnMint }}>
-            Screenshot my results
-          </Text>
-        </View>
-        <PressFade
-          onPress={() => router.replace("/(member)")}
-          accessibilityRole="button"
-          style={{
-            width: 108,
-            height: 50,
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: "rgba(255,255,255,.2)",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: NEON.ink }}>
-            Done
-          </Text>
-        </PressFade>
-      </View>
+      {/* The design's primary here is "Save to photos", and there is no
+          rasterizer in this app — react-native-view-shot is a native
+          dependency and every real user is on the installed PWA, where a
+          native module never arrives. It shipped as a mint block that looked
+          exactly like a button and did nothing, which is worse than not
+          having it. It is a plain hint now: the card above is built
+          screenshot-clean for exactly this reason, the same way the coach's
+          photo-compare board is, and this just points at that. Done is the
+          only thing on the screen that can be pressed, so it is the only
+          thing that looks pressable. */}
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{
+          fontFamily: fonts.sans,
+          fontSize: 12.5,
+          lineHeight: 18,
+          color: NEON.ink5,
+          textAlign: "center",
+          marginTop: 16,
+        }}
+      >
+        Screenshot this to keep it, or share it.
+      </Text>
+
+      <PressFade
+        onPress={() => router.replace("/(member)")}
+        accessibilityRole="button"
+        style={{
+          marginTop: 14,
+          height: 50,
+          borderRadius: 14,
+          backgroundColor: NEON.mint,
+          alignItems: "center",
+          justifyContent: "center",
+          ...glow(NEON.mintRgb, { radius: 22, opacity: 0.4 }),
+        }}
+      >
+        <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 14, color: NEON.inkOnMint }}>
+          Done
+        </Text>
+      </PressFade>
 
       {next ? (
         <Text

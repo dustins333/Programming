@@ -97,13 +97,25 @@ export default function BenchmarkMovement() {
   // One bell per movement, ever. Tapping where it already sits removes it;
   // tapping elsewhere moves it and carries the number and load along, because
   // she is correcting her tier, not starting over.
+  // Changing what she actually DID un-completes the movement, so the button
+  // goes back to "Mark pull ups complete" and she confirms the new number the
+  // same way she confirmed the first one. Without this an edit landed
+  // silently: the button sat on "Logged | tap a KB to change" whatever she
+  // typed, and there was no way to tell the change had registered.
+  //
+  // The note is deliberately NOT in this set. It is commentary on the result,
+  // not the result, and having a sentence about how it felt drop her back to
+  // un-logged would be surprising.
+  const unconfirm = (slot) => (slot === "this" && entry?.completedAt ? { completedAt: null } : null);
+
   const placeBell = (slot, tier) => {
     if (slot === "this" && locked) return;
     const current = slot === "this" ? entry : lastEntry;
     const onThisCell = current?.tier === tier && (current?.variant ?? 0) === activeVariant;
-    const fields = onThisCell
-      ? { tier: null, value: "", load: "" }
-      : { tier, variant: activeVariant };
+    const fields = {
+      ...(onThisCell ? { tier: null, value: "", load: "" } : { tier, variant: activeVariant }),
+      ...unconfirm(slot),
+    };
     patchLocal(slot, fields);
     persist(slot, fields);
   };
@@ -111,8 +123,11 @@ export default function BenchmarkMovement() {
   const setNumber = (slot, field, raw) => {
     if (slot === "this" && locked) return;
     const clean = String(raw).replace(/[^0-9]/g, "").slice(0, 4);
-    patchLocal(slot, { [field]: clean });
-    persistDebounced(slot, field, { [field]: clean });
+    const fields = { [field]: clean, ...unconfirm(slot) };
+    patchLocal(slot, fields);
+    // Keyed on the field so two fields in flight don't cancel each other, and
+    // the un-confirm rides along with whichever write lands.
+    persistDebounced(slot, field, fields);
   };
 
   const setNote = (slot, text) => {
@@ -138,8 +153,9 @@ export default function BenchmarkMovement() {
           : "Add the load you used";
 
   const markComplete = async () => {
-    // Re-tapping a completed movement does nothing: the celebration is for the
-    // moment she finishes it, and firing it again on an edit would be noise.
+    // Guard only against a double-tap on an already-confirmed movement. An
+    // edit clears completedAt above, so confirming a corrected number is a
+    // real completion and celebrates like one.
     if (!canComplete || entry?.completedAt) return;
     const completedAt = new Date().toISOString();
     patchLocal("this", { completedAt });

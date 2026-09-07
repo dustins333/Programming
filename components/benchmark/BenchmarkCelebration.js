@@ -160,12 +160,15 @@ export function BenchmarkCelebration({ eventName, movement, entry, lastEntry, al
             alignItems: "center",
             justifyContent: "center",
             gap: 8,
-            backgroundColor: allDone ? NEON.mint : "#fff",
-            ...(allDone ? glow(NEON.mintRgb, { radius: 28, opacity: 0.5 }) : null),
+            // Both CTAs are the mint primary. The label is the only thing
+            // that differs, because the choice it offers is the only thing
+            // that differs.
+            backgroundColor: NEON.mint,
+            ...glow(NEON.mintRgb, { radius: 28, opacity: 0.5 }),
           }}
         >
           <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 14.5, color: NEON.inkOnNeon }}>
-            {allDone ? "See my results" : "Next test"}
+            {allDone ? "See my results" : "Next movement"}
           </Text>
           <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.sansBold, fontSize: 15, color: NEON.inkOnNeon, opacity: 0.55 }}>
             ›

@@ -6991,6 +6991,23 @@ log a real movement on a phone.
   the bundle.
 - `isWinTone` was deleted, dead since the celebration pill was corrected to
   always use the lift colour.
+- **Editing a completed movement un-completes it.** Changing the tier, the
+  number, the load or the variation clears `completed_at`, so the button goes
+  back to "Mark pull ups complete" and she confirms the new number the way she
+  confirmed the first. Without it an edit landed silently — the button sat on
+  "Logged | tap a KB to change" whatever she typed. The note is deliberately
+  NOT in that set: it is commentary on the result rather than the result, and
+  a sentence about how it felt dropping her back to un-logged would be
+  surprising. Knock-on effects are correct and intended: the hub falls to 2/3
+  and My Week drops out of its results state until she re-confirms.
+- **Both celebration CTAs are the mint primary now**, and the mid-flow one
+  reads "Next movement" rather than "Next test". The label is the only thing
+  that differs between them.
+- **The results screen's screenshot line is plain text, not a button.** It
+  shipped as a mint block that looked exactly like a button and did nothing,
+  which is worse than not having it at all — there is no rasterizer here (see
+  the "Save to photos" note above). Done is the only pressable thing on that
+  screen, so it is the only thing that looks pressable.
 
 **Verified**: the unlock driven for real on a completed movement (re-keyed 28
 to 31, moved the KB to another tier carrying the new value, both notes
