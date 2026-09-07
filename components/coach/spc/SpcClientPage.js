@@ -30,6 +30,7 @@ import { SpcSessionsTab } from "./SpcSessionsTab";
 import { LiftHistory } from "./LiftHistory";
 import { statusColors, fonts, colors } from "../../../lib/theme";
 import { toastError, toastSuccess } from "../../../lib/toast";
+import { confirmTurnSpcOff } from "../../../lib/confirmDialog";
 
 // The SPC client page under the simplification
 // (design_handoff_spc_rework_v1, 1a/1b): the existing frame — identity row,
@@ -920,6 +921,28 @@ export function SpcClientPage({ userId }) {
     }
   };
 
+  // Turning SPC off entirely used to live only on the client detail page,
+  // which for a coach account is reachable only through Settings -> Team.
+  // It belongs where the client actually lives, so it is here too — as a
+  // deliberate action behind a confirm rather than a third option in the
+  // Enrolment select, because leaving the roster is a different kind of
+  // decision from choosing between active and paused, and a select that
+  // archives on change gives no beat to change your mind.
+  const setEnrolment = async (status, message) => {
+    try {
+      await setSpcStatus(userId, status);
+      setSpcClient((c) => (c ? { ...c, status } : c));
+      toastSuccess(message);
+    } catch (err) {
+      toastError("Couldn't update status", err);
+    }
+  };
+
+  const handleTurnSpcOff = async () => {
+    if (!(await confirmTurnSpcOff(member?.name ?? "this client"))) return;
+    await setEnrolment("inactive", "SPC turned off");
+  };
+
   if (!ready) {
     return (
       <CoachShell>
@@ -1185,12 +1208,21 @@ export function SpcClientPage({ userId }) {
               <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginBottom: 5 }}>Enrolment</Text>
               {spcClient?.status === "inactive" ? (
                 // Reachable only by a direct link — she is off the SPC roster
-                // (0108). The select's two options don't include this state on
-                // purpose: turning SPC back on happens on her client page,
-                // where it was turned off.
-                <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#b23a22", marginBottom: 12 }}>
-                  SPC is switched off for this client. Turn it back on from her client page.
-                </Text>
+                // (0108). The select's two options still don't include this
+                // state on purpose: active and paused are a choice between,
+                // and off is an action. Turning it back on is offered right
+                // here rather than pointing elsewhere, so switching off from
+                // this card can be undone from the same card.
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#b23a22", marginBottom: 8 }}>
+                    SPC is switched off for this client. Their programs and history are kept.
+                  </Text>
+                  <PressFade onPress={() => setEnrolment("active", "SPC turned back on")}>
+                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+                      Turn SPC back on
+                    </Text>
+                  </PressFade>
+                </View>
               ) : (
               <select
                 value={spcClient?.status ?? ""}
@@ -1233,6 +1265,20 @@ export function SpcClientPage({ userId }) {
                 activeKey={String(spcClient?.sessions_per_week ?? 2)}
                 onSelect={(key) => patch({ sessions_per_week: Number(key) })}
               />
+
+              {spcClient && spcClient.status !== "inactive" ? (
+                <>
+                  <View style={{ height: 1, backgroundColor: CARD_BORDER, marginTop: 15, marginBottom: 12 }} />
+                  <PressFade onPress={handleTurnSpcOff}>
+                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#b23a22" }}>
+                      Turn SPC off
+                    </Text>
+                  </PressFade>
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 4 }}>
+                    Comes off the SPC roster and the live board. Programs are kept.
+                  </Text>
+                </>
+              ) : null}
             </View>
           </View>
         </View>
