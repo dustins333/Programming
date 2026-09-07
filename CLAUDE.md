@@ -7277,6 +7277,86 @@ is then reachable only by direct link.
 'force')" into LogBox and looks exactly like an app bug. Mouse/pointer events
 alone are enough to drive a `Pressable`.
 
+## Members get the weight trend, and the chart becomes thumb-scrubbable (2026-09-06)
+
+No migration, no new query on either screen's normal load.
+
+**Two doors into one sheet, both on numbers that were already there.** Today's
+`▼ 1.2 vs last week` under the weight tile and Weekly's `8-WK LB` stat in the
+averages band are each a one-line version of exactly what the chart answers,
+so both became the tap target rather than growing a button beside them. Same
+W/1m/3m/6m/1y ranges and the same 1m default as the coach's dashboard chart,
+deliberately, so a coach and a client talking about "the last three months"
+are looking at the same window.
+
+**Rejected: the Today card slider.** `TodayCardSlider` is the coach's strip
+(focus, notes, plan phases, milestones) and it sizes itself to its tallest
+card, so a chart in there inflates the whole strip for every member including
+those with no history worth charting.
+
+`WeightTrendSheet` fetches its own logs rather than taking them as a prop.
+Weekly has 200 loaded already and Today only has the last 8 days, so one
+bounded `listLogsForDateRange` on open is both cheaper than adding a year of
+history to every Today load and identical from either door. Range changes
+filter what is already in hand rather than refetching a subset.
+
+**The real fix is in `TrendChart`, and it is why the chart was unusable.**
+Reading a value was `onMouseMove` on web and an `onPress` on a 2.5px `Circle`
+on native. A thumb drag fires neither, so on the PWA, which is where everyone
+actually is, the chart could not be read on a phone at all. It is a
+`PanResponder` over the plot now:
+
+- **The pointer only has to land in the right COLUMN.** `nearestIndex` snaps
+  horizontally, so vertical accuracy is irrelevant and a sloppy drag still
+  reads cleanly.
+- `onStartShouldSetPanResponder: () => true` keeps a plain tap working, and
+  `onPanResponderTerminationRequest: () => true` lets a parent scroller take
+  the gesture back, which is what keeps the page scrollable when a finger
+  starts on the chart. `touchAction: "pan-y"` on web hands vertical panning to
+  the browser outright.
+- **The read-out is NOT cleared on release.** She lifts her thumb to read the
+  value it was covering; clearing on release removes the answer at the exact
+  moment the chart becomes visible again.
+- `readoutPlacement="above"` puts it over the plot for the same reason: on a
+  phone the hand doing the scrubbing is on the chart, so a read-out below it
+  is under that hand. Fixed 34px height so the chart does not shift when the
+  hint swaps for a number.
+- The responder is created once and reads coords through a ref, so it cannot
+  close over a stale render. Mouse hover is kept alongside for the coach at a
+  desk, and it has to stay on the `<Svg>` rather than the wrapper: `offsetX`
+  is relative to the DOM event's own target, which over a wrapper View is
+  whichever child is under the pointer. The PanResponder uses `locationX`,
+  which RNW computes as `clientX - currentTarget.getBoundingClientRect().left`
+  (verified in `createResponderEvent.js`), so it resolves against the wrapper
+  and needs no measurement.
+
+This lands in the shared component, so the coach dashboard and the member's
+own lift progress chart both get the drag.
+
+Down is olive and up is neutral, never red, matching the weight tile on Today
+rather than the coach's own red-for-up colouring, since not every member is
+trying to go down.
+
+**Verified in a browser at 390 and 1280 with real touch events** (harness
+deleted, stubbed file restored and md5-verified): touch-down reads a value,
+dragging walks the read-out through dates in order, it holds after release,
+the read-out swap causes no layout shift, the range pills recompute both the
+window and the delta, the chart caps at 560 and centres exactly on desktop,
+and the empty and failed-load states both render. **Not verified behind a real
+login**, and not on native.
+
+**The lesson that cost real confusion: a dev-server stub leaks into whoever
+else is on that server.** Terra was logged in against the same scratch-port
+Metro instance while the harness had installed
+`globalThis.__ZZ_FAKE_LOGS__` over `listLogsForDateRange` at module scope.
+Once that route had loaded in her tab the stub stayed live, so Today compared
+her real weight against generated data and reported a 30 lb swing, and the
+sheet drew a sine wave. Nothing was written (the stub only intercepted a read,
+feeding a displayed delta), but it read exactly like a real data bug and she
+reported it as one. **Say so before starting a stubbed dev server, or scope
+the stub so it cannot survive leaving the harness route.** The "restore and
+md5-verify" discipline covers the repo; it does nothing for a running server.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
