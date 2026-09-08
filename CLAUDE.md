@@ -1023,7 +1023,66 @@ Five reports in one message, two of which needed real diagnosis rather than a UI
 
 **Refreshing a deep URL 404'd** — e.g. `/clients/<uuid>`. Confirmed live with a plain `curl` against `app.kovastrength.com` before touching anything (`200` for `/clients`, `404` for `/clients/<uuid>`). Root cause: Expo's static web export writes a dynamic route to a file named **literally** `dist/clients/[userId].html`, and Vercel serves static files — no request path ever matches that name. Client-side navigation always worked because the router never asked the server; only a hard refresh/direct-link hit it. Fixed with explicit `rewrites` in `vercel.json`, one per dynamic route (11 of them, plus a `:step` rule covering the four `nutrition/clients/[userId]/onboarding/*` pages). Destinations keep the literal brackets (`/clients/[userId]`, not `.html`) because `cleanUrls: true` is what maps extensionless→`.html`, and a `.html` destination would collide with cleanUrls' own `.html`→extensionless redirect. **Vercel's routing order is redirects → filesystem → rewrites**, so these are a pure fallback and can't shadow a real static file — that's why `/spc/templates` still resolves to its own index rather than being eaten by the `/spc/:userId` rule. Re-enumerate with `find dist -name "*[[]*.html" | grep -v "^dist/("` and add a rule if a new dynamic route ever appears; nothing fails loudly if you forget, it just 404s on refresh.
 
-**"The webapp constantly asks for a refresh"** — that's `components/AppUpdateChecker.js` (the stale-tab detector) working *correctly* and being unbearable about it. During a heavy-deploy stretch every prompt is a true positive, so the fix was quieting it, not making detection smarter: it had **no dismiss at all** (only a "Refresh" button, so it re-raised on every tab-return until you gave in), and — the "randomly asking" half — it called `window.location.reload()` **on its own** whenever the tab was backgrounded with the banner up, silently discarding anything half-typed. Now: a compact dismissible pill instead of a full-width bar, an ✕ that suppresses that specific script-src for good in that tab (a *newer* deploy still gets one prompt), no self-initiated reload ever, and a 15-minute poll instead of 5. **General lesson**: for a background nag, "is the signal accurate" and "is the interruption warranted" are separate questions — this one was 100% accurate and still wrong.
+**"The webapp constantly asks for a refresh"** — that's `components/AppUpdateChecker.js` (the stale-tab detector) working *correctly* and being unbearable about it. During a heavy-deploy stretch every prompt is a true positive, so the fix was quieting it, not making detection smarter: it had **no dismiss at all** (only a "Refresh" button, so it re-raised on every tab-return until you gave in), and — the "randomly asking" half — it called `window.location.reload()` **on its own** whenever the tab was backgrounded with the banner up, silently discarding anything half-typed. Now: a compact dismissible pill instead of a full-width bar, an ✕ that suppresses that specific script-src for good in that tab (a *newer* deploy still gets one prompt), no self-initiated reload ever, and a 15-minute poll instead of 5. **General lesson**: for a background nag, "is the signal accurate" and "is the interruption warranted" are separate questions — this one was 100% accurate and still wrong. **And a follow-up on 2026-09-07 found the signal was not always accurate after all — see the next section.**
+
+## The refresh pill that never went away, on Chrome (2026-09-07)
+
+Reported from an installed Chrome PWA: tap Refresh, the page reloads, a few
+minutes later the same pill is back, over and over. Not the 2026-08-09
+nagginess (that one was accurate and merely relentless) but a **false
+positive that no refresh could ever satisfy**. No migration, no deploy step,
+one file.
+
+**`AppUpdateChecker` compared two different things and called them the same.**
+It read the running version as `document.querySelector("script[src]")` — the
+first script with a src *anywhere in the DOM* — and the deployed version by
+regexing the first `<script src>` out of a freshly fetched `/`. Those only
+agree when nothing else has put a script on the page, and **the entry bundle
+is the very last element in `<body>`** (verified against both the deployed and
+a freshly built `index.html`), so literally anything injected ahead of it
+wins the DOM query. A browser extension does exactly that, extensions run
+inside an installed Chrome PWA window, and an extension URL can never equal a
+deployed filename — so the comparison failed identically on every single
+load, forever. Reproduced on the real page: injecting one script into
+`<head>` flips the old selector to `chrome-extension://…` while the entry tag
+sits untouched at the bottom of the document.
+
+Two changes, and the second matters more than the first:
+
+1. **Match the app's own bundle explicitly on both sides** — a
+   `script[src*="/_expo/static/js/"][src*="entry-"]` selector and the
+   equivalent regex, kept next to each other so they cannot drift. If Expo
+   ever moves that path both sides stop matching, the effect bails early and
+   the checker quietly does nothing, which is the right direction to fail in.
+2. **A reload-didn't-help guard**, because I could not see the reporter's
+   browser and "an extension is injecting" is an inference, not a
+   confirmation. Tapping Refresh stamps the target src into `sessionStorage`;
+   on the next mount, if the version actually running still isn't that one,
+   the reload demonstrably did not help, so that version is retired for the
+   session instead of being offered again. Any cause — an extension, a stale
+   PWA cache, two edge nodes disagreeing — degrades to **at most one prompt
+   per deploy** rather than an unbreakable loop. The wall display's
+   auto-reload goes through the same marker, or it would have reloaded itself
+   every minute forever on the same trigger.
+
+**Worth generalising: comparing "what's running" against "what's deployed"
+means naming the artifact you care about, not taking the first thing that
+looks like it.** "The first script on the page" is a description of a
+document you control end to end; a real page in a real browser is not that.
+
+`sessionStorage` is wrapped in try/catch on every access and the reload fires
+**outside** it — a private window with storage blocked must still be able to
+refresh, the marker is only a safety net.
+
+**Verified**: the shipped regex run against the live and freshly built HTML
+plus injected-script variants (4 cases); the DOM selector driven in a real
+browser on the real page, where the old one breaks and the new one holds; the
+shipped marker helpers exercised through both outcomes and with
+`sessionStorage` stubbed to throw (12 assertions, including that Refresh
+still reloads when storage is blocked); `npm run build` + `check:routes` and
+a Babel parse / unresolved-identifier / unused-import pass. **Not verified**:
+the fix in Terra's own Chrome, which is the only place the original symptom
+lives — worth her confirming the pill stops coming back.
 
 **Builder contrast + library filter** — every lift row in the group and SPC web builders now carries a 2px warm border (`#dcc9bf`) instead of a 1px `stone-200` hairline, with full terracotta + a `#fdf6f2` fill for superset members. New `components/SupersetConnector.js` replaces the 10px grey "+" glyph between rows with a real 26px circle, and it does double duty: white circle + `add` icon when unlinked, filled terracotta + `link` icon **plus a vertical spine** when linked (tap to unlink). The spine needs negative `top`/`bottom` to overhang the connector's own box — sized flush to the gap it's entirely hidden behind the circle, which is how the first version shipped and looked like nothing.
 

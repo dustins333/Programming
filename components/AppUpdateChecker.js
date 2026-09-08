@@ -36,8 +36,51 @@ const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const DISPLAY_IDLE_MS = 60 * 1000;
 const DISPLAY_IDLE_POLL_MS = 5 * 1000;
 
-function extractScriptSrc(html) {
-  return html.match(/<script[^>]+src="([^"]+)"/)?.[1] ?? null;
+// Match the app's OWN bundle explicitly, on both sides of the comparison.
+// The entry tag is the very last element in <body>, so a plain
+// document.querySelector("script[src]") returns whatever *anything else* put
+// on the page first — a Chrome extension injecting into <head>, say, which
+// happens inside an installed PWA window too. That src can never equal a
+// deployed filename, so the pill came back after every single refresh, for
+// good. If Expo ever moves this path both sides stop matching, the effect
+// below bails, and the checker quietly does nothing — which is the right way
+// for it to fail.
+const ENTRY_SELECTOR = 'script[src*="/_expo/static/js/"][src*="entry-"]';
+const ENTRY_RE = /<script[^>]+src="([^"]*\/_expo\/static\/js\/[^"]*entry-[^"]*)"/;
+
+function extractEntrySrc(html) {
+  return html.match(ENTRY_RE)?.[1] ?? null;
+}
+
+// Survives exactly one reload, so we can tell "the refresh worked" from "the
+// refresh landed us right back where we were". Anything that makes those two
+// versions permanently disagree would otherwise nag forever, and the same
+// guard stops the wall display auto-reloading in a loop.
+const RELOAD_MARKER_KEY = "kova:update-reload-target";
+
+function readReloadMarker() {
+  try {
+    return window.sessionStorage.getItem(RELOAD_MARKER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function clearReloadMarker() {
+  try {
+    window.sessionStorage.removeItem(RELOAD_MARKER_KEY);
+  } catch {
+    // Private window / storage blocked. Worst case is one extra prompt.
+  }
+}
+
+function reloadForUpdate(src) {
+  try {
+    if (src) window.sessionStorage.setItem(RELOAD_MARKER_KEY, src);
+  } catch {
+    // As above — reload anyway, the marker is only a safety net.
+  }
+  window.location.reload();
 }
 
 export function AppUpdateChecker() {
@@ -56,13 +99,22 @@ export function AppUpdateChecker() {
     // URL while the regex below reads the raw attribute out of fetched HTML
     // text, and those two forms never string-equal each other even when
     // nothing has changed (root-relative vs. absolute-with-origin).
-    currentSrcRef.current = document.querySelector("script[src]")?.getAttribute("src") ?? null;
+    currentSrcRef.current = document.querySelector(ENTRY_SELECTOR)?.getAttribute("src") ?? null;
     if (!currentSrcRef.current) return;
+
+    // Did the last Refresh actually get us onto the version it promised? If
+    // not, tapping it again would land in exactly the same place, so retire
+    // that version rather than asking a second time.
+    const reloadedFor = readReloadMarker();
+    clearReloadMarker();
+    if (reloadedFor && reloadedFor !== currentSrcRef.current) {
+      dismissedRef.current.add(reloadedFor);
+    }
 
     const checkForUpdate = async () => {
       try {
         const res = await fetch("/", { cache: "no-store" });
-        const src = extractScriptSrc(await res.text());
+        const src = extractEntrySrc(await res.text());
         if (!src || src === currentSrcRef.current || dismissedRef.current.has(src)) return;
         setLatestSrc(src);
       } catch {
@@ -96,7 +148,7 @@ export function AppUpdateChecker() {
     const events = ["pointerdown", "touchstart", "keydown", "wheel"];
     events.forEach((name) => window.addEventListener(name, bump, { passive: true }));
     const interval = setInterval(() => {
-      if (Date.now() - lastTouched >= DISPLAY_IDLE_MS) window.location.reload();
+      if (Date.now() - lastTouched >= DISPLAY_IDLE_MS) reloadForUpdate(latestSrc);
     }, DISPLAY_IDLE_POLL_MS);
     return () => {
       clearInterval(interval);
@@ -137,7 +189,7 @@ export function AppUpdateChecker() {
         >
           <Text style={{ color: "white", fontFamily: fonts.sansMedium, fontSize: 13 }}>New version available</Text>
           <Pressable
-            onPress={() => window.location.reload()}
+            onPress={() => reloadForUpdate(latestSrc)}
             style={{ backgroundColor: colors.primary, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 }}
           >
             <Text style={{ color: "white", fontFamily: fonts.sansSemiBold, fontSize: 13 }}>Refresh</Text>
