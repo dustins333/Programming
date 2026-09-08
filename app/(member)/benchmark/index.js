@@ -12,6 +12,7 @@ import {
   compareEntries,
   tierUnit,
   benchmarkPhase,
+  isLoggingOpen,
 } from "../../../lib/programming/benchmark";
 import { useBenchmark } from "../../../lib/programming/useBenchmark";
 import { formatDateShort } from "../../../lib/formatDate";
@@ -78,7 +79,12 @@ export default function BenchmarkHub() {
   }
 
   const done = MOVEMENTS.filter((m) => board[m]?.completedAt);
-  const allDone = done.length === 3;
+  const loggingOpen = isLoggingOpen(event);
+  // Once logging has closed this is a review screen, so her results are
+  // always reachable from it — gating that button on all three would leave a
+  // member who missed one (or all three) with no way back to the card she
+  // just came from.
+  const showResults = done.length === 3 || !loggingOpen;
 
   return (
     <NeonScreen insets={insets}>
@@ -143,11 +149,12 @@ export default function BenchmarkHub() {
           movement={m}
           entry={board[m]}
           lastEntry={last[m]}
+          loggingOpen={loggingOpen}
           onOpen={() => router.push(`/(member)/benchmark/${m}`)}
         />
       ))}
 
-      {allDone ? (
+      {showResults ? (
         <PressFade
           onPress={() => router.push("/(member)/benchmark/card")}
           accessibilityRole="button"
@@ -176,16 +183,21 @@ export default function BenchmarkHub() {
   );
 }
 
-function MovementCard({ movement, entry, lastEntry, onOpen }) {
+function MovementCard({ movement, entry, lastEntry, loggingOpen, onOpen }) {
   const lift = LIFTS[movement];
   const logged = !!entry?.completedAt;
   const delta = compareEntries(movement, entry, lastEntry);
 
+  // "Not logged yet" is only true while she can still log it. After the day
+  // has passed it reads as though there is still something to do, so it
+  // becomes the same N/A the results screens show.
   const status = logged
     ? `${entry.value || "–"} ${tierUnit(movement, entry.tier)}${
         lift.load && entry.load ? ` at ${entry.load} lb` : ""
       } | ${delta.text}`
-    : "Not logged yet";
+    : loggingOpen
+      ? "Not logged yet"
+      : "N/A";
 
   return (
     <PressFade

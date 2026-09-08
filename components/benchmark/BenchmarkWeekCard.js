@@ -2,7 +2,7 @@ import { View, Text } from "react-native";
 import { PressFade } from "../PressFade";
 import { NeonText, neonTextShadow } from "./NeonText";
 import { NEON, glow, rgba } from "./neon";
-import { LIFTS, MOVEMENTS, tierUnit } from "../../lib/programming/benchmark";
+import { LIFTS, MOVEMENTS, tierUnit, missedBenchmark } from "../../lib/programming/benchmark";
 import { fonts } from "../../lib/theme";
 
 // The one way into Benchmark Day. Lives on My Week between the hero and YOUR
@@ -174,7 +174,12 @@ export function BenchmarkWeekCard({ phase, event, board, daysOut, onOpen }) {
 
   // Results. Tapping it opens her card rather than the board — the board is
   // read-only by now and the card is the thing she wants to look at again.
+  //
+  // A member who missed the day entirely gets the same card, said plainly:
+  // three N/A tiles and one line pointing at the next one. Showing her
+  // nothing, or hiding the card, would let the day pass without registering.
   const loggedCount = MOVEMENTS.filter((m) => board?.[m]?.completedAt).length;
+  const missed = missedBenchmark(board);
   return (
     <PressFade
       onPress={onOpen}
@@ -240,7 +245,7 @@ export function BenchmarkWeekCard({ phase, event, board, daysOut, onOpen }) {
                 core={14}
                 coreAlpha={0.6}
               >
-                {logged ? entry.value || "–" : "–"}
+                {logged ? entry.value || "–" : "N/A"}
               </NeonText>
               {/* Two lines are RESERVED whether the unit needs them or not.
                   With space-between, a bottom block that wraps pushes the
@@ -259,12 +264,28 @@ export function BenchmarkWeekCard({ phase, event, board, daysOut, onOpen }) {
                   color: NEON.ink42,
                 }}
               >
-                {logged ? resultUnit(m, entry) : "NOT LOGGED"}
+                {/* Nothing under an N/A: the value already says it, and
+                    "NOT LOGGED" under "N/A" is the same sentence twice. The
+                    height stays reserved so the numbers still line up. */}
+                {logged ? resultUnit(m, entry) : ""}
               </Text>
             </View>
           );
         })}
       </View>
+      {missed ? (
+        <Text
+          maxFontSizeMultiplier={1.15}
+          style={{
+            fontFamily: fonts.sansBold,
+            fontSize: 12.5,
+            color: NEON.ink62,
+            marginTop: 14,
+          }}
+        >
+          Don't miss the next one!
+        </Text>
+      ) : null}
     </PressFade>
   );
 }

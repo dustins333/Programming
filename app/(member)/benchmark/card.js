@@ -7,7 +7,7 @@ import { FinalizeConfetti } from "../../../components/FinalizeConfetti";
 import { NeonText, neonTextShadow } from "../../../components/benchmark/NeonText";
 import { NEON, glow, rgba } from "../../../components/benchmark/neon";
 import { BackRow, NeonScreen } from "../../../components/benchmark/BenchmarkChrome";
-import { LIFTS, MOVEMENTS, tierUnit, getNextBenchmarkEvent } from "../../../lib/programming/benchmark";
+import { LIFTS, MOVEMENTS, tierUnit, missedBenchmark, getNextBenchmarkEvent } from "../../../lib/programming/benchmark";
 import { useBenchmark } from "../../../lib/programming/useBenchmark";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { daysBetween, todayInBoise } from "../../../lib/boiseDate";
@@ -72,19 +72,27 @@ export default function BenchmarkCard() {
 
   const firstName = (profile?.name ?? "").trim().split(/\s+/)[0] || "You";
 
+  // She missed the day. Same card, told straight: no confetti over it, N/A
+  // where the numbers go, and no invitation to share it — there is nothing
+  // here she would want to send anyone. The one line under the tiles is the
+  // whole message.
+  const missed = missedBenchmark(board);
+
   return (
     <NeonScreen insets={insets}>
-      <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 40, overflow: "hidden" }}>
-        <FinalizeConfetti
-          runKey={`card:${event.id}`}
-          pieceCount={38}
-          distance={height + 80}
-          fallMinMs={1500}
-          fallMaxMs={2800}
-          staggerMs={700}
-          colors={[LIFTS.pull.color, LIFTS.push.color, LIFTS.squat.color, NEON.mint]}
-        />
-      </View>
+      {missed ? null : (
+        <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 40, overflow: "hidden" }}>
+          <FinalizeConfetti
+            runKey={`card:${event.id}`}
+            pieceCount={38}
+            distance={height + 80}
+            fallMinMs={1500}
+            fallMaxMs={2800}
+            staggerMs={700}
+            colors={[LIFTS.pull.color, LIFTS.push.color, LIFTS.squat.color, NEON.mint]}
+          />
+        </View>
+      )}
 
       <BackRow label="Benchmark Day" onPress={() => router.replace("/(member)/benchmark")} />
 
@@ -184,7 +192,7 @@ export default function BenchmarkCard() {
                   coreAlpha={0.6}
                   style={{ marginTop: 6 }}
                 >
-                  {logged ? entry.value || "–" : "–"}
+                  {logged ? entry.value || "–" : "N/A"}
                 </NeonText>
                 <Text
                   maxFontSizeMultiplier={1.05}
@@ -198,12 +206,29 @@ export default function BenchmarkCard() {
                     marginTop: 6,
                   }}
                 >
-                  {logged ? tileUnit(m, entry) : "NOT LOGGED"}
+                  {/* Nothing under an N/A — see the same note on the My
+                      Week tile. */}
+                  {logged ? tileUnit(m, entry) : ""}
                 </Text>
               </View>
             );
           })}
         </View>
+
+        {missed ? (
+          <Text
+            maxFontSizeMultiplier={1.15}
+            style={{
+              fontFamily: fonts.sansBold,
+              fontSize: 13,
+              color: NEON.ink62,
+              textAlign: "center",
+              marginTop: 16,
+            }}
+          >
+            Don't miss the next one!
+          </Text>
+        ) : null}
 
         <View
           style={{
@@ -242,19 +267,21 @@ export default function BenchmarkCard() {
           photo-compare board is, and this just points at that. Done is the
           only thing on the screen that can be pressed, so it is the only
           thing that looks pressable. */}
-      <Text
-        maxFontSizeMultiplier={1.2}
-        style={{
-          fontFamily: fonts.sans,
-          fontSize: 12.5,
-          lineHeight: 18,
-          color: NEON.ink5,
-          textAlign: "center",
-          marginTop: 16,
-        }}
-      >
-        Screenshot this to keep it, or share it.
-      </Text>
+      {missed ? null : (
+        <Text
+          maxFontSizeMultiplier={1.2}
+          style={{
+            fontFamily: fonts.sans,
+            fontSize: 12.5,
+            lineHeight: 18,
+            color: NEON.ink5,
+            textAlign: "center",
+            marginTop: 16,
+          }}
+        >
+          Screenshot this to keep it, or share it.
+        </Text>
+      )}
 
       <PressFade
         onPress={() => router.replace("/(member)")}
