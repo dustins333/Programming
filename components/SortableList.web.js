@@ -11,7 +11,7 @@ import { CSS } from "@dnd-kit/utilities";
 // small drag handle rather than making the whole row draggable — rows here
 // carry their own checkbox/edit/delete Pressables that must keep working.
 
-function SortableRow({ id, item, index, renderItem }) {
+function SortableRow({ id, item, index, renderItem, handlePadding }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -22,7 +22,7 @@ function SortableRow({ id, item, index, renderItem }) {
     <div
       {...attributes}
       {...listeners}
-      style={{ cursor: "grab", padding: 4, color: "#78716c", userSelect: "none", touchAction: "none" }}
+      style={{ cursor: "grab", padding: handlePadding, color: "#78716c", userSelect: "none", touchAction: "none" }}
       aria-label="Drag to reorder"
     >
       ⠿
@@ -35,7 +35,10 @@ function SortableRow({ id, item, index, renderItem }) {
   );
 }
 
-export function SortableList({ items, onReorder, renderItem, keyExtractor = (item) => item.id }) {
+// `handlePadding` widens the grab area without changing the glyph. The 4px
+// default is right for a dense editor row on a desktop; a list a coach drags
+// on her phone wants a target closer to 44pt, so it passes more.
+export function SortableList({ items, onReorder, renderItem, keyExtractor = (item) => item.id, handlePadding = 4 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const ids = items.map(keyExtractor);
 
@@ -51,7 +54,7 @@ export function SortableList({ items, onReorder, renderItem, keyExtractor = (ite
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {items.map((item, i) => (
-          <SortableRow key={keyExtractor(item)} id={keyExtractor(item)} item={item} index={i} renderItem={renderItem} />
+          <SortableRow key={keyExtractor(item)} id={keyExtractor(item)} item={item} index={i} renderItem={renderItem} handlePadding={handlePadding} />
         ))}
       </SortableContext>
     </DndContext>

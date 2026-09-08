@@ -18,7 +18,7 @@ export default function More() {
   // default for why (a true default flashes the row in, then out, on
   // every load for anyone with messaging turned off).
   const [messagingEnabled, setMessagingEnabled] = useState(false);
-  const { count: pendingDocuments, refresh: refreshDocuments } = usePendingDocuments();
+  const { count: pendingDocuments } = usePendingDocuments();
   // 0 for anyone who isn't a library reviewer — the row below is hidden
   // for them too, so this never lights up something they can't open.
   const { count: pendingReviews, refresh: refreshReviews } = usePendingExerciseReviews();
@@ -31,11 +31,10 @@ export default function More() {
       getMessagingSettings()
         .then((s) => setMessagingEnabled(s.enabled))
         .catch((err) => console.error("Failed to load messaging settings:", err));
-      // This tab stays mounted, so signing something has to re-count on
-      // the way back here rather than on next launch.
-      refreshDocuments();
+      // usePendingDocuments re-counts on focus itself; only the exercise
+      // review count still needs asking for by hand.
       refreshReviews();
-    }, [refreshDocuments, refreshReviews])
+    }, [refreshReviews])
   );
 
   return (

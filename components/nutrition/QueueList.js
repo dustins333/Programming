@@ -3,6 +3,7 @@ import { STATUS_META } from "../../lib/nutrition/rosterStatus";
 import { weekOnProgram } from "../../lib/nutrition/queue";
 import { dateInBoise, daysBetween } from "../../lib/boiseDate";
 import { CheckinCallPill } from "./CheckinCallPill";
+import { SortableList } from "../SortableList";
 import { fonts, colors } from "../../lib/theme";
 
 // The Nutrition queue's left rail (coach web v2, screen 17).
@@ -67,16 +68,16 @@ function subline(client, today) {
   return "";
 }
 
-function ClientRow({ client, today, selected, onPress }) {
+// `controls` is the drag handle when this group is reorderable. It sits
+// OUTSIDE the Pressable rather than inside it: the row is a click target
+// (select the client / open her record) and a handle nested in it would hand
+// every grab to that press as well.
+function ClientRow({ client, today, selected, onPress, controls }) {
   return (
-    <Pressable
-      onPress={onPress}
+    <View
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 11,
         borderBottomWidth: 1,
         borderBottomColor: "#f6f3ef",
         backgroundColor: selected ? "#fdf6f2" : "transparent",
@@ -84,41 +85,56 @@ function ClientRow({ client, today, selected, onPress }) {
         borderLeftColor: selected ? colors.primary : "transparent",
       }}
     >
-      <View className="items-center justify-center rounded-full" style={{ width: 32, height: 32, backgroundColor: "#f4ede7", flexShrink: 0 }}>
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: colors.primaryOnWhite }}>{initials(client.name)}</Text>
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={{ fontFamily: selected ? fonts.sansBold : fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
-          {client.name}
-        </Text>
-        {/* A booked call TAKES the second line rather than sitting beside
-            the waiting count, because "Waiting 3 days" is the thing that
-            was misleading: a client with a call on the calendar is not
-            waiting on anybody. The week still shows, since that is the one
-            part of the old line that stays true either way. */}
-        {client.checkinBooking ? (
-          <View className="flex-row items-center" style={{ gap: 6, marginTop: 2, minWidth: 0 }}>
-            <CheckinCallPill booking={client.checkinBooking} today={today} />
-            {weekPart(client, today) ? (
-              <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", flexShrink: 0 }}>
-                {weekPart(client, today)}
-              </Text>
-            ) : null}
-          </View>
-        ) : (
-          <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
-            {subline(client, today)}
+      <Pressable
+        onPress={onPress}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingLeft: 14,
+          paddingRight: controls ? 4 : 14,
+          paddingVertical: 11,
+        }}
+      >
+        <View className="items-center justify-center rounded-full" style={{ width: 32, height: 32, backgroundColor: "#f4ede7", flexShrink: 0 }}>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: colors.primaryOnWhite }}>{initials(client.name)}</Text>
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ fontFamily: selected ? fonts.sansBold : fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
+            {client.name}
           </Text>
-        )}
-      </View>
-    </Pressable>
+          {/* A booked call TAKES the second line rather than sitting beside
+              the waiting count, because "Waiting 3 days" is the thing that
+              was misleading: a client with a call on the calendar is not
+              waiting on anybody. The week still shows, since that is the one
+              part of the old line that stays true either way. */}
+          {client.checkinBooking ? (
+            <View className="flex-row items-center" style={{ gap: 6, marginTop: 2, minWidth: 0 }}>
+              <CheckinCallPill booking={client.checkinBooking} today={today} />
+              {weekPart(client, today) ? (
+                <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", flexShrink: 0 }}>
+                  {weekPart(client, today)}
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
+              {subline(client, today)}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+      {controls ? <View style={{ paddingRight: 2, opacity: 0.6 }}>{controls}</View> : null}
+    </View>
   );
 }
 
 // A status is a header when it's open and a one-line count when it isn't.
 // Collapsed rows still carry the dot and the number, which is the whole
 // reason they're worth keeping on screen rather than hiding behind a filter.
-function StatusGroup({ status, clients, open, onToggle, selectedUserId, onSelect, today }) {
+function StatusGroup({ status, clients, open, onToggle, selectedUserId, onSelect, today, onReorder }) {
   const meta = STATUS_META[status];
   return (
     <View>
@@ -150,17 +166,35 @@ function StatusGroup({ status, clients, open, onToggle, selectedUserId, onSelect
         </View>
       </Pressable>
 
-      {open
-        ? clients.map((client) => (
+      {/* Only the open group renders rows, so at most one DndContext is ever
+          mounted and there is no chance of two groups sharing an id space. */}
+      {open && onReorder ? (
+        <SortableList
+          items={clients}
+          keyExtractor={(client) => client.userId}
+          handlePadding={12}
+          onReorder={(next) => onReorder(next.map((client) => client.userId))}
+          renderItem={(client, controls) => (
             <ClientRow
-              key={client.userId}
               client={client}
               today={today}
               selected={client.userId === selectedUserId}
               onPress={() => onSelect(client)}
+              controls={controls}
             />
-          ))
-        : null}
+          )}
+        />
+      ) : open ? (
+        clients.map((client) => (
+          <ClientRow
+            key={client.userId}
+            client={client}
+            today={today}
+            selected={client.userId === selectedUserId}
+            onPress={() => onSelect(client)}
+          />
+        ))
+      ) : null}
     </View>
   );
 }

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { Link, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getNutritionRoster } from "../../../lib/nutrition/dashboard";
+import { getRosterOrder, saveRosterOrder, sortRosterGroup, applyRosterOrder } from "../../../lib/nutrition/rosterOrder";
+import { useAuth } from "../../../lib/auth/AuthProvider";
+import { toastError } from "../../../lib/toast";
 import { QueuePreview } from "../../../components/nutrition/QueuePreview";
 import { StatusGroup } from "../../../components/nutrition/QueueList";
 import { EnrollClientModal } from "../../../components/nutrition/EnrollClientModal";
@@ -60,12 +63,15 @@ function HeaderButton({ label, onPress, primary }) {
 export default function NutritionQueue() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { profile } = useAuth();
   const { width } = useWindowDimensions();
   const isMobile = width < MOBILE_BREAKPOINT;
   const today = todayInBoise();
 
   const [roster, setRoster] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  // The coach's own drag order for each status group (migration 0123).
+  const [orderMap, setOrderMap] = useState(() => new Map());
   // ?status= opens a specific group. Tolerates the comma-joined form the old
   // roster accepted from dashboard tiles by taking the first entry, so an
   // outdated link opens something sensible rather than nothing.
@@ -74,6 +80,8 @@ export default function NutritionQueue() {
   );
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [enrolling, setEnrolling] = useState(false);
+
+  const ownerId = profile?.id ?? null;
 
   const load = useCallback(async () => {
     // Clear any previous failure first — without this a successful
@@ -88,11 +96,25 @@ export default function NutritionQueue() {
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
-  }, []);
+    // Isolated: a saved sort order is a convenience, so a failure here (an
+    // unrun 0123, a blip) falls back to alphabetical rather than taking the
+    // roster down with it.
+    try {
+      setOrderMap(await getRosterOrder(ownerId));
+    } catch {
+      setOrderMap(new Map());
+    }
+  }, [ownerId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Refetch on every focus, not just on mount. This screen sits under a Stack,
+  // so pushing a client's record leaves it mounted underneath — without this,
+  // coming back from (say) closing out a check-in showed the roster exactly as
+  // it looked before, with the client still sitting in her old group.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const byStatus = useMemo(() => {
     const map = {};
@@ -100,9 +122,14 @@ export default function NutritionQueue() {
       if (!map[client.rosterStatus]) map[client.rosterStatus] = [];
       map[client.rosterStatus].push(client);
     });
-    Object.values(map).forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)));
+    // The coach's own order first, then everyone she hasn't placed, by name.
+    // A client who has just moved into this group has no position for it yet,
+    // so she lands at the bottom — see lib/nutrition/rosterOrder.js.
+    Object.keys(map).forEach((status) => {
+      map[status] = sortRosterGroup(map[status], orderMap);
+    });
     return map;
-  }, [roster]);
+  }, [roster, orderMap]);
 
   // The queue opens on whatever is genuinely waiting on her — the first
   // status in priority order that has anyone in it, unless she arrived here
@@ -126,6 +153,24 @@ export default function NutritionQueue() {
     const list = byStatus[activeStatus] ?? [];
     setSelectedUserId((current) => (list.some((c) => c.userId === current) ? current : (list[0]?.userId ?? null)));
   }, [activeStatus, byStatus]);
+
+  // Optimistic: the list reorders under the coach's hand and the write goes
+  // out behind it, rolling back only on a real failure. Waiting on the round
+  // trip would make every drag snap back and then settle.
+  const handleReorder = useCallback(
+    async (status, clientIds) => {
+      if (!ownerId) return;
+      const previous = orderMap;
+      setOrderMap(applyRosterOrder(previous, status, clientIds));
+      try {
+        await saveRosterOrder(ownerId, status, clientIds);
+      } catch (err) {
+        setOrderMap(previous);
+        toastError("Couldn't save that order", err);
+      }
+    },
+    [ownerId, orderMap]
+  );
 
   const selected = (roster ?? []).find((c) => c.userId === selectedUserId) ?? null;
   const waitingCount = (byStatus.readyForCheckin ?? []).length;
@@ -187,6 +232,7 @@ export default function NutritionQueue() {
                 selectedUserId={selectedUserId}
                 onSelect={(client) => (isMobile ? router.push(`/(coach)/nutrition/clients/${client.userId}`) : setSelectedUserId(client.userId))}
                 today={today}
+                onReorder={ownerId ? (clientIds) => handleReorder(status, clientIds) : null}
               />
             ))}
           </View>

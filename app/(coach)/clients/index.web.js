@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { toastError } from "../../../lib/toast";
 import { linkMemberByAuthId } from "../../../lib/programming/clients";
@@ -125,9 +125,17 @@ export default function ClientsWeb() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // useFocusEffect, not a mount-only useEffect. Pushing into a NESTED dynamic
+  // route (/clients/[userId]) leaves this screen mounted underneath — measured,
+  // for router.back() and the browser back button alike — so a mount-only load
+  // showed the roster exactly as it looked before the coach opened the client
+  // and changed something. (A sibling route does unmount, which is why the
+  // note above about state surviving is still true and this is not.)
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   // A second arrival from the dashboard with a different link, without this
   // screen having unmounted in between. The initializers above can't see it,

@@ -11,7 +11,9 @@ import { PressFade } from "./PressFade";
 // `controls` is a ready-made node the caller drops wherever it wants the
 // handle to sit in its own row. `onReorder` always receives the full new
 // array, so callers persist positions as 1..N regardless of platform.
-export function SortableList({ items, onReorder, renderItem, keyExtractor = (item) => item.id }) {
+// handlePadding is web-only (it widens the drag handle's grab area) and is
+// accepted here purely so callers can pass one API to both platforms.
+export function SortableList({ items, onReorder, renderItem, keyExtractor = (item) => item.id, handlePadding }) {
   const move = (index, direction) => {
     const target = direction === "up" ? index - 1 : index + 1;
     if (target < 0 || target >= items.length) return;

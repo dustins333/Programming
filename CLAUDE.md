@@ -7666,6 +7666,99 @@ block each seeding to their real length, and the publish payload carrying
 to be strings on both platforms and be converted at the boundary. Not verified
 behind a real login.
 
+## The nutrition roster reloads, and each coach orders her own queue (2026-09-07)
+
+Two asks on the same screen. Migration `0123` — applied and verified live.
+
+**A mount-only `useEffect` on a coach screen is a stale screen, and whether
+it is depends on the SHAPE of the route you pushed.** Close out a check-in on
+a client's record, come back, and the roster still showed her in her old
+group. Measured it rather than reasoning about it, through a throwaway
+`app/zz-stack/` probe logging mount/unmount/focus:
+
+| push from a Stack index to | on back |
+|---|---|
+| a **sibling static** route (`/zz-stack/detail`) | UNMOUNT then MOUNT — a plain `useEffect` re-runs |
+| a **nested dynamic** route (`/zz-stack/clients/[id]`) | stays mounted; only `useFocusEffect` fires |
+
+The second is every coach detail page in this app, and it holds for
+`router.back()` **and** the browser back button. So the CLAUDE.md note under
+"The rosters remember where you were" claiming the SPC roster unmounts on web
+is true only of its own route shape (`/spc/[userId]` is a direct sibling) and
+must not be generalised. `app/(coach)/nutrition/index.web.js` is on
+`useFocusEffect` now, matching what its native sibling has always done.
+
+**Swept the rest of the coach web app for the same shape, same session.**
+`app/(coach)/clients/index.web.js` had it for real and is fixed; so were the
+two secondary Coach Home hooks, `usePendingDocuments` (the nav's signature
+badge) and `useLibraryReview`. `more.js` stopped re-counting documents by
+hand now that the hook does it itself.
+
+**Grep the route file and you will get the wrong answer.** Coach Home
+(`app/(coach)/index.web.js`) looked mount-only and was reported that way; it
+is 20 lines picking a layout by width, and its real load lives in
+`useCoachDashboard`, which has been on `useFocusEffect` all along. Look for
+where the fetch actually is, not for the screen's own file. `usePendingDocuments`
+carried a comment asserting the opposite of what was measured here ("on web
+CoachShell remounts on every page navigation, so the mount-effect alone keeps
+it current") — that is true of a sibling push and false of a nested one.
+
+### Each coach's own order for the queue
+
+`programming.nutrition_roster_order` (0123) — `(owner_id, client_id)` primary
+key holding a `status` and a `position`. Per coach, not shared: the roster
+shows every client to every coach, so one order would mean three people
+fighting over one list. Own-rows-only RLS, gated on `core.can_access_nutrition()`
+like every other nutrition table (revoking access hides the order rather than
+deleting it, so it comes back intact).
+
+**The `status` column is the whole design.** A saved position only counts
+while the client is still in the status it was saved under, which is what
+makes Terra's rule — "when someone moves from one stage to the next, they drop
+in at the bottom" — true with **no write at the moment her status changes and
+no reconciliation job**. Her row simply stops matching and she falls into the
+unordered tail, which sorts by name. One row per (owner, client), so a client
+moving between statuses replaces her own row rather than accumulating one per
+status she has ever been in. `lib/nutrition/rosterOrder.js`'s `sortRosterGroup`
+is the single definition and is pure so it can be checked without a database.
+
+Ordering is **per status group**, not one flat list — that is the only reading
+under which "moves from one stage to the next" means anything, and the queue is
+already grouped that way. A drag persists the **whole** group (positions 1..N,
+including the rows that were only in the unordered tail), so one drag pins the
+group instead of leaving it half-placed.
+
+- Reordering is optimistic with a rollback + toast on a failed write, and the
+  order fetch is in its own try/catch: an unrun 0123 leaves the roster
+  alphabetical rather than blanking it.
+- `components/SortableList.web.js` gained `handlePadding` (default 4,
+  unchanged for its two existing callers). The queue passes 12, taking the grab
+  area from 19x32 to **35x48** — a desktop editor row and a list a coach drags
+  on her phone want different targets, and the glyph does not change.
+- The handle sits **outside** `ClientRow`'s `Pressable`, not inside it. The row
+  is a click target (select / open the record) and a handle nested in it hands
+  every grab to that press as well.
+- Only the open group renders rows, so at most one `DndContext` is ever mounted
+  and two groups can never share an id space.
+- **Native (`index.js`) is deliberately untouched** — it is a flat list across
+  every status, where a per-status order has nothing to attach to, and per
+  [[project_everyone_is_on_the_pwa]] nobody is on it.
+
+**Verified**: `npm run build` + `check:routes` clean; a Babel parse /
+unresolved-identifier / unused-import / missing-named-export pass over every
+touched file plus the two other `SortableList` callers; 10 assertions against
+the **shipped** `sortRosterGroup`/`applyRosterOrder` (empty map = today's
+alphabetical exactly, a new arrival at the bottom, a row stamped for another
+status not counting, re-dragging replacing rather than appending, left-and-
+returned back at the bottom); and the real `StatusGroup` driven at 1280 and 390
+through a throwaway `app/zz-roster.js` — a real pointer drag reordering the
+list and firing `onReorder` with the full new id order at both widths, a row
+click still selecting, a bare tap on the handle changing nothing, and no name
+clipping or page overflow at 390. **Not verified behind a real login** —
+standing limitation. Worth Terra's pass: drag a group, reload, and confirm the
+order sticks; then close out a check-in and confirm that client appears at the
+bottom of her new group, under the ones already placed.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -7766,6 +7859,7 @@ sections; next number after 0080 is 0081.)
 - `0119_hub_start_with_instance.sql` — **run**, verified live 2026-09-05 (dry run rolled back, then applied; both RPCs driven as the real display account against Ashley's real rows in rolled-back transactions — a make-up add and a PIN start each read instance 2 the first time the slot is visible with no completion at that instance, an ordinary add still reads 1, and a call with the flag absent falls back to 1 with no error). `hub_add_client` and `hub_start_session` now resolve a make-up's instance themselves before returning, closing the window the board's poll was falling into. **Drops the 4-argument `hub_add_client` overload** — adding a defaulted parameter creates a new function rather than replacing the old one, and both would match a 4-argument call.
 - `0120_benchmark_day.sql` — **run**, verified live 2026-09-06 (dry-run then a 15-assertion RLS impersonation test as a real member, coach and admin in a rolled-back transaction first; both tables, 7 policies, and a live PostgREST 200 confirmed after). Adds `programming.benchmark_events` (the coach's three dates, no status column — an event whose window covers today IS live) and `programming.benchmark_entries` (one row per event/member/movement/**slot**, where `slot` is `'this'` or `'last'` — see the Benchmark Day section for why the Last column is an override rather than a write back onto the previous event). Member writes are bounded to `benchmark_day … hide_after`, deliberately wider than the UI's lock.
 - `0121_benchmark_past_events_readable.sql` — **run**, verified live 2026-09-06. Widens the member read on `programming.benchmark_events` from the event's own window to `show_from <= today`, so a FINISHED benchmark stays readable. 0120's window broke the Last time prefill outright: `getPreviousBenchmarkEvent` returned null once the previous event passed its `hide_after`, so `getBenchmarkBoard` never read last quarter's rows and the column came up blank. Her entries were never affected (`members read own benchmark entries` has no window). The lower bound stays and is the load-bearing half, or a scheduled-but-not-opened benchmark would put the button on My Week early. Proved by impersonating a real member with a closed benchmark behind her, before and after: 0 previous events visible then 1, board fetch 0 rows then 3, and a future event still invisible.
+- `0123_nutrition_roster_order.sql` — **run**, verified live 2026-09-07 (dry-run with 7 RLS impersonation assertions in a rolled-back transaction first — a coach sees and writes only her own rows, a re-drag replaces rather than duplicating, another coach sees none of it, a member sees 0 and is refused; then applied, `NOTIFY pgrst` sent and a live PostgREST call returning 200 `[]` rather than PGRST205). Adds `programming.nutrition_roster_order` (owner_id, client_id) — each coach's own drag order for the nutrition queue, scoped per status group. Own-rows-only RLS behind `core.can_access_nutrition()`. No FK on `client_id` (it points at the shared `public.clients`, same call as `payroll.nutrition_assignments`), so a client who leaves nutrition just leaves a stale row that reads join past. See the section above for why the `status` column is what makes "moves to a new stage = lands at the bottom" free.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
