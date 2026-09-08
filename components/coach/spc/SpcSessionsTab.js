@@ -30,8 +30,6 @@ import {
 import { listExercises } from "../../../lib/programming/exercises";
 import { liftLabelsFor, warmupNumbersFor } from "../../../lib/programming/sessionLabels";
 import { monthDay } from "../../../lib/programming/spcState";
-import { calendarWeekNumber } from "../../../lib/programming/schedule";
-import { listSpcCompletionDetailsForWorkouts } from "../../../lib/programming/sessionCompletions";
 import {
   confirmRemoveLift,
   confirmOpenLiveEditor,
@@ -39,6 +37,7 @@ import {
   confirmCancelQueuedProgram,
 } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
+import { ProgramNotesRow } from "./ProgramNotes";
 
 // The Sessions tab — the whole SPC programming workflow
 // (design_handoff_spc_rework_v1, 1c/1d).
@@ -237,18 +236,6 @@ function LiftRow({ label, row, draft, onDraft, onRemove, editable }) {
   );
 }
 
-function supersetFootnote(exercises, labels) {
-  const groups = new Map();
-  for (const row of exercises) {
-    if (!row.superset_group_id) continue;
-    if (!groups.has(row.superset_group_id)) groups.set(row.superset_group_id, []);
-    groups.get(row.superset_group_id).push(labels[row.id]);
-  }
-  const pairs = [...groups.values()].filter((g) => g.length > 1);
-  if (!pairs.length) return null;
-  return pairs.map((g) => `${g.join(" + ")} run as a superset, rest after ${g[g.length - 1]} only.`).join(" ");
-}
-
 // The warm-up, collapsed by default — the same "Warm-up · N moves" + chevron
 // row the member's own session page uses (app/(member)/plan.js's WarmupCard),
 // so the two surfaces read the same way. Not a nested card: it's a section
@@ -321,7 +308,6 @@ function WarmupStrip({ warmups }) {
 function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, onOpenEditor, clientFirst, editable }) {
   const { workout, exercises } = session;
   const empty = exercises.length === 0;
-  const note = supersetFootnote(exercises, labels);
   return (
     <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, marginTop: 14, overflow: "hidden" }}>
       {/* Same wrap as a lift row: "Session 2 · Upper" keeps its floor and the
@@ -383,12 +369,6 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
           />
         ))
       )}
-
-      {note ? (
-        <View style={{ paddingVertical: 9, paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: "#f4f1ec" }}>
-          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>{note}</Text>
-        </View>
-      ) : null}
 
       {editable ? (
         // The row's padding belongs to the pressable, not the strip around it,
@@ -499,7 +479,7 @@ function EndDateModal({ visible, onClose, options, currentEnd, onPick }) {
 // chrome for the whole run, and reading as one more white card next to the
 // sessions is what made the old flex-wrap band look slapped together. Both
 // dates are plain read-outs; the two buttons under them are what change one.
-function ProgramDatesPanel({ block, lapsed, statusLine, nextStart, today, busy, onSetEnd, onAddWeek, onOngoing }) {
+function ProgramDatesPanel({ block, lapsed, nextStart, today, busy, onSetEnd, onAddWeek, onOngoing }) {
   const ongoing = !block.block_end_date;
   const [endOpen, setEndOpen] = useState(false);
   const options = useMemo(
@@ -591,8 +571,6 @@ function ProgramDatesPanel({ block, lapsed, statusLine, nextStart, today, busy, 
           )}
         </View>
       </View>
-
-      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: lapsed ? "#9a6b1f" : "#78716c", marginTop: 11 }}>{statusLine}</Text>
 
       <EndDateModal
         visible={endOpen}
@@ -871,7 +849,6 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
   const [publishOpen, setPublishOpen] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [loggedCount, setLoggedCount] = useState(0);
   const [pane, setPane] = useState("current");
 
   const reloadSessions = useCallback(async () => {
@@ -879,12 +856,6 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
       const [cur, up] = await Promise.all([loadBlockSessions(current), loadBlockSessions(upcoming)]);
       setCurrentSessions(cur ?? []);
       setUpcomingSessions(up ?? []);
-      if (cur && cur.length) {
-        const details = await listSpcCompletionDetailsForWorkouts(userId, cur.map((s) => s.workout.id)).catch(() => new Map());
-        setLoggedCount(details.size);
-      } else {
-        setLoggedCount(0);
-      }
     } catch (err) {
       toastError("Couldn't load the sessions", err);
       setCurrentSessions([]);
@@ -1189,9 +1160,7 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
 
   /* ------------------------------- render ------------------------------- */
 
-  const weekNumber = current?.block_start_date ? calendarWeekNumber(current.block_start_date, today) : null;
   const lapsed = Boolean(current?.block_end_date && current.block_end_date < today);
-  const expected = weekNumber ? weekNumber * (spcClient?.sessions_per_week ?? 1) : 0;
   const targetSessions = spcClient?.sessions_per_week ?? 1;
   const upcomingQueued = Boolean(upcoming && upcoming.status === "active");
   // The published-but-not-yet-started program, whichever pane is holding it.
@@ -1252,15 +1221,6 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
             onSetEnd={handleSetEnd}
             onAddWeek={handleAddWeek}
             onOngoing={handleOngoingToggle}
-            statusLine={
-              currentNotStarted
-                ? "Waiting to start · nothing is due"
-                : lapsed
-                  ? `Ended ${sunFmt(current.block_end_date)} · still live to her until you publish something new`
-                  : current.block_end_date
-                    ? `Week ${weekNumber} of ${current.block_length_weeks} · she's logged ${loggedCount} of ${expected} so far`
-                    : `Week ${weekNumber} · runs until you set an end date`
-            }
           />
 
           {currentNotStarted ? (
@@ -1298,6 +1258,13 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
               ) : null}
             </View>
           ) : null}
+
+          {/* Same thread as the foot of Overview's CURRENT PROGRAM card, and
+              the same open state — a coach who opens it in one place finds it
+              open in the other. Its own white card here, so it reads as a peer
+              of the session cards below rather than a caption on the dates
+              panel above. */}
+          <ProgramNotesRow spcBlockId={current.id} coachId={coachId} variant="card" style={{ marginTop: 14 }} />
 
           {currentSessions.map((s) => (
             <SessionCard
@@ -1392,7 +1359,13 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
   );
 
   const upcomingPane = (
-    <View style={{ flex: 1, minWidth: 0 }}>
+    <View
+      style={
+        sideBySide
+          ? { flex: 1, minWidth: 0, backgroundColor: "#e7e0d6", borderWidth: 1, borderColor: "#dad2c6", borderRadius: 14, padding: 18 }
+          : { flex: 1, minWidth: 0 }
+      }
+    >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <View style={{ width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: "#c9c4bd" }} />
         <Text style={{ fontFamily: fonts.display, fontSize: 20, color: "#2a211c" }}>Upcoming program</Text>
@@ -1544,7 +1517,7 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
   return (
     <View>
       {sideBySide ? (
-        <View style={{ flexDirection: "row", gap: 26, alignItems: "flex-start" }}>
+        <View style={{ flexDirection: "row", gap: 26, alignItems: "stretch" }}>
           {currentPane}
           {upcomingPane}
         </View>

@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Protest+Strike&display=swap" rel="stylesheet" />
+<script type="module" src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+<script nomodule="" src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+<style>
+  body { margin: 0; background: #f1ece6; font-family: Montserrat, sans-serif; }
+  a { color: #8a5140; text-decoration: none; }
+  a:hover { color: #a46a57; }
+  ion-icon { display: block; }
+  input, textarea, select, button { font-family: Montserrat, sans-serif; }
+  textarea::placeholder, input::placeholder { color: #9a9187; }
+</style>
+</helmet>
+
+<div style="display:flex;width:1440px;min-height:1180px;background:#f1ece6;color:#2a211c;-webkit-font-smoothing:antialiased">
+
+  <!-- sidebar -->
+  <div style="width:232px;flex:0 0 232px;background:#fff;border-right:1px solid #e1dad1;display:flex;flex-direction:column;padding:18px 0 0 0">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 16px 20px 16px">
+      <img src="assets/kova-logo.jpg" alt="Kova Strength" style="width:32px;height:32px;border-radius:16px;display:block" />
+      <div style="font-family:'Protest Strike';font-size:19px;color:#a46a57">Kova Strength</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:2px;padding:0 10px">
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:9px">
+        <ion-icon name="home-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Dashboard</span>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:14px 10px 6px 10px">
+        <span style="flex:1;font-size:10.5px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">CLIENTS</span>
+        <ion-icon name="chevron-down" style="font-size:13px;color:#a8a29e"></ion-icon>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="people-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">All Clients</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="barbell-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Group</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px;background:#f4ece5">
+        <ion-icon name="clipboard" style="font-size:18px;color:#8a5140"></ion-icon>
+        <span style="font-size:13.5px;font-weight:700;color:#8a5140">SPC</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="restaurant-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Nutrition</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="school-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Coach Prep</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="trophy-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">CCrew</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="library-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Exercise Library</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="documents-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Templates</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="checkmark-done-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="flex:1;min-width:0;font-size:13.5px;font-weight:500;color:#44403c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Library Review</span>
+        <span style="background:#a46a57;color:#fff;font-size:10.5px;font-weight:700;border-radius:99px;padding:1px 7px">2</span>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:16px 10px 6px 10px">
+        <span style="flex:1;font-size:10.5px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">COACH</span>
+        <ion-icon name="chevron-down" style="font-size:13px;color:#a8a29e"></ion-icon>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="fitness-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">My Training</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="cash-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Payroll</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="document-text-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Documents</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="body-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Member View</span>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:16px 10px 6px 10px">
+        <span style="flex:1;font-size:10.5px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">ADMIN</span>
+        <ion-icon name="chevron-down" style="font-size:13px;color:#a8a29e"></ion-icon>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="megaphone-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Announcements</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="calendar-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Events</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px 9px 14px;border-radius:9px">
+        <ion-icon name="videocam-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Help Videos</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px;margin-top:10px;border-radius:9px">
+        <ion-icon name="settings-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Settings</span>
+      </div>
+    </div>
+
+    <div style="flex:1"></div>
+    <div style="border-top:1px solid #f0eae3;margin:0 16px;padding:14px 0 20px 0">
+      <div style="font-size:11.5px;color:#a8a29e;margin-bottom:10px">Terra</div>
+      <div style="display:flex;align-items:center;gap:11px">
+        <ion-icon name="log-out-outline" style="font-size:18px;color:#78716c"></ion-icon>
+        <span style="font-size:13.5px;font-weight:500;color:#44403c">Sign out</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- page -->
+  <div style="flex:1;min-width:0;padding:26px 26px 70px 26px">
+    <div style="font-size:12.5px;font-weight:600;color:#a8a29e;margin-bottom:12px">‹ SPC</div>
+
+    <!-- identity -->
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="font-family:'Protest Strike';font-size:34px;line-height:38px;color:#2a211c">Alicia Allen</div>
+      <div style="background:#33251f;border-radius:99px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:0.7px;color:#f7f3ee">SPC</div>
+      <div style="display:flex;align-items:center;gap:7px;border:1px solid #d9d4cd;border-radius:9px;padding:8px 13px;background:#fff;font-size:13px;font-weight:600;color:#44403c;white-space:nowrap;cursor:pointer">
+        <ion-icon name="radio-outline" style="font-size:15px;color:#8a5140"></ion-icon>
+        Live session
+      </div>
+    </div>
+    <div style="font-size:12.5px;color:#78716c;margin-top:5px">Abbi Stauffer · 1× a week</div>
+
+    <!-- goal hero -->
+    <div style="position:relative;border-radius:16px;background:#a46a57;padding:18px 20px;overflow:hidden;margin-top:18px;display:flex;align-items:center;gap:28px;flex-wrap:wrap">
+      <div style="position:absolute;right:-40px;top:-52px;width:180px;height:180px;border-radius:99px;background:rgba(255,255,255,0.07)"></div>
+      <div style="position:relative;flex:1;min-width:280px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <ion-icon name="flag" style="font-size:12px;color:#f5d9cd"></ion-icon>
+          <span style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:#f5d9cd">WORKING TOWARD</span>
+          <ion-icon name="eye-outline" style="font-size:14px;color:#e8c4b6;margin-left:4px"></ion-icon>
+        </div>
+        <div style="font-family:'Protest Strike';font-size:30px;line-height:36px;color:#fff9f6;margin-top:8px">Pull Ups + Athleticism</div>
+      </div>
+      <div style="position:relative;flex:0 1 460px;min-width:300px">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px">
+          <ion-icon name="lock-closed" style="font-size:11px;color:#f0d9d0"></ion-icon>
+          <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#f0d9d0">KEEP IN MIND</span>
+        </div>
+        <textarea style="display:block;width:100%;box-sizing:border-box;min-height:58px;border:1px solid #e1dad1;border-radius:8px;padding:9px;font-size:12.5px;color:#2a211c;background:#fff;resize:vertical;outline:none">Pull up</textarea>
+      </div>
+    </div>
+
+    <div style="margin-top:20px">
+      <div>
+
+        <!-- tabs -->
+        <div style="display:flex;gap:28px;border-bottom:1px solid #e1dad1;margin-bottom:16px">
+          <div style="{{ tabOverview }}" onClick="{{ onOverview }}">Overview</div>
+          <div style="{{ tabSessions }}" onClick="{{ onSessions }}">Sessions</div>
+          <div style="{{ tabHistory }}" onClick="{{ onHistory }}">History</div>
+          <div style="{{ tabSettings }}" onClick="{{ onSettings }}">Settings</div>
+        </div>
+
+        <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#fff;border:1px solid #e1dad1;border-radius:14px;padding:20px;max-width:440px">
+            <span style="font-size:10px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">CLIENT SETTINGS</span>
+            <div style="font-size:11.5px;color:#78716c;margin:14px 0 5px 0">Enrolment</div>
+            <select style="width:100%;box-sizing:border-box;font-size:13px;padding:9px 10px;border-radius:8px;border:1px solid #d9d4cd;background:#fff;color:#2a211c">
+              <option>Active</option>
+              <option>Paused</option>
+            </select>
+            <div style="font-size:11.5px;color:#78716c;margin:14px 0 5px 0">Assigned coach</div>
+            <select style="width:100%;box-sizing:border-box;font-size:13px;padding:9px 10px;border-radius:8px;border:1px solid #d9d4cd;background:#fff;color:#2a211c">
+              <option>Abbi Stauffer</option>
+              <option>Unassigned</option>
+            </select>
+            <div style="font-size:11.5px;color:#78716c;margin:14px 0 5px 0">Sessions a week</div>
+            <div style="display:flex;gap:3px;background:#f4f1ec;border-radius:9px;padding:3px">
+              <div style="flex:1;text-align:center;padding:9px 0;border-radius:7px;background:#fff;border:1px solid #e1dad1;font-size:12.5px;font-weight:700;color:#2a211c">1×</div>
+              <div style="flex:1;text-align:center;padding:9px 0;border-radius:7px;font-size:12.5px;font-weight:500;color:#78716c">2×</div>
+              <div style="flex:1;text-align:center;padding:9px 0;border-radius:7px;font-size:12.5px;font-weight:500;color:#78716c">3×</div>
+              <div style="flex:1;text-align:center;padding:9px 0;border-radius:7px;font-size:12.5px;font-weight:500;color:#78716c">4×</div>
+            </div>
+            <div style="height:1px;background:#e1dad1;margin:20px 0 14px 0"></div>
+            <div style="font-size:12.5px;font-weight:600;color:#b23a22">Turn SPC off</div>
+            <div style="font-size:11.5px;color:#a8a29e;margin-top:4px;line-height:16px">Comes off the SPC roster and the live board. Programs are kept.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:16px">
+
+          <!-- status banner -->
+          <div style="background:#f4ede3;border-radius:14px;padding:18px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:11px;height:11px;border-radius:99px;background:#8a5a2e"></div>
+              <span style="font-size:22px;font-weight:700;color:#8a5a2e">Due soon</span>
+            </div>
+            <div style="background:#a46a57;border-radius:10px;padding:12px;text-align:center;margin-top:14px;font-size:13.5px;font-weight:700;color:#fff">Build next program</div>
+          </div>
+
+          <!-- this week -->
+          <div style="background:#fff;border:1px solid #e1dad1;border-radius:14px;padding:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:10px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">THIS WEEK</span>
+              <span style="font-size:12px;color:#78716c">target 1</span>
+            </div>
+            <div style="margin-top:6px;display:flex;align-items:baseline;gap:5px">
+              <span style="font-family:'Protest Strike';font-size:30px;color:#2a211c">0</span>
+              <span style="font-size:15px;color:#57534e">of 1 logged</span>
+            </div>
+            <div style="display:flex;gap:9px;margin-top:11px;flex-wrap:wrap">
+              <div style="flex:1;min-width:130px;border-radius:10px;padding:12px;background:#fff;border:1.5px dashed #d9d4cd">
+                <div style="display:flex;align-items:center;gap:5px;min-width:0">
+                  <span style="flex-shrink:0;font-size:13px;font-weight:700;color:#2a211c">Session 1</span>
+                  <span style="min-width:0;font-size:13px;color:#78716c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Alicia SPC: Pull Ups + Athleticism</span>
+                </div>
+                <div style="font-size:11.5px;color:#78716c;margin-top:2px">Not yet</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- current program -->
+          <div style="background:#fff;border:1px solid #e1dad1;border-radius:14px;padding:16px">
+            <span style="font-size:10px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">CURRENT PROGRAM</span>
+            <div style="font-size:15px;font-weight:700;color:#2a211c;margin-top:4px">Aug 24 – Sep 13 · 3 weeks</div>
+
+            <div style="margin-top:10px">
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;background:#e3ead9;margin:1px 0">
+                <span style="width:30px;font-size:12.5px;font-weight:700;color:#78716c">W1</span>
+                <span style="width:52px;font-size:12px;color:#6d7d61">Aug 24</span>
+                <div style="flex:1;min-width:0;display:flex;gap:8px">
+                  <div style="flex:1;min-width:0;padding:7px 9px;border-radius:9px;background:#f3f6ef;border:1px solid #8fb473">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Session 1</span>
+                      <span style="padding:1px 5px;border-radius:5px;background:#dbe8cf;font-size:10px;font-weight:700;color:#3d5036">8/24</span>
+                    </div>
+                    <div style="font-size:11.5px;color:#78716c;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Alicia SPC: Pull Ups + Athleticism</div>
+                  </div>
+                </div>
+                <span style="width:30px;text-align:right;font-size:12px;font-weight:600;color:#4d6142">1/1</span>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;background:#e3ead9;margin:1px 0">
+                <span style="width:30px;font-size:12.5px;font-weight:700;color:#78716c">W2</span>
+                <span style="width:52px;font-size:12px;color:#6d7d61">Aug 31</span>
+                <div style="flex:1;min-width:0;display:flex;gap:8px">
+                  <div style="flex:1;min-width:0;padding:7px 9px;border-radius:9px;background:#f3f6ef;border:1px solid #8fb473">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Session 1</span>
+                      <span style="padding:1px 5px;border-radius:5px;background:#dbe8cf;font-size:10px;font-weight:700;color:#3d5036">9/4</span>
+                    </div>
+                    <div style="font-size:11.5px;color:#78716c;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Alicia SPC: Pull Ups + Athleticism</div>
+                  </div>
+                </div>
+                <span style="width:30px;text-align:right;font-size:12px;font-weight:600;color:#4d6142">1/1</span>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-top:1px solid #f4f1ec">
+                <span style="width:30px;font-size:12.5px;font-weight:700;color:#8a5140">W3</span>
+                <span style="width:52px;font-size:12px;color:#a8a29e">Sep 7</span>
+                <div style="flex:1;min-width:0;display:flex;gap:8px">
+                  <div style="flex:1;min-width:0;padding:7px 9px;border-radius:9px;background:#fff;border:1px solid #e4ded6">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:#2a211c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Session 1</span>
+                    </div>
+                    <div style="font-size:11.5px;color:#78716c;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Alicia SPC: Pull Ups + Athleticism</div>
+                  </div>
+                </div>
+                <span style="width:30px;text-align:right;font-size:12px;font-weight:600;color:#c58a3a">0/1</span>
+              </div>
+            </div>
+
+            <div style="border-top:1px solid #f4f1ec;margin-top:12px">
+              <div style="display:flex;align-items:center;gap:9px;padding:11px 0 0 0;cursor:pointer" onClick="{{ onToggleNotes }}">
+                <span style="font-size:12.5px;font-weight:700;color:#57534e">Notes</span>
+                <span style="flex:1;min-width:0;font-size:12px;color:#a8a29e">1 note</span>
+                <ion-icon name="{{ notesChevron }}" style="font-size:15px;color:#c9c4bd"></ion-icon>
+              </div>
+              <sc-if value="{{ notesOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="padding-top:12px">
+                  <div style="padding-bottom:12px;border-bottom:1px solid #f4f1ec">
+                    <div style="font-size:12.5px;color:#2a211c;line-height:18px">Shoulder was cranky on the eccentrics — dropped to a 3 second lower.</div>
+                    <div style="font-size:11px;font-weight:600;color:#a8a29e;margin-top:5px">Abbi Stauffer | 9/4</div>
+                  </div>
+                  <textarea placeholder="Leave a note for other coaches…" style="display:block;width:100%;box-sizing:border-box;min-height:52px;margin-top:12px;border:1px solid #e1dad1;border-radius:8px;padding:9px;font-size:12.5px;color:#2a211c;background:#fff;resize:vertical;outline:none"></textarea>
+                  <div style="display:flex;justify-content:flex-end;margin-top:9px">
+                    <div style="background:#e4c6bb;border-radius:9px;padding:9px 16px;cursor:pointer;font-size:12.5px;font-weight:700;color:#fdf6f3">Add note</div>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isSessions }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:20px;align-items:stretch">
+
+            <!-- current program -->
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:8px;height:8px;border-radius:4px;background:#4d6142"></span>
+                <span style="font-family:'Protest Strike';font-size:20px;color:#2a211c">Current program</span>
+                <span style="background:#eef1e7;color:#4d6142;font-weight:700;font-size:9.5px;letter-spacing:0.8px;border-radius:99px;padding:3px 10px">LIVE TO ALICIA</span>
+              </div>
+
+              <!-- program dates -->
+              <div style="background:#fdf6f2;border:1px solid #f0ddd2;border-radius:14px;padding:14px;margin-top:14px">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">PROGRAM DATES</span>
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <span style="width:34px;height:20px;border-radius:99px;background:#d9d4cd;display:flex;align-items:center;justify-content:flex-start;padding:2px;box-sizing:border-box">
+                      <span style="width:16px;height:16px;border-radius:99px;background:#fff"></span>
+                    </span>
+                    <span style="font-size:12.5px;font-weight:600;color:#57534e">Ongoing</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap">
+                  <div style="flex:1;min-width:132px">
+                    <div style="font-size:10px;font-weight:700;letter-spacing:1.1px;color:#a8a29e;margin-bottom:5px">STARTS</div>
+                    <div style="background:#f6f1ec;border:1px solid #e8ddd4;border-radius:8px;padding:9px 11px;min-height:38px;display:flex;align-items:center;box-sizing:border-box">
+                      <span style="font-size:13.5px;font-weight:700;color:#2a211c">Mon Aug 24</span>
+                    </div>
+                  </div>
+                  <div style="flex:1;min-width:132px">
+                    <div style="font-size:10px;font-weight:700;letter-spacing:1.1px;color:#a8a29e;margin-bottom:5px">ENDS</div>
+                    <div style="background:#fff;border:1px solid #e3d5cb;border-radius:8px;padding:9px 11px;min-height:38px;display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;box-sizing:border-box">
+                      <span style="font-size:13.5px;font-weight:700;color:#2a211c">Sun Sep 13</span>
+                      <ion-icon name="chevron-down" style="font-size:14px;color:#a8a29e"></ion-icon>
+                    </div>
+                    <div style="display:inline-block;border:1.5px dashed #dcc9bf;border-radius:9px;padding:7px 12px;background:#fff;margin-top:8px;cursor:pointer;font-size:12px;font-weight:600;color:#8a5140">+ Add a week</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- program notes -->
+              <div style="background:#fff;border:1px solid #e1dad1;border-radius:14px;margin-top:14px;overflow:hidden">
+                <div style="display:flex;align-items:center;gap:9px;padding:11px 14px;cursor:pointer" onClick="{{ onToggleNotes }}">
+                  <span style="font-size:12.5px;font-weight:700;color:#57534e">Notes</span>
+                  <span style="flex:1;min-width:0;font-size:12px;color:#a8a29e">1 note</span>
+                  <ion-icon name="{{ notesChevron }}" style="font-size:15px;color:#c9c4bd"></ion-icon>
+                </div>
+                <sc-if value="{{ notesOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-top:1px solid #f4f1ec;padding:12px 14px 14px 14px">
+                    <div style="padding-bottom:12px;border-bottom:1px solid #f4f1ec">
+                      <div style="font-size:12.5px;color:#2a211c;line-height:18px">Shoulder was cranky on the eccentrics — dropped to a 3 second lower.</div>
+                      <div style="font-size:11px;font-weight:600;color:#a8a29e;margin-top:5px">Abbi Stauffer | 9/4</div>
+                    </div>
+                    <textarea placeholder="Leave a note for other coaches…" style="display:block;width:100%;box-sizing:border-box;min-height:52px;margin-top:12px;border:1px solid #e1dad1;border-radius:8px;padding:9px;font-size:12.5px;color:#2a211c;background:#fff;resize:vertical;outline:none"></textarea>
+                    <div style="display:flex;justify-content:flex-end;margin-top:9px">
+                      <div style="background:#e4c6bb;border-radius:9px;padding:9px 16px;cursor:pointer;font-size:12.5px;font-weight:700;color:#fdf6f3">Add note</div>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+
+              <!-- session card -->
+              <div style="background:#fff;border:1px solid #e1dad1;border-radius:14px;margin-top:14px;overflow:hidden">
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 14px">
+                  <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:170px">
+                    <span style="font-size:15px;font-weight:700;color:#2a211c;flex-shrink:0">Session 1</span>
+                    <span style="flex:1;min-width:0;font-size:12.5px;color:#78716c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Pull Ups + Athleticism</span>
+                  </div>
+                  <div style="margin-left:auto;display:flex;align-items:center;gap:4px;padding:7px 12px;border-radius:999px;border:1px solid #dcc9bf;background:#fdf6f2;cursor:pointer">
+                    <span style="font-size:12px;font-weight:600;color:#8a5140">Full editor</span>
+                    <ion-icon name="chevron-forward" style="font-size:12px;color:#8a5140"></ion-icon>
+                  </div>
+                </div>
+
+                <div style="border-top:1px solid #f4f1ec;display:flex;align-items:center;gap:9px;padding:11px 14px;cursor:pointer">
+                  <span style="font-size:12.5px;font-weight:700;color:#57534e">Warm-up</span>
+                  <span style="flex:1;min-width:0;font-size:12px;color:#a8a29e">4 moves</span>
+                  <ion-icon name="chevron-down" style="font-size:15px;color:#c9c4bd"></ion-icon>
+                </div>
+
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;border-top:1px solid #f4f1ec;">
+                  <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:96px">
+                    <div style="width:26px;height:26px;border-radius:99px;border:1.5px solid #dcc9bf;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10.5px;font-weight:700;color:#8a5140">A</div>
+                    <span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:#2a211c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Barbell Back Squat</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-shrink:1;min-width:0">
+                    <input value="4" style="width:44px;min-width:34px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    <span style="font-size:12px;color:#a8a29e;flex-shrink:0">×</span>
+                    <input value="5" style="width:72px;min-width:48px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    <div style="display:flex;align-items:center;gap:5px;flex-shrink:1;min-width:0">
+                      <span style="font-size:11.5px;color:#a8a29e;flex-shrink:0">rest</span>
+                      <input value="2:30" placeholder="—" style="width:58px;min-width:40px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    </div>
+                    <span style="font-size:15px;color:#c9c4bd;cursor:pointer;flex-shrink:0">×</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;border-top:1px solid #f4f1ec;">
+                  <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:96px">
+                    <div style="width:26px;height:26px;border-radius:99px;border:1.5px solid #dcc9bf;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10.5px;font-weight:700;color:#8a5140">B</div>
+                    <span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:#2a211c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Chin Up Eccentric</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-shrink:1;min-width:0">
+                    <input value="4" style="width:44px;min-width:34px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    <span style="font-size:12px;color:#a8a29e;flex-shrink:0">×</span>
+                    <input value="4" style="width:72px;min-width:48px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    <div style="display:flex;align-items:center;gap:5px;flex-shrink:1;min-width:0">
+                      <span style="font-size:11.5px;color:#a8a29e;flex-shrink:0">rest</span>
+                      <input value="2:00" placeholder="—" style="width:58px;min-width:40px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    </div>
+                    <span style="font-size:15px;color:#c9c4bd;cursor:pointer;flex-shrink:0">×</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;border-top:1px solid #f4f1ec;border-left:3px solid #dbe8cf;">
+                  <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:96px">
+                    <div style="width:26px;height:26px;border-radius:99px;border:1.5px solid #dcc9bf;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10.5px;font-weight:700;color:#8a5140">C1</div>
+                    <span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:#2a211c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Ring Row</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-shrink:1;min-width:0">
+                    <input value="3" style="width:44px;min-width:34px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    <span style="font-size:12px;color:#a8a29e;flex-shrink:0">×</span>
+                    <input value="10" style="width:72px;min-width:48px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    <div style="display:flex;align-items:center;gap:5px;flex-shrink:1;min-width:0">
+                      <span style="font-size:11.5px;color:#a8a29e;flex-shrink:0">rest</span>
+                      <input value="" placeholder="—" style="width:58px;min-width:40px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    </div>
+                    <span style="font-size:15px;color:#c9c4bd;cursor:pointer;flex-shrink:0">×</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;border-top:1px solid #f4f1ec;border-left:3px solid #dbe8cf;">
+                  <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:96px">
+                    <div style="width:26px;height:26px;border-radius:99px;border:1.5px solid #dcc9bf;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10.5px;font-weight:700;color:#8a5140">C2</div>
+                    <span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:#2a211c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Hollow Hold</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-shrink:1;min-width:0">
+                    <input value="3" style="width:44px;min-width:34px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    <span style="font-size:12px;color:#a8a29e;flex-shrink:0">×</span>
+                    <input value="30 sec" style="width:72px;min-width:48px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    <div style="display:flex;align-items:center;gap:5px;flex-shrink:1;min-width:0">
+                      <span style="font-size:11.5px;color:#a8a29e;flex-shrink:0">rest</span>
+                      <input value="1:00" placeholder="—" style="width:58px;min-width:40px;flex-shrink:1;border:1px solid #e2ddd6;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:600;color:#2a211c;text-align:center;background:#fff;box-sizing:border-box" />
+                    </div>
+                    <span style="font-size:15px;color:#c9c4bd;cursor:pointer;flex-shrink:0">×</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;justify-content:flex-end;border-top:1px solid #f4f1ec">
+                  <div style="padding:10px 14px;cursor:pointer;font-size:12.5px;font-weight:600;color:#8a5140">+ Add exercise</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- upcoming program -->
+            <div style="flex:1;min-width:0;background:#e7e0d6;border:1px solid #dad2c6;border-radius:14px;padding:18px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:8px;height:8px;border-radius:4px;border:1.5px solid #c9c4bd;box-sizing:border-box"></span>
+                <span style="font-family:'Protest Strike';font-size:20px;color:#2a211c">Upcoming program</span>
+                <span style="background:#f1efec;color:#78716c;font-weight:700;font-size:9.5px;letter-spacing:0.8px;border-radius:99px;padding:3px 10px">INVISIBLE TO ALICIA</span>
+              </div>
+
+              <div style="border:1.5px dashed #dcc9bf;border-radius:14px;padding:24px;margin-top:14px;display:flex;flex-direction:column;align-items:center">
+                <div style="font-size:13.5px;font-weight:600;color:#2a211c;text-align:center">Nothing queued yet</div>
+                <div style="background:#a46a57;border-radius:10px;padding:11px 18px;margin-top:14px;cursor:pointer;font-size:13px;font-weight:700;color:#fff">Copy current program</div>
+                <div style="margin-top:10px;cursor:pointer;font-size:12.5px;font-weight:600;color:#8a5140">or build from blank</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="display:flex;gap:3px;background:#f4f1ec;border-radius:9px;padding:3px;max-width:320px">
+              <div style="{{ segLifts }}" onClick="{{ onLifts }}">Lifts</div>
+              <div style="{{ segPrograms }}" onClick="{{ onPrograms }}">Programs</div>
+            </div>
+
+            <sc-if value="{{ isLifts }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top:14px">
+                <input placeholder="Search lifts" style="width:100%;box-sizing:border-box;border:1px solid #e1dad1;background:#fff;border-radius:10px;padding:9px 12px;font-size:13.5px;color:#2a211c;margin-bottom:10px;outline:none" />
+                <div style="background:#fff;border:1px solid #e1dad1;border-radius:14px;overflow:hidden">
+                  <div style="display:flex;align-items:center;padding:9px 16px;border-bottom:1px solid #e1dad1">
+                    <span style="flex:1;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#a8a29e">LIFT</span>
+                    <span style="width:96px;text-align:right;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#a8a29e">LAST</span>
+                    <span style="width:96px;text-align:right;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#a8a29e">BEST</span>
+                    <span style="width:96px;text-align:right;font-size:10px;font-weight:700;letter-spacing:0.9px;color:#a8a29e">SESSIONS</span>
+                    <span style="width:22px"></span>
+                  </div>
+
+                  <div style="display:flex;align-items:center;padding:11px 16px;border-top:1px solid #e1dad1">
+                    <div style="flex:1;min-width:0;padding-right:10px">
+                      <div style="display:flex;align-items:center;gap:7px">
+                        <span style="font-size:13.5px;font-weight:600;color:#2a211c">Barbell Back Squat</span>
+                        <span style="background:#eef1e7;border-radius:99px;padding:2px 7px;font-size:10px;font-weight:700;color:#4d6142">2 PRs</span>
+                      </div>
+                      <div style="font-size:11.5px;color:#a8a29e;margin-top:1px">Last logged 09/04/2026 | up 10 lb recently</div>
+                    </div>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#57534e">5 @ 145</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;font-weight:600;color:#2a211c">155 lb</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#78716c">11</span>
+                    <span style="width:22px;display:flex;justify-content:flex-end"><ion-icon name="chevron-down" style="font-size:16px;color:#a8a29e"></ion-icon></span>
+                  </div>
+
+                  <div style="display:flex;align-items:center;padding:11px 16px;border-top:1px solid #f5f2ee">
+                    <div style="flex:1;min-width:0;padding-right:10px">
+                      <div style="display:flex;align-items:center;gap:7px">
+                        <span style="font-size:13.5px;font-weight:600;color:#2a211c">Trap Bar Deadlift</span>
+                        <span style="background:#eef1e7;border-radius:99px;padding:2px 7px;font-size:10px;font-weight:700;color:#4d6142">1 PR</span>
+                      </div>
+                      <div style="font-size:11.5px;color:#a8a29e;margin-top:1px">Last logged 08/17/2026</div>
+                    </div>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#57534e">5 @ 205</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;font-weight:600;color:#2a211c">215 lb</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#78716c">12</span>
+                    <span style="width:22px;display:flex;justify-content:flex-end"><ion-icon name="chevron-down" style="font-size:16px;color:#a8a29e"></ion-icon></span>
+                  </div>
+
+                  <div style="display:flex;align-items:center;padding:11px 16px;border-top:1px solid #f5f2ee">
+                    <div style="flex:1;min-width:0;padding-right:10px">
+                      <span style="font-size:13.5px;font-weight:600;color:#2a211c">Chin Up Eccentric</span>
+                      <div style="font-size:11.5px;color:#a8a29e;margin-top:1px">Last logged 09/04/2026</div>
+                    </div>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#57534e">4 reps</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;font-weight:600;color:#2a211c">–</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#78716c">9</span>
+                    <span style="width:22px;display:flex;justify-content:flex-end"><ion-icon name="chevron-down" style="font-size:16px;color:#a8a29e"></ion-icon></span>
+                  </div>
+
+                  <div style="display:flex;align-items:center;padding:11px 16px;border-top:1px solid #f5f2ee">
+                    <div style="flex:1;min-width:0;padding-right:10px">
+                      <div style="display:flex;align-items:center;gap:7px">
+                        <span style="font-size:13.5px;font-weight:600;color:#2a211c">Farmer Carry</span>
+                        <span style="background:#eef1e7;border-radius:99px;padding:2px 7px;font-size:10px;font-weight:700;color:#4d6142">1 PR</span>
+                      </div>
+                      <div style="font-size:11.5px;color:#a8a29e;margin-top:1px">Last logged 09/04/2026 | up 10 lb recently</div>
+                    </div>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#57534e">40 yd @ 70</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;font-weight:600;color:#2a211c">70 lb</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#78716c">8</span>
+                    <span style="width:22px;display:flex;justify-content:flex-end"><ion-icon name="chevron-down" style="font-size:16px;color:#a8a29e"></ion-icon></span>
+                  </div>
+
+                  <div style="display:flex;align-items:center;padding:11px 16px;border-top:1px solid #f5f2ee">
+                    <div style="flex:1;min-width:0;padding-right:10px">
+                      <span style="font-size:13.5px;font-weight:600;color:#2a211c">Ring Row</span>
+                      <div style="font-size:11.5px;color:#a8a29e;margin-top:1px">Last logged 08/24/2026</div>
+                    </div>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#57534e">10 reps</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;font-weight:600;color:#2a211c">–</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#78716c">7</span>
+                    <span style="width:22px;display:flex;justify-content:flex-end"><ion-icon name="chevron-down" style="font-size:16px;color:#a8a29e"></ion-icon></span>
+                  </div>
+
+                  <div style="display:flex;align-items:center;padding:11px 16px;border-top:1px solid #f5f2ee">
+                    <div style="flex:1;min-width:0;padding-right:10px">
+                      <span style="font-size:13.5px;font-weight:600;color:#2a211c">Hollow Hold</span>
+                      <div style="font-size:11.5px;color:#a8a29e;margin-top:1px">Last logged 08/24/2026</div>
+                    </div>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#57534e">30 sec</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;font-weight:600;color:#2a211c">–</span>
+                    <span style="width:96px;text-align:right;font-size:12.5px;color:#78716c">6</span>
+                    <span style="width:22px;display:flex;justify-content:flex-end"><ion-icon name="chevron-down" style="font-size:16px;color:#a8a29e"></ion-icon></span>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isPrograms }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px;background:#fff;border:1px solid #e1dad1;border-radius:14px;overflow:hidden">
+                <div style="border-top:0">
+                  <div style="display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer" onClick="{{ onRun1 }}">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:13.5px;font-weight:700;color:#2a211c">Jun 15 – Jul 26</div>
+                      <div style="font-size:11.5px;color:#a8a29e;margin-top:1px">6 weeks · 2 notes</div>
+                    </div>
+                    <span style="font-size:12.5px;font-weight:600;color:#4d6142">6 sessions logged</span>
+                    <ion-icon name="{{ run1Chevron }}" style="font-size:15px;color:#a8a29e"></ion-icon>
+                  </div>
+                  <sc-if value="{{ run1Open }}" hint-placeholder-val="{{ false }}">
+                    <div style="background:#fdf6f2;border-top:1px solid #f0ddd2;padding:13px 16px 14px 16px;display:flex;flex-direction:column;gap:11px">
+                      <div style="font-size:10px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">PROGRAM NOTES</div>
+                    <div style="padding-bottom:11px;border-bottom:1px solid #f0ebe4">
+                      <div style="font-size:12.5px;color:#2a211c;line-height:18px">Hit 3 unassisted chin-ups in week 5 — moved the eccentrics to a 5 second lower.</div>
+                      <div style="font-size:11px;font-weight:600;color:#a8a29e;margin-top:5px">Abbi Stauffer | 7/22</div>
+                    </div>
+                    <div style="padding-bottom:11px;border-bottom:1px solid #f0ebe4">
+                      <div style="font-size:12.5px;color:#2a211c;line-height:18px">Travelling weeks 3 and 4, ran it 1× instead of 2×.</div>
+                      <div style="font-size:11px;font-weight:600;color:#a8a29e;margin-top:5px">Terra | 6/29</div>
+                    </div>
+                    </div>
+                  </sc-if>
+                </div>
+                <div style="border-top:1px solid #f4f1ec">
+                  <div style="display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer" onClick="{{ onRun2 }}">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:13.5px;font-weight:700;color:#2a211c">May 4 – Jun 14</div>
+                      <div style="font-size:11.5px;color:#a8a29e;margin-top:1px">6 weeks · 1 note</div>
+                    </div>
+                    <span style="font-size:12.5px;font-weight:600;color:#4d6142">5 sessions logged</span>
+                    <ion-icon name="{{ run2Chevron }}" style="font-size:15px;color:#a8a29e"></ion-icon>
+                  </div>
+                  <sc-if value="{{ run2Open }}" hint-placeholder-val="{{ false }}">
+                    <div style="background:#fdf6f2;border-top:1px solid #f0ddd2;padding:13px 16px 14px 16px;display:flex;flex-direction:column;gap:11px">
+                      <div style="font-size:10px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">PROGRAM NOTES</div>
+                    <div style="padding-bottom:11px;border-bottom:1px solid #f0ebe4">
+                      <div style="font-size:12.5px;color:#2a211c;line-height:18px">Right knee sore on the split squats, swapped to a box step-up.</div>
+                      <div style="font-size:11px;font-weight:600;color:#a8a29e;margin-top:5px">Abbi Stauffer | 5/19</div>
+                    </div>
+                    </div>
+                  </sc-if>
+                </div>
+                <div style="border-top:1px solid #f4f1ec">
+                  <div style="display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer" onClick="{{ onRun3 }}">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:13.5px;font-weight:700;color:#2a211c">Mar 23 – May 3</div>
+                      <div style="font-size:11.5px;color:#a8a29e;margin-top:1px">6 weeks</div>
+                    </div>
+                    <span style="font-size:12.5px;font-weight:600;color:#4d6142">6 sessions logged</span>
+                    <ion-icon name="{{ run3Chevron }}" style="font-size:15px;color:#a8a29e"></ion-icon>
+                  </div>
+                  <sc-if value="{{ run3Open }}" hint-placeholder-val="{{ false }}">
+                    <div style="background:#fdf6f2;border-top:1px solid #f0ddd2;padding:13px 16px 14px 16px;display:flex;flex-direction:column;gap:11px">
+                      <div style="font-size:10px;font-weight:700;letter-spacing:1.1px;color:#a8a29e">PROGRAM NOTES</div>
+                    <div style="font-size:12.5px;color:#a8a29e">No notes on this program.</div>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1180}}">class Component extends DCLogic {
+  state = { tab: "Overview", hview: "lifts", notesOpen: false, openRun: null };
+  renderVals() {
+    const t = this.state.tab;
+    const h = this.state.hview;
+    const segOn = "flex:1;text-align:center;padding:8px 0;border-radius:7px;background:#fff;border:1px solid #e1dad1;font-size:12.5px;font-weight:700;color:#2a211c;cursor:pointer";
+    const segOff = "flex:1;text-align:center;padding:8px 0;border-radius:7px;font-size:12.5px;font-weight:500;color:#78716c;cursor:pointer";
+    const go = (tab) => () => this.setState({ tab });
+    const style = (tab) =>
+      t === tab
+        ? "padding:9px 2px 10px 2px;font-size:14px;font-weight:700;color:#2a211c;box-shadow:inset 0 -2px 0 0 #2a211c;cursor:pointer"
+        : "padding:9px 2px 10px 2px;font-size:14px;font-weight:500;color:#a8a29e;cursor:pointer";
+    return {
+      onOverview: go("Overview"), onSessions: go("Sessions"), onHistory: go("History"), onSettings: go("Settings"),
+      tabOverview: style("Overview"), tabSessions: style("Sessions"), tabHistory: style("History"), tabSettings: style("Settings"),
+      isOverview: t === "Overview", isSessions: t === "Sessions", isHistory: t === "History", isSettings: t === "Settings",
+      onRun1: () => this.setState((s) => ({ openRun: s.openRun === 1 ? null : 1 })),
+      onRun2: () => this.setState((s) => ({ openRun: s.openRun === 2 ? null : 2 })),
+      onRun3: () => this.setState((s) => ({ openRun: s.openRun === 3 ? null : 3 })),
+      run1Open: this.state.openRun === 1, run2Open: this.state.openRun === 2, run3Open: this.state.openRun === 3,
+      run1Chevron: this.state.openRun === 1 ? "chevron-up" : "chevron-down",
+      run2Chevron: this.state.openRun === 2 ? "chevron-up" : "chevron-down",
+      run3Chevron: this.state.openRun === 3 ? "chevron-up" : "chevron-down",
+      notesOpen: this.state.notesOpen,
+      notesChevron: this.state.notesOpen ? "chevron-up" : "chevron-down",
+      onToggleNotes: () => this.setState((s) => ({ notesOpen: !s.notesOpen })),
+      onLifts: () => this.setState({ hview: "lifts" }), onPrograms: () => this.setState({ hview: "programs" }),
+      segLifts: h === "lifts" ? segOn : segOff, segPrograms: h === "programs" ? segOn : segOff,
+      isLifts: h === "lifts", isPrograms: h === "programs",
+    };
+  }
+}</script>
+</body>
+</html>

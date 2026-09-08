@@ -6,6 +6,7 @@ import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getUser, listCoaches } from "../../../lib/programming/clients";
 import { getSpcClient, updateSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
 import { listBlocksForSpcClient, listSpcWorkoutsForBlock, listSpcWorkoutsForBlocks } from "../../../lib/programming/spcBlocks";
+import { listCommentsForBlocks } from "../../../lib/programming/comments";
 import { listSpcCompletionDetailsForWorkouts } from "../../../lib/programming/sessionCompletions";
 import { getExerciseStats } from "../../../lib/programming/exerciseStats";
 import { getClient as getNutritionClient } from "../../../lib/nutrition/clients";
@@ -17,33 +18,43 @@ import { getSpcBlockDetail } from "../../../lib/programming/spcBlockDetail";
 import { finalizeSpcSession, unfinalizeSpcSession } from "../../../lib/programming/sessionCompletions";
 import { boiseInstantFrom } from "../../../lib/boiseDate";
 import { SpcSessionReadout } from "../../SpcSessionReadout";
-import { describeLastSession } from "../../../lib/programming/spcRoster";
 import { todayInBoise, daysBetween, dateInBoise, addDays } from "../../../lib/boiseDate";
-import { formatDateRange } from "../../../lib/formatDate";
+import { formatDateRange, formatDateMDShort } from "../../../lib/formatDate";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../CoachShell";
 import { ClientGoalCard } from "../../ClientGoalCard";
-import { CommentThread } from "../../CommentThread";
 import { CoachMessageBubble } from "../../CoachMessageBubble";
 import { SegmentedControl } from "../../SegmentedControl";
 import { PressFade } from "../../PressFade";
 import { SpcSessionsTab } from "./SpcSessionsTab";
 import { LiftHistory } from "./LiftHistory";
+import { ProgramNotesRow, ProgramNotesPanel } from "./ProgramNotes";
 import { statusColors, fonts, colors } from "../../../lib/theme";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { confirmTurnSpcOff } from "../../../lib/confirmDialog";
 
-// The SPC client page under the simplification
-// (design_handoff_spc_rework_v1, 1a/1b): the existing frame — identity row,
-// goal hero with the private coach notes attached, and a right rail with
-// NOTES and CLIENT SETTINGS clearly spaced apart — kept as-is, with the main
-// column under it becoming a tab strip: Overview / Sessions / History /
-// Print. Rendered by [userId].web.js for clients on the new model (no live
-// weekly-format block); legacy clients keep the old page until the cutover.
+// The SPC client page. Rendered by [userId].web.js for clients on the new
+// model (no live weekly-format block); legacy clients keep the old page.
 //
-// Phone (mock 1b) is a compact frame: back link + status pill, name, coach
-// line, tabs. The rail is desktop-only, matching the pre-existing precedent
-// (the native page deliberately dropped settings; web at phone width never
-// had them).
+// SIMPLIFICATION PASS (design_handoff_spc_client_v2), and the shape of it is
+// worth knowing before adding anything back:
+//
+//   The right rail is gone. It held NOTES and CLIENT SETTINGS beside a main
+//   column that then had ~850px to fit two side-by-side Sessions panes in,
+//   which is why every lift row in them wrapped. Settings became its own tab;
+//   the thread became a fold-away row (see ProgramNotes.js).
+//
+//   Two different things were both labelled COACH NOTES. The client-row field
+//   is KEEP IN MIND now and lives in the goal hero; the block-scoped thread is
+//   Notes, and follows its program into History when the program closes.
+//
+//   Overview is banner / THIS WEEK / CURRENT PROGRAM and nothing else. The
+//   banner's title and supporting line went with the RECENT PRS and LAST
+//   SESSION cards: all of it was either duplicated by the two cards below it
+//   or reachable in one tap on History.
+//
+// Phone is a compact frame: back link + status pill, name, coach line, tabs.
+// Settings is desktop-only, matching the pre-existing precedent (the native
+// page deliberately dropped settings; web at phone width never had them).
 
 const CANVAS = colors.coachCanvas;
 const CARD_BORDER = colors.coachCardBorder;
@@ -56,19 +67,6 @@ function Eyebrow({ children, style }) {
   );
 }
 
-function initials(name) {
-  return (name ?? "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
-function firstNameOf(name) {
-  return (name ?? "").trim().split(/\s+/)[0] || "her";
-}
-
 function StatusPill({ derived }) {
   const tone = statusColors[derived.tone] ?? statusColors.paused;
   return (
@@ -79,7 +77,7 @@ function StatusPill({ derived }) {
   );
 }
 
-const TABS = ["Overview", "Sessions", "History", "Print"];
+const TABS = ["Overview", "Sessions", "History", "Settings"];
 
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 function weekdayOf(iso) {
@@ -135,12 +133,7 @@ function buildWeekEntries({ block, workouts, completionKeys, activity, week }) {
 
 // "9/5" — the badge form, no leading zeros. formatDateMD gives "09/05",
 // which is right in a calendar grid's fixed column and too heavy in a corner.
-function badgeDate(iso) {
-  if (!iso) return "";
-  const [, m, d] = iso.split("-");
-  if (!m || !d) return "";
-  return `${Number(m)}/${Number(d)}`;
-}
+const badgeDate = formatDateMDShort;
 
 // The day something last happened on this session: when she finished it, or
 // when she last logged into it without finishing.
@@ -327,53 +320,21 @@ function WeekRow({ week, weekStart, future, current, entries, onOpenSession }) {
 /* ------------------------------------------------------------- overview */
 
 // Exported for the visual harness — a real component boundary, not a test seam.
-export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, member, completionKeys, activity = new Map(), sessionWorkouts, stats, lastSessionAt, onOpenSession, onGoSessions, onGoPrint }) {
-  const router = useRouter();
-  const clientFirst = firstNameOf(member?.name);
+export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, completionKeys, activity = new Map(), sessionWorkouts, coachId, onOpenSession, onGoSessions }) {
   const target = spcClient?.sessions_per_week ?? 1;
   const tone = statusColors[derived.tone] ?? statusColors.paused;
 
-  const banner = (() => {
-    if (derived.state === "paused") {
-      return { title: "Paused", line: derived.reason, cta: null };
-    }
-    if (!current) {
-      return {
-        title: `Program ${clientFirst} now`,
-        line: "Enrolled, never programmed. Build her first program, or pause her to silence this.",
-        cta: "Build her first program",
-      };
-    }
-    // Her program is built and waiting for its Monday. Nothing is due, and the
-    // week-N lines below would be counting weeks of a program that hasn't run.
-    if (notStarted) {
-      return {
-        title: `Ready and waiting for Mon ${monthDay(current.block_start_date)}`,
-        line: `Her program is published. ${clientFirst} can't see it until it starts, and you can still change the dates or edit it on the Sessions tab.`,
-        cta: "See her program",
-      };
-    }
-    if (derived.state === "goodToGo" && upcoming?.status === "active") {
-      return {
-        title: `Nothing needed until ${monthDay(upcoming.block_start_date)}`,
-        line: `Her next program is queued and starts Mon ${monthDay(upcoming.block_start_date)}.${weekNumber ? ` She's on week ${weekNumber}${current.block_length_weeks && current.block_end_date ? ` of ${current.block_length_weeks}` : ""}.` : ""}`,
-        cta: "See what's queued",
-      };
-    }
-    if (derived.state === "goodToGo") {
-      return {
-        title: "Nothing needed right now",
-        line: current.block_end_date
-          ? `Her program runs through Sun ${monthDay(current.block_end_date)}. She's on week ${weekNumber} of ${current.block_length_weeks}.`
-          : `Ongoing program. Week ${weekNumber}, runs until you set an end date.`,
-        cta: null,
-      };
-    }
-    return {
-      title: "Publish her next program",
-      line: `${derived.reason}. Build it on the Sessions tab and publish it with a start Monday.`,
-      cta: "Build next program",
-    };
+  // Title and supporting line both dropped in the v2 pass. The label already
+  // names the state, and every sentence they carried is on the two cards
+  // directly beneath — the week's count, the program's dates, whether
+  // anything is queued. What is left is the state, and the one thing to do
+  // about it.
+  const bannerCta = (() => {
+    if (derived.state === "paused") return null;
+    if (!current) return "Build her first program";
+    if (notStarted) return "See her program";
+    if (derived.state === "goodToGo") return upcoming?.status === "active" ? "See what's queued" : null;
+    return "Build next program";
   })();
 
   const weeksToShow = current
@@ -391,29 +352,20 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
   // Finalize is her confirmation, not the event.
   const countForWeek = (w) => entriesForWeek(w).filter((e) => e.state !== "untouched").length;
 
-  // personalRecords comes back date-descending already (exerciseStats.js).
-  const prs = (stats?.personalRecords ?? []).slice(0, 3);
-
   return (
     <View style={{ gap: 16 }}>
       {/* Status banner */}
       <View style={{ backgroundColor: tone.bg, borderRadius: 14, padding: 18 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: tone.text }} />
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 1, color: tone.text }}>
-            {derived.label.toUpperCase()}
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ width: 11, height: 11, borderRadius: 99, backgroundColor: tone.text }} />
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 22, color: tone.text }}>{derived.label}</Text>
         </View>
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 19, color: "#2a211c", marginTop: 7 }}>{banner.title}</Text>
-        {banner.line ? (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#57534e", marginTop: 5 }}>{banner.line}</Text>
-        ) : null}
-        {banner.cta ? (
+        {bannerCta ? (
           <PressFade
             onPress={onGoSessions}
-            style={{ backgroundColor: derived.state === "goodToGo" ? "#4d6142" : colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: "center", marginTop: 13 }}
+            style={{ backgroundColor: derived.state === "goodToGo" ? "#4d6142" : colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: "center", marginTop: 14 }}
           >
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#fff" }}>{banner.cta}</Text>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#fff" }}>{bannerCta}</Text>
           </PressFade>
         ) : null}
       </View>
@@ -544,57 +496,13 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
               </Text>
             </View>
           ) : null}
+
+          {/* The block-scoped thread, at the foot of the program it belongs
+              to. Second mount is the Sessions tab; both share their open
+              state, so it cannot be open in one place and shut in the other. */}
+          <ProgramNotesRow spcBlockId={current.id} coachId={coachId} />
         </View>
       ) : null}
-
-      {/* Recent PRs + last session */}
-      <View style={{ flexDirection: "row", gap: 16, flexWrap: "wrap" }}>
-        <View style={{ flex: 1, minWidth: 220, backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, padding: 16 }}>
-          <Eyebrow>RECENT PRS</Eyebrow>
-          {prs.length === 0 ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e", marginTop: 6 }}>None yet.</Text>
-          ) : (
-            prs.map((p, i) => (
-              <View key={`${p.exerciseId ?? i}-${p.date}`} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
-                <Text style={{ flex: 1, minWidth: 0, fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#2a211c" }} numberOfLines={1}>
-                  {p.exerciseName ?? "Lift"}
-                </Text>
-                <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#4d6142" }}>
-                  {p.weight != null ? `${p.weight} lb` : `${p.reps} reps`}
-                </Text>
-                <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>{monthDay(p.date)}</Text>
-              </View>
-            ))
-          )}
-        </View>
-        <View style={{ flex: 1, minWidth: 220, backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, padding: 16 }}>
-          <Eyebrow>LAST SESSION</Eyebrow>
-          <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: lastSessionAt ? "#2a211c" : "#a8a29e", marginTop: 6 }}>
-            {describeLastSession(lastSessionAt)}
-          </Text>
-          {lastSessionAt ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c", marginTop: 2 }}>
-              {weekdayOf(dateInBoise(new Date(lastSessionAt)))} {monthDay(dateInBoise(new Date(lastSessionAt)))}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-
-      {/* Quick links */}
-      <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-        <PressFade
-          onPress={onGoPrint}
-          style={{ flex: 1, minWidth: 150, borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 10, paddingVertical: 12, alignItems: "center", backgroundColor: "#fff" }}
-        >
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Print sheet</Text>
-        </PressFade>
-        <PressFade
-          onPress={() => router.push("/(coach)/spc/live")}
-          style={{ flex: 1, minWidth: 150, borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 10, paddingVertical: 12, alignItems: "center", backgroundColor: "#fff" }}
-        >
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Live session</Text>
-        </PressFade>
-      </View>
     </View>
   );
 }
@@ -644,8 +552,14 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
           if (!cancelled) setRuns([]);
           return;
         }
-        const workouts = await listSpcWorkoutsForBlocks(past.map((b) => b.id));
+        const pastIds = past.map((b) => b.id);
+        const workouts = await listSpcWorkoutsForBlocks(pastIds);
         const details = await listSpcCompletionDetailsForWorkouts(userId, workouts.map((w) => w.id)).catch(() => new Map());
+        // Batched rather than lazy-per-run like the sessions below: the count
+        // sits on every collapsed row's meta line, so fetching on expand would
+        // be one query per row to draw a list nobody has opened yet. Its own
+        // catch — a notes failure costs the counts, never the runs.
+        const notesByBlock = await listCommentsForBlocks({ spcBlockIds: pastIds }).catch(() => new Map());
         const blockByWorkout = new Map(workouts.map((w) => [w.id, w.spc_block_id]));
         const loggedByBlock = new Map();
         for (const key of details.keys()) {
@@ -655,7 +569,7 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
         }
         const rows = past
           .sort((a, b) => (a.block_start_date < b.block_start_date ? 1 : -1))
-          .map((b) => ({ block: b, logged: loggedByBlock.get(b.id) ?? 0 }));
+          .map((b) => ({ block: b, logged: loggedByBlock.get(b.id) ?? 0, notes: notesByBlock.get(b.id) ?? [] }));
         if (!cancelled) setRuns(rows);
       } catch {
         if (!cancelled) setRuns([]);
@@ -698,7 +612,7 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
   }
   return (
     <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, overflow: "hidden" }}>
-      {runs.map(({ block, logged }, i) => {
+      {runs.map(({ block, logged, notes }, i) => {
         const expanded = openBlock === block.id;
         const data = inner[block.id];
         return (
@@ -713,7 +627,7 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
                 </Text>
                 <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
                   {block.block_length_weeks} week{block.block_length_weeks === 1 ? "" : "s"}
-                  {block.format === "weekly" ? " · built week by week" : ""}
+                  {notes.length ? ` · ${notes.length} note${notes.length === 1 ? "" : "s"}` : ""}
                 </Text>
               </View>
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: logged > 0 ? "#4d6142" : "#a8a29e" }}>
@@ -723,68 +637,40 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
             </PressFade>
 
             {expanded ? (
-              <View style={{ paddingHorizontal: 16, paddingBottom: 6, backgroundColor: "#fdfcfa" }}>
-                {!data ? (
-                  <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
-                ) : (
-                  Array.from({ length: block.block_length_weeks ?? 0 }, (_, k) => k + 1).map((w) => (
-                    <WeekRow
-                      key={w}
-                      week={w}
-                      weekStart={addDays(block.block_start_date, (w - 1) * 7)}
-                      future={false}
-                      current={false}
-                      entries={buildWeekEntries({
-                        block,
-                        workouts: data.workouts,
-                        completionKeys: data.completions,
-                        activity: data.activity,
-                        week: w,
-                      })}
-                      onOpenSession={(e) => onOpenSession?.(e, block.id)}
-                    />
-                  ))
-                )}
-              </View>
+              <>
+                <View style={{ paddingHorizontal: 16, paddingBottom: 6, backgroundColor: "#fdfcfa" }}>
+                  {!data ? (
+                    <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+                  ) : (
+                    Array.from({ length: block.block_length_weeks ?? 0 }, (_, k) => k + 1).map((w) => (
+                      <WeekRow
+                        key={w}
+                        week={w}
+                        weekStart={addDays(block.block_start_date, (w - 1) * 7)}
+                        future={false}
+                        current={false}
+                        entries={buildWeekEntries({
+                          block,
+                          workouts: data.workouts,
+                          completionKeys: data.completions,
+                          activity: data.activity,
+                          week: w,
+                        })}
+                        onOpenSession={(e) => onOpenSession?.(e, block.id)}
+                      />
+                    ))
+                  )}
+                </View>
+                {/* Read-only: the notes written on this program while it ran,
+                    which is the whole point of scoping the thread to a block.
+                    Its own ground and padding, so it sits outside the padded
+                    sessions container rather than inside it. */}
+                <ProgramNotesPanel notes={notes} />
+              </>
             ) : null}
           </View>
         );
       })}
-    </View>
-  );
-}
-
-/* ---------------------------------------------------------------- print */
-
-function PrintTab({ current, sessionWorkouts }) {
-  if (!current || sessionWorkouts.length === 0) {
-    return (
-      <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, padding: 24 }}>
-        <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: "#78716c" }}>
-          Nothing to print yet. The sheet comes from her current program's sessions.
-        </Text>
-      </View>
-    );
-  }
-  return (
-    <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, overflow: "hidden" }}>
-      {sessionWorkouts.map((w, i) => (
-        <View
-          key={w.id}
-          style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13, paddingHorizontal: 16, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: "#f4f1ec" }}
-        >
-          <Text style={{ flex: 1, minWidth: 0, fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }} numberOfLines={1}>
-            Session {w.session_number}
-            {w.title ? <Text style={{ fontFamily: fonts.sans, color: "#78716c" }}> · {w.title}</Text> : null}
-          </Text>
-          <PressFade
-            onPress={() => window.open(`/spc/print/${current.id}?session=${w.session_number}`, "_blank")}
-            style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 7, paddingHorizontal: 13, backgroundColor: "#fff" }}
-          >
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c" }}>Print ›</Text>
-          </PressFade>
-        </View>
-      ))}
     </View>
   );
 }
@@ -819,7 +705,6 @@ export function SpcClientPage({ userId }) {
   const [detail, setDetail] = useState(null);
   const [readoutKey, setReadoutKey] = useState(null);
   const [openingSession, setOpeningSession] = useState(false);
-  const [lastSessionAt, setLastSessionAt] = useState(null);
   const [notesDraft, setNotesDraft] = useState("");
   const [tab, setTab] = useState("Overview");
   const [ready, setReady] = useState(false);
@@ -874,9 +759,6 @@ export function SpcClientPage({ userId }) {
           ]);
           setCompletionKeys(details);
           setActivity(acts);
-          let latest = null;
-          for (const at of details.values()) if (!latest || at > latest) latest = at;
-          setLastSessionAt(latest);
         } catch {
           setSessionWorkouts([]);
           setCompletionKeys(new Map());
@@ -886,7 +768,6 @@ export function SpcClientPage({ userId }) {
         setSessionWorkouts([]);
         setCompletionKeys(new Map());
         setActivity(new Map());
-        setLastSessionAt(null);
       }
     } catch (err) {
       setLoadError(err.message ?? String(err));
@@ -1020,10 +901,10 @@ export function SpcClientPage({ userId }) {
   // which for a coach account is reachable only through Settings -> Team.
   // It belongs where the client actually lives, so it is here too — as a
   // deliberate action behind a confirm rather than a third option in the
-  // Enrolment select, because leaving the roster is a different kind of
+  // Enrollment select, because leaving the roster is a different kind of
   // decision from choosing between active and paused, and a select that
   // archives on change gives no beat to change your mind.
-  const setEnrolment = async (status, message) => {
+  const setEnrollment = async (status, message) => {
     try {
       await setSpcStatus(userId, status);
       setSpcClient((c) => (c ? { ...c, status } : c));
@@ -1035,7 +916,7 @@ export function SpcClientPage({ userId }) {
 
   const handleTurnSpcOff = async () => {
     if (!(await confirmTurnSpcOff(member?.name ?? "this client"))) return;
-    await setEnrolment("inactive", "SPC turned off");
+    await setEnrollment("inactive", "SPC turned off");
   };
 
   if (!ready) {
@@ -1079,6 +960,89 @@ export function SpcClientPage({ userId }) {
     </View>
   );
 
+  // Was the right rail's card, at 280 wide. Its own tab now, so it can take a
+  // readable width and stop competing with the Sessions panes for the page.
+  const settingsField = { fontFamily: fonts.sans, fontSize: 13, padding: "9px 10px", borderRadius: 8, border: "1px solid #d9d4cd", background: "#fff", width: "100%", boxSizing: "border-box", color: "#2a211c" };
+  const settingsLabel = { fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginTop: 14, marginBottom: 5 };
+
+  const settingsCard = (
+    <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, padding: 20, maxWidth: 440 }}>
+      <Eyebrow>CLIENT SETTINGS</Eyebrow>
+
+      <Text style={settingsLabel}>Enrollment</Text>
+      {spcClient?.status === "inactive" ? (
+        // Reachable only by a direct link — she is off the SPC roster (0108).
+        // The select's two options still don't include this state on purpose:
+        // active and paused are a choice between, and off is an action.
+        // Turning it back on is offered right here rather than pointing
+        // elsewhere, so switching off from this card can be undone from it.
+        <View>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#b23a22", marginBottom: 8 }}>
+            SPC is switched off for this client. Their programs and history are kept.
+          </Text>
+          <PressFade onPress={() => setEnrollment("active", "SPC turned back on")}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+              Turn SPC back on
+            </Text>
+          </PressFade>
+        </View>
+      ) : (
+        <select
+          value={spcClient?.status ?? ""}
+          onChange={async (e) => {
+            const status = e.target.value;
+            try {
+              await setSpcStatus(userId, status);
+              setSpcClient((c) => ({ ...c, status }));
+            } catch (err) {
+              toastError("Couldn't update status", err);
+            }
+          }}
+          style={settingsField}
+        >
+          {Object.entries(SPC_ENROLLMENT_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      )}
+
+      <Text style={settingsLabel}>Assigned coach</Text>
+      <select
+        value={spcClient?.assigned_coach_id ?? ""}
+        onChange={(e) => patch({ assigned_coach_id: e.target.value || null })}
+        style={settingsField}
+      >
+        <option value="">Unassigned</option>
+        {coaches.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+
+      <Text style={settingsLabel}>Sessions a week</Text>
+      <SegmentedControl
+        segments={[1, 2, 3, 4].map((n) => ({ key: String(n), label: `${n}×` }))}
+        activeKey={String(spcClient?.sessions_per_week ?? 2)}
+        onSelect={(key) => patch({ sessions_per_week: Number(key) })}
+      />
+
+      {spcClient && spcClient.status !== "inactive" ? (
+        <>
+          <View style={{ height: 1, backgroundColor: CARD_BORDER, marginTop: 20, marginBottom: 14 }} />
+          <PressFade onPress={handleTurnSpcOff} style={{ alignSelf: "flex-start" }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#b23a22" }}>Turn SPC off</Text>
+          </PressFade>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 16, color: "#a8a29e", marginTop: 4 }}>
+            Comes off the SPC roster and the live board. Programs are kept.
+          </Text>
+        </>
+      ) : null}
+    </View>
+  );
+
   const tabContent = (
     <View style={{ marginTop: 18 }}>
       {tab === "Overview" ? (
@@ -1089,15 +1053,12 @@ export function SpcClientPage({ userId }) {
           upcoming={upcoming}
           weekNumber={weekNumber}
           spcClient={spcClient}
-          member={member}
           completionKeys={completionKeys}
           activity={activity}
           sessionWorkouts={sessionWorkouts}
-          stats={stats}
-          lastSessionAt={lastSessionAt}
+          coachId={profile?.id}
           onOpenSession={openSession}
           onGoSessions={() => setTab("Sessions")}
-          onGoPrint={() => setTab("Print")}
         />
       ) : null}
       {tab === "Sessions" ? (
@@ -1125,7 +1086,7 @@ export function SpcClientPage({ userId }) {
           onOpenSession={openSession}
         />
       ) : null}
-      {tab === "Print" ? <PrintTab current={current} sessionWorkouts={sessionWorkouts} /> : null}
+      {tab === "Settings" ? settingsCard : null}
 
       {/* Opening a session pulls the whole block, which is not instant. Said
           out loud rather than leaving a tap look like it did nothing. */}
@@ -1200,182 +1161,92 @@ export function SpcClientPage({ userId }) {
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#a8a29e" }}>‹ SPC</Text>
         </PressFade>
 
-        {/* Identity + goal hero — the kept frame. */}
-        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
-          <View style={{ width: 46, height: 46, borderRadius: 99, backgroundColor: "#fdece5", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#b23a22" }}>{initials(member.name)}</Text>
+        {/* Name line: everything that identifies her, on one row. The avatar
+            went (initials next to the name they are the initials of), and so
+            did the status pill — it repeated the banner a few pixels below. */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <Text style={{ fontFamily: fonts.display, fontSize: 34, lineHeight: 38, color: "#2a211c" }}>{member.name}</Text>
+          <View style={{ backgroundColor: "#33251f", borderRadius: 99, paddingVertical: 3, paddingHorizontal: 10 }}>
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.7, color: "#f7f3ee" }}>SPC</Text>
           </View>
-          <View style={{ flex: 1, minWidth: 240 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-              <Text style={{ fontFamily: fonts.display, fontSize: 29, color: "#2a211c" }}>{member.name}</Text>
-              <View style={{ backgroundColor: "#33251f", borderRadius: 99, paddingVertical: 3, paddingHorizontal: 10 }}>
-                <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.7, color: "#f7f3ee" }}>SPC</Text>
-              </View>
-              {nutritionClient ? (
-                <PressFade
-                  onPress={() => router.push(`/(coach)/nutrition/clients/${userId}`)}
-                  style={{ backgroundColor: "#e3ead9", borderRadius: 99, paddingVertical: 3, paddingHorizontal: 10 }}
-                >
-                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#4d6142" }}>Nutrition ›</Text>
-                </PressFade>
-              ) : null}
-              <StatusPill derived={derived} />
-            </View>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", marginTop: 3 }}>
-              Coach: {coaches.find((c) => c.id === spcClient?.assigned_coach_id)?.name ?? "Unassigned"} · training{" "}
-              {spcClient?.sessions_per_week ?? "—"}× a week
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-              <PressFade
-                onPress={() => router.push("/(coach)/spc/live")}
-                style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 15, backgroundColor: "#fff" }}
-              >
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Live session</Text>
-              </PressFade>
-            </View>
-          </View>
-
-          <ClientGoalCard
-            goal={goalRow?.goal}
-            userId={userId}
-            clientName={member.name}
-            editable
-            editorId={profile?.id}
-            onSaved={setGoalRow}
-            style={{ width: 380, flexGrow: 1, flexShrink: 0, minWidth: 300 }}
-            notes={
-              <>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 }}>
-                  <Ionicons name="lock-closed" size={11} color="#a8a29e" />
-                  <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1, color: "#a8a29e" }}>COACH NOTES</Text>
-                </View>
-                <TextInput
-                  value={notesDraft}
-                  onChangeText={setNotesDraft}
-                  onBlur={() => {
-                    if (notesDraft !== (spcClient?.notes_goals_feedback ?? "")) patch({ notes_goals_feedback: notesDraft }, "Notes saved");
-                  }}
-                  multiline
-                  placeholder="Only you and the other coaches see this…"
-                  placeholderTextColor={colors.hint}
-                  style={{
-                    minHeight: 54,
-                    borderWidth: 1,
-                    borderColor: CARD_BORDER,
-                    borderRadius: 8,
-                    padding: 9,
-                    fontFamily: fonts.sans,
-                    fontSize: 12.5,
-                    color: "#2a211c",
-                    textAlignVertical: "top",
-                  }}
-                />
-              </>
-            }
-          />
+          {nutritionClient ? (
+            <PressFade
+              onPress={() => router.push(`/(coach)/nutrition/clients/${userId}`)}
+              style={{ backgroundColor: "#e3ead9", borderRadius: 99, paddingVertical: 3, paddingHorizontal: 10 }}
+            >
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: "#4d6142" }}>Nutrition ›</Text>
+            </PressFade>
+          ) : null}
+          <PressFade
+            onPress={() => router.push("/(coach)/spc/live")}
+            style={{ flexDirection: "row", alignItems: "center", gap: 7, borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 8, paddingHorizontal: 13, backgroundColor: "#fff" }}
+          >
+            <Ionicons name="radio-outline" size={15} color={colors.primaryOnWhite} />
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Live session</Text>
+          </PressFade>
         </View>
 
-        {/* Main column + right rail */}
-        <View style={{ flexDirection: "row", gap: 26, alignItems: "flex-start", marginTop: 20 }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            {tabStrip}
-            {tabContent}
-          </View>
+        {/* Meta line. No "Coach:" prefix and no "training" — the two facts
+            stand on their own next to her name. */}
+        <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", marginTop: 5 }}>
+          {coaches.find((c) => c.id === spcClient?.assigned_coach_id)?.name ?? "Unassigned"} ·{" "}
+          {spcClient?.sessions_per_week ?? "—"}× a week
+        </Text>
 
-          <View style={{ width: 280, flexShrink: 0 }}>
-            <Eyebrow style={{ marginBottom: 10 }}>NOTES</Eyebrow>
-            {current ? (
-              <View style={{ marginBottom: 12 }}>
-                <CommentThread spcBlockId={current.id} />
+        {/* Goal hero, full width, with KEEP IN MIND inside it. That field is
+            spc_clients.notes_goals_feedback — standing facts about the client
+            (injuries, cues, what she responds to), as against the Notes thread
+            further down, which is dated, attributed, and belongs to one
+            program. They used to be two identical grey boxes both called
+            COACH NOTES, which is why nobody could tell them apart. */}
+        <ClientGoalCard
+          goal={goalRow?.goal}
+          userId={userId}
+          clientName={member.name}
+          editable
+          editorId={profile?.id}
+          onSaved={setGoalRow}
+          wide
+          style={{ marginTop: 18 }}
+          aside={
+            <>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 }}>
+                <Ionicons name="lock-closed" size={11} color="#f0d9d0" />
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1, color: "#f0d9d0" }}>
+                  KEEP IN MIND
+                </Text>
               </View>
-            ) : (
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", marginBottom: 12 }}>
-                Coach-to-coach notes attach to her program once one exists.
-              </Text>
-            )}
-
-            {/* 36px of air before settings — Notes and Settings read as two
-                sections, not one (Terra's explicit ask). */}
-            <View style={{ height: 36 }} />
-
-            <Eyebrow style={{ marginBottom: 10 }}>CLIENT SETTINGS</Eyebrow>
-            <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 12, padding: 15 }}>
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginBottom: 5 }}>Enrolment</Text>
-              {spcClient?.status === "inactive" ? (
-                // Reachable only by a direct link — she is off the SPC roster
-                // (0108). The select's two options still don't include this
-                // state on purpose: active and paused are a choice between,
-                // and off is an action. Turning it back on is offered right
-                // here rather than pointing elsewhere, so switching off from
-                // this card can be undone from the same card.
-                <View style={{ marginBottom: 12 }}>
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#b23a22", marginBottom: 8 }}>
-                    SPC is switched off for this client. Their programs and history are kept.
-                  </Text>
-                  <PressFade onPress={() => setEnrolment("active", "SPC turned back on")}>
-                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
-                      Turn SPC back on
-                    </Text>
-                  </PressFade>
-                </View>
-              ) : (
-              <select
-                value={spcClient?.status ?? ""}
-                onChange={async (e) => {
-                  const status = e.target.value;
-                  try {
-                    await setSpcStatus(userId, status);
-                    setSpcClient((c) => ({ ...c, status }));
-                  } catch (err) {
-                    toastError("Couldn't update status", err);
-                  }
+              <TextInput
+                value={notesDraft}
+                onChangeText={setNotesDraft}
+                onBlur={() => {
+                  if (notesDraft !== (spcClient?.notes_goals_feedback ?? "")) patch({ notes_goals_feedback: notesDraft }, "Saved");
                 }}
-                style={{ width: "100%", fontFamily: fonts.sans, fontSize: 13, padding: "8px 10px", borderRadius: 8, border: "1px solid #d9d4cd", background: "#fff", marginBottom: 12 }}
-              >
-                {Object.entries(SPC_ENROLLMENT_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              )}
-
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginBottom: 5 }}>Assigned coach</Text>
-              <select
-                value={spcClient?.assigned_coach_id ?? ""}
-                onChange={(e) => patch({ assigned_coach_id: e.target.value || null })}
-                style={{ width: "100%", fontFamily: fonts.sans, fontSize: 13, padding: "8px 10px", borderRadius: 8, border: "1px solid #d9d4cd", background: "#fff", marginBottom: 12 }}
-              >
-                <option value="">Unassigned</option>
-                {coaches.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginBottom: 5 }}>Sessions a week</Text>
-              <SegmentedControl
-                segments={[1, 2, 3, 4].map((n) => ({ key: String(n), label: `${n}×` }))}
-                activeKey={String(spcClient?.sessions_per_week ?? 2)}
-                onSelect={(key) => patch({ sessions_per_week: Number(key) })}
+                multiline
+                placeholder="Injuries, cues, what she responds to…"
+                placeholderTextColor={colors.hint}
+                style={{
+                  minHeight: 58,
+                  backgroundColor: "#fff",
+                  borderWidth: 1,
+                  borderColor: CARD_BORDER,
+                  borderRadius: 8,
+                  padding: 9,
+                  fontFamily: fonts.sans,
+                  fontSize: 12.5,
+                  color: "#2a211c",
+                  textAlignVertical: "top",
+                }}
               />
+            </>
+          }
+        />
 
-              {spcClient && spcClient.status !== "inactive" ? (
-                <>
-                  <View style={{ height: 1, backgroundColor: CARD_BORDER, marginTop: 15, marginBottom: 12 }} />
-                  <PressFade onPress={handleTurnSpcOff}>
-                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#b23a22" }}>
-                      Turn SPC off
-                    </Text>
-                  </PressFade>
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 4 }}>
-                    Comes off the SPC roster and the live board. Programs are kept.
-                  </Text>
-                </>
-              ) : null}
-            </View>
-          </View>
+        {/* Full width — the rail that used to sit beside this is gone, which
+            is what lets the Sessions tab put its two panes side by side. */}
+        <View style={{ marginTop: 20 }}>
+          {tabStrip}
+          {tabContent}
         </View>
       </ScrollView>
       <CoachMessageBubble userId={userId} clientName={member.name} />

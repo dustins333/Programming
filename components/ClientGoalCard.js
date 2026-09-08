@@ -35,6 +35,91 @@ function firstNameOf(name) {
 // ---------------------------------------------------------------------------
 // Resting card
 // ---------------------------------------------------------------------------
+// The full-width form, used only where the hero is a band across the top of a
+// page rather than a card in a column (the SPC client page). Goal on the
+// left, an `aside` on the right inside the same clay — on that page the
+// coach-only KEEP IN MIND field, which used to hang under the card as a
+// separate white panel and read as a second, unrelated thing.
+//
+// A separate branch rather than conditionals threaded through the narrow
+// hero: four other callers render that one, and none of them should move.
+//
+// Only the goal column is pressable-to-edit here. Wrapping the whole band
+// would put the aside's TextInput inside a Pressable, which is a fight over
+// the touch nobody wins cleanly.
+function WideGoalHero({ goal, showSharedMark, onEdit, aside }) {
+  const inner = (
+    <>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Ionicons name="flag" size={12} color={CLAY_EYEBROW} />
+        <Text
+          maxFontSizeMultiplier={1.1}
+          style={{ fontFamily: fonts.sansBold, fontSize: type.eyebrow, letterSpacing: 1.2, color: CLAY_EYEBROW }}
+        >
+          WORKING TOWARD
+        </Text>
+        {/* Next to the words, not pushed to the far edge: at this width the
+            far edge is most of a screen away from the thing it marks. */}
+        {showSharedMark ? <Ionicons name="eye-outline" size={14} color="#e8c4b6" style={{ marginLeft: 4 }} /> : null}
+      </View>
+      {/* The band is not only the goal here — it also holds the aside — so a
+          client with no goal keeps it, with the prompt where the goal goes.
+          The narrow card's dashed empty box would have nowhere to put the
+          aside and would read as an empty form. */}
+      <Text
+        maxFontSizeMultiplier={1.15}
+        style={{
+          fontFamily: fonts.display,
+          fontSize: 30,
+          lineHeight: 36,
+          color: goal ? CLAY_TEXT : "rgba(255,249,246,0.55)",
+          marginTop: 8,
+        }}
+      >
+        {goal || "Set a goal +"}
+      </Text>
+    </>
+  );
+
+  const column = { flexGrow: 1, flexShrink: 1, flexBasis: 280, minWidth: 280 };
+
+  return (
+    <View
+      style={{
+        borderRadius: 16,
+        backgroundColor: colors.primary,
+        paddingVertical: 18,
+        paddingHorizontal: 20,
+        overflow: "hidden",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 28,
+        flexWrap: "wrap",
+      }}
+    >
+      <View
+        style={{
+          position: "absolute",
+          right: -40,
+          top: -52,
+          width: 180,
+          height: 180,
+          borderRadius: 90,
+          backgroundColor: "rgba(255,255,255,0.07)",
+        }}
+      />
+      {onEdit ? (
+        <PressFade onPress={onEdit} accessibilityLabel="Edit goal" style={column}>
+          {inner}
+        </PressFade>
+      ) : (
+        <View style={column}>{inner}</View>
+      )}
+      {aside ? <View style={{ flexGrow: 0, flexShrink: 1, flexBasis: 460, minWidth: 300 }}>{aside}</View> : null}
+    </View>
+  );
+}
+
 function GoalHero({ goal, showSharedMark, onEdit }) {
   const body = (
     <View style={{ borderRadius: 16, backgroundColor: colors.primary, padding: 16, overflow: "hidden" }}>
@@ -195,6 +280,11 @@ export function ClientGoalCard({
   editorId,
   showSharedMark = true,
   notes,
+  // `wide` swaps the card for the full-width band (see WideGoalHero), and
+  // `aside` is what sits on its right. Distinct from `notes`, which is the
+  // stacked panel underneath and is left exactly as it was for its callers.
+  wide = false,
+  aside,
   style,
   onSaved,
 }) {
@@ -222,7 +312,33 @@ export function ClientGoalCard({
     }
   };
 
-  if (!goal && !editable) return null;
+  if (!goal && !editable && !aside) return null;
+
+  if (wide) {
+    return (
+      <View style={style}>
+        {editing ? (
+          <GoalEditor
+            initial={goal}
+            clientName={clientName}
+            saving={saving}
+            onCancel={() => setEditing(false)}
+            onSave={handleSave}
+          />
+        ) : (
+          // The aside goes with the band while the editor is open, matching
+          // what `notes` has always done. It is a few seconds of a state a
+          // coach opened on purpose.
+          <WideGoalHero
+            goal={goal}
+            showSharedMark={showSharedMark}
+            onEdit={editable ? () => setEditing(true) : undefined}
+            aside={aside}
+          />
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={style}>

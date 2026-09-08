@@ -55,7 +55,10 @@ function ControlButton({ icon, onPress, disabled, label }) {
 // auto-growing version was tried and feeds back on itself here, because
 // onContentSizeChange measures the element whose height it just set, so an
 // EMPTY draft field inflated itself to the cap on first render.
-function NoteField({ value, onChangeText, placeholder, fieldRef, onFocus, autoFocus, height }) {
+// Exported for components/coach/spc/ProgramNotes.js, which renders the same
+// thread in the SPC page's collapsed-row idiom. One definition of the field,
+// so the fixed-height rule above cannot be lost by a second implementation.
+export function NoteField({ value, onChangeText, placeholder, fieldRef, onFocus, autoFocus, height }) {
   return (
     <TextInput
       ref={fieldRef}

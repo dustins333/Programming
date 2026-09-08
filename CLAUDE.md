@@ -1025,6 +1025,134 @@ Five reports in one message, two of which needed real diagnosis rather than a UI
 
 **"The webapp constantly asks for a refresh"** — that's `components/AppUpdateChecker.js` (the stale-tab detector) working *correctly* and being unbearable about it. During a heavy-deploy stretch every prompt is a true positive, so the fix was quieting it, not making detection smarter: it had **no dismiss at all** (only a "Refresh" button, so it re-raised on every tab-return until you gave in), and — the "randomly asking" half — it called `window.location.reload()` **on its own** whenever the tab was backgrounded with the banner up, silently discarding anything half-typed. Now: a compact dismissible pill instead of a full-width bar, an ✕ that suppresses that specific script-src for good in that tab (a *newer* deploy still gets one prompt), no self-initiated reload ever, and a 15-minute poll instead of 5. **General lesson**: for a background nag, "is the signal accurate" and "is the interruption warranted" are separate questions — this one was 100% accurate and still wrong. **And a follow-up on 2026-09-07 found the signal was not always accurate after all — see the next section.**
 
+## SPC client page v2: the rail goes, and two things called COACH NOTES stop being one (2026-09-07)
+
+A handoff (`design_handoff_spc_client_v2/` — README + `.dc.html` + 5
+screenshots) simplifies the coach-web SPC client page. Written as a diff
+against current source, so most of it is deletion. No migration, no deploy
+step. Screens: `components/coach/spc/SpcClientPage.js`, `SpcSessionsTab.js`,
+plus a new `ProgramNotes.js`.
+
+**The right rail is gone, and that is what pays for everything else.** It held
+NOTES and CLIENT SETTINGS at 280px beside a main column that was then ~850px
+at 1440 — which is why the Sessions tab's two side-by-side panes were ~412px
+each and every lift row in them wrapped. Full width measures **1141px** now.
+Settings became its own tab; the thread became a fold-away row.
+
+**The two COACH NOTES were never the same feature, which is the whole reason
+nobody could tell them apart:**
+
+| | what it is |
+|---|---|
+| `spc_clients.notes_goals_feedback` | one field on the client row. No author, no date, last write wins, true across every program. Now **KEEP IN MIND**, inside the goal hero. |
+| `program_comments` (spcBlockId) | attributed, dated, appended, scoped to the block — and it follows the program into History when the program closes. Now **Notes**. |
+
+Same label and the same grey-box-with-a-textarea on both is what made them
+read as one thing rendered twice. Kept as two, relabelled, and given visibly
+different shapes.
+
+**`ProgramNotes.js` is a separate component from `CommentThread`, not a
+variant of it.** CommentThread keeps its card for the builders and the group
+pages; this is the same data in a row that folds away, with the byline *under*
+the body rather than above it (these are read as a run of remarks — what was
+said is what you scan, who said it is the footnote). It is mounted three
+times: the foot of Overview's CURRENT PROGRAM card, its own white card on the
+Sessions tab, and read-only on the peach ground inside a finished run in
+History.
+
+- **`NoteField` is exported from `CommentThread` and reused** rather than
+  copied, so the fixed-height-no-autogrow rule (which this codebase has been
+  bitten by three times) has one definition.
+- **Open state is a pub-sub AsyncStorage pref** (`lib/spcNotesPref.js`), not
+  local state. Two mounts of the same thread live on one page; opening it in
+  one and finding it shut in the other would read as two different features,
+  which is the exact confusion the pass exists to undo. Verified surviving a
+  reload.
+- Notes are fetched **on first open, not on mount** — two of these render on a
+  page where the row is normally shut.
+
+**History's note counts are batched, deliberately against the handoff's
+suggestion.** It says one lazy query per expanded run, same as the sessions
+expansion. But the count sits on *every collapsed row's* meta line
+("6 weeks · 2 notes"), so lazy would be one query per row to draw a list
+nobody has opened. New `listCommentsForBlocks({ spcBlockIds })` is one `.in()`
+plus one names query, and it feeds both the counts and the bodies.
+
+**Print is gone from this page entirely, and that is now correct rather than
+a gap.** The handoff drops the Print tab and says "flag if that matters; it
+wants to live somewhere." It looked like it did — that tab was the only route
+to the paper sheet at desktop width, since the desktop SPC roster has none. A
+Print button was built onto the name line for it, and then **Terra said the
+paper workflow is retired: everything moved to the live hub.** So the button
+came out again. Worth knowing before anyone re-adds one: `/spc/print/[blockId]`
+still exists and still works, it is just not linked from here on purpose.
+
+**One deviation from the mock, kept:** notes keep their **edit and delete**.
+The mock draws neither; both have existed since 2026-08-21, and dropping them
+would be a silent loss of function. Moved onto the byline row.
+
+**Two corrections from Terra mid-build**, both applied: **"Enrolment" →
+"Enrollment"** (US spelling; the mock has the British one, and this was the
+last user-facing `Enrolment` in reachable code — the only other is the dead
+legacy `spc/[userId].web.js` — same class as the 2026-08-14 programme/enrol
+sweep), and **History → Programs drops "· built week by week"** from a run's
+meta line. That line is weeks, then notes, and nothing else.
+
+**Also removed, and one of them was a real query.** `ProgramDatesPanel`'s
+`statusLine` went — and it turned out to be the only consumer of `loggedCount`,
+which was fed by a `listSpcCompletionDetailsForWorkouts` call on **every load
+of the Sessions tab**. `supersetFootnote` went too (the 3px olive left border
+on a superset row was always carrying it). Overview lost RECENT PRS, LAST
+SESSION, the quick links, and the banner's title and supporting line — every
+sentence of which was on the two cards directly beneath it. `lastSessionAt`
+and `describeLastSession` are now unreferenced from this page.
+
+**`ClientGoalCard` gained a `wide` + `aside` branch**, not a set of
+conditionals through the existing hero — four other callers render that one
+and none of them should move. Only the goal column is pressable-to-edit in
+wide mode: wrapping the whole band would put the aside's TextInput inside a
+Pressable. A client with **no goal** still gets the band (with "Set a goal +"
+where the goal goes), because the band also carries the aside — the narrow
+card's dashed empty box has nowhere to put it.
+
+**New `formatDateMDShort`** in `lib/formatDate.js` — "9/4", not "09/04", for a
+small annotation hanging off something else. `formatDateMD` keeps its padding
+for the calendar grids, where columns are fixed and dates line up under each
+other. `SpcClientPage`'s `badgeDate`, which was the same function inlined, now
+delegates to it.
+
+**Known and unchanged**: the Settings *tab* is reachable at phone width where
+the rail's card never was — a small gain, since a phone-width coach previously
+had no way to change a client's frequency at all. The phone branch still
+renders no goal card, so KEEP IN MIND is desktop-only; that was already true
+of the field it replaces.
+
+**Verification.** `npm run build` + `check:routes` clean; a Babel parse,
+unresolved-identifier, unused-import **and missing-named-export** pass over
+every touched file; and the whole page driven for real at 1440, 1024 and 390
+through a throwaway `app/zz-spc.js` route. Exercised: the header band, the
+trimmed banner, the Notes row opening and its count appearing, the byline
+reading `9/4`, the Settings tab reading **Enrollment**, History's per-run note
+counts (with a `weekly`-format block deliberately in the fixture, so the
+removed "built week by week" would have shown if it were still there) and the
+PROGRAM NOTES panel inside an expanded run, and the Sessions
+panes — whose recessed ground was **measured**, not eyeballed (`#e7e0d6` /
+`#dad2c6`, radius 14, padding 18, row `align-items: stretch`, panel stretching
+to 522px against the taller column). At 1024 the hero wraps with no page
+overflow; at 390 all four tabs fit with no truncation.
+
+**The harness technique worth reusing**: rather than stubbing modules by
+overwriting them, each was copied to `*.real.js` and replaced with
+`export * from "./x.real"` plus explicit overrides — explicit exports shadow
+star exports, so every pure helper and component stayed real and nothing could
+be lost by a stub forgetting an export. Eleven modules, restored afterwards and
+**md5-verified byte-identical**, then `git status` checked for strays.
+
+**Not verified**: any of it behind a real login, and none of it on native
+(the page is web-only — `[userId].js` renders `CoachSpcOverview` instead).
+Worth Terra's pass: a real note added and edited, a real print, and the
+Sessions tab against a client whose sessions actually load.
+
 ## The refresh pill that never went away, on Chrome (2026-09-07)
 
 Reported from an installed Chrome PWA: tap Refresh, the page reloads, a few
