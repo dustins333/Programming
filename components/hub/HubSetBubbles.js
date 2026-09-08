@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import { fonts, colors } from "../../lib/theme";
-import { deriveSetLabels, isRampUpSet } from "../../lib/programming/setLabels";
+import { deriveSetLabels, isRampUpSet, BODYWEIGHT } from "../../lib/programming/setLabels";
 
 // The one set-bubble primitive on the hub board. Reps large, weight small
 // beside it, each set in its own pill — used identically by a resting lift's
@@ -71,6 +71,9 @@ export function SetBubble({ reps, weight, target, rampUp = false, tracksWeight =
   const s = SIZES[size] ?? SIZES.md;
   const logged = reps != null || weight != null;
   const showWeight = tracksWeight && weight != null;
+  // Bodyweight (a stored 0) reads as "BW", with no "×" in front of it: the
+  // × means "at", and "8 × BW" is a sentence where "8 BW" is a set.
+  const bodyweight = weight != null && Number(weight) === BODYWEIGHT;
   return (
     <View
       style={{
@@ -111,8 +114,7 @@ export function SetBubble({ reps, weight, target, rampUp = false, tracksWeight =
           }}
           numberOfLines={1}
         >
-          ×{weight}
-          {showWeightUnit ? " lb" : ""}
+          {bodyweight ? "BW" : `×${weight}${showWeightUnit ? " lb" : ""}`}
         </Text>
       ) : null}
     </View>

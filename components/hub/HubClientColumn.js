@@ -13,6 +13,7 @@ import { HubHistoryStrip, HubHistoryPanel } from "./HubLiftHistory";
 import { HubFinalizedWash, HubFinalizeConfetti, HubUndoFinalizeModal, CELEBRATION_MS } from "./HubFinalizedOverlay";
 import { schemeLabel } from "../builder/SessionBuilderParts";
 import { supersetLettersFor } from "../../lib/programming/spcBlockDetail";
+import { BODYWEIGHT } from "../../lib/programming/setLabels";
 import { getLiftBlockHistory } from "../../lib/programming/hub";
 import { confirmDropFromBoard } from "../../lib/confirmDialog";
 import { registerHubKeyboard, focusHubKeyboard } from "../../lib/hubKeyboard";
@@ -126,13 +127,22 @@ function summaryText(item, logs) {
     return schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }, item.exercise);
   }
   const sets = real.sort((a, b) => (a.set_number ?? 1) - (b.set_number ?? 1));
-  const anyWeight = tracksWeight && sets.some((r) => r.weight != null);
+  // "lb" is only owed if a real load was actually used. A set at bodyweight
+  // says BW on the set itself, so a lift done entirely unloaded must not
+  // pick up a trailing unit that belongs to nobody's number.
+  const anyLoad = tracksWeight && sets.some((r) => r.weight != null && Number(r.weight) !== BODYWEIGHT);
   return (
-    sets.map((r) => (tracksWeight && r.weight != null ? `${r.reps ?? "–"}×${r.weight}` : `${r.reps ?? "–"}`)).join(" · ") +
+    sets
+      .map((r) => {
+        const reps = r.reps ?? "–";
+        if (!tracksWeight || r.weight == null) return `${reps}`;
+        return Number(r.weight) === BODYWEIGHT ? `${reps}×BW` : `${reps}×${r.weight}`;
+      })
+      .join(" · ") +
     // Said once at the end rather than on every set — this line is already
     // the tightest thing in a resting row, and "8×65 lb · 8×65 lb" reads as
     // a sentence where the point is the shape of three sets.
-    (anyWeight ? " lb" : "")
+    (anyLoad ? " lb" : "")
   );
 }
 
@@ -811,6 +821,21 @@ export function HubClientColumn({
     setDock("keypad");
   };
 
+  // "She did this one with nothing on it." Writes the same 0 the coaches
+  // have been typing by hand — see setLabels.js — so this key and their
+  // habit produce the identical row, and neither has to be unlearned.
+  //
+  // Always the WEIGHT of the current set, whichever field is lit: pressing a
+  // key called Bodyweight while the reps box happens to be active can only
+  // mean one thing, and making it a no-op there would read as broken.
+  // Advances afterwards, because unlike a digit there is nothing more to
+  // type into that box.
+  const handleBodyweight = () => {
+    const cell = ensureCell();
+    setValue(cell.set, "weight", String(BODYWEIGHT));
+    if (cell.set + 1 < rowsRef.current.length) applyActive({ set: cell.set + 1, field: "reps" });
+  };
+
   const handleDrop = async () => {
     if (!onDropClient) return;
     if (!(await confirmDropFromBoard(entry.clientName))) return;
@@ -1148,6 +1173,19 @@ export function HubClientColumn({
             strip={
               dock === "keypad" ? (
                 <View>
+                  {/* Bodyweight sits with Calculator and Next rather than on
+                      the pad: it is an action, not a digit, and the pad's
+                      "." is load-bearing (9.5 lb dumbbells, 2.5 lb plates).
+                      Both are withheld on a reps-only lift, which has no
+                      weight box to write into at all. */}
+                  <View style={{ marginBottom: 8 }}>
+                    <DockPill
+                      label="Bodyweight"
+                      icon="body-outline"
+                      onPress={handleBodyweight}
+                      disabled={!tracksWeight}
+                    />
+                  </View>
                   <View style={{ marginBottom: 8 }}>
                     <DockPill
                       label="Calculator"

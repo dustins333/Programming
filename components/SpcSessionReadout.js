@@ -8,6 +8,7 @@ import { toastError } from "../lib/toast";
 import { formatRest } from "./builder/SessionBuilderParts";
 import { fonts } from "../lib/theme";
 import { MOBILE_BREAKPOINT } from "./CoachShell";
+import { formatWeight } from "../lib/programming/setLabels";
 
 // SPC session read-out (design_handoff_coach_web_v2, screen 16).
 //
@@ -78,7 +79,7 @@ function SetChip({ set }) {
       >
         <Text style={{ fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.6, color: "#a8a29e" }}>RAMP</Text>
         <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#6f6862" }}>
-          {set.weight != null ? `${set.weight} lb × ` : ""}
+          {formatWeight(set.weight) ? `${formatWeight(set.weight)} × ` : ""}
           {set.reps ?? "—"}
         </Text>
       </View>
@@ -95,7 +96,7 @@ function SetChip({ set }) {
       }}
     >
       <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: missed ? "#b23a22" : "#44403c" }}>
-        {set.weight != null ? `${set.weight} lb × ` : ""}
+        {formatWeight(set.weight) ? `${formatWeight(set.weight)} × ` : ""}
         {set.reps ?? "—"}
       </Text>
     </View>

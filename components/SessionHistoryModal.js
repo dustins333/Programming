@@ -3,6 +3,7 @@ import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator } from "rea
 import { listLogsForDate } from "../lib/programming/memberPlan";
 import { formatDateMDY } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
+import { formatWeight } from "../lib/programming/setLabels";
 
 const CARD_BORDER = "#ece7e1";
 const CARD_SHADOW = { shadowColor: "#44403c", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2 };
@@ -105,7 +106,7 @@ export function SessionHistoryModal({ visible, onClose, title, date, userId }) {
                     </Text>
                     {group.sets.map((s) => (
                       <Text key={s.id} style={{ fontFamily: fonts.sans, fontSize: 14, color: "#57534e", marginTop: 2 }}>
-                        Set {s.set_number}: {s.reps ?? "–"} reps{s.weight != null ? ` @ ${s.weight} lb` : ""}
+                        Set {s.set_number}: {s.reps ?? "–"} reps{formatWeight(s.weight) ? ` @ ${formatWeight(s.weight)}` : ""}
                       </Text>
                     ))}
                     {group.notes ? (

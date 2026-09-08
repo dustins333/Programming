@@ -8,7 +8,7 @@ import { PressFade } from "./PressFade";
 import { TrueCoachMatchModal } from "./TrueCoachMatchModal";
 import { listMyTrueCoachImports } from "../lib/programming/truecoachImports";
 import { formatCount } from "../lib/programming/repUnit";
-import { isRampUpSet } from "../lib/programming/setLabels";
+import { isRampUpSet, formatWeight } from "../lib/programming/setLabels";
 import { fonts, colors } from "../lib/theme";
 
 // design_handoff_member_lasttime_v1. This is now the ONLY place a member sees
@@ -122,7 +122,7 @@ function SetPill({ set, tinted, tracksWeight = true, exercise }) {
             marginTop: 2,
           }}
         >
-          {set.weight != null ? `${set.weight} lb` : "–"}
+          {formatWeight(set.weight) ?? "–"}
         </Text>
       ) : null}
     </View>

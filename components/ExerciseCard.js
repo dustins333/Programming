@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Plat
 import { Ionicons } from "@expo/vector-icons";
 import { deleteLoggedSet, getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { repUnit, repUnitHeader } from "../lib/programming/repUnit";
-import { deriveSetLabels, workingSets, RAMP_UP, WORKING } from "../lib/programming/setLabels";
+import { deriveSetLabels, workingSets, formatWeight, RAMP_UP, WORKING } from "../lib/programming/setLabels";
 import { fonts, colors, type } from "../lib/theme";
 import { formatDateMD } from "../lib/formatDate";
 import { dateInBoise } from "../lib/boiseDate";
@@ -99,9 +99,9 @@ export function summarizeSets(entries, exercise) {
   const reps = real.map((s) => val(s.reps));
   const weights = real.map((s) => val(s.weight));
   if (new Set(reps).size <= 1 && new Set(weights).size <= 1) {
-    return `${real.length} × ${unit(reps[0])}${weights[0] != null ? ` @ ${weights[0]} lb` : ""}`;
+    return `${real.length} × ${unit(reps[0])}${formatWeight(weights[0]) ? ` @ ${formatWeight(weights[0])}` : ""}`;
   }
-  return real.map((s, i) => `${unit(reps[i])}${weights[i] != null ? `@${weights[i]} lb` : ""}`).join(", ");
+  return real.map((s, i) => `${unit(reps[i])}${formatWeight(weights[i]) ? `@${formatWeight(weights[i])}` : ""}`).join(", ");
 }
 
 // Only worth showing as a per-set breakdown when the sets actually differ —
@@ -649,6 +649,7 @@ function SetRow({
   // Keyed or not is per BOX, not per row: typing reps without a weight yet
   // should settle the reps box and leave the weight box still asking. The
   // clay border marks whichever box she's on.
+  const isBodyweight = tracksWeight && row.weight !== "" && Number(row.weight) === 0;
   const boxStyle = (hasValue) => ({
     flex: 1,
     minWidth: 0,
@@ -809,9 +810,29 @@ function SetRow({
               placeholder="–"
               placeholderTextColor={TARGET_TEXT}
               maxFontSizeMultiplier={1}
-              accessibilityLabel={`${label.label} weight`}
-              style={{ ...boxStyle(row.weight !== ""), flex: undefined, width: "100%", paddingRight: 30 }}
+              accessibilityLabel={isBodyweight ? `${label.label} weight, bodyweight` : `${label.label} weight`}
+              // A zero means bodyweight (setLabels.js), and the box says so
+              // rather than showing a bare 0 that reads as a mistake. The
+              // input still HOLDS "0" — it is what gets saved, and what
+              // selectTextOnFocus replaces on the next keystroke — so the
+              // digit is hidden rather than the value changed. Nothing real
+              // starts with a leading zero (the smallest plate is 2.5), so
+              // there is no number this can flicker over on the way in.
+              style={{
+                ...boxStyle(row.weight !== ""),
+                flex: undefined,
+                width: "100%",
+                paddingRight: 30,
+                ...(isBodyweight ? { color: "transparent" } : null),
+              }}
             />
+            {isBodyweight ? (
+              <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 30, top: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
+                <Text maxFontSizeMultiplier={1} style={{ fontFamily: fonts.display, fontSize: compact ? 15 : 16, color: rampUp ? MUTED : "#44403c" }}>
+                  BW
+                </Text>
+              </View>
+            ) : null}
             <PressFade
               onPress={() => {
                 Keyboard.dismiss();

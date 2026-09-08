@@ -55,6 +55,11 @@ function prescriptionLine(item, letter) {
 
 function FieldBox({ value, target, isActive, isWeight, onPress, compact }) {
   const filled = value !== "" && value != null;
+  // A zero in the weight box means bodyweight (setLabels.js), so the box says
+  // so. Only once she has moved on — while the box is still lit, the digit
+  // she just pressed has to be the thing on screen, or a 0 typed as the
+  // first character of 0.5 would flicker to a word under her finger.
+  const bodyweight = isWeight && filled && !isActive && Number(value) === 0;
   const height = compact ? 40 : 44;
   return (
     <PressFade
@@ -82,7 +87,7 @@ function FieldBox({ value, target, isActive, isWeight, onPress, compact }) {
               color: isActive ? "#292524" : KEYED_TEXT,
             }}
           >
-            {value === "" ? "" : value}
+            {value === "" ? "" : bodyweight ? "BW" : value}
           </Text>
           {isActive ? (
             <View style={{ width: 2, height: compact ? 20 : 22, backgroundColor: colors.primary, marginLeft: 3, borderRadius: 1 }} />

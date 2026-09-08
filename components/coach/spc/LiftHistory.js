@@ -6,7 +6,7 @@ import { LiftProgressSection } from "../../LiftProgress";
 import { PressFade } from "../../PressFade";
 import { formatDateMDY } from "../../../lib/formatDate";
 import { formatCount } from "../../../lib/programming/repUnit";
-import { isRampUpSet } from "../../../lib/programming/setLabels";
+import { isRampUpSet, formatWeight } from "../../../lib/programming/setLabels";
 import { fonts, colors } from "../../../lib/theme";
 
 // Per-lift history on the SPC client page, reported as the gap it fills:
@@ -79,7 +79,7 @@ function SetPill({ set, exercise, tracksWeight }) {
         {count ?? "–"}
         {tracksWeight ? (
           <Text style={{ fontFamily: fonts.sans, color: rampUp ? colors.muted : set.weight != null ? "#78716c" : colors.hint }}>
-            {set.weight != null ? ` @ ${set.weight} lb` : " @ –"}
+            {formatWeight(set.weight) ? ` @ ${formatWeight(set.weight)}` : " @ –"}
           </Text>
         ) : null}
       </Text>
@@ -306,7 +306,7 @@ export function LiftHistory({ userId, stats, statsError, onRetry, isDesktop }) {
                         {tracksWeight ? (row.lastWeight != null ? ` @ ${row.lastWeight}` : " @ –") : ""}
                       </Text>
                       <Text style={{ width: NUM_COL, textAlign: "right", fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#2a211c" }}>
-                        {row.best != null ? `${row.best} lb` : "–"}
+                        {formatWeight(row.best) ?? "–"}
                       </Text>
                       <Text style={{ width: NUM_COL, textAlign: "right", fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
                         {row.sessionCount}

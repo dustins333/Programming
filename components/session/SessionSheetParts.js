@@ -1,6 +1,7 @@
 import { View, Text } from "react-native";
 import { formatCount } from "../../lib/programming/repUnit";
 import { fonts, colors, type } from "../../lib/theme";
+import { formatWeight } from "../../lib/programming/setLabels";
 
 // Shared anatomy for the session sheet (design_handoff_member_block_v1,
 // screens 13b-13e and 14a-14d). Kept in one file so the sheet and the
@@ -183,7 +184,7 @@ export function LoggedExerciseRow({ position, name, detail, sets, last, exercise
                   {missed || set.reps == null ? "–" : formatCount(set.reps, exercise)}
                 </Text>
                 <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: missed ? type.caption : 12.5, color: missed ? "#b9705c" : INK_DEEP }}>
-                  {missed ? "missed" : set.weight != null ? `${set.weight} lb` : "–"}
+                  {missed ? "missed" : formatWeight(set.weight) ?? "–"}
                 </Text>
               </View>
             );

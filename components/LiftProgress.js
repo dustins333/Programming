@@ -1,6 +1,7 @@
 import { View, Text, useWindowDimensions } from "react-native";
 import { TrendChart } from "./TrendChart";
 import { formatDateMDY } from "../lib/formatDate";
+import { externalLoad, formatWeight } from "../lib/programming/setLabels";
 import { fonts } from "../lib/theme";
 
 // Turns a lift's raw per-set log rows (listLogsForExercise's shape:
@@ -11,15 +12,18 @@ export function computeLiftProgress(logs) {
   const topByDate = new Map();
   let best = null;
   for (const row of logs ?? []) {
-    if (row.weight == null) continue;
+    // Bodyweight is not a point on a weight-progress line — a stored 0 would
+    // spike the chart to the floor on any lift she sometimes loads and
+    // sometimes doesn't (Split Squat, across 23 clients as of 2026-09-08),
+    // and would report a "best" of 0 lb on one she never loads at all. A
+    // lift done only at bodyweight therefore draws no chart, exactly like a
+    // reps-only lift; her progress on it is in the reps.
+    const load = externalLoad(row);
+    if (load == null) continue;
     const current = topByDate.get(row.date_performed);
-    if (current == null || row.weight > current) topByDate.set(row.date_performed, row.weight);
-    if (
-      !best ||
-      row.weight > best.weight ||
-      (row.weight === best.weight && (row.reps ?? 0) > (best.reps ?? 0))
-    ) {
-      best = { weight: row.weight, reps: row.reps, date: row.date_performed };
+    if (current == null || load > current) topByDate.set(row.date_performed, load);
+    if (!best || load > best.weight || (load === best.weight && (row.reps ?? 0) > (best.reps ?? 0))) {
+      best = { weight: load, reps: row.reps, date: row.date_performed };
     }
   }
   const points = [...topByDate.entries()]
@@ -46,7 +50,7 @@ export function LiftProgressSection({ logs, width }) {
     <View className="mb-3">
       {best ? (
         <Text className="mb-1" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#4d6142" }}>
-          Best: {best.reps ?? "–"} reps @ {best.weight} lb ({formatDateMDY(best.date)})
+          Best: {best.reps ?? "–"} reps @ {formatWeight(best.weight)} ({formatDateMDY(best.date)})
         </Text>
       ) : null}
       {points.length >= 2 ? <TrendChart points={points} width={chartWidth} unit="lb" /> : null}
