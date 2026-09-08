@@ -386,6 +386,13 @@ export function HubClientColumn({
   const saveTimer = useRef(null);
   const seededFor = useRef(null);
   const noteSeed = useRef("");
+  // Auto-tick bookkeeping — see the effect below. `was` is what the last
+  // render saw, so the tick fires on the transition and not on every
+  // keystroke after it; `skip` swallows the very first pass after a lift is
+  // seeded, so opening one that is already fully logged records the state
+  // without issuing a write.
+  const wasFullyFilledRef = useRef(false);
+  const skipAutoTickRef = useRef(false);
   const rowsRef = useRef([]);
   rowsRef.current = rows;
   // The active cell needs the same hand-advanced ref as the rows, and for the
@@ -498,6 +505,15 @@ export function HubClientColumn({
       if (i === seeded.length - 1) focus = { set: i, field: wantsWeight ? "weight" : "reps" };
     }
     suggestedCell.current = focus;
+    // What a freshly opened lift already looks like, so the auto-tick below
+    // treats it as the starting point rather than as a transition. Recorded
+    // HERE, off `seeded`, because setRows is asynchronous: this effect and
+    // the auto-tick effect both run in the commit that changed expandedId,
+    // and on that pass `rows` is still the PREVIOUS lift's. skipAutoTickRef
+    // swallows exactly that one stale pass without disturbing this value.
+    wasFullyFilledRef.current =
+      seeded.length > 0 && seeded.every((r) => r.reps !== "" && (!wantsWeight || r.weight !== ""));
+    skipAutoTickRef.current = true;
     applyActive(null);
     editSeq.current = 0;
     savedSeq.current = 0;
@@ -556,6 +572,47 @@ export function HubClientColumn({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry.logsByExerciseId, entry.noteForWeekByExerciseId, expandedItem?.id, note]);
+
+  // Fills the lift's green tick the moment every set holds both numbers, so
+  // the board confirms the work the same way the client's own phone does.
+  // Until this, the tick was manual-only here while ExerciseCard auto-filled
+  // it — a coach typing a whole session in and watching nothing go green
+  // reasonably reads the board as not saving anything (reported 2026-09-08;
+  // the sets and the finalize had in fact landed every time).
+  //
+  // Mirrors ExerciseCard's rule exactly, including the two things it is
+  // careful NOT to do: it fires only on a genuine false->true transition, and
+  // it never auto-*un*ticks when a box is later cleared. Clearing a number is
+  // a correction, not a statement that the lift was never done, and a tick
+  // vanishing under the coach mid-fix is worse than a stale one she can tap.
+  //
+  // No auto-collapse either, for the reason that file gives: "fully filled"
+  // becomes true after the FIRST digit of a three-digit weight, so anything
+  // that moved the view here would yank the card away mid-number. Filling the
+  // tick a beat early is harmless; closing the card is not.
+  //
+  // Only the open lift has rows, so only the open lift can auto-tick. That is
+  // the same scope the member app has — a card you have not opened has
+  // nothing typed into it either.
+  useEffect(() => {
+    if (!expandedItem || !onToggleComplete) return;
+    const wantsWeight = expandedItem.exercise?.tracks_weight !== false;
+    const fullyFilled = rows.length > 0 && rows.every((r) => r.reps !== "" && (!wantsWeight || r.weight !== ""));
+    if (skipAutoTickRef.current) {
+      // The stale pass. `wasFullyFilledRef` already holds the seeded lift's
+      // own state; overwriting it from the previous lift's rows is what
+      // would make merely OPENING a fully logged lift look like a
+      // transition and tick it.
+      skipAutoTickRef.current = false;
+      return;
+    }
+    // Already ticked (by hand, on her phone, or a moment ago) — marking is
+    // idempotent, but there is no reason to spend a round trip saying so.
+    const alreadyDone = entry.completedItemIds.has(expandedItem.id);
+    if (fullyFilled && !wasFullyFilledRef.current && !alreadyDone) onToggleComplete(expandedItem, true);
+    wasFullyFilledRef.current = fullyFilled;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, expandedItem?.id]);
 
   // The one place a write is issued. Marks the draft saved only once the
   // write resolves, and only if nothing was typed in the meantime — so the

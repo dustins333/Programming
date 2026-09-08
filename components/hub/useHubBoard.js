@@ -362,10 +362,33 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
     []
   );
 
+  // Tick every lift a finalize implies. Finalizing IS the statement that the
+  // session is done, so leaving half its lifts hollow makes the column
+  // disagree with itself — and with her own phone, which already checks off
+  // the card it was finalized from. Only ever on the way IN: un-finalizing
+  // must not wipe ticks, since which lifts she actually did is real state and
+  // a mistap on Finalize would take the lot.
+  //
+  // Best effort, and deliberately not awaited by the caller's error handler:
+  // the session completion is the thing that matters, and a failed tick must
+  // never make a finalize that landed report as failed.
+  const tickOutstanding = useCallback(async (userId, entry) => {
+    const outstanding = entry.items.filter((item) => !entry.completedItemIds.has(item.id));
+    if (outstanding.length === 0) return;
+    await Promise.all(
+      outstanding.map((item) =>
+        entry.kind === "group"
+          ? markGroupExerciseComplete(userId, item.id)
+          : markSpcExerciseComplete(userId, item.id, entry.completionWeek ?? entry.weekNumber, entry.instance ?? 1)
+      )
+    ).catch(() => {});
+  }, []);
+
   const toggleFinalize = useCallback(
     async (userId) => {
       const entry = boardRef.current?.get(userId);
       if (!entry) return;
+      const finalizing = !entry.finalized;
       if (entry.kind === "group") {
         if (entry.finalized) await unfinalizeGroupSession(userId, entry.groupWorkoutId);
         else await finalizeGroupSession(userId, entry.groupWorkoutId);
@@ -382,9 +405,10 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
         // forward to today. See finalizeGroupSession's completed-at rule.
         await finalizeSpcSession(userId, entry.spcWorkoutId, null, { instance: entry.instance ?? 1 });
       }
+      if (finalizing) await tickOutstanding(userId, entry);
       await refreshBoard();
     },
-    [refreshBoard]
+    [refreshBoard, tickOutstanding]
   );
 
   // Swap a lift with its neighbor (equipment conflicts). Sends the FULL
