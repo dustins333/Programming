@@ -45,8 +45,8 @@ import { confirmTurnSpcOff } from "../../../lib/confirmDialog";
 // (the native page deliberately dropped settings; web at phone width never
 // had them).
 
-const CANVAS = "#faf8f6";
-const CARD_BORDER = "#ece7e1";
+const CANVAS = colors.coachCanvas;
+const CARD_BORDER = colors.coachCardBorder;
 
 function Eyebrow({ children, style }) {
   return (

@@ -15,16 +15,15 @@ import { fonts, colors } from "../../../lib/theme";
 // with five of them nothing was findable. One header treatment now: icon
 // chip, title, subline, right link.
 
-export const CARD_BORDER = "#e1dad1";
+// Lives in the theme now — the SPC screens sit on the same ground and need
+// the same edge. Kept exported here for this file's existing importers.
+export const CARD_BORDER = colors.coachCardBorder;
 
-// The ground both dashboards sit on. Deliberately NOT colors.canvas
-// (#faf8f6): white cards on that are a 1.06:1 step, so the 11px gutter
-// between two sections reads as the same colour as the sections and they run
-// together. #f1ece6 is ~3x that separation and is what makes a card look
-// like a card. The desktop shipped with it from the start and the phone did
-// not — one constant now, because that is the exact drift this pass exists
-// to stop.
-export const DASHBOARD_CANVAS = "#f1ece6";
+// The ground both dashboards sit on. Deliberately NOT colors.canvas — see
+// colors.coachCanvas for the why. Kept as a named export here because both
+// dashboards already import it from this file; the value itself moved to the
+// theme once the SPC screens started sitting on it too.
+export const DASHBOARD_CANVAS = colors.coachCanvas;
 export const DIVIDER = "#ece7e1";
 export const ROW_DIVIDER = "#f4f1ec";
 export const NEUTRAL_TILE = { bg: colors.canvas, border: "#ebe5de" };

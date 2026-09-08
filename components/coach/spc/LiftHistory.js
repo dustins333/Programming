@@ -22,7 +22,7 @@ import { fonts, colors } from "../../../lib/theme";
 // programming.logs carries no program reference, and a coach asking how a
 // lift has moved wants every rep of it, not the slice that happened to fall
 // inside one program.
-const CARD_BORDER = "#ece7e1";
+const CARD_BORDER = colors.coachCardBorder;
 const ROW_BORDER = "#f5f2ee";
 const PEACH_BG = "#fdf6f2";
 const PEACH_BORDER = "#f0ddd2";

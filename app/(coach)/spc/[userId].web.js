@@ -55,10 +55,10 @@ import { fonts, colors } from "../../../lib/theme";
 // Native (app/(coach)/spc/[userId].js) keeps the calendar-grid version —
 // same web/native split precedent as the roster and the clients list.
 
-const CANVAS = "#faf8f6";
+const CANVAS = colors.coachCanvas;
 // Trailing column for "End here", reserved on every row so the grid ends flush.
 const END_HERE_WIDTH = 58;
-const CARD_BORDER = "#ece7e1";
+const CARD_BORDER = colors.coachCardBorder;
 
 const CELL_STATES = {
   logged: { border: "#4d6142", bg: "#fff", dot: "#4d6142", label: "logged" },

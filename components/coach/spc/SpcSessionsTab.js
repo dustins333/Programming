@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Modal, ActivityIndicator, Switch, Platform, ScrollView } from "react-native";
+import { View, Text, TextInput, Modal, ActivityIndicator, Switch, Platform, ScrollView, useWindowDimensions } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../../PressFade";
@@ -54,9 +54,30 @@ import { toastError, toastSuccess } from "../../../lib/toast";
 // On a phone the two panes become two sub-tabs, Current / Upcoming, with a
 // dot per tab (olive = live, grey = invisible).
 
-const CARD_BORDER = "#ece7e1";
+const CARD_BORDER = colors.coachCardBorder;
 const OLIVE = "#4d6142";
 const OLIVE_BG = "#eef1e7";
+
+// The floor a name keeps in a wrapping row: whatever sits beside it drops to
+// the next line rather than eating into this. A name truncated to "Tricep
+// Pushdown w/ro…" is fine, a name squeezed to nothing looks broken. 96 is
+// deliberately tight — it is the point the row wraps at, not the width the
+// name normally gets (it grows to fill whatever is spare), so a lower floor
+// means a common 1400-1500px window keeps its rows on one line instead of
+// doubling every card's height for names that were readable anyway.
+const NAME_MIN = 96;
+
+// The session header's floor is larger because "Session 2" already takes ~72
+// of it before the coach's own title gets a pixel.
+const TITLE_MIN = 170;
+
+// Below this the two panes stop sitting side by side and become the
+// Current / Upcoming sub-tabs the phone layout already uses. Measured from
+// the page's own fixed chrome: sidebar 232 + page padding 52 + notes rail
+// 280 + its 26 gap = 590, so a pane is (width - 616) / 2. At 1100 that is a
+// ~242px pane, which is the point where even a wrapped row's controls start
+// getting clipped; one full-width pane reads far better than two of those.
+const SIDE_BY_SIDE_MIN = 1100;
 
 function Eyebrow({ children, style }) {
   return (
@@ -130,10 +151,17 @@ function LiftRow({ label, row, draft, onDraft, onRemove, editable }) {
   };
   const inSuperset = Boolean(row.superset_group_id);
   return (
+    // Two groups, and the row WRAPS between them. The lift's name used to be
+    // the only shrinkable thing in a row of fixed-width inputs, so a narrow
+    // pane fed it whatever was left over — which at a ~1200px window is
+    // nothing at all, and every name vanished while the boxes stayed put.
+    // Now the name group holds a floor and the controls drop to a second
+    // line instead, so the name is always readable and nothing is lost.
     <View
       style={{
         flexDirection: "row",
         alignItems: "center",
+        flexWrap: "wrap",
         gap: 10,
         paddingVertical: 10,
         paddingHorizontal: 14,
@@ -143,53 +171,59 @@ function LiftRow({ label, row, draft, onDraft, onRemove, editable }) {
         borderLeftColor: "#dbe8cf",
       }}
     >
-      <View
-        style={{
-          width: 26,
-          height: 26,
-          borderRadius: 99,
-          borderWidth: 1.5,
-          borderColor: "#dcc9bf",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: colors.primaryOnWhite }}>{label}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: NAME_MIN }}>
+        <View
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 99,
+            borderWidth: 1.5,
+            borderColor: "#dcc9bf",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: colors.primaryOnWhite }}>{label}</Text>
+        </View>
+        <Text style={{ flex: 1, minWidth: 0, fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }} numberOfLines={1}>
+          {row.exercises?.name ?? "Unknown lift"}
+        </Text>
       </View>
-      <Text style={{ flex: 1, minWidth: 0, fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }} numberOfLines={1}>
-        {row.exercises?.name ?? "Unknown lift"}
-      </Text>
 
+      {/* marginLeft:auto keeps the numbers in the same right-hand column
+          whether the controls sit beside the name or under it, so scanning a
+          card's sets and reps still works straight down. */}
       {editable ? (
-        <>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginLeft: "auto", flexShrink: 1, minWidth: 0 }}>
           <TextInput
             value={String(value("sets", row.sets))}
             onChangeText={(t) => onDraft(row.id, "sets", t)}
             keyboardType="number-pad"
-            style={[inputStyle, { width: 44 }]}
+            style={[inputStyle, { width: 44, minWidth: 34, flexShrink: 1 }]}
           />
-          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>×</Text>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", flexShrink: 0 }}>×</Text>
           <TextInput
             value={String(value("reps", row.reps))}
             onChangeText={(t) => onDraft(row.id, "reps", t)}
-            style={[inputStyle, { width: 72 }]}
+            style={[inputStyle, { width: 72, minWidth: 48, flexShrink: 1 }]}
           />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>rest</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", flexShrink: 0 }}>rest</Text>
             <TextInput
               value={String(value("rest", row.rest ?? ""))}
               onChangeText={(t) => onDraft(row.id, "rest", t)}
               placeholder="—"
               placeholderTextColor="#c9c4bd"
-              style={[inputStyle, { width: 58 }]}
+              style={[inputStyle, { width: 58, minWidth: 40, flexShrink: 1 }]}
             />
           </View>
           <PressFade onPress={() => onRemove(row)} hitSlop={8} accessibilityLabel={`Remove ${row.exercises?.name}`}>
             <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: "#c9c4bd" }}>×</Text>
           </PressFade>
-        </>
+        </View>
       ) : (
-        <>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginLeft: "auto", flexShrink: 1, minWidth: 0 }}>
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e" }}>
             {row.sets} × {row.reps}
           </Text>
@@ -197,7 +231,7 @@ function LiftRow({ label, row, draft, onDraft, onRemove, editable }) {
           <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", width: 44, textAlign: "right" }}>
             {row.rest ?? ""}
           </Text>
-        </>
+        </View>
       )}
     </View>
   );
@@ -290,29 +324,42 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
   const note = supersetFootnote(exercises, labels);
   return (
     <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, marginTop: 14, overflow: "hidden" }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 14 }}>
-        <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#2a211c" }}>Session {workout.session_number}</Text>
-        {workout.title ? (
-          <Text style={{ flex: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }} numberOfLines={1}>
-            {workout.title}
+      {/* Same wrap as a lift row: "Session 2 · Upper" keeps its floor and the
+          actions drop underneath rather than squeezing the title away. */}
+      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10, paddingVertical: 12, paddingHorizontal: 14 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: TITLE_MIN }}>
+          <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#2a211c", flexShrink: 0 }}>
+            Session {workout.session_number}
           </Text>
-        ) : (
-          <View style={{ flex: 1 }} />
-        )}
-        {editable ? (
-          <>
-            <PressFade onPress={() => onOpenEditor(session)} hitSlop={6}>
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#a8a29e" }}>Full editor ›</Text>
-            </PressFade>
-            <PressFade onPress={() => onAddLift(session)} hitSlop={6}>
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>+ Add lift</Text>
-            </PressFade>
-          </>
-        ) : (
-          <PressFade onPress={() => onOpenEditor(session)} hitSlop={6}>
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>Edit</Text>
-          </PressFade>
-        )}
+          {workout.title ? (
+            <Text style={{ flex: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }} numberOfLines={1}>
+              {workout.title}
+            </Text>
+          ) : null}
+        </View>
+        {/* One button, top right: the way into the full editor. Adding an
+            exercise moved to the foot of the card, where the list it appends
+            to actually ends. */}
+        <PressFade onPress={() => onOpenEditor(session)} hitSlop={8} style={{ marginLeft: "auto" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              paddingVertical: 7,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "#dcc9bf",
+              backgroundColor: "#fdf6f2",
+            }}
+          >
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>
+              {editable ? "Full editor" : "Edit"}
+            </Text>
+            <Ionicons name="chevron-forward" size={12} color={colors.primaryOnWhite} />
+          </View>
+        </PressFade>
       </View>
 
       <WarmupStrip warmups={session.warmups} />
@@ -320,7 +367,7 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
       {empty ? (
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
           <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
-            Nothing in it yet. Hidden from {clientFirst} until it has lifts.
+            Nothing in it yet. Hidden from {clientFirst} until it has exercises.
           </Text>
         </View>
       ) : (
@@ -340,6 +387,17 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
       {note ? (
         <View style={{ paddingVertical: 9, paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: "#f4f1ec" }}>
           <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>{note}</Text>
+        </View>
+      ) : null}
+
+      {editable ? (
+        // The row's padding belongs to the pressable, not the strip around it,
+        // so the whole right-hand corner is tappable rather than just the
+        // 15px of text.
+        <View style={{ alignItems: "flex-end", borderTopWidth: 1, borderTopColor: "#f4f1ec" }}>
+          <PressFade onPress={() => onAddLift(session)} hitSlop={8} style={{ paddingVertical: 10, paddingHorizontal: 14 }}>
+            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>+ Add exercise</Text>
+          </PressFade>
         </View>
       ) : null}
     </View>
@@ -798,6 +856,12 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
   const router = useRouter();
   const today = todayInBoise();
   const clientFirst = firstNameOf(member?.name);
+  // The page is desktop from 768 up, but two programming panes need far more
+  // room than that. Below SIDE_BY_SIDE_MIN this tab falls back to the same
+  // Current / Upcoming sub-tabs the phone uses, so the pane you are actually
+  // working in gets the whole column.
+  const { width } = useWindowDimensions();
+  const sideBySide = isDesktop && width >= SIDE_BY_SIDE_MIN;
 
   const [currentSessions, setCurrentSessions] = useState(null);
   const [upcomingSessions, setUpcomingSessions] = useState(null);
@@ -1172,7 +1236,7 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
         <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, padding: 24, marginTop: 14 }}>
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#2a211c" }}>No current program</Text>
           <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", marginTop: 4 }}>
-            Build her first one on the {isDesktop ? "right" : "Upcoming tab"} and publish it with a start Monday.
+            Build her first one on the {sideBySide ? "right" : "Upcoming tab"} and publish it with a start Monday.
           </Text>
         </View>
       ) : currentSessions == null ? (
@@ -1479,7 +1543,7 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
 
   return (
     <View>
-      {isDesktop ? (
+      {sideBySide ? (
         <View style={{ flexDirection: "row", gap: 26, alignItems: "flex-start" }}>
           {currentPane}
           {upcomingPane}

@@ -40,8 +40,8 @@ import { useAuth } from "../../lib/auth/AuthProvider";
 // keeps the desktop table on a phone. A component with no .web.js sibling
 // has no such ambiguity.
 
-const CANVAS = colors.canvas;
-const CARD_BORDER = "#ece7e1";
+const CANVAS = colors.coachCanvas;
+const CARD_BORDER = colors.coachCardBorder;
 const ROW_DIVIDER = "#f4f1ec";
 const INPUT_BORDER = "#e2ddd6";
 const ESPRESSO = "#33251f";

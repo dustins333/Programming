@@ -46,8 +46,8 @@ import {
 // matches on name only, and search + chips + coach compose (search first,
 // then filter).
 
-const CARD_BORDER = "#ece7e1";
-const CANVAS = "#faf8f6";
+const CARD_BORDER = colors.coachCardBorder;
+const CANVAS = colors.coachCanvas;
 
 const NEXT_STEP_STYLES = {
   urgent: { bg: colors.primary, border: colors.primary, text: "#fff" },
