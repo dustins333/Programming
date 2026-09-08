@@ -110,77 +110,6 @@ function sessionTitleFor(workout) {
   return t;
 }
 
-// One session in a week row: a real tile carrying its own name and state, and
-// pressable straight through to the session. It used to be a 34x13 marker and
-// the WEEK was what you pressed, which meant two taps to reach a session and
-// a row of anonymous dashes that told you nothing about which session was
-// which. Nobody runs more than about three SPC sessions in a week, so the
-// tiles can take the width the row was wasting.
-function SessionTile({ entry, future, notStarted, startDate, onPress }) {
-  const { state, workout } = entry;
-  const finalized = state === "finalized";
-  const started = state === "started";
-  const title = sessionTitleFor(workout);
-  // A status line only where there is something to say. "Nothing logged"
-  // repeated down eight future weeks is noise, and the dashed edge already
-  // says the week has not come round yet.
-  const line = finalized || started || entry.loggedSets > 0 ? sessionLine(entry, notStarted, startDate) : null;
-  return (
-    <PressFade
-      onPress={onPress}
-      hitSlop={4}
-      style={{
-        flex: 1,
-        minWidth: 0,
-        paddingVertical: 7,
-        paddingHorizontal: 10,
-        borderRadius: 9,
-        backgroundColor: finalized ? "#f3f6ef" : "#fff",
-        borderWidth: started ? 2 : 1,
-        borderStyle: future && !finalized && !started ? "dashed" : "solid",
-        borderColor: finalized || started ? "#8fb473" : future ? "#ded8d0" : "#e4ded6",
-      }}
-    >
-      {/* Two Texts, not one: in a single Text the whole label truncates
-          together and a narrow tile ends up reading "Session…", which loses
-          the only part that has to survive. The number never shrinks; the
-          title gives way. */}
-      <View style={{ flexDirection: "row", alignItems: "center", minWidth: 0, gap: 5 }}>
-        <Text
-          numberOfLines={1}
-          style={{
-            flexShrink: 0,
-            fontFamily: fonts.sansSemiBold,
-            fontSize: 12.5,
-            color: future && !finalized && !started ? "#8b837a" : "#2a211c",
-          }}
-        >
-          Session {workout.session_number}
-        </Text>
-        {/* A gap, not a "·": a separator character survives the truncation
-            that eats the title and leaves a stray dot hanging off the number.
-            Same shape the session card header uses. */}
-        {title ? (
-          <Text
-            numberOfLines={1}
-            style={{ flexShrink: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}
-          >
-            {title}
-          </Text>
-        ) : null}
-      </View>
-      {line ? (
-        <Text
-          numberOfLines={1}
-          style={{ fontFamily: fonts.sans, fontSize: 11, marginTop: 1, color: finalized ? "#4d6142" : "#5c7a4a" }}
-        >
-          {line}
-        </Text>
-      ) : null}
-    </PressFade>
-  );
-}
-
 // One entry per real session in a given week, in programmed order. A
 // sessions-format run has one workout row spanning every week (0105), so all
 // of them apply; a legacy weekly block already has a row per week, so only
@@ -204,67 +133,193 @@ function buildWeekEntries({ block, workouts, completionKeys, activity, week }) {
   });
 }
 
-function sessionLine(entry, notStarted, startDate) {
-  if (entry.state === "finalized" && entry.completedAt) {
-    const d = dateInBoise(new Date(entry.completedAt));
-    return `Finalized ${weekdayOf(d)} ${monthDay(d)}`;
-  }
-  if (entry.state === "started") {
-    return `${entry.loggedSets} sets logged${entry.lastLoggedDate ? ` ${weekdayOf(entry.lastLoggedDate)}` : ""} · not finalized`;
-  }
-  if (entry.loggedSets > 0) return `${entry.loggedSets} set${entry.loggedSets === 1 ? "" : "s"} logged`;
-  if (notStarted) return `Starts Mon ${monthDay(startDate)}`;
-  return "Nothing logged";
+// "9/5" — the badge form, no leading zeros. formatDateMD gives "09/05",
+// which is right in a calendar grid's fixed column and too heavy in a corner.
+function badgeDate(iso) {
+  if (!iso) return "";
+  const [, m, d] = iso.split("-");
+  if (!m || !d) return "";
+  return `${Number(m)}/${Number(d)}`;
+}
+
+// The day something last happened on this session: when she finished it, or
+// when she last logged into it without finishing.
+function tileDate(entry) {
+  if (entry.state === "finalized" && entry.completedAt) return dateInBoise(new Date(entry.completedAt));
+  if (entry.lastLoggedDate) return entry.lastLoggedDate;
+  return null;
+}
+
+// One session in a week row: a real tile carrying its own name and state, and
+// pressable straight through to the session. It used to be a 34x13 marker and
+// the WEEK was what you pressed, which meant two taps to reach a session and
+// a row of anonymous dashes that told you nothing about which session was
+// which. Nobody runs more than about three SPC sessions in a week, so the
+// tiles can take the width the row was wasting.
+//
+// Name on line one with the date as a corner badge, title on line two. A
+// sentence ("Finalized Tue Sep 8") needed width the phone does not have, and
+// stacking it under a title made every tile three lines deep.
+function SessionTile({ entry, future, onPress }) {
+  const { state, workout } = entry;
+  const finalized = state === "finalized";
+  const started = state === "started";
+  const title = sessionTitleFor(workout);
+  const date = finalized || started ? badgeDate(tileDate(entry)) : "";
+  const dim = future && !finalized && !started;
+  return (
+    <PressFade
+      onPress={onPress}
+      hitSlop={4}
+      style={{
+        flex: 1,
+        minWidth: 0,
+        paddingVertical: 7,
+        paddingHorizontal: 9,
+        borderRadius: 9,
+        backgroundColor: finalized ? "#f3f6ef" : "#fff",
+        borderWidth: started ? 2 : 1,
+        borderStyle: dim ? "dashed" : "solid",
+        borderColor: finalized || started ? "#8fb473" : future ? "#ded8d0" : "#e4ded6",
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Text
+          numberOfLines={1}
+          style={{ flex: 1, minWidth: 0, fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: dim ? "#8b837a" : "#2a211c" }}
+        >
+          Session {workout.session_number}
+        </Text>
+        {date ? (
+          // Filled once it is finished, outlined while it is only started, so
+          // the two never read as the same thing at a glance.
+          <View
+            style={{
+              paddingHorizontal: 5,
+              paddingVertical: 1,
+              borderRadius: 5,
+              backgroundColor: finalized ? "#dbe8cf" : "transparent",
+              borderWidth: finalized ? 0 : 1,
+              borderColor: "#a9c48e",
+            }}
+          >
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, color: "#3d5036" }}>{date}</Text>
+          </View>
+        ) : null}
+      </View>
+      {title ? (
+        <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 11.5, marginTop: 1, color: dim ? "#a8a29e" : "#78716c" }}>
+          {title}
+        </Text>
+      ) : null}
+    </PressFade>
+  );
+}
+
+// A tile needs about this much before "Session 1" and its date badge start
+// truncating, and the number is the part that has to survive.
+const TILE_MIN = 118;
+
+// Everything a week row spends before the tiles get a pixel: the page's fixed
+// chrome (sidebar 232, page padding 52, notes rail 280 + its 26 gap), the
+// card's padding and the row's own W / date / count columns and gaps.
+const ROW_CHROME = 590 + 32 + 16 + 142;
+
+// Window arithmetic rather than onLayout, because the chrome around this
+// column does not move and ResizeObserver does not fire where this gets
+// verified. A phone is comfortably below it whatever the sums say.
+function weekRowStacks(width, tiles) {
+  return width - ROW_CHROME < tiles * TILE_MIN + Math.max(0, tiles - 1) * 8;
 }
 
 // A week is a row of its sessions, each one pressable straight through. No
-// expand step: the tiles carry the title and the state the expanded panel
-// used to, so there is nothing left behind a chevron.
-function WeekRow({ week, weekStart, future, current, entries, onOpenSession, notStarted, startDate }) {
+// expand step: the tiles carry the name, the title and the state that the
+// expanded panel used to, so there is nothing left behind a chevron.
+//
+// A week she finished turns the whole row green. The tiles keep their own
+// lighter tint on top of it, so a finished session still reads as a card
+// rather than dissolving into the band.
+//
+// Narrow, the four columns stop fitting and the row stacks: the label and the
+// count on their own line, the tiles across the full width beneath. Shaving
+// the tiles instead just puts the session number back under the truncation
+// this layout exists to keep it out of.
+function WeekRow({ week, weekStart, future, current, entries, onOpenSession }) {
+  const { width } = useWindowDimensions();
   const target = entries.length;
   const done = entries.filter((e) => e.state !== "untouched").length;
-  return (
-    <View
+  const complete = target > 0 && done >= target && !future;
+  const stacked = weekRowStacks(width, target);
+
+  const label = (
+    <Text style={{ width: 30, fontFamily: fonts.sansBold, fontSize: 12.5, color: current ? colors.primaryOnWhite : "#78716c" }}>
+      W{week}
+    </Text>
+  );
+  const date = (
+    <Text
       style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        paddingVertical: 7,
-        borderTopWidth: week === 1 ? 0 : 1,
-        borderTopColor: "#f4f1ec",
+        width: stacked ? undefined : 52,
+        flex: stacked ? 1 : undefined,
+        fontFamily: fonts.sans,
+        fontSize: 12,
+        color: complete ? "#6d7d61" : "#a8a29e",
       }}
     >
-      <Text style={{ width: 30, fontFamily: fonts.sansBold, fontSize: 12.5, color: current ? colors.primaryOnWhite : "#78716c" }}>
-        W{week}
-      </Text>
-      <Text style={{ width: 52, fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>{monthDay(weekStart)}</Text>
-      <View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 8 }}>
-        {entries.length ? (
-          entries.map((e) => (
-            <SessionTile
-              key={e.key}
-              entry={e}
-              future={future}
-              notStarted={notStarted}
-              startDate={startDate}
-              onPress={() => onOpenSession(e)}
-            />
-          ))
-        ) : (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#c9c4bd" }}>Nothing written for this week</Text>
-        )}
+      {monthDay(weekStart)}
+    </Text>
+  );
+  const count = (
+    <Text
+      style={{
+        width: 30,
+        textAlign: "right",
+        fontFamily: fonts.sansSemiBold,
+        fontSize: 12,
+        color: future ? "#c9c4bd" : complete ? "#4d6142" : "#c58a3a",
+      }}
+    >
+      {future || !target ? "\u2013" : `${done}/${target}`}
+    </Text>
+  );
+  const tiles = target ? (
+    entries.map((e) => <SessionTile key={e.key} entry={e} future={future} onPress={() => onOpenSession(e)} />)
+  ) : (
+    <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#c9c4bd" }}>Nothing written for this week</Text>
+  );
+
+  const shell = {
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: complete ? 9 : 0,
+    backgroundColor: complete ? "#e3ead9" : "transparent",
+    // Two finished weeks in a row would otherwise butt together into one long
+    // green block with a notch where the corners meet.
+    marginVertical: complete ? 1 : 0,
+    // A rounded green band does not want a rule cutting across its top.
+    borderTopWidth: week === 1 || complete ? 0 : 1,
+    borderTopColor: "#f4f1ec",
+  };
+
+  if (stacked) {
+    return (
+      <View style={shell}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          {label}
+          {date}
+          {count}
+        </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>{tiles}</View>
       </View>
-      <Text
-        style={{
-          width: 30,
-          textAlign: "right",
-          fontFamily: fonts.sansSemiBold,
-          fontSize: 12,
-          color: future ? "#c9c4bd" : done >= target ? "#4d6142" : "#c58a3a",
-        }}
-      >
-        {future || !target ? "–" : `${done}/${target}`}
-      </Text>
+    );
+  }
+
+  return (
+    <View style={{ ...shell, flexDirection: "row", alignItems: "center", gap: 10 }}>
+      {label}
+      {date}
+      <View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 8 }}>{tiles}</View>
+      {count}
     </View>
   );
 }
@@ -468,8 +523,6 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
                 current={w === weekNumber}
                 entries={entriesForWeek(w)}
                 onOpenSession={(e) => onOpenSession?.(e)}
-                notStarted={notStarted}
-                startDate={current.block_start_date}
               />
             ))}
           </View>
@@ -689,8 +742,6 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
                         week: w,
                       })}
                       onOpenSession={(e) => onOpenSession?.(e, block.id)}
-                      notStarted={false}
-                      startDate={block.block_start_date}
                     />
                   ))
                 )}
