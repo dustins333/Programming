@@ -855,7 +855,14 @@ export default function NutritionClientDetail() {
             are occasional housekeeping, so they live behind the toolbar's
             Manage photos button. */}
         {activeTab === "photos" ? (
-          <PhotoCompareRail photos={photos} startDate={client.start_date} onManage={() => setManagingPhotos(true)} />
+          <PhotoCompareRail
+            photos={photos}
+            startDate={client.start_date}
+            onManage={() => setManagingPhotos(true)}
+            onFramingChange={(photoId, framing) =>
+              setPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, framing } : p)))
+            }
+          />
         ) : null}
 
         {activeTab === "targets" ? (

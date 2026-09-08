@@ -107,7 +107,7 @@ export default function NutritionPhotoCompare() {
 
   const boardSlots = slotDates.map((date) => {
     const photo = anglePhotos.find((p) => p.date === date);
-    return photo ? { date: photo.date, weight: photo.weight } : null;
+    return photo ? { date: photo.date, weight: photo.weight, framing: photo.framing } : null;
   });
   const boardUrls = Object.fromEntries(
     slotDates.map((date) => {

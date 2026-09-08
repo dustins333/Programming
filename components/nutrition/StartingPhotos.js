@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { View, Text, Image, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { getPhotoSignedUrls } from "../../lib/nutrition/photos";
 import { photosSinceEngagement } from "../../lib/nutrition/onboarding";
 import { formatDateMDY } from "../../lib/formatDate";
+import { FramedPhoto } from "./FramedPhoto";
 import { fonts, colors } from "../../lib/theme";
 
 const ANGLES = ["front", "side", "back"];
@@ -58,11 +59,7 @@ export function StartingPhotos({ photos, client, emptyMessage = "Nothing in yet.
         {starting.map((photo) => (
           <View key={photo.id ?? photo.angle} style={{ flex: 1 }}>
             {urls[photo.storage_path] ? (
-              <Image
-                source={{ uri: urls[photo.storage_path] }}
-                style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: 8, backgroundColor: "#f1efed" }}
-                resizeMode="cover"
-              />
+              <FramedPhoto uri={urls[photo.storage_path]} framing={photo.framing} aspectRatio={3 / 4} radius={8} />
             ) : (
               <View className="items-center justify-center rounded-lg" style={{ aspectRatio: 3 / 4, backgroundColor: "#f1efed" }}>
                 <ActivityIndicator color={colors.primary} size="small" />

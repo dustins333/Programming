@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, Image, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { MacroRingRow } from "./MacroRingRow";
+import { FramedPhoto } from "./FramedPhoto";
 import { CheckinAnswerList, CheckinMetricStrip } from "./CheckinAnswerList";
 import { GamePlan } from "./GamePlan";
 import { OnboardingCheckinView } from "./OnboardingCheckinView";
@@ -108,11 +109,7 @@ function CheckinPhotos({ photos, weekWeight, onOpenPhotos }) {
         {photos.map((photo) => (
           <View key={photo.id ?? `${photo.angle}-${photo.date}`} style={{ flex: 1 }}>
             {urls[photo.storage_path] ? (
-              <Image
-                source={{ uri: urls[photo.storage_path] }}
-                style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: 8, backgroundColor: "#f1efed" }}
-                resizeMode="cover"
-              />
+              <FramedPhoto uri={urls[photo.storage_path]} framing={photo.framing} aspectRatio={3 / 4} radius={8} />
             ) : (
               <View className="items-center justify-center rounded-lg" style={{ aspectRatio: 3 / 4, backgroundColor: "#f1efed" }}>
                 <ActivityIndicator color={colors.primary} size="small" />

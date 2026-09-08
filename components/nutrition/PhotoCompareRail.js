@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Image, Pressable, ScrollView, Modal, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
-import { getPhotoSignedUrls } from "../../lib/nutrition/photos";
+import { View, Text, Pressable, ScrollView, Modal, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
+import { getPhotoSignedUrls, updatePhotoFraming } from "../../lib/nutrition/photos";
+import { toStoredFraming } from "../../lib/nutrition/photoFraming";
 import { ZoomableImage } from "./ZoomableImage";
+import { FramedPhoto } from "./FramedPhoto";
+import { AdjustablePhoto, AlignmentGuides, DEFAULT_GUIDES } from "./PhotoFramingEditor";
+import { toastError } from "../../lib/toast";
 import { formatDateMD, formatDateMDY } from "../../lib/formatDate";
 import { daysBetween } from "../../lib/boiseDate";
 import { fonts, colors } from "../../lib/theme";
@@ -126,7 +130,7 @@ function DatePill({ tone, photo, options, onChange, isStart }) {
   );
 }
 
-function Pane({ photo, url, tone, options, onChange, isStart, onOpenLightbox, width, height }) {
+function Pane({ photo, url, tone, options, onChange, isStart, onOpenLightbox, width, height, adjusting, framing, onFramingChange, onFramingCommit }) {
   if (!photo) {
     return (
       <View
@@ -139,9 +143,19 @@ function Pane({ photo, url, tone, options, onChange, isStart, onOpenLightbox, wi
   }
   return (
     <View style={{ width, height, position: "relative" }}>
-      {url ? (
+      {url && adjusting ? (
+        <AdjustablePhoto
+          uri={url}
+          framing={framing}
+          width={width}
+          height={height}
+          tone={tone}
+          onChange={onFramingChange}
+          onCommit={onFramingCommit}
+        />
+      ) : url ? (
         <Pressable onPress={onOpenLightbox}>
-          <Image source={{ uri: url }} style={{ width, height, borderRadius: 12, backgroundColor: "#f1efed" }} resizeMode="cover" />
+          <FramedPhoto uri={url} framing={framing} width={width} height={height} />
         </Pressable>
       ) : (
         <View className="items-center justify-center rounded-xl" style={{ width, height, backgroundColor: "#f1efed" }}>
@@ -153,7 +167,7 @@ function Pane({ photo, url, tone, options, onChange, isStart, onOpenLightbox, wi
   );
 }
 
-export function PhotoCompareRail({ photos, startDate, onManage }) {
+export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange }) {
   const windowHeight = useViewportHeight();
   const [railWidth, setRailWidth] = useState(0);
   const [angle, setAngle] = useState("front");
@@ -162,6 +176,65 @@ export function PhotoCompareRail({ photos, startDate, onManage }) {
   const [urls, setUrls] = useState({});
   const [lightboxUrl, setLightboxUrl] = useState(null);
   const attemptedRef = useRef(new Set());
+
+  const [adjusting, setAdjusting] = useState(false);
+  const [showGuides, setShowGuides] = useState(true);
+  const [guides, setGuides] = useState(DEFAULT_GUIDES);
+
+  // Local framings are authoritative while this is mounted, so a nudge shows
+  // instantly and doesn't wait on a round trip. The row is written in the
+  // background and the parent is told, so leaving the tab and coming back
+  // finds the same picture.
+  const [framings, setFramings] = useState({});
+  const framingsRef = useRef(framings);
+  framingsRef.current = framings;
+  const saveTimers = useRef({});
+  const onFramingChangeRef = useRef(onFramingChange);
+  onFramingChangeRef.current = onFramingChange;
+
+  const framingFor = (photo) => {
+    if (!photo) return null;
+    return photo.id in framings ? framings[photo.id] : photo.framing ?? null;
+  };
+
+  const setFraming = (photo, next) => {
+    if (!photo) return;
+    setFramings((prev) => ({ ...prev, [photo.id]: next }));
+  };
+
+  const saveFraming = (photoId) => {
+    const value = framingsRef.current[photoId] ?? null;
+    updatePhotoFraming(photoId, value)
+      .then(() => onFramingChangeRef.current?.(photoId, toStoredFraming(value)))
+      .catch(() => toastError("Couldn't save that framing. Try again."));
+  };
+
+  // Debounced so a drag that ends, gets nudged, and ends again writes once.
+  const commitFraming = (photo) => {
+    if (!photo) return;
+    const id = photo.id;
+    if (saveTimers.current[id]) clearTimeout(saveTimers.current[id]);
+    saveTimers.current[id] = setTimeout(() => {
+      delete saveTimers.current[id];
+      saveFraming(id);
+    }, 600);
+  };
+
+  // A pending save must not die with the component. Switching tab, paging to
+  // another week or closing the client unmounts this, and a coach who has
+  // just nudged a photo into place would otherwise watch it spring back the
+  // next time she looked.
+  useEffect(() => {
+    const timers = saveTimers.current;
+    return () => {
+      Object.keys(timers).forEach((id) => {
+        clearTimeout(timers[id]);
+        delete timers[id];
+        saveFraming(id);
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Oldest first — a comparison reads left-to-right as time passing, and the
   // default pair is "where she started" against "where she is".
@@ -280,11 +353,37 @@ export function PhotoCompareRail({ photos, startDate, onManage }) {
           <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#c3bdb4" }}>
             {setCount} set{setCount === 1 ? "" : "s"} on file
           </Text>
-          {onManage ? (
-            <Pressable onPress={onManage} className="rounded-lg px-3.5 py-2" style={{ borderWidth: 1, borderColor: "#ddd6cd", backgroundColor: "white" }}>
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c" }}>Manage photos</Text>
-            </Pressable>
-          ) : null}
+          {adjusting ? (
+            <>
+              <Pressable
+                onPress={() => setShowGuides((v) => !v)}
+                className="rounded-lg px-3.5 py-2"
+                style={{ borderWidth: 1, borderColor: showGuides ? colors.primary : "#ddd6cd", backgroundColor: showGuides ? "#fdf6f2" : "white" }}
+              >
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: showGuides ? colors.primaryOnWhite : "#44403c" }}>
+                  {showGuides ? "Hide guides" : "Show guides"}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => setAdjusting(false)} className="rounded-lg px-3.5 py-2" style={{ backgroundColor: colors.primary }}>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "white" }}>Done</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Pressable
+                onPress={() => setAdjusting(true)}
+                className="rounded-lg px-3.5 py-2"
+                style={{ borderWidth: 1, borderColor: "#ddd6cd", backgroundColor: "white" }}
+              >
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c" }}>Adjust framing</Text>
+              </Pressable>
+              {onManage ? (
+                <Pressable onPress={onManage} className="rounded-lg px-3.5 py-2" style={{ borderWidth: 1, borderColor: "#ddd6cd", backgroundColor: "white" }}>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#44403c" }}>Manage photos</Text>
+                </Pressable>
+              ) : null}
+            </>
+          )}
         </View>
       </View>
 
@@ -294,35 +393,48 @@ export function PhotoCompareRail({ photos, startDate, onManage }) {
         </View>
       ) : (
         <>
-          <View
-            className="flex-row justify-center"
-            style={{ gap: PANE_GAP }}
-            onLayout={(e) => setRailWidth(e.nativeEvent.layout.width)}
-          >
-            <Pane
-              photo={leftPhoto}
-              url={leftPhoto ? urls[leftPhoto.storage_path] : null}
-              tone={LEFT}
-              options={anglePhotos}
-              onChange={setLeftDate}
-              isStart={Boolean(startDate && leftPhoto && leftPhoto.date <= startDate)}
-              onOpenLightbox={() => leftPhoto && urls[leftPhoto.storage_path] && setLightboxUrl(urls[leftPhoto.storage_path])}
-              width={paneWidth}
-              height={finalHeight}
-            />
-            <Pane
-              photo={rightPhoto}
-              url={rightPhoto ? urls[rightPhoto.storage_path] : null}
-              tone={RIGHT}
-              options={anglePhotos}
-              onChange={setRightDate}
-              onOpenLightbox={() => rightPhoto && urls[rightPhoto.storage_path] && setLightboxUrl(urls[rightPhoto.storage_path])}
-              width={paneWidth}
-              height={finalHeight}
-            />
+          <View style={{ position: "relative" }}>
+            <View
+              className="flex-row justify-center"
+              style={{ gap: PANE_GAP }}
+              onLayout={(e) => setRailWidth(e.nativeEvent.layout.width)}
+            >
+              <Pane
+                photo={leftPhoto}
+                url={leftPhoto ? urls[leftPhoto.storage_path] : null}
+                tone={LEFT}
+                options={anglePhotos}
+                onChange={setLeftDate}
+                isStart={Boolean(startDate && leftPhoto && leftPhoto.date <= startDate)}
+                onOpenLightbox={() => leftPhoto && urls[leftPhoto.storage_path] && setLightboxUrl(urls[leftPhoto.storage_path])}
+                width={paneWidth}
+                height={finalHeight}
+                adjusting={adjusting}
+                framing={framingFor(leftPhoto)}
+                onFramingChange={(next) => setFraming(leftPhoto, next)}
+                onFramingCommit={() => commitFraming(leftPhoto)}
+              />
+              <Pane
+                photo={rightPhoto}
+                url={rightPhoto ? urls[rightPhoto.storage_path] : null}
+                tone={RIGHT}
+                options={anglePhotos}
+                onChange={setRightDate}
+                onOpenLightbox={() => rightPhoto && urls[rightPhoto.storage_path] && setLightboxUrl(urls[rightPhoto.storage_path])}
+                width={paneWidth}
+                height={finalHeight}
+                adjusting={adjusting}
+                framing={framingFor(rightPhoto)}
+                onFramingChange={(next) => setFraming(rightPhoto, next)}
+                onFramingCommit={() => commitFraming(rightPhoto)}
+              />
+            </View>
+            {adjusting && showGuides ? <AlignmentGuides height={finalHeight} guides={guides} onChange={setGuides} /> : null}
           </View>
           <Text className="mt-3 text-center" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-            Tap either date to pick a different photo for that side. Tap a photo to open it full size.
+            {adjusting
+              ? "Drag a photo to move it, zoom to fill the frame, and drag the rust lines to line up her head, waist and feet. Saves as you go, and applies wherever this photo is shown."
+              : "Tap either date to pick a different photo for that side. Tap a photo to open it full size."}
           </Text>
         </>
       )}

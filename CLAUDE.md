@@ -7759,6 +7759,109 @@ standing limitation. Worth Terra's pass: drag a group, reload, and confirm the
 order sticks; then close out a check-in and confirm that client appears at the
 bottom of her new group, under the ones already placed.
 
+## Progress photos can be nudged into a common frame (2026-09-08)
+
+Two photos of the same client weeks apart rarely line up, because what
+moved between them is the CAMERA -- she stood a foot further back, or the
+phone was propped higher. Every compare surface crops with `cover`, which
+centres, so the misalignment survives into the comparison and a coach reads
+a difference that isn't there. Migration `0124` -- applied and verified live.
+
+**Stored on the PHOTO, not on the pair, and that is the whole design.** The
+distortion belongs to the shot, so nudging a photo once into a standard
+frame lines it up against every other adjusted photo rather than only the
+one beside it today. Adjust once, correct forever, and the client's own
+Photos tab and the shareable board get it for free. Per-pair framing was the
+alternative and would mean redoing the work on every new comparison.
+
+`public.photos.framing` is nullable jsonb `{scale, x, y, ar}` -- **NULL means
+untouched, which is the entire backward-compatibility story**: all 604
+existing photos keep rendering byte-identically until someone deliberately
+adjusts one. Additive on the table the standalone Nutrition Tracker app
+shares, same pattern as 0031 / 0033 / 0042; that app never selects it.
+
+**`x`/`y` are fractions of the frame, never pixels** -- the same photo draws
+at five different sizes across the app, so a pixel offset saved on a desktop
+rail would be meaningless in a board cell. `ar` is the source image's
+intrinsic ratio, captured once by the editor via `Image.getSize` so that
+every *renderer* can work out the cover fit synchronously instead of running
+an async measurement on every photo it draws.
+
+**The rule that makes it safe everywhere: the pan is clamped so the image
+always covers the frame.** Frame shapes genuinely differ across surfaces --
+the compare panes are 3:4, the board's 3-up cell is 356/676 -- and the slack
+axis FLIPS between them, so a vertical offset that is legal in a pane has no
+room at all in a board cell. `clampFraming` re-clamps at render against
+whatever frame it is actually in, so a framing set in one place can never
+expose an edge in another. Brute-forced across 750 combinations of frame
+shape x photo ratio x scale x offset: zero exposed edges. The cost is that
+you must zoom slightly before a photo will move, which is what aligning
+takes anyway; the editor says so in place rather than leaving it a mystery.
+
+**`framingLayoutFractions` is the core, and `framingLayout` (pixels) and
+`framingPercentStyle` (percentages) are both thin wrappers over it**, tested
+to agree exactly across 540 combinations. The percentage path is what lets
+`FramedPhoto` serve the flex- and percentage-sized frames (member Photos
+tab, starting photos, check-in thumbnails) **without measuring** -- worth
+doing deliberately, because react-native-web implements `onLayout` with a
+ResizeObserver, which would flash empty on first paint and, per this file's
+standing note, never fires in the sandboxed Browser pane at all.
+
+`components/nutrition/FramedPhoto.js` is the single renderer; five surfaces
+that each had their own `<Image resizeMode="cover">` now go through it, so a
+future framing change cannot be threaded through four of them and forgotten
+in the fifth. **An unadjusted photo takes the plain cover path deliberately**
+rather than falling through the maths with an identity framing -- the two
+agree arithmetically, but a photo nobody has touched should be provably
+untouched. The lightbox and `PhotoSubmissionsEditor` deliberately do NOT use
+it: one is the full original, the other is where a coach works out which
+photo is which, and both want the raw truth.
+
+**Editing is inline on the coach's Photos tab, which is the only place it
+can be**: you cannot align against a reference you cannot see. "Adjust
+framing" turns both panes into drag-to-move / zoom-to-fill surfaces and
+drops three draggable rust guide lines ACROSS BOTH photos -- head, waist,
+feet. Without the guides you are judging whether two heads are level across
+a gap with nothing to measure against, which is the actual hard part.
+**Autosaves on a 600ms debounce with an unmount flush**, not a Save button:
+switching tab or paging to another week unmounts the rail, and this file
+already records coach notes being lost three times to exactly that. Reset
+writes NULL rather than an identity object, so "has anyone touched this?"
+stays an honest question of the data. Coaches only -- clients see the result
+and get no controls.
+
+`updatePhotoFraming` asks for the row back and throws on zero rows, per the
+standing lesson that an UPDATE filtered out by RLS reports success.
+
+**Interaction is PanResponder plus plain +/- buttons, deliberately not a
+gesture-handler pinch**: this is coach work done on the web build at a desk,
+the responder system is the one thing in this app proven identical on web
+and native, and a pinch would have been the one part of the feature that
+could not be verified from here.
+
+**Verified by driving it, not by reasoning.** 29 unit assertions against the
+shipped source (including the two brute-force sweeps above), then the real
+rail driven at 1280x900 through a throwaway `app/zz-frameharness.js` with
+two deliberately mismatched figures: zooming to 185% matched their spans to
+2px, a drag closed the offset, and the heads finished **0.5px** apart and the
+feet **1.2px** apart -- measured off `getBoundingClientRect`, not eyeballed.
+Also confirmed: 17 rapid zoom taps produced ONE save, the framing survived
+leaving adjust mode, Reset restored the frame exactly and stored null, a
+guide dragged pixel-exactly, and the same framing covered all four real
+frame shapes with no exposed edge. Harnesses deleted, the stubbed lib
+restored and md5-verified byte-identical, `git status` checked.
+
+**Harness gotcha, re-confirmed**: with the Browser pane hidden, rAF is frozen
+and a synchronous burst of `pointermove` events is only partly processed --
+a 45px guide drag registered as 17px and read exactly like a broken clamp.
+A single-move drag measured -60px against -60px expected. Dispatch one move,
+or await between them, before concluding a drag is wrong.
+
+**Not verified**: any of it behind a real login (standing limitation), and
+none of it on native. Worth Terra's pass on a real client's photos --
+especially that the guides land where she wants them and that an adjusted
+photo looks right on the shareable board.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -7860,6 +7963,7 @@ sections; next number after 0080 is 0081.)
 - `0120_benchmark_day.sql` — **run**, verified live 2026-09-06 (dry-run then a 15-assertion RLS impersonation test as a real member, coach and admin in a rolled-back transaction first; both tables, 7 policies, and a live PostgREST 200 confirmed after). Adds `programming.benchmark_events` (the coach's three dates, no status column — an event whose window covers today IS live) and `programming.benchmark_entries` (one row per event/member/movement/**slot**, where `slot` is `'this'` or `'last'` — see the Benchmark Day section for why the Last column is an override rather than a write back onto the previous event). Member writes are bounded to `benchmark_day … hide_after`, deliberately wider than the UI's lock.
 - `0121_benchmark_past_events_readable.sql` — **run**, verified live 2026-09-06. Widens the member read on `programming.benchmark_events` from the event's own window to `show_from <= today`, so a FINISHED benchmark stays readable. 0120's window broke the Last time prefill outright: `getPreviousBenchmarkEvent` returned null once the previous event passed its `hide_after`, so `getBenchmarkBoard` never read last quarter's rows and the column came up blank. Her entries were never affected (`members read own benchmark entries` has no window). The lower bound stays and is the load-bearing half, or a scheduled-but-not-opened benchmark would put the button on My Week early. Proved by impersonating a real member with a closed benchmark behind her, before and after: 0 previous events visible then 1, board fetch 0 rows then 3, and a future event still invisible.
 - `0123_nutrition_roster_order.sql` — **run**, verified live 2026-09-07 (dry-run with 7 RLS impersonation assertions in a rolled-back transaction first — a coach sees and writes only her own rows, a re-drag replaces rather than duplicating, another coach sees none of it, a member sees 0 and is refused; then applied, `NOTIFY pgrst` sent and a live PostgREST call returning 200 `[]` rather than PGRST205). Adds `programming.nutrition_roster_order` (owner_id, client_id) — each coach's own drag order for the nutrition queue, scoped per status group. Own-rows-only RLS behind `core.can_access_nutrition()`. No FK on `client_id` (it points at the shared `public.clients`, same call as `payroll.nutrition_assignments`), so a client who leaves nutrition just leaves a stale row that reads join past. See the section above for why the `status` column is what makes "moves to a new stage = lands at the bottom" free.
+- `0124_photo_framing.sql` — **run**, verified live 2026-09-08 (dry-run in a rolled-back transaction first, including a real insert carrying a framing; then applied, column/constraint confirmed and all 604 existing photos still NULL, `NOTIFY pgrst` sent). Adds `public.photos.framing` (nullable jsonb `{scale,x,y,ar}`) — coach-set display framing so two photos taken at different distances can be nudged into a common frame. NULL = untouched, so nothing existing changes. The CHECK is deliberately shallow (`jsonb_typeof = 'object'`) because a constraint casting the members to numeric would ERROR rather than return false on a malformed value; the app clamps every field on the way in and again on the way out. See "Progress photos can be nudged into a common frame" above.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 

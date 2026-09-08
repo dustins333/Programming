@@ -3,6 +3,7 @@ import { View, Text, Image, Pressable, Modal, ActivityIndicator } from "react-na
 import { getPhotoSignedUrls } from "../../lib/nutrition/photos";
 import { OptionStepper } from "../OptionPicker";
 import { ZoomableImage } from "./ZoomableImage";
+import { FramedPhoto } from "./FramedPhoto";
 import { formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
 
@@ -34,7 +35,7 @@ function Slot({ photo, url, onPress }) {
   return (
     <Pressable onPress={onPress} className="flex-1">
       {url ? (
-        <Image source={{ uri: url }} style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: 8, backgroundColor: "#f1efed" }} resizeMode="cover" />
+        <FramedPhoto uri={url} framing={photo.framing} aspectRatio={3 / 4} radius={8} />
       ) : (
         <View className="items-center justify-center rounded-lg bg-stone-100" style={{ aspectRatio: 3 / 4 }}>
           <ActivityIndicator color={colors.primary} />

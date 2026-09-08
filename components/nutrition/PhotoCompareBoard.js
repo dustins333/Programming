@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, RadialGradient, Stop, Rect } from "react-native-svg";
+import { FramedPhoto } from "./FramedPhoto";
 import { fonts } from "../../lib/theme";
 
 // design_handoff_photo_compare_v1, direction "3b Chop" — the shareable
@@ -104,7 +105,7 @@ function Cell({ slot, url, w, h, s, showDetails, firstDate, gradientId }) {
   const weekLabel = slot && firstDate ? `week ${(weeksBetween(firstDate, slot.date) ?? 0) + 1}` : "";
   return (
     <View style={{ width: w, height: h, backgroundColor: CELL_BACKING, overflow: "hidden" }}>
-      {slot && url ? <Image source={{ uri: url }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : null}
+      {slot && url ? <FramedPhoto uri={url} framing={slot.framing} width={w} height={h} radius={0} backgroundColor={CELL_BACKING} /> : null}
       {slot && showDetails ? (
         <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingTop: 104 * s, paddingHorizontal: 24 * s, paddingBottom: 24 * s }}>
           <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
