@@ -100,21 +100,84 @@ function weekdayOf(iso) {
 // outline means the sets are there and the tap never happened. Grey means
 // nothing. Deliberately no partial fill: a half-filled pill implies a ratio,
 // and the real numbers are one tap away in the expansion.
-function SessionPill({ state, future }) {
+// "Session 2 · Upper", but a title that only repeats the label reads as
+// "Session 2 · Session 2" — coaches do type that — so it is dropped rather
+// than echoed.
+function sessionTitleFor(workout) {
+  const t = (workout?.title ?? "").trim();
+  if (!t) return null;
+  if (t.toLowerCase() === `session ${workout.session_number}`.toLowerCase()) return null;
+  return t;
+}
+
+// One session in a week row: a real tile carrying its own name and state, and
+// pressable straight through to the session. It used to be a 34x13 marker and
+// the WEEK was what you pressed, which meant two taps to reach a session and
+// a row of anonymous dashes that told you nothing about which session was
+// which. Nobody runs more than about three SPC sessions in a week, so the
+// tiles can take the width the row was wasting.
+function SessionTile({ entry, future, notStarted, startDate, onPress }) {
+  const { state, workout } = entry;
   const finalized = state === "finalized";
   const started = state === "started";
+  const title = sessionTitleFor(workout);
+  // A status line only where there is something to say. "Nothing logged"
+  // repeated down eight future weeks is noise, and the dashed edge already
+  // says the week has not come round yet.
+  const line = finalized || started || entry.loggedSets > 0 ? sessionLine(entry, notStarted, startDate) : null;
   return (
-    <View
+    <PressFade
+      onPress={onPress}
+      hitSlop={4}
       style={{
-        width: 34,
-        height: 13,
-        borderRadius: 6,
-        backgroundColor: finalized ? "#8fb473" : "transparent",
-        borderWidth: finalized ? 0 : started ? 2 : 1,
-        borderStyle: future ? "dashed" : "solid",
-        borderColor: started ? "#8fb473" : "#d9d4cd",
+        flex: 1,
+        minWidth: 0,
+        paddingVertical: 7,
+        paddingHorizontal: 10,
+        borderRadius: 9,
+        backgroundColor: finalized ? "#f3f6ef" : "#fff",
+        borderWidth: started ? 2 : 1,
+        borderStyle: future && !finalized && !started ? "dashed" : "solid",
+        borderColor: finalized || started ? "#8fb473" : future ? "#ded8d0" : "#e4ded6",
       }}
-    />
+    >
+      {/* Two Texts, not one: in a single Text the whole label truncates
+          together and a narrow tile ends up reading "Session…", which loses
+          the only part that has to survive. The number never shrinks; the
+          title gives way. */}
+      <View style={{ flexDirection: "row", alignItems: "center", minWidth: 0, gap: 5 }}>
+        <Text
+          numberOfLines={1}
+          style={{
+            flexShrink: 0,
+            fontFamily: fonts.sansSemiBold,
+            fontSize: 12.5,
+            color: future && !finalized && !started ? "#8b837a" : "#2a211c",
+          }}
+        >
+          Session {workout.session_number}
+        </Text>
+        {/* A gap, not a "·": a separator character survives the truncation
+            that eats the title and leaves a stray dot hanging off the number.
+            Same shape the session card header uses. */}
+        {title ? (
+          <Text
+            numberOfLines={1}
+            style={{ flexShrink: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}
+          >
+            {title}
+          </Text>
+        ) : null}
+      </View>
+      {line ? (
+        <Text
+          numberOfLines={1}
+          style={{ fontFamily: fonts.sans, fontSize: 11, marginTop: 1, color: finalized ? "#4d6142" : "#5c7a4a" }}
+        >
+          {line}
+        </Text>
+      ) : null}
+    </PressFade>
   );
 }
 
@@ -154,87 +217,54 @@ function sessionLine(entry, notStarted, startDate) {
   return "Nothing logged";
 }
 
-// Tapping the WEEK opens it, not the pill. A pill is 34x13, well under the
-// 44pt target this app holds everywhere else, and SpcClientPage is one file
-// for both widths so whatever it becomes lands on a phone too. Expanding also
-// makes room for the session title and the real set count, and it handles a
-// week holding more sessions than the weekly target.
-function WeekRow({ week, weekStart, future, current, entries, expanded, onToggle, onOpenSession, notStarted, startDate }) {
+// A week is a row of its sessions, each one pressable straight through. No
+// expand step: the tiles carry the title and the state the expanded panel
+// used to, so there is nothing left behind a chevron.
+function WeekRow({ week, weekStart, future, current, entries, onOpenSession, notStarted, startDate }) {
   const target = entries.length;
   const done = entries.filter((e) => e.state !== "untouched").length;
-  const anyStarted = entries.some((e) => e.state === "started");
   return (
-    <View style={{ borderTopWidth: week === 1 ? 0 : 1, borderTopColor: "#f4f1ec" }}>
-      <PressFade
-        onPress={onToggle}
-        style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11 }}
-      >
-        <Text style={{ width: 30, fontFamily: fonts.sansBold, fontSize: 12.5, color: current ? colors.primaryOnWhite : "#78716c" }}>
-          W{week}
-        </Text>
-        <Text style={{ width: 56, fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>{monthDay(weekStart)}</Text>
-        <View style={{ flex: 1, flexDirection: "row", gap: 5, flexWrap: "wrap" }}>
-          {entries.map((e) => (
-            <SessionPill key={e.key} state={e.state} future={future} />
-          ))}
-        </View>
-        <Text
-          style={{
-            fontFamily: fonts.sansSemiBold,
-            fontSize: 12,
-            color: future ? "#c9c4bd" : done >= target ? "#4d6142" : "#c58a3a",
-          }}
-        >
-          {future ? "–" : `${done}/${target}`}
-        </Text>
-        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={15} color="#a8a29e" />
-      </PressFade>
-
-      {expanded ? (
-        <View style={{ paddingBottom: 8, gap: 6 }}>
-          {anyStarted ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#7d6a60", paddingLeft: 42 }}>
-              An olive outline means she logged the work and never tapped Finalize. Open it to settle it.
-            </Text>
-          ) : null}
-          {entries.map((e) => (
-            <PressFade
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingVertical: 7,
+        borderTopWidth: week === 1 ? 0 : 1,
+        borderTopColor: "#f4f1ec",
+      }}
+    >
+      <Text style={{ width: 30, fontFamily: fonts.sansBold, fontSize: 12.5, color: current ? colors.primaryOnWhite : "#78716c" }}>
+        W{week}
+      </Text>
+      <Text style={{ width: 52, fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>{monthDay(weekStart)}</Text>
+      <View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 8 }}>
+        {entries.length ? (
+          entries.map((e) => (
+            <SessionTile
               key={e.key}
+              entry={e}
+              future={future}
+              notStarted={notStarted}
+              startDate={startDate}
               onPress={() => onOpenSession(e)}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                marginLeft: 42,
-                paddingVertical: 9,
-                paddingHorizontal: 12,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: e.state === "started" ? "#c9dab6" : "#f0ece6",
-                backgroundColor: e.state === "finalized" ? "#f3f6ef" : "#fff",
-              }}
-            >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#2a211c" }} numberOfLines={1}>
-                  Session {e.workout.session_number}
-                  {e.workout.title ? <Text style={{ fontFamily: fonts.sans, color: "#78716c" }}> · {e.workout.title}</Text> : null}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: fonts.sans,
-                    fontSize: 11.5,
-                    marginTop: 1,
-                    color: e.state === "finalized" ? "#4d6142" : e.state === "started" ? "#5c7a4a" : "#a8a29e",
-                  }}
-                >
-                  {sessionLine(e, notStarted, startDate)}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={15} color="#c9c4bd" />
-            </PressFade>
-          ))}
-        </View>
-      ) : null}
+            />
+          ))
+        ) : (
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#c9c4bd" }}>Nothing written for this week</Text>
+        )}
+      </View>
+      <Text
+        style={{
+          width: 30,
+          textAlign: "right",
+          fontFamily: fonts.sansSemiBold,
+          fontSize: 12,
+          color: future ? "#c9c4bd" : done >= target ? "#4d6142" : "#c58a3a",
+        }}
+      >
+        {future || !target ? "–" : `${done}/${target}`}
+      </Text>
     </View>
   );
 }
@@ -244,7 +274,6 @@ function WeekRow({ week, weekStart, future, current, entries, expanded, onToggle
 // Exported for the visual harness — a real component boundary, not a test seam.
 export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, member, completionKeys, activity = new Map(), sessionWorkouts, stats, lastSessionAt, onOpenSession, onGoSessions, onGoPrint }) {
   const router = useRouter();
-  const [openWeek, setOpenWeek] = useState(null);
   const clientFirst = firstNameOf(member?.name);
   const target = spcClient?.sessions_per_week ?? 1;
   const tone = statusColors[derived.tone] ?? statusColors.paused;
@@ -372,10 +401,22 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
                     borderColor: started ? "#8fb473" : "#d9d4cd",
                   }}
                 >
-                  <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: done ? "#3d5036" : "#2a211c" }} numberOfLines={1}>
-                    Session {e.workout.session_number}
-                    {e.workout.title ? <Text style={{ fontFamily: fonts.sans, color: "#78716c" }}> · {e.workout.title}</Text> : null}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", minWidth: 0, gap: 5 }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{ flexShrink: 0, fontFamily: fonts.sansBold, fontSize: 13, color: done ? "#3d5036" : "#2a211c" }}
+                    >
+                      Session {e.workout.session_number}
+                    </Text>
+                    {sessionTitleFor(e.workout) ? (
+                      <Text
+                        numberOfLines={1}
+                        style={{ flexShrink: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: 13, color: "#78716c" }}
+                      >
+                        {sessionTitleFor(e.workout)}
+                      </Text>
+                    ) : null}
+                  </View>
                   <Text
                     style={{
                       fontFamily: fonts.sans,
@@ -408,6 +449,15 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
               ? `${formatDateRange(current.block_start_date, current.block_end_date)} · ${current.block_length_weeks} weeks`
               : `Since ${monthDay(current.block_start_date)} · ongoing`}
           </Text>
+          {/* Lived inside an expanded week before the rows stopped expanding.
+              Said once, and only when a week actually has one. */}
+          {Array.from({ length: weeksToShow }, (_, i) => i + 1).some((w) =>
+            entriesForWeek(w).some((e) => e.state === "started"),
+          ) ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#7d6a60", marginTop: 8 }}>
+              An olive outline means she logged the work and never tapped Finalize. Open it to settle it.
+            </Text>
+          ) : null}
           <View style={{ marginTop: 10 }}>
             {Array.from({ length: weeksToShow }, (_, i) => i + 1).map((w) => (
               <WeekRow
@@ -417,8 +467,6 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
                 future={weekNumber != null && w > weekNumber}
                 current={w === weekNumber}
                 entries={entriesForWeek(w)}
-                expanded={openWeek === w}
-                onToggle={() => setOpenWeek((v) => (v === w ? null : w))}
                 onOpenSession={(e) => onOpenSession?.(e)}
                 notStarted={notStarted}
                 startDate={current.block_start_date}
@@ -529,7 +577,6 @@ export function HistoryTab({ userId, blocks, today, stats, statsError, onRetrySt
 function ProgramRuns({ userId, blocks, today, onOpenSession }) {
   const [runs, setRuns] = useState(null);
   const [openBlock, setOpenBlock] = useState(null);
-  const [openWeek, setOpenWeek] = useState(null);
   // Per-block, fetched the first time a run is opened. A coach opens one run,
   // not fourteen, so pulling every finished block's sessions up front would be
   // most of a page load thrown away.
@@ -567,7 +614,6 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
   }, [userId, blocks, today]);
 
   const toggleBlock = async (block) => {
-    setOpenWeek(null);
     if (openBlock === block.id) {
       setOpenBlock(null);
       return;
@@ -642,8 +688,6 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
                         activity: data.activity,
                         week: w,
                       })}
-                      expanded={openWeek === `${block.id}:${w}`}
-                      onToggle={() => setOpenWeek((v) => (v === `${block.id}:${w}` ? null : `${block.id}:${w}`))}
                       onOpenSession={(e) => onOpenSession?.(e, block.id)}
                       notStarted={false}
                       startDate={block.block_start_date}
