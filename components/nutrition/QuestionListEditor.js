@@ -11,15 +11,22 @@ import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 // already be sorted by position. Reorder swaps `position` between a row and
 // its neighbor via two onUpdate calls rather than needing drag-and-drop.
 //
-// `choicesEnabled` opts a caller into the multiple-choice/booking-trigger
-// editing UI (migration 0042) — only the two weekly check-in question lists
-// (template + per-client) pass this; the questionnaire editors don't, and
-// stay exactly as before. When on, `onUpdate` is called with a fields object
-// ({question_text, question_type, options, booking_option}) instead of a
-// bare string — callers not opting in still receive an equivalent object
-// (just {question_text}), so existing onUpdate handlers that already do
-// `updateXQuestion(id, fields)` need no changes.
-export function QuestionListEditor({ title, description, questions, onAdd, onUpdate, onDelete, onMove, busy, choicesEnabled }) {
+// `onUpdate` is called with a fields object, and it only ever carries columns
+// the caller's own table actually has — every handler passes it straight into
+// an `.update()`, and PostgREST rejects the whole write if it names a column
+// that isn't there, whatever the value. So the two opt-in flags below are not
+// only about which controls to show:
+//
+//   `choicesEnabled`  -> question_type + options  (0042 on the two check-in
+//                        tables; 0061 on programming.event_questions)
+//   `bookingEnabled`  -> booking_option           (0042 check-in tables only)
+//
+// The questionnaire lists (template + per-client) pass neither, since
+// public.questionnaire_template_questions / client_questionnaire_questions
+// have none of the three; events pass choicesEnabled alone, having no booking
+// column and no Zoom scheduler to trigger. Sending them regardless is what
+// broke Save on the questionnaire and on event questions.
+export function QuestionListEditor({ title, description, questions, onAdd, onUpdate, onDelete, onMove, busy, choicesEnabled, bookingEnabled }) {
   const [newText, setNewText] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
@@ -62,13 +69,20 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
   const saveEdit = async () => {
     if (!editText.trim()) return;
     const isChoice = choicesEnabled && editType === "single_choice";
+    const fields = { question_text: editText.trim() };
+    if (choicesEnabled) {
+      fields.question_type = isChoice ? "single_choice" : "text";
+      // [] rather than null when it isn't a choice question:
+      // programming.event_questions.options is NOT NULL (0061), while the
+      // check-in tables' is nullable (0042). Every reader does
+      // `options || []`, so [] is what all three will take.
+      fields.options = isChoice ? editOptions : [];
+    }
+    if (bookingEnabled) {
+      fields.booking_option = isChoice ? editBookingOption : null;
+    }
     try {
-      await onUpdate(editingId, {
-        question_text: editText.trim(),
-        question_type: isChoice ? "single_choice" : "text",
-        options: isChoice ? editOptions : null,
-        booking_option: isChoice ? editBookingOption : null,
-      });
+      await onUpdate(editingId, fields);
       setEditingId(null);
     } catch (err) {
       toastError("Failed to save question", err);
@@ -170,20 +184,26 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
                         ) : (
                           editOptions.map((opt) => (
                             <View key={opt} className="mb-1.5 flex-row items-center gap-2">
-                              <Pressable
-                                onPress={() => setEditBookingOption((b) => (b === opt ? null : opt))}
-                                className="flex-1 flex-row items-center gap-2"
-                                hitSlop={4}
-                              >
-                                <Ionicons
-                                  name={editBookingOption === opt ? "radio-button-on" : "radio-button-off"}
-                                  size={15}
-                                  color={editBookingOption === opt ? "#4d6142" : "#a8a29e"}
-                                />
+                              {bookingEnabled ? (
+                                <Pressable
+                                  onPress={() => setEditBookingOption((b) => (b === opt ? null : opt))}
+                                  className="flex-1 flex-row items-center gap-2"
+                                  hitSlop={4}
+                                >
+                                  <Ionicons
+                                    name={editBookingOption === opt ? "radio-button-on" : "radio-button-off"}
+                                    size={15}
+                                    color={editBookingOption === opt ? "#4d6142" : "#a8a29e"}
+                                  />
+                                  <Text className="flex-1 text-xs" style={{ fontFamily: fonts.sans }}>
+                                    {opt}
+                                  </Text>
+                                </Pressable>
+                              ) : (
                                 <Text className="flex-1 text-xs" style={{ fontFamily: fonts.sans }}>
                                   {opt}
                                 </Text>
-                              </Pressable>
+                              )}
                               <Pressable onPress={() => handleRemoveOption(opt)} hitSlop={6}>
                                 <Ionicons name="close" size={14} color="#a8a29e" />
                               </Pressable>
@@ -205,9 +225,11 @@ export function QuestionListEditor({ title, description, questions, onAdd, onUpd
                             </Text>
                           </Pressable>
                         </View>
-                        <Text className="mt-1.5 text-[10px] text-stone-400" style={{ fontFamily: fonts.sans }}>
-                          Tap an option's circle to make it open the Zoom scheduler when a client picks it.
-                        </Text>
+                        {bookingEnabled ? (
+                          <Text className="mt-1.5 text-[10px] text-stone-400" style={{ fontFamily: fonts.sans }}>
+                            Tap an option's circle to make it open the Zoom scheduler when a client picks it.
+                          </Text>
+                        ) : null}
                       </View>
                     ) : null}
                   </View>

@@ -990,6 +990,7 @@ export default function Settings() {
             onDelete={handleDeleteCheckinQuestion}
             onMove={handleMoveCheckinQuestion}
             choicesEnabled
+            bookingEnabled
           />
         </View>
         <View>

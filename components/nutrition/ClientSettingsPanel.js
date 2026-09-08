@@ -381,6 +381,7 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
             onDelete={handleDeleteQuestion}
             onMove={handleMoveQuestion}
             choicesEnabled
+            bookingEnabled
           />
         </Card>
       </View>

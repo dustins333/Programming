@@ -843,7 +843,7 @@ Three-part ask, all built same session:
 
 **Multiple-choice check-in questions + a booking trigger** — the "Loom or Zoom" question was free text like every other check-in question; the ask was to make it (and any future question like it) a real radio-button choice, with one option able to open a scheduler. Migration `0042_checkin_question_choices.sql` (**run**) adds `question_type`/`options`/`booking_option` to `public.checkin_template_questions`/`public.client_checkin_questions` — **these are the standalone Nutrition Tracker app's live `public.*` tables** (confirmed by checking `lib/nutrition/checkin.js`'s calls, which use the plain `supabase` client with no `.schema()` override — the `nutrition.*` versions from migration 0005 are the dead placeholder schema), so this follows the same additive/backward-compatible pattern as 0031/0033. `copyTemplateToClient` now carries the new columns over into a client's own copy, same as `question_text`/`position`.
 
-`QuestionListEditor.js` (shared by all 4 question-list editors in the app) gained an opt-in `choicesEnabled` prop: when editing a question, a "Multiple choice" toggle reveals an options list (add/remove) plus a per-option radio marking it the "opens Zoom scheduler" trigger. Only wired on for the two **check-in** editors (`settings.js`'s template editor, `ClientSettingsModal.js`'s per-client editor) — the questionnaire editors are untouched. This changed `onUpdate`'s contract app-wide: it's now always called with a fields object (`{question_text, question_type, options, booking_option}`) instead of a bare string, so all 4 `onUpdate` handlers (2 checkin, 2 questionnaire) were simplified to plain passthroughs (`(id, fields) => updateXQuestion(id, fields)`) rather than branching by caller.
+`QuestionListEditor.js` (shared by all 4 question-list editors in the app) gained an opt-in `choicesEnabled` prop: when editing a question, a "Multiple choice" toggle reveals an options list (add/remove) plus a per-option radio marking it the "opens Zoom scheduler" trigger. Only wired on for the two **check-in** editors (`settings.js`'s template editor, `ClientSettingsModal.js`'s per-client editor) — the questionnaire editors are untouched. This changed `onUpdate`'s contract app-wide: it's now always called with a fields object instead of a bare string, so all 4 `onUpdate` handlers (2 checkin, 2 questionnaire) were simplified to plain passthroughs (`(id, fields) => updateXQuestion(id, fields)`) rather than branching by caller. **That object sent all four keys regardless of `choicesEnabled`, which broke Save on every editor whose table lacks them — see "A shared editor sent columns three of its five tables don't have" below.**
 
 `app/(member)/nutrition/checkin.js` renders a `single_choice` question as real radio buttons (`ChoiceQuestion`) instead of a `TextInput`, in both the live and coach-reopened-week forms. On successful submit, if the member's answer matches that question's `booking_option`, a new `ZoomSchedulerModal` opens automatically.
 
@@ -10120,6 +10120,75 @@ unmount with zero writes issued beforehand, and a new phase card on screen 60ms
 after Enter. Console errors checked in a **fresh tab** (the pane's log
 accumulates stale errors across reloads). **Terra confirmed both live** before
 this was committed.
+
+## A shared editor sent columns three of its five tables don't have (2026-09-08)
+
+Reported on Ashley Mullet: add a question to her onboarding questionnaire
+(fine), go out, come back, edit it, Save — *"could not find the booking column
+option on the client questionaire."* Reproduced verbatim against the live API:
+`PGRST204 Could not find the 'booking_option' column of
+'client_questionnaire_questions' in the schema cache`. No migration; this is a
+client-side fix.
+
+**`QuestionListEditor` is shared by five question lists across three schemas,
+and its `saveEdit` always sent all four keys** — `question_text`,
+`question_type`, `options`, `booking_option` — whatever `choicesEnabled` said.
+Its own header comment claimed callers not opting in "still receive an
+equivalent object (just `{question_text}`)"; that was never true of the code.
+Every handler passes the object straight into an `.update()`, and **PostgREST
+rejects the whole write if the body names a column the table doesn't have,
+regardless of the value** — `booking_option: null` fails exactly as a real
+value would. Confirmed live against each table:
+
+| editor | table | had | broken |
+|---|---|---|---|
+| check-in template | `public.checkin_template_questions` | all three (0042) | no |
+| per-client check-in | `public.client_checkin_questions` | all three (0042) | no |
+| questionnaire template | `public.questionnaire_template_questions` | none | **yes** |
+| per-client questionnaire | `public.client_questionnaire_questions` | none | **yes** — Ashley's |
+| event questions | `programming.event_questions` | type + options (0061) | **yes**, on `booking_option` |
+
+So two surfaces nobody had reported were broken too: the questionnaire template
+in Settings → Nutrition, and editing an event's extra questions.
+
+**The fix splits one flag into two, because the two columns have different
+reach**: `choicesEnabled` now gates `question_type` + `options`,
+`bookingEnabled` gates `booking_option` alone. Events pass `choicesEnabled`
+only — they have no booking column and no Zoom scheduler to trigger, so the
+per-option radio and its "opens the Zoom scheduler" hint are gated on
+`bookingEnabled` too and an event's options render as plain rows. The
+questionnaires pass neither. **The flags are a statement about the target
+table's columns, not only about which controls to show** — that is what the
+comment now says, so the next caller added here has to answer the schema
+question before it can render.
+
+**Second latent bug found while testing the payload against the real tables**:
+`options` was written as `null` for a non-choice question, but
+`programming.event_questions.options` is `NOT NULL DEFAULT '[]'` (0061) where
+the check-in tables' is nullable (0042) — so turning an event question back
+from choice to text would have failed a not-null violation on a real row. It
+writes `[]` now, which every reader already normalises to (`options || []`) and
+which all three tables accept.
+
+**Worth generalising: a component shared across tables must send the
+intersection of what those tables have, and "it's null so it's harmless" is
+wrong for PostgREST** — it validates column names when it builds the
+statement, before values or RLS are considered. The failure is loud at runtime
+and completely invisible to `npm run build` and a scope pass.
+
+**Verification.** The exact error was reproduced and then cleared by curling
+the live REST endpoint with the anon key against a nonexistent UUID (so zero
+rows could change) — old payload `400 PGRST204`, new payload `204`, for both
+`client_questionnaire_questions` and `event_questions`. Then the real component
+was driven in a browser through a throwaway `app/zz-qharness.js` (deleted;
+`git status` confirmed clean) in all three flag configurations, capturing what
+`onUpdate` actually receives: questionnaire `{question_text}`, events
+`+ question_type, options`, check-in `+ booking_option` — with the Zoom hint
+present only on the check-in editor and the Multiple-choice toggle absent
+entirely from the questionnaire. `npm run build` + `check:routes` clean, Babel
+parse + unresolved-identifier pass clean over all five files. **Not verified
+behind a real login** — standing limitation; worth Terra re-editing one of
+Ashley's questions to confirm.
 
 ## Working notes for future sessions
 
