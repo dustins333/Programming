@@ -1197,9 +1197,8 @@ leaving the absence to be discovered.
 of the 268px right rail and onto the top of the session column as the full
 `wide` band, carrying KEEP IN MIND in its `aside` — the two standing facts
 about a client were in the narrowest column on screen, or on another page
-entirely, while the session got the width. Read-only, same as limitations
-("editing belongs on her own page"); the whole band renders nothing for a
-client with neither. **`CommentThread` is gone from the SPC builder's rail**
+entirely, while the session got the width. **`CommentThread` is gone from the
+SPC builder's rail**
 with it: it was the second notes box on a screen that now opens with KEEP IN
 MIND, which is exactly the "one feature drawn twice" confusion the client-page
 rebuild existed to undo. The thread still lives on that page's Sessions tab
@@ -1215,6 +1214,27 @@ the board recognises what she is typing into. Peach specifically, not the
 softer `#fdf6f2`: a supersetted lift row is already filled with that one and
 the field would be invisible inside it. Shared by all three builders, which is
 the point — one name for one field.
+
+**New `components/coach/spc/ClientContextBand.js` is that band, and it is one
+component on purpose.** Terra's framing when she asked for it to be editable
+in the builder too: *"That is a client specific object. So it shouldn't matter
+what page you are on."* So the client page and the builder render the same
+thing — same wording, same eye glyph, same ability to set a goal or update the
+notes — rather than the builder getting a read-only lookalike. The client page
+lost its inline copy (and its `notesDraft` state) to it. Two properties worth
+keeping if this is ever touched:
+
+- **`keepInMind === undefined` means "not loaded yet"**, distinct from null
+  ("she has none"), and the editor seeds from the prop exactly ONCE per
+  client. Both hosts re-run `load()` while the box can be open — the builder
+  on every prev/next session, the client page after any save — and a re-seed
+  there wipes whatever the coach is halfway through typing. Both get the
+  undefined for free: a not-yet-loaded client row is null, and
+  `null?.notes_goals_feedback` is undefined.
+- **It saves on blur AND flushes on unmount.** Blur covers the ordinary case;
+  the unmount flush covers leaving the page with the cursor still in the box.
+  Coach notes have been lost to exactly that before (see GamePlan, 2026-08-28)
+  on a field that only saved on an explicit action.
 
 **Deliberately NOT renamed on the hub or the member app**, where it still
 reads "Coach note:". It is an *exercise note* when you write it and a *coach
@@ -1240,11 +1260,20 @@ six touched files; and every piece driven for real through a throwaway
 exported/stubbed files restored and **md5-verified byte-identical**, `git
 status` checked). Exercised: hub row heights above, the expanded lift card with
 its note typed into and its computed style read back (`#fdece5`, 3px
-`#a46a57`, 866px wide), the goal+KEEP IN MIND band, the session card with and
+`#a46a57`, 866px wide), the session card with and
 without the editor button, and the sheet's header, collapsed preview and
-expanded note. **Not verified behind a real login** — standing limitation.
-Worth Terra's pass: a real client's sheet, and the builder against a real
-session.
+expanded note. The band was driven separately with its two write paths
+stubbed: it seeds from a stored value, a stale re-seed mid-edit does NOT wipe
+the draft, blur writes exactly one `updateSpcClient` with the right payload,
+an unchanged blur writes nothing, unmounting with unsaved text flushes it, and
+the goal editor opens from the band and calls `setClientGoal`. **Not verified
+behind a real login** — standing limitation. Worth Terra's pass: a real
+client's sheet, and setting a goal from the builder.
+
+**Harness gotcha, re-confirmed**: a programmatic `el.focus()` does not stick in
+the hidden Browser pane (`document.activeElement` stayed BODY), so a following
+`el.blur()` is a no-op and an onBlur save looks broken when it is fine.
+Dispatch `new FocusEvent("blur")` on the node instead.
 
 ## The refresh pill that never went away, on Chrome (2026-09-07)
 

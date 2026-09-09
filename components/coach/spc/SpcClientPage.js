@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, ScrollView, ActivityIndicator, Modal, useWindowDimensions } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Modal, useWindowDimensions } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
@@ -21,7 +21,7 @@ import { SpcSessionReadout } from "../../SpcSessionReadout";
 import { todayInBoise, daysBetween, dateInBoise, addDays } from "../../../lib/boiseDate";
 import { formatDateRange, formatDateMDShort } from "../../../lib/formatDate";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../CoachShell";
-import { ClientGoalCard } from "../../ClientGoalCard";
+import { ClientContextBand } from "./ClientContextBand";
 import { CoachMessageBubble } from "../../CoachMessageBubble";
 import { SegmentedControl } from "../../SegmentedControl";
 import { PressFade } from "../../PressFade";
@@ -705,7 +705,6 @@ export function SpcClientPage({ userId }) {
   const [detail, setDetail] = useState(null);
   const [readoutKey, setReadoutKey] = useState(null);
   const [openingSession, setOpeningSession] = useState(false);
-  const [notesDraft, setNotesDraft] = useState("");
   const [tab, setTab] = useState("Overview");
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -735,7 +734,6 @@ export function SpcClientPage({ userId }) {
       setCoaches(coachRows);
       setBlocks(blockRows);
       setGoalRow(goal);
-      setNotesDraft(clientRow?.notes_goals_feedback ?? "");
 
       loadStats();
       getNutritionClient(userId).then(setNutritionClient).catch(() => setNutritionClient(null));
@@ -1193,53 +1191,18 @@ export function SpcClientPage({ userId }) {
           {spcClient?.sessions_per_week ?? "—"}× a week
         </Text>
 
-        {/* Goal hero, full width, with KEEP IN MIND inside it. That field is
-            spc_clients.notes_goals_feedback — standing facts about the client
-            (injuries, cues, what she responds to), as against the Notes thread
-            further down, which is dated, attributed, and belongs to one
-            program. They used to be two identical grey boxes both called
-            COACH NOTES, which is why nobody could tell them apart. */}
-        <ClientGoalCard
-          goal={goalRow?.goal}
+        {/* The goal and KEEP IN MIND are facts about the CLIENT, not about
+            this page, so they are one shared component rendered identically
+            here and in the session builder — see ClientContextBand. */}
+        <ClientContextBand
           userId={userId}
           clientName={member.name}
-          editable
           editorId={profile?.id}
-          onSaved={setGoalRow}
-          wide
+          goal={goalRow?.goal}
+          keepInMind={spcClient?.notes_goals_feedback}
+          onGoalSaved={setGoalRow}
+          onKeepInMindSaved={(text) => setSpcClient((c) => ({ ...c, notes_goals_feedback: text }))}
           style={{ marginTop: 18 }}
-          aside={
-            <>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 }}>
-                <Ionicons name="lock-closed" size={11} color="#f0d9d0" />
-                <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1, color: "#f0d9d0" }}>
-                  KEEP IN MIND
-                </Text>
-              </View>
-              <TextInput
-                value={notesDraft}
-                onChangeText={setNotesDraft}
-                onBlur={() => {
-                  if (notesDraft !== (spcClient?.notes_goals_feedback ?? "")) patch({ notes_goals_feedback: notesDraft }, "Saved");
-                }}
-                multiline
-                placeholder="Injuries, cues, what she responds to…"
-                placeholderTextColor={colors.hint}
-                style={{
-                  minHeight: 58,
-                  backgroundColor: "#fff",
-                  borderWidth: 1,
-                  borderColor: CARD_BORDER,
-                  borderRadius: 8,
-                  padding: 9,
-                  fontFamily: fonts.sans,
-                  fontSize: 12.5,
-                  color: "#2a211c",
-                  textAlignVertical: "top",
-                }}
-              />
-            </>
-          }
         />
 
         {/* Full width — the rail that used to sit beside this is gone, which

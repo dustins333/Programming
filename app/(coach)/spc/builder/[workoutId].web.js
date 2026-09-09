@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { DndContext, PointerSensor, useSensor, useSensors, pointerWithin } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
@@ -33,7 +32,7 @@ import { SessionPreviewModal } from "../../../../components/SessionPreviewModal"
 import { ClientLimitationsCard } from "../../../../components/ClientLimitationsCard";
 import { listClientLimitations } from "../../../../lib/programming/clientNotes";
 import { getClientGoal } from "../../../../lib/programming/clientGoals";
-import { ClientGoalCard } from "../../../../components/ClientGoalCard";
+import { ClientContextBand } from "../../../../components/coach/spc/ClientContextBand";
 import { PressFade } from "../../../../components/PressFade";
 import {
   BUILDER_CANVAS,
@@ -102,7 +101,7 @@ export default function SpcWorkoutBuilderWeb() {
   const [goal, setGoal] = useState(null);
   // spc_clients.notes_goals_feedback — the standing "keep in mind" facts. Own
   // catch for the same reason the goal has one.
-  const [keepInMind, setKeepInMind] = useState(null);
+  const [keepInMind, setKeepInMind] = useState(undefined);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -554,38 +553,25 @@ export default function SpcWorkoutBuilderWeb() {
 
           <View style={{ flex: 1, flexDirection: "row" }}>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 26, paddingVertical: 22, paddingBottom: 60 }}>
-              {/* Who this is for, above what you are writing for her. The goal
-                  used to lead the right rail and KEEP IN MIND wasn't here at
-                  all — so the two standing facts about a client sat in the
-                  narrowest column on screen, or on another page entirely,
-                  while the session got the width. Read-only: editing either
-                  belongs on her own page, same as the limitations below.
-                  The whole band disappears for a client with neither. */}
-              {goal || keepInMind ? (
-                <ClientGoalCard
-                  goal={goal}
-                  showSharedMark={false}
-                  wide
-                  style={{ marginBottom: 20 }}
-                  aside={
-                    keepInMind ? (
-                      <>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 }}>
-                          <Ionicons name="lock-closed" size={11} color="#f0d9d0" />
-                          <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1, color: "#f0d9d0" }}>
-                            KEEP IN MIND
-                          </Text>
-                        </View>
-                        <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: BUILDER_CARD_BORDER, borderRadius: 8, padding: 9 }}>
-                          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 19, color: "#2a211c" }}>
-                            {keepInMind}
-                          </Text>
-                        </View>
-                      </>
-                    ) : undefined
-                  }
-                />
-              ) : null}
+              {/* Who this is for, above what you are writing for her. The
+                  goal used to lead the right rail and KEEP IN MIND wasn't
+                  here at all, so the two standing facts about a client sat in
+                  the narrowest column on screen, or on another page entirely,
+                  while the session got the width.
+                  Editable, and the SAME component her own page renders — the
+                  goal and the notes belong to the client, not to whichever
+                  screen you happen to be on, so setting a goal here is the
+                  same act as setting it there. */}
+              <ClientContextBand
+                userId={workout.spc_blocks.spc_client_id}
+                clientName={member?.name}
+                editorId={profile?.id}
+                goal={goal}
+                keepInMind={keepInMind}
+                onGoalSaved={(row) => setGoal(row?.goal ?? null)}
+                onKeepInMindSaved={setKeepInMind}
+                style={{ marginBottom: 20 }}
+              />
 
               <TextInput
                 value={workout.title ?? ""}
