@@ -49,6 +49,12 @@ const TAB_RADIUS = 8;
 // app's own "needs a look" amber rather than borrowing a phase colour.
 const TARGETS = { bg: "#f7f0e3", border: "#e2d2b4", text: "#8a5a2e" };
 const DASHED = { bg: "white", border: "#ddd6cd", text: "#a8a29e" };
+// A week with no phase yet. It has to be a FILL, not white: the spine is
+// what draws the card's left edge now, and white-on-white dissolved it — a
+// run of unphased weeks read as though the cards themselves were missing.
+// Recessed rather than tinted, so it says "nothing here yet" without
+// competing with the real phases above and below it.
+const UNSET = { bg: "#f6f3ef", border: "#ddd6cd", text: "#a8a29e" };
 // The week's own label reads a shade heavier than a note's, since it names
 // the thing the rest of the tabs are filed against.
 const DATE = { bg: "white", border: "#e2ddd6", text: "#44403c" };
@@ -125,7 +131,7 @@ function railType(name) {
 
 export function PhaseRail({ phase, onPress }) {
   const ref = useRef(null);
-  const tone = phase ? phaseColor(phase.color) : DASHED;
+  const tone = phase ? phaseColor(phase.color) : UNSET;
   const type = railType(phase?.name ?? "");
   const letter = { fontFamily: fonts.sansBold, fontSize: type.fontSize, lineHeight: type.lineHeight, textAlign: "center" };
 
@@ -167,9 +173,16 @@ export function PhaseRail({ phase, onPress }) {
           </Text>
         </>
       ) : (
-        <Text maxFontSizeMultiplier={1} style={{ ...letter, fontSize: 13, lineHeight: 15, color: tone.text }}>
-          +
-        </Text>
+        <>
+          <Text maxFontSizeMultiplier={1} style={{ ...letter, fontSize: 12, lineHeight: 14, color: tone.text }}>
+            +
+          </Text>
+          {[..."PHASE"].map((ch, i) => (
+            <Text key={i} maxFontSizeMultiplier={1} style={{ ...letter, color: tone.text }}>
+              {ch}
+            </Text>
+          ))}
+        </>
       )}
     </Pressable>
   );
