@@ -42,7 +42,7 @@ import { ClientSettingsPanel } from "../../../../components/nutrition/ClientSett
 import { NutritionDashboardTab } from "../../../../components/nutrition/NutritionDashboardTab";
 import { NutritionCheckinTab } from "../../../../components/nutrition/NutritionCheckinTab";
 import { NutritionOnboardingTab } from "../../../../components/nutrition/NutritionOnboardingTab";
-import { CoachMessageBubble } from "../../../../components/CoachMessageBubble";
+import { CoachMessageBubble, bubbleClearance } from "../../../../components/CoachMessageBubble";
 import { ClientNotesBubble } from "../../../../components/nutrition/ClientNotesBubble";
 import { CoachShell } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
@@ -669,7 +669,7 @@ export default function NutritionClientDetail() {
 
   return (
     <CoachShell>
-      <ScrollView className="flex-1" style={{ backgroundColor: colors.canvas }} contentContainerStyle={{ paddingTop: insets.top + 20, paddingHorizontal: isWeb ? 40 : 18, paddingBottom: 48 }}>
+      <ScrollView className="flex-1" style={{ backgroundColor: colors.canvas }} contentContainerStyle={{ paddingTop: insets.top + 20, paddingHorizontal: isWeb ? 40 : 18, paddingBottom: bubbleClearance(insets) }}>
         <Pressable onPress={() => (router.canGoBack() ? router.back() : router.push("/(coach)/nutrition"))} style={{ marginBottom: 14, alignSelf: "flex-start" }}>
           <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, fontSize: 13 }}>‹ Nutrition</Text>
         </Pressable>

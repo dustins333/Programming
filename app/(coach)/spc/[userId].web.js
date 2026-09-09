@@ -27,7 +27,7 @@ import { SpcSessionReadout } from "../../../components/SpcSessionReadout";
 import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceModal";
 import { SendSpcBlockModal } from "../../../components/SendSpcBlockModal";
 import { PrintBlockPickerModal } from "../../../components/PrintBlockPickerModal";
-import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
+import { CoachMessageBubble, bubbleClearance } from "../../../components/CoachMessageBubble";
 import { CommentThread } from "../../../components/CommentThread";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { CoachSpcOverview } from "../../../components/coach/CoachSpcOverview";
@@ -42,6 +42,7 @@ import { formatDateMD } from "../../../lib/formatDate";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { confirmOverwrite, confirmEndBlockHere, confirmDeleteDraftBlock } from "../../../lib/confirmDialog";
 import { fonts, colors } from "../../../lib/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // SPC client block view, coach web (design_handoff_coach_web_v2, screen 15).
 //
@@ -420,6 +421,9 @@ function BlockNotes({ notes }) {
 
 function SpcClientDesktop() {
   const { userId } = useLocalSearchParams();
+  // Reserves room for the floating message bubble, which otherwise sits on
+  // top of whatever this page ends with.
+  const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const router = useRouter();
 
@@ -800,7 +804,7 @@ function SpcClientDesktop() {
 
   return (
     <CoachShell>
-      <ScrollView style={{ flex: 1, backgroundColor: CANVAS }} contentContainerStyle={{ padding: 26, paddingBottom: 70 }}>
+      <ScrollView style={{ flex: 1, backgroundColor: CANVAS }} contentContainerStyle={{ padding: 26, paddingBottom: bubbleClearance(insets) }}>
         <Pressable onPress={() => router.push("/(coach)/spc")} style={{ marginBottom: 12 }}>
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#a8a29e" }}>‹ SPC</Text>
         </Pressable>

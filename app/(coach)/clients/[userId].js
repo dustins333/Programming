@@ -37,7 +37,7 @@ import { AssignAlternateModal } from "../../../components/coach/AssignAlternateM
 import { RecentSessionsCard } from "../../../components/RecentSessionsCard";
 import { UpcomingSessionsCard } from "../../../components/UpcomingSessionsCard";
 import { MessageThread } from "../../../components/MessageThread";
-import { CoachMessageBubble } from "../../../components/CoachMessageBubble";
+import { CoachMessageBubble, bubbleClearance } from "../../../components/CoachMessageBubble";
 import { CoachShell } from "../../../components/CoachShell";
 import { ClientNotesCard } from "../../../components/ClientNotesCard";
 import { ClientLimitationsCard } from "../../../components/ClientLimitationsCard";
@@ -66,6 +66,7 @@ import {
 import { SPC_ENROLLMENT_LABELS, SPC_ENROLLMENT_TONES } from "../../../lib/programming/spcState";
 import { todayInBoise, addDays, dayOfWeekInBoise } from "../../../lib/boiseDate";
 import { fonts, colors } from "../../../lib/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const NUTRITION_TONES = { active: "onTrack", paused: "paused", archived: "paused" };
 const NUTRITION_STATUS_LABELS = { active: "Active", paused: "Paused", archived: "Archived" };
@@ -255,6 +256,9 @@ function LiftProgressTab({ stats, error, onRetry }) {
 
 export default function ClientProfile() {
   const { userId } = useLocalSearchParams();
+  // Reserves room for the floating message bubble, which otherwise sits on
+  // top of whatever this page ends with.
+  const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -830,7 +834,7 @@ export default function ClientProfile() {
         ref={scrollViewRef}
         className="flex-1"
         style={{ backgroundColor: "#faf8f6" }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, maxWidth: wideCards ? 1240 : 900 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: bubbleClearance(insets), maxWidth: wideCards ? 1240 : 900 }}
         onScroll={(e) => {
           scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
         }}

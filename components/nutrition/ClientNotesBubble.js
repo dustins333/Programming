@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GamePlan } from "./GamePlan";
 import { FocusChecklist } from "./FocusChecklist";
 import { fonts, colors } from "../../lib/theme";
+import { BUBBLE_BOTTOM } from "../CoachMessageBubble";
 
 // Notes + Focus, reachable from ANY tab of a client's nutrition record.
 // Both already live in the Dashboard and Check-In rails, but a coach part-way
@@ -62,7 +63,7 @@ export function ClientNotesBubble({ userId, client, focusItems, onChanged }) {
         accessibilityLabel="Notes and focus for this client"
         style={{
           position: "absolute",
-          bottom: insets.bottom + 24,
+          bottom: insets.bottom + BUBBLE_BOTTOM,
           left: 24,
           flexDirection: "row",
           alignItems: "center",

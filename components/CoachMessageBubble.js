@@ -36,6 +36,20 @@ import { fonts, colors } from "../lib/theme";
 // who's only enrolled in a scope the admin has messaging turned off for
 // won't show this button on any of their pages. Starts hidden (`enabled`
 // null) until the check resolves.
+// The idle button's own geometry, exported so a page can reserve room for
+// it rather than guessing. A floating button covers whatever the page puts
+// under it, and the thing at the bottom of a list is usually the one that
+// loads more of it — Terra hit exactly that with the Weeks tab's "N earlier
+// weeks" link sitting under the notes bubble.
+export const BUBBLE_BOTTOM = 24;
+export const BUBBLE_SIZE = 52;
+
+// What a ScrollView on a page carrying either bubble should use as its
+// paddingBottom, so its last row clears the button with room to breathe.
+export function bubbleClearance(insets) {
+  return (insets?.bottom ?? 0) + BUBBLE_BOTTOM + BUBBLE_SIZE + 20;
+}
+
 export function CoachMessageBubble({ userId, clientName }) {
   const { profile } = useAuth();
   const insets = useSafeAreaInsets();
@@ -103,11 +117,11 @@ export function CoachMessageBubble({ userId, clientName }) {
         accessibilityLabel={`Message ${displayName}`}
         style={{
           position: "absolute",
-          bottom: insets.bottom + 24,
+          bottom: insets.bottom + BUBBLE_BOTTOM,
           right: 24,
-          width: 52,
-          height: 52,
-          borderRadius: 26,
+          width: BUBBLE_SIZE,
+          height: BUBBLE_SIZE,
+          borderRadius: BUBBLE_SIZE / 2,
           backgroundColor: colors.primary,
           alignItems: "center",
           justifyContent: "center",
