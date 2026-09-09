@@ -6,7 +6,7 @@ import { colorForTarget, colorForStepsTarget } from "../../lib/nutrition/weekCyc
 import { deriveCalories } from "../../lib/nutrition/targets";
 import { formatDateMDShort } from "../../lib/formatDate";
 import { PhaseEditor } from "./WeekPhaseEditor";
-import { WeekTabStrip, WeekNoteEditor, TargetChangePopup } from "./WeekTabs";
+import { WeekTabStrip, WeekNoteEditor, TargetChangePopup, PhaseRail, RAIL_WIDTH } from "./WeekTabs";
 import { resolveWeekPhase } from "../../lib/nutrition/weekPhases";
 import { fonts } from "../../lib/theme";
 import { MOBILE_BREAKPOINT } from "../CoachShell";
@@ -338,6 +338,9 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
   // where there isn't. Resolved once here rather than inside each ring.
   const { width } = useWindowDimensions();
   const wide = width >= MOBILE_BREAKPOINT;
+  // Unpadded (9/7, not 09/07) — nothing lines up under a tab, so the zeros
+  // were only making a short label look long.
+  const dateLabel = `${formatDateMDShort(week.start)} – ${formatDateMDShort(week.end)}`;
 
   // Declared once and placed twice, so the two arrangements below cannot
   // drift into rendering different things.
@@ -400,78 +403,63 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
   return (
     <View className="mb-2">
       <WeekTabStrip
-        phase={phase}
+        dateLabel={dateLabel}
+        expanded={expanded}
+        onToggle={onToggle}
         targetChange={targetChange}
         notes={notes}
-        phasesEnabled={phasesEnabled}
         notesEnabled={notesEnabled}
+        railWidth={phasesEnabled ? RAIL_WIDTH : 0}
         onOpen={(kind, anchor, payload) => onOpenTab(week, kind, anchor, payload)}
       />
       <View
-        className="rounded-xl"
+        className="flex-row rounded-xl"
         style={{
           borderWidth: 1,
           borderColor: expanded ? "#e2d6cd" : "#ece7e1",
           backgroundColor: "white",
+          // So the spine's fill is clipped to the card's own corners rather
+          // than squaring them off.
+          overflow: "hidden",
         }}
       >
-        <Pressable onPress={onToggle} className="px-4 py-3">
-          {/* The week's own dates, top-left under its tabs, on their own
-              line rather than in a column of their own. Unpadded (9/7, not
-              09/07) — nothing lines up under it here, so the padding was
-              only ever making a short label look long.
-
-              The running week number ("Week 12") that used to lead this row
-              is gone: it counted from the client's start date, so it said
-              how long she has been here rather than anything about the week
-              being read, and it cost a 118px column plus a second line of
-              height on every row. Spending that on the numbers instead is
-              the whole point of the change. */}
-          <View className="flex-row items-center justify-between">
-            <Text
-              maxFontSizeMultiplier={1.15}
-              numberOfLines={1}
-              style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e", textDecorationLine: "underline" }}
-            >
-              {formatDateMDShort(week.start)} – {formatDateMDShort(week.end)}
-            </Text>
-            {/* Top-right of the card, on the date's own line. In the metric
-                row it took a column the rings wanted, and on a phone that
-                was enough to push them onto a line of their own. */}
-            <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#c9c4bd" />
-          </View>
-
-          {/* The same four blocks, arranged two ways.
-              Desktop puts them all on one line with the check-in state last,
-              after the numbers. On a phone there is no room for that, and
-              the state next to the rings is what pushed them onto a line of
-              their own; so the weight, the dots and the state take the first
-              line (the state pinned right, where a status belongs) and the
-              rings get the whole of the second. */}
-          {wide ? (
-            <View className="flex-row flex-wrap items-center" style={{ gap: 14, marginTop: 7 }}>
-              {weightBlock}
-              {dotsBlock}
-              {ringsBlock}
-              {statusBlock}
-            </View>
-          ) : (
-            <>
-              <View className="flex-row items-center" style={{ gap: 14, marginTop: 7 }}>
+        {phasesEnabled ? <PhaseRail phase={phase} onPress={(anchor) => onOpenTab(week, "phase", anchor)} /> : null}
+        {/* minWidth 0 or the day table's horizontal scroller sizes this
+            column to its own content and pushes the card past the page. */}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Pressable onPress={onToggle} className="px-4 py-3">
+            {/* The same four blocks, arranged two ways.
+                Desktop puts them all on one line with the check-in state last,
+                after the numbers. On a phone there is no room for that, and
+                the state next to the rings is what pushed them onto a line of
+                their own; so the weight, the dots and the state take the first
+                line (the state pinned right, where a status belongs) and the
+                rings get the whole of the second. */}
+            {wide ? (
+              <View className="flex-row flex-wrap items-center" style={{ gap: 14 }}>
                 {weightBlock}
                 {dotsBlock}
+                {ringsBlock}
                 {statusBlock}
               </View>
-              <View className="flex-row" style={{ marginTop: 10 }}>{ringsBlock}</View>
-            </>
-          )}
-        </Pressable>
+            ) : (
+              <>
+                <View className="flex-row items-center" style={{ gap: 14 }}>
+                  {weightBlock}
+                  {dotsBlock}
+                  {statusBlock}
+                </View>
+                <View className="flex-row" style={{ marginTop: 10 }}>{ringsBlock}</View>
+              </>
+            )}
+          </Pressable>
 
-        {expanded ? (
-          <View className="px-4 pb-4">
-            <DayTable week={week} target={target} />
-          </View>
-        ) : null}
+          {expanded ? (
+            <View className="px-4 pb-4">
+              <DayTable week={week} target={target} />
+            </View>
+          ) : null}
+        </View>
       </View>
     </View>
   );

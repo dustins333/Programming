@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { AnchoredPopup, measureAnchor } from "../AnchoredPopup";
 import { formatDateMD, formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
@@ -13,10 +14,15 @@ import { Swatch } from "./WeekPhaseEditor";
 // out of a hanging folder, so a coach running down eleven weeks can see
 // what was going on in each one without opening any of them.
 //
-//   Phase            which run this week belongs to, colour-coded (0111/0125)
+//   the date         the week's own label, and the handle that opens it
 //   Targets changed  a target change that landed INSIDE this week
 //   a free label     "Mexico trip" (0125)
 //   +                add another label
+//
+// The phase is NOT a tab. It reads down the card's left edge instead, as a
+// coloured spine spelling the run out a letter at a time (PhaseRail below)
+// — a phase is a property of the whole week rather than one more thing
+// filed against it, and as a tab it competed with the labels for the strip.
 //
 // The targets tab is what prompted the whole idea. It used to be a divider
 // drawn BETWEEN two weeks, which reads as belonging to the week above it —
@@ -43,8 +49,11 @@ const TAB_RADIUS = 8;
 // app's own "needs a look" amber rather than borrowing a phase colour.
 const TARGETS = { bg: "#f7f0e3", border: "#e2d2b4", text: "#8a5a2e" };
 const DASHED = { bg: "white", border: "#ddd6cd", text: "#a8a29e" };
+// The week's own label reads a shade heavier than a note's, since it names
+// the thing the rest of the tabs are filed against.
+const DATE = { bg: "white", border: "#e2ddd6", text: "#44403c" };
 
-function Tab({ tone, label, dashed, maxWidth, accessibilityLabel, onPress }) {
+function Tab({ tone, label, dashed, maxWidth, chevron, accessibilityLabel, onPress }) {
   const ref = useRef(null);
   return (
     <Pressable
@@ -69,46 +78,125 @@ function Tab({ tone, label, dashed, maxWidth, accessibilityLabel, onPress }) {
         marginBottom: -1,
       }}
     >
-      <Text
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.1}
-        style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: tone.text }}
-      >
-        {label}
-      </Text>
+      <View className="flex-row items-center" style={{ gap: 4 }}>
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.1}
+          style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: tone.text }}
+        >
+          {label}
+        </Text>
+        {chevron ? <Ionicons name={chevron} size={11} color="#a8a29e" /> : null}
+      </View>
+    </Pressable>
+  );
+}
+
+// The phase, read down the card's left edge — the spine of the folder
+// rather than one more tab filed onto it.
+//
+// Stacked letters, not rotated text: RN has no dependable transform-origin
+// and a rotated block has to be measured before it can be placed, where a
+// column of single characters simply lays itself out. A space becomes a
+// gap rather than a blank Text — a whitespace-only line in a
+// numberOfLines={1} Text collapses to zero height, so "Fat loss" would
+// otherwise read as "FATLOSS".
+//
+// The run's number sits under the name with a line's worth of air between
+// them, which is what tells the two apart at this size.
+export const RAIL_WIDTH = 26;
+
+// The letters shrink as the name gets longer, because a column of them is
+// taller than the card whenever the name is. A short name is the common
+// case and keeps a comfortable size; a long one steps down rather than
+// stretching its row away from its neighbours.
+//
+// Measured against the live data this is sized for: Diet (4) is 12 of the
+// 20 markers in the gym and costs nothing, Reverse (7) and Recomp (6) add a
+// little, and Maintenance (11) is the worst case. The alternative — one
+// rotated line, truncated — fits any length at one size but reads worse for
+// the short names that dominate.
+function railType(name) {
+  const n = name.length;
+  if (n <= 5) return { fontSize: 10, lineHeight: 13, gap: 9 };
+  if (n <= 8) return { fontSize: 8.5, lineHeight: 10.5, gap: 7 };
+  return { fontSize: 7.5, lineHeight: 9, gap: 6 };
+}
+
+export function PhaseRail({ phase, onPress }) {
+  const ref = useRef(null);
+  const tone = phase ? phaseColor(phase.color) : DASHED;
+  const type = railType(phase?.name ?? "");
+  const letter = { fontFamily: fonts.sansBold, fontSize: type.fontSize, lineHeight: type.lineHeight, textAlign: "center" };
+
+  return (
+    <Pressable
+      ref={ref}
+      collapsable={false}
+      accessibilityLabel={
+        phase ? `Change the phase from this week (currently ${phase.name} ${phase.number})` : "Set the phase from this week"
+      }
+      onPress={() => measureAnchor(ref, onPress)}
+      style={{
+        width: RAIL_WIDTH,
+        backgroundColor: tone.bg,
+        borderRightWidth: 1,
+        borderRightColor: tone.border,
+        borderStyle: phase ? "solid" : "dashed",
+        alignItems: "center",
+        // Top-aligned, not centred: the card's height changes when the day
+        // table opens, and letters floating in the middle of an expanded
+        // week would drift away from the row they belong to.
+        paddingTop: 12,
+        paddingBottom: 8,
+      }}
+    >
+      {phase ? (
+        <>
+          {[...phase.name.toUpperCase()].map((ch, i) =>
+            ch === " " ? (
+              <View key={i} style={{ height: type.gap - 2 }} />
+            ) : (
+              <Text key={i} maxFontSizeMultiplier={1} style={{ ...letter, color: tone.text }}>
+                {ch}
+              </Text>
+            )
+          )}
+          <Text maxFontSizeMultiplier={1} style={{ ...letter, color: tone.text, marginTop: type.gap }}>
+            {phase.number}
+          </Text>
+        </>
+      ) : (
+        <Text maxFontSizeMultiplier={1} style={{ ...letter, fontSize: 13, lineHeight: 15, color: tone.text }}>
+          +
+        </Text>
+      )}
     </Pressable>
   );
 }
 
 // `onOpen(kind, anchor, payload)` — the row above owns which popup is open,
 // so only one is ever mounted no matter how many weeks are on screen.
-export function WeekTabStrip({ phase, targetChange, notes, notesEnabled, phasesEnabled, onOpen }) {
-  if (!phasesEnabled && !targetChange && !notesEnabled) return null;
-
+//
+// `railWidth` shifts the strip clear of the phase spine below it, so the
+// first tab sits over the card's white content rather than over the spine's
+// own colour. The spine's top edge is then what shows to the tabs' left,
+// which reads as it running up to meet them.
+export function WeekTabStrip({ dateLabel, expanded, onToggle, targetChange, notes, notesEnabled, railWidth = 0, onOpen }) {
   return (
     <View
       className="flex-row flex-wrap"
-      style={{ paddingLeft: 12, paddingRight: 12, columnGap: 4, rowGap: 0, zIndex: 1 }}
+      style={{ paddingLeft: 12 + railWidth, paddingRight: 12, columnGap: 4, rowGap: 0, zIndex: 1 }}
     >
-      {phasesEnabled ? (
-        phase ? (
-          <Tab
-            tone={phaseColor(phase.color)}
-            label={`${phase.name} ${phase.number}`}
-            maxWidth={180}
-            accessibilityLabel={`Change the phase from this week (currently ${phase.name} ${phase.number})`}
-            onPress={(anchor) => onOpen("phase", anchor)}
-          />
-        ) : (
-          <Tab
-            tone={DASHED}
-            dashed
-            label="+ Phase"
-            accessibilityLabel="Set the phase from this week"
-            onPress={(anchor) => onOpen("phase", anchor)}
-          />
-        )
-      ) : null}
+      {/* The week's own label, and the handle that opens it. It carries the
+          chevron so the card's first line is all numbers. */}
+      <Tab
+        tone={DATE}
+        label={dateLabel}
+        chevron={expanded ? "chevron-up" : "chevron-down"}
+        accessibilityLabel={`${expanded ? "Collapse" : "Expand"} the week of ${dateLabel}`}
+        onPress={onToggle}
+      />
 
       {targetChange ? (
         <Tab

@@ -624,7 +624,6 @@ export default function NutritionClientDetail() {
       targetChangeByWeek[match.start] = { changes, date: target.effective_date };
     }
   });
-  const targetChangeCount = Object.keys(targetChangeByWeek).length;
   const notesByWeek = groupNotesByWeek(weekNotes);
 
   const photosByDate = {};
@@ -771,15 +770,10 @@ export default function NutritionClientDetail() {
 
         {activeTab === "weeks" ? (
           <View>
-            <View className="mb-3 flex-row flex-wrap items-baseline justify-between" style={{ gap: 10 }}>
+            <View className="mb-3">
               <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
                 {maxWeeks} week{maxWeeks === 1 ? "" : "s"} on program
               </Text>
-              {targetChangeCount > 0 ? (
-                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
-                  Targets changed {targetChangeCount === 1 ? "once" : `${targetChangeCount} times`}, tabbed on the week it moved
-                </Text>
-              ) : null}
             </View>
             <WeekRows
               weeks={weekRows}
