@@ -8436,6 +8436,26 @@ rather than closing over it, and `resolveWeekPhase` is resolved once into a map,
 because a fresh object per render defeats the memo exactly as an inline arrow
 does. Measured at 131 weeks: 217-346ms unmemoised against 21-33ms with it.
 
+**A floating bubble covers whatever a page ends with, and the thing at the foot of
+a list is usually the one that loads more of it.** The Weeks tab's "N earlier weeks"
+link is bottom-left, which is exactly where `ClientNotesBubble` floats — measured, a
+click on the link's own centre hit-tested to the bubble rather than the link, so the
+control that reaches a client's history was unclickable. Three pages carried a
+bubble with too little bottom padding (48, 32 and 70 against a button reaching
+`insets.bottom + 76`). The geometry now lives in `components/CoachMessageBubble.js`
+(`BUBBLE_BOTTOM`/`BUBBLE_SIZE`), both bubbles share it, and `bubbleClearance(insets)`
+is what a scrolling page spends as its `paddingBottom`. **Any new coach page that
+mounts either bubble owes it that clearance.** Still outstanding: `spc/[userId].js`
+on native has no scroll container of its own, so the padding belongs inside
+`CoachSpcOverview`.
+
+**A hook has to go in the component that uses the value, not the file's default
+export.** Adding `useSafeAreaInsets` to `SpcClientDetailWeb` while the ScrollView
+that needed `insets` lived in `SpcClientDesktop` several hundred lines earlier gave
+a completely clean `npm run build` and would have thrown at render. The
+unresolved-identifier pass caught it — which is the whole reason that pass exists,
+since Metro resolves no identifiers.
+
 **Measure interactions with a `MutationObserver`, never a `setTimeout` poll.** The
 preview browser clamps timers to ~1s while the pane is hidden, so every
 interaction reports as a flat 999ms whatever the truth is — and a
