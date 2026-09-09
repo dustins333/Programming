@@ -8407,6 +8407,13 @@ labels for a strip that wraps. Three things about it are load-bearing:
   page. The rail is top-aligned rather than centred: the card's height changes when
   the day table opens, and letters floating in the middle of an expanded week drift
   away from the row they belong to.
+- **An unset spine must be a fill, never white.** It shipped white-on-white with a
+  bare grey `+`, and since the spine is what draws the card's left edge now, that
+  edge dissolved — Terra reported a run of unphased weeks as the cards being *gone*.
+  Nothing was dropped (rendering her real shape, all twelve weeks and all twelve
+  spines were present); it was purely that they had no visible left edge. It is a
+  recessed `#f6f3ef` now and reads "+ PHASE" down it, since the tab it replaced said
+  "+ Phase" and a plus alone in an invisible gutter is not an invitation.
 
 **Deleted from the Weeks tab header**: the "Targets changed N times, tabbed on the
 week it moved" line. The tabs say it on the weeks it happened.
