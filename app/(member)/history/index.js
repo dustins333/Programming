@@ -5,6 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { listDayTimeline } from "../../../lib/history";
+import { listLiftPhotosForUser, groupPhotosByDate } from "../../../lib/programming/liftPhotos";
+import { LiftPhotoViewer } from "../../../components/LiftPhotoViewer";
 import { getExerciseStats, biggestJump } from "../../../lib/programming/exerciseStats";
 import { todayInBoise, addDays } from "../../../lib/boiseDate";
 import { formatDateMDY, formatDateMD } from "../../../lib/formatDate";
@@ -129,7 +131,7 @@ function Sparkline({ values, color = CLAY, highlightLast }) {
   );
 }
 
-function TimelineRow({ entry, onPress, isLast }) {
+function TimelineRow({ entry, onPress, isLast, photos, onOpenPhotos }) {
   const isSession = entry.type === "session";
   const isMilestone = entry.type === "milestone";
   const isPr = entry.type === "pr";
@@ -184,6 +186,34 @@ function TimelineRow({ entry, onPress, isLast }) {
           {entry.subtitle}
         </Text>
       </View>
+      {/* Nested inside the row's own Pressable on purpose: the inner one
+          wins the press, so tapping the clip opens the photos while tapping
+          anywhere else still opens the session. */}
+      {photos?.length ? (
+        <PressFade
+          onPress={onOpenPhotos}
+          hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+          accessibilityLabel={`View ${photos.length === 1 ? "the photo" : `${photos.length} photos`} from ${entry.label}`}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 3,
+            height: 26,
+            paddingHorizontal: 8,
+            borderRadius: 13,
+            backgroundColor: "#fdf6f2",
+            borderWidth: 1,
+            borderColor: "#f0ddd2",
+          }}
+        >
+          <Ionicons name="attach" size={14} color={colors.primaryOnWhite} />
+          {photos.length > 1 ? (
+            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, color: colors.primaryOnWhite }}>
+              {photos.length}
+            </Text>
+          ) : null}
+        </PressFade>
+      ) : null}
       {isPressable ? <Ionicons name="chevron-forward" size={16} color={CHEVRON_COLOR} /> : null}
     </Wrapper>
   );
@@ -198,6 +228,8 @@ function ByDayView({ profile, prEntries, sessionCount, streak, statsError }) {
   const [loadError, setLoadError] = useState(null);
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [photos, setPhotos] = useState([]);
+  const [viewingPhotos, setViewingPhotos] = useState(null);
 
   useEffect(() => {
     setLoadError(null);
@@ -205,6 +237,22 @@ function ByDayView({ profile, prEntries, sessionCount, streak, statsError }) {
       .then(setEntries)
       .catch((err) => setLoadError(err.message ?? String(err)));
   }, [profile.id, retryKey, focusKey]);
+
+  // Its own fetch and its own catch rather than sharing the timeline's
+  // failure: photos are the newest thing on this screen and a member's whole
+  // history must not go blank because of them. Keyed on focusKey too, so a
+  // photo taken on My Fitness is here the moment she comes back.
+  useEffect(() => {
+    let live = true;
+    listLiftPhotosForUser(profile.id)
+      .then((rows) => live && setPhotos(rows))
+      .catch(() => live && setPhotos([]));
+    return () => {
+      live = false;
+    };
+  }, [profile.id, retryKey, focusKey]);
+
+  const photosByDate = useMemo(() => groupPhotosByDate(photos), [photos]);
 
   const sections = useMemo(() => {
     if (!entries) return [];
@@ -267,6 +315,8 @@ function ByDayView({ profile, prEntries, sessionCount, streak, statsError }) {
                   entry={entry}
                   isLast={i === section.items.length - 1}
                   onPress={() => setSelectedEntry(entry)}
+                  photos={entry.type === "session" ? photosByDate.get(entry.date) : null}
+                  onOpenPhotos={() => setViewingPhotos(photosByDate.get(entry.date) ?? [])}
                 />
               ))}
             </View>
@@ -280,7 +330,19 @@ function ByDayView({ profile, prEntries, sessionCount, streak, statsError }) {
         title={selectedEntry?.label ?? ""}
         date={selectedEntry?.date}
         userId={profile.id}
+        // The same rows the pill counted, so the two can't disagree.
+        photos={(selectedEntry?.date && photosByDate.get(selectedEntry.date)) || []}
       />
+      {viewingPhotos?.length ? (
+        <LiftPhotoViewer
+          photos={viewingPhotos}
+          onClose={() => setViewingPhotos(null)}
+          onDeleted={() => {
+            setViewingPhotos(null);
+            setRetryKey((k) => k + 1);
+          }}
+        />
+      ) : null}
       <MilestoneDetailModal milestone={selectedEntry?.type === "milestone" ? selectedEntry : null} onClose={() => setSelectedEntry(null)} />
     </View>
   );

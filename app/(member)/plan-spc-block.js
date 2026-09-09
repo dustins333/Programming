@@ -241,7 +241,14 @@ export default function PlanSpcBlock() {
     closeModal();
     router.push({
       pathname: "/(member)/plan",
-      params: { session: "spc", weekNumber: String(workout.week_number), sessionNumber: String(workout.session_number) },
+      // exactWeek: this screen means the week it names, unlike My Week's
+      // bubbles, which are always about the current one. See plan.js.
+      params: {
+        session: "spc",
+        weekNumber: String(workout.week_number),
+        sessionNumber: String(workout.session_number),
+        exactWeek: "1",
+      },
     });
   };
 

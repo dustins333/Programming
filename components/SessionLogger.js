@@ -19,6 +19,7 @@ import { fonts, colors, type } from "../lib/theme";
 import { toastError } from "../lib/toast";
 import { ExerciseCard } from "./ExerciseCard";
 import { addCoachingNote, listSessionExerciseNotes } from "../lib/programming/coachingNotes";
+import { listLiftPhotosForDate } from "../lib/programming/liftPhotos";
 import { useAuth } from "../lib/auth/AuthProvider";
 
 // The member's session-logging surface (design_handoff_member_lift_v1).
@@ -81,6 +82,8 @@ export function SessionLogger({
   // Map<exerciseId, { current, previous }> — this session's note and the last
   // thing said about this lift in any earlier session.
   const [notesByExerciseId, setNotesByExerciseId] = useState(() => new Map());
+  // exercise_id -> today's photos, for the strip under each lift's notes.
+  const [photosByExerciseId, setPhotosByExerciseId] = useState(() => new Map());
   // Whoever is signed in, i.e. the AUTHOR of anything typed here — distinct
   // from userId, which is whose session is being logged.
   const { profile } = useAuth();
@@ -198,6 +201,35 @@ export function SessionLogger({
   useEffect(() => {
     fetchNotes();
   }, [fetchNotes]);
+
+  // ---------------------------------------------------------------------
+  // Today's lift photos
+  // ---------------------------------------------------------------------
+  // ONE round trip for the whole session, the same way the notes above are
+  // batched. A per-card fetch would be a query per lift on every session load,
+  // which is why the card originally carried no photo state at all -- but a
+  // member has to be able to see that her photo uploaded, and delete it if it
+  // came out badly, without leaving the screen she is standing on.
+  const fetchPhotos = useCallback(async () => {
+    if (!userId || !datePerformed || exercises.length === 0) return;
+    try {
+      const map = await listLiftPhotosForDate({
+        userId,
+        exerciseIds: exercises.map((item) => item.exercise.id),
+        date: datePerformed,
+      });
+      setPhotosByExerciseId(map);
+    } catch (err) {
+      // Never fatal, same as the notes: a photo failure must not blank the
+      // session she is trying to log.
+      console.error("Failed to load lift photos:", err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, exerciseIdsKey, datePerformed]);
+
+  useEffect(() => {
+    fetchPhotos();
+  }, [fetchPhotos]);
 
   // Append-only (see coachingNotes.js): a later row supersedes rather than
   // editing in place, so this must only write when the text actually changed
@@ -319,6 +351,8 @@ export function SessionLogger({
       note={notesByExerciseId.get(item.exercise.id)?.current ?? null}
       previousNote={notesByExerciseId.get(item.exercise.id)?.previous ?? null}
       onSaveNote={handleSaveNote}
+      photos={photosByExerciseId.get(item.exercise.id) ?? null}
+      onPhotosChanged={fetchPhotos}
     />
   );
 

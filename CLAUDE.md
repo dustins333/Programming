@@ -8115,6 +8115,320 @@ along after it, and the wrapped strip stacks cleanly at phone width.
 pass: colour a real phase, label a real week, and confirm a real target change
 lands on the week it happened in.
 
+## A photo on a lift, in her own history (2026-09-08)
+
+TrueCoach had one and members asked for it back. Terra scoped it: tied to a
+lift, taken from a camera icon in the notes field on the logging card, viewed
+from a camera icon on that lift's history row, and **coaches do not see them**.
+Migration `0126` -- applied and verified live.
+
+**The storage question she opened with, answered against real numbers rather
+than guessed.** They are on Supabase **Pro**: 100 GB file storage included
+(then ~$0.021/GB), 250 GB egress (then $0.09/GB). Usage the day this was built
+was **236 MB total** -- `photos` 613 files / 220 MB / avg 368 KB, `help-videos`
+2 files / 14 MB / avg 7.3 MB, `graphics` 9 files / 2.4 MB. The database is 73 MB
+and images never go in it, so "db storage" was never the concern.
+
+At ~200 finalized sessions a week: a photo on every session is ~3.8 GB a year,
+realistic uptake under 1 GB. **Video is the cliff** -- 20% of sessions at ~10 MB
+is roughly 20 GB a year, 25x the photo case, and it turns into a different
+feature because somebody has to watch them. Held back deliberately; the bucket
+caps below are what enforce that rather than intent.
+
+**A new `lift-photos` bucket, NOT the existing `photos` one, and the reason is
+load bearing:** `photos` carries a policy called "coach can manage photo files"
+granting `is_coach()` ALL on everything in it. Reusing it would hand coaches the
+exact thing Terra said they should not see. The new bucket also gets caps
+`photos` still lacks -- that one is **nullable on both `file_size_limit` and
+`allowed_mime_types` to this day**, so a 200 MB file can be pushed through the
+progress-photo flow right now. Worth fixing whether or not anyone asks.
+
+**Owner-only in every direction, with no staff policy at all** -- enforced in
+RLS, not hidden in the UI. Proven by impersonation: a reviewer coach sees 0, an
+admin sees 0, another member sees 0 and is refused 42501 on an insert under
+someone else's id.
+
+**The trap that finding produced, and it is the durable lesson.**
+`mergeExercises` repoints every reference off the retired exercise and runs as a
+**coach**. Measured, not assumed: a coach's direct UPDATE on this table affects
+**zero rows and returns no error**. So a merge would have silently left a
+member's photo on the half that then gets archived while her sets moved to the
+survivor, and it would just stop appearing in her history. Fixed with
+`programming.repoint_lift_photos()`, a narrow security-definer function gated on
+`core.can_access_exercise_library()` that can only ever change `exercise_id` and
+grants no read access. **It is deliberately NOT added to `REFERENCE_TABLES`** --
+that list also drives `getExerciseUsageCount`, which would read zero for the
+same reason and quietly understate what archiving affects.
+
+**Android, flagged by Terra because it has bitten before.** The live Android
+surface is Chrome on the PWA, and there is no Android SDK on this Mac. Two
+things done about it: the feature reuses the exact camera path the nutrition
+progress-photo flow already ships (so it inherits whatever works today rather
+than introducing a second mechanism), and a failed capture surfaces a real
+message instead of doing nothing. `expo-image-picker` on web renders
+`<input type="file" accept="image/*" capture="camera">` and auto-resolves the
+permission as granted -- **verified in the browser that a real input with
+`capture="camera"` is created on tap**. It also degrades safely: a browser that
+ignores `capture` shows a chooser with Camera in it, not a dead button.
+
+**`pickImage` is called FIRST, with nothing awaited ahead of it.** On web it
+ends in a synthetic click on a file input, and transient user activation is what
+lets that open the camera at all -- awaiting anything in between risks spending
+it. This is also the order `PhotoUpload` already uses, which is the one camera
+path proven on the PWA.
+
+**The camera icon lives inside the notes box, absolutely positioned, not in the
+row.** Putting it in the flex row would shift the rest timer button left, and
+the rest preset fan is positioned off the gutter's bottom-right corner rather
+than off the button -- so the arc would stop lining up with the button it
+belongs to. **It is hidden while the fan is open**, and that is not defensive:
+measured, preset "Rest 2:00" lands at 262,357 -> 300,395 against the camera at
+274,357 -> 304,387, a direct overlap. Faded rather than unmounted so nothing
+shifts under a finger, the same treatment the last set row's "+" already gets.
+
+**No photo count on the card, deliberately.** It would need a query per card on
+every session load, and a count held only in local state resets on reload and
+reads as "my photo is gone". The icon is an action, the toast is the
+confirmation, and her history is where they live.
+
+`groupByDate` gives a photo-only day its own card -- a photo taken on a day
+whose sets were never typed, or typed and cleared, would otherwise be
+unreachable, which is a photo silently going nowhere.
+
+**Verified**: migration dry-run rolled back, then a 9-assertion impersonation
+test as a real member, a second member, a plain coach, a reviewer coach and an
+admin (also rolled back, nothing left behind); 13 unit assertions against the
+**shipped** `groupByDate`; `npm run build` + `check:routes` clean; a Babel parse
+/ unresolved-identifier / unused-import / **missing-named-export** pass over all
+six touched files; and the card and viewer driven for real at 390px through a
+throwaway `app/zz-liftphoto.js` (deleted, the one temporarily stubbed file
+restored and md5-verified byte-identical, `git status` checked). Measured there:
+the icon sits fully inside the notes box, 42px of padding reserves its space,
+16px clear of the rest button, zero page overflow, hidden with
+`pointer-events: none` while the fan is open and reachable by a real hit-test
+when it is not, and the viewer's pager bounds dim correctly at each end.
+
+### The first one saved fine and was still invisible (same day)
+
+Terra attached one to KAS Glute Bridge on 9/7 and could not find it. The row
+was there and correct -- **the photo saved; nothing surfaced it.** The icon
+only existed on `history/[exerciseId].js`, the per-lift drill-down, so reaching
+it meant History -> By Workout -> find the lift -> tap in. She was looking at
+the History tab itself.
+
+**Worth generalising: "attached to a lift" is where the data belongs, and it is
+not where she looks for it.** She thinks in sessions. So the same photo now
+surfaces in three places off one query.
+
+- **`listLiftPhotosForUser` + `groupPhotosByDate`** (`liftPhotos.js`). One
+  indexed read for the whole tab, and `ByDayView` hands the SAME rows to both
+  the timeline pill and the popup it opens -- a count that can disagree with
+  the list it opens is how the live board once advertised "16 sets logged" on
+  an empty board.
+- **A paperclip pill on the By Day timeline row**, between the subtitle and the
+  chevron, with a count only past one. It is a **nested** Pressable inside the
+  row's own: tapping the clip opens the photos, tapping anywhere else still
+  opens the session. Verified by hit-test, not assumed.
+- **Thumbnails inside `SessionHistoryModal`, on the lift they belong to.** That
+  popup already groups a day's logs by exercise, so a photo slots straight onto
+  its group. `mergePhotos` gives a photo whose lift has no logs that day its own
+  card rather than dropping it, and falls back to "Exercise" when the embed
+  returns no name -- member RLS on `programming.exercises` requires `is_active`,
+  so an **archived** lift genuinely comes back nameless.
+- "Right away" needed no work: `ByDayView` already keys its effect on
+  `useRefreshOnFocus`, and the photo fetch is keyed on the same counter.
+
+Signing happens when the popup opens, never when the timeline loads -- a signed
+url lasts five minutes, so signing every photo up front hands back dead links by
+the time she scrolls and taps. The photo fetch carries its own catch rather than
+sharing the timeline's `Promise.all`.
+
+**Verified**: 14 more unit assertions against the shipped `mergePhotos` /
+`groupPhotosByDate` (orphan photo, archived-lift fallback, no-photos returning
+the original array unmutated), plus the pill and popup driven at 390px through a
+throwaway `app/zz-hist.js` -- clip vs row proven to fire different handlers with
+a real hit-test landing on the clip, singular/plural labels, and a thumbnail
+opening the viewer scoped to that one lift. Three temporarily hooked files
+restored and **md5-verified byte-identical**.
+
+### A cutoff that applied to the sets but not the photos (same day)
+
+Second round of Terra's testing found two more things.
+
+**The real bug: the lift-history screen showed today's photo with today's sets
+stripped out**, so the session she was standing in rendered as a card holding a
+picture and nothing else. `history/[exerciseId].js` is opened two ways -- from
+My History with no cutoff, and from a lift's history sheet mid-session with
+`before` set to that session's date, so her own half-finished sets don't read
+back as "last time". `listLogsForExercise` honours that cutoff; my photo query
+did not. **A cutoff has to apply to everything on a screen or it invents a day
+that never looked like that.** `listLiftPhotos` takes `before` now and filters
+identically.
+
+**And the photo did not show on the session she was logging.** The card
+originally carried no photo state at all, deliberately -- a per-card query would
+be one round trip per lift on every session load, and a count held only in local
+state resets on reload and reads as "my photo is gone". Terra asked for it
+anyway, and she is right: *"so the girls can see that it uploaded, and then
+delete it if needed."* Neither of those is reachable from a screen that shows
+nothing.
+
+Resolved by batching instead of dropping the constraint: new
+`listLiftPhotosForDate({ userId, exerciseIds, date })` is **one** query for the
+whole session, mirroring `listSessionExerciseNotes`, which `SessionLogger`
+already batches exactly this way. It hands each card its own photos and an
+`onPhotosChanged` callback, so an upload or a delete refetches the batch and the
+strip is always real stored state rather than a local guess. Thumbnails sit
+under the notes field; tapping one opens the same viewer the history screens
+use, which is where delete already lived.
+
+Signing stays lazy and per-card, keyed on the photo ids rather than the array --
+`SessionLogger` rebuilds that array on every refetch, and an effect keyed on the
+array itself re-signs in a loop. Most lifts have no photo, so most cards sign
+nothing.
+
+**Verified**: both new query shapes curled against the live API (`lt` cutoff and
+the batched `in`), and the strip driven at 390px through a throwaway
+`app/zz-card.js` -- one thumbnail on one lift, two on another, none on a third,
+zero page overflow, a real hit-test landing on the thumbnail, and the viewer
+opening with delete available. Stubbed file restored md5-identical.
+
+### "View full block" could only ever open the CURRENT week (same day)
+
+Terra opened week 2 session 1 from View full block and saw week 3's photo under
+KAS Glute Bridge. She diagnosed it herself, correctly: *"because when i click
+edit this session, it opens the current week (week 3)."* One bug, not two -- she
+was looking at week 3 the whole time, so the photo was right and the screen was
+wrong. **The photo is what made a long-standing navigation bug visible.**
+
+`plan.js` computed the week from **today** in both the group and SPC branches
+and used `params.weekNumber` only as an equality check, to decide whether to
+bypass the weekly cap. So the week could never be navigated to -- it could only
+be confirmed. Every handoff from a past week silently landed on the live week,
+with that week's sets, notes and photo under the same lift.
+
+The equality check was deliberate and its comment says why: a My Week link
+generated last week and tapped after a rollover must not force a week that is no
+longer current. That is right for My Week's bubbles, which are always about the
+current week, and wrong for View full block, whose entire purpose is browsing
+other weeks. **So the fix distinguishes the two rather than removing the guard**:
+`plan-block.js` and `plan-spc-block.js` send `exactWeek: "1"`, My Week
+deliberately does not, and only that flag lets a requested week win. Bounded to a
+week that has actually started, since a future week has nothing to edit.
+
+Two preconditions were checked before trusting this rather than assumed:
+`datePerformed` already derives from the completion's own `completed_at`, so a
+past session keeps writing to the day she trained; and the block view only ever
+shows the CURRENT block (`getCurrentBlock`), so this is weeks within one block,
+not arbitrary history. A past session that was never completed is `backlog` in
+the sheet and finishes there without ever handing off, so the handoff path always
+has a real completion date.
+
+**Verified**: 15 assertions against the **shipped** resolution expressions --
+week 2 honoured with the flag, ignored without it (the stale-link guard intact),
+future weeks, week 0, NaN, a non-numeric week, another program's id, and the
+SPC/group branches each ignoring the other's params.
+
+**Not verified**: anything behind a real login, and none of it on native or on
+Android Chrome. Worth Terra's pass: take a real photo on a phone, confirm it
+opens the camera rather than a file browser, confirm the thumbnail appears on
+the card straight away, that the paperclip shows on that session in History, and
+that View full block -> a past week -> "Update this session" now opens THAT
+week.
+
+## The Weeks tab leads with its dates, and a label can carry a colour (2026-09-08)
+
+Three asks on the coach's Weeks tab. Migration `0127` — applied and verified live.
+
+**The running week number is gone.** It counted from the client's `start_date`
+(`weekOnProgram`), so "Week 12" said how long she has been a client rather than
+anything about the week being read — and it cost a 118px column plus a second line
+of height on every row. The week's own dates take its place as a single line at the
+top-left of the card, directly under its tabs, and the metric row below it gets the
+width back. Measured at 1360: the rings spread from a 278px block to the full
+remaining width, with the date line sitting 16px under the phase tab at the same
+left edge. `weekOnProgram` is no longer imported by the client page; `week.label`
+is no longer built.
+
+**Calories lead the rings; the day table runs Day, Weight, Cal.** Weight leads
+there because it is the outcome and the row header already reports its average.
+Moving calories is a reorder of the two config arrays, not a new column, so
+`TABLE_MIN_WIDTH` is unchanged and the note cell's `NOTE_MAX_WIDTH` cap still
+holds — re-measured with a 200-character note in the week, the table fits its
+container exactly (1294 of 1294) rather than dragging the row sideways.
+
+**Each ring carries two labels**: the full word on a desktop card and the P/C/F/f
+shorthand below `MOBILE_BREAKPOINT`, resolved once per row rather than inside each
+ring. **The lowercase f is a phone measure, not the preferred reading** — it exists
+only to tell fibre from fat's capital F, and the full words tell themselves apart,
+so the case carries meaning in the short set alone. Measured at 800 (just above the
+breakpoint) all five full words still fit on one row unclipped.
+
+**The row is two arrangements of the same four blocks**, declared once in
+`WeekRow` and placed twice so they cannot drift. Desktop keeps the check-in state
+last, after the numbers; a phone gives the first line to the weight, the dots and
+the state (pinned right with `marginLeft: "auto"` and content-sized, since a fixed
+width there leaves the label short of the edge) and the whole of the second line to
+the rings. **Putting the state beside the dots at both widths was right for the
+phone and wrong for the desktop**, where there was never a shortage of room — the
+arrangements genuinely differ, so it is a branch rather than one order. The chevron
+is out of the metric row entirely at both widths: it is the card's expander, and in
+the row it was a column the rings wanted. The desktop line keeps `flex-wrap` as a
+safety net for a squeezed card (a coach at ~1000px still has the 232px sidebar).
+
+**Dates are unpadded and underlined** — `formatDateMDShort` ("9/7"), not
+`formatDateMD` ("09/07"). Nothing lines up under this line, so the padding was only
+making a short label look long; the calendar grids keep `formatDateMD` for exactly
+the reason it exists. The tab popups still use the padded form, deliberately —
+changing one of them and not the other would read worse than either.
+
+**Calories lead `MacroRingRow` too**, the shared component behind the Dashboard,
+the Check-In tab and the nutrition queue preview. Those three share one component
+precisely so they cannot disagree about what a ring means, so the reorder lands on
+all three together rather than on the Dashboard alone.
+
+**A label tab can carry a colour**, sharing the phase palette so a colour means the
+same thing on either kind of tab. `Swatch` is now exported from `WeekPhaseEditor`
+and rendered by both editors rather than copied, so the control cannot drift.
+
+- **Null is a real choice for a note, not merely "unset"** — a plain white tab is
+  what every existing label already is, and a coach who does not want to colour-code
+  a particular week should be able to leave it that way. So `NOTE_COLORS` leads with
+  a neutral and `noteColor()` falls back to it, where `phaseColor()` falls back to
+  the first swatch. That is the only asymmetry between the two, and it is why the
+  phase editor correctly offers no "None" swatch.
+- **The colour is savable on its own.** Recolouring a label without retyping it is
+  the common edit once the label itself is right, so `canSave` compares the colour
+  as well as the text. Verified: Save sits at 0.45 with nothing changed and goes to
+  1 on a colour change alone.
+- The card grew a swatch row, so `estimatedHeight` grew with it — `AnchoredPopup`
+  clamps against that figure, and a stale one opens the card off the bottom of a
+  long list.
+
+**A scripted-edit trap worth remembering: an assertion can be tripped by the comment
+you are inserting.** A guard asserting the old label `"Fib"` was gone from the file
+failed because the explanatory comment being added quoted it. Scope that kind of
+assertion to the data it is about — here, the array bodies pulled out with a regex —
+rather than the whole file. A second assert in the same pass counted `"calories"`
+across a line that carries both `key:` and `targetKey:`. Both were the assert being
+wrong rather than the edit, which is the right direction for an assert to fail.
+
+**Verified** by driving the real component at 1360, 800, 767 and 390 through a
+throwaway `app/zz-weeks.js` route (deleted; `git status` checked): full words above
+the breakpoint and the shorthand below it with nothing clipped, all five rings on
+one row with zero page overflow at every width, day headers leading Day/Weight/Cal,
+the state measured flush to the card's content edge on a phone (17px from the card
+edge = its own 16px padding plus the border) and right of the rings above the
+breakpoint, the dashboard rings reading Calories/Protein/Carbs/Fat/Days logged,
+the + tab opening a nine-swatch picker, a save carrying `color=slate`, an existing
+label seeding its own colour, a colour-only edit enabling Save and firing
+`updateNote … color=olive`, and the phase editor still offering no "None". `npm run
+build` + `check:routes` clean, plus a Babel parse / unresolved-identifier /
+unused-import / **missing-named-export** pass over all five touched files (the
+checker was itself proved to catch a planted fault). **Not verified behind a real
+login** — standing limitation. Worth Terra's pass: colour a real label, and confirm
+the date line reads right on a client with a long history.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -8217,6 +8531,8 @@ sections; next number after 0080 is 0081.)
 - `0121_benchmark_past_events_readable.sql` — **run**, verified live 2026-09-06. Widens the member read on `programming.benchmark_events` from the event's own window to `show_from <= today`, so a FINISHED benchmark stays readable. 0120's window broke the Last time prefill outright: `getPreviousBenchmarkEvent` returned null once the previous event passed its `hide_after`, so `getBenchmarkBoard` never read last quarter's rows and the column came up blank. Her entries were never affected (`members read own benchmark entries` has no window). The lower bound stays and is the load-bearing half, or a scheduled-but-not-opened benchmark would put the button on My Week early. Proved by impersonating a real member with a closed benchmark behind her, before and after: 0 previous events visible then 1, board fetch 0 rows then 3, and a future event still invisible.
 - `0123_nutrition_roster_order.sql` — **run**, verified live 2026-09-07 (dry-run with 7 RLS impersonation assertions in a rolled-back transaction first — a coach sees and writes only her own rows, a re-drag replaces rather than duplicating, another coach sees none of it, a member sees 0 and is refused; then applied, `NOTIFY pgrst` sent and a live PostgREST call returning 200 `[]` rather than PGRST205). Adds `programming.nutrition_roster_order` (owner_id, client_id) — each coach's own drag order for the nutrition queue, scoped per status group. Own-rows-only RLS behind `core.can_access_nutrition()`. No FK on `client_id` (it points at the shared `public.clients`, same call as `payroll.nutrition_assignments`), so a client who leaves nutrition just leaves a stale row that reads join past. See the section above for why the `status` column is what makes "moves to a new stage = lands at the bottom" free.
 - `0124_photo_framing.sql` — **run**, verified live 2026-09-08 (dry-run in a rolled-back transaction first, including a real insert carrying a framing; then applied, column/constraint confirmed and all 604 existing photos still NULL, `NOTIFY pgrst` sent). Adds `public.photos.framing` (nullable jsonb `{scale,x,y,ar}`) — coach-set display framing so two photos taken at different distances can be nudged into a common frame. NULL = untouched, so nothing existing changes. The CHECK is deliberately shallow (`jsonb_typeof = 'object'`) because a constraint casting the members to numeric would ERROR rather than return false on a malformed value; the app clamps every field on the way in and again on the way out. See "Progress photos can be nudged into a common frame" above.
+- `0127_week_note_color.sql` — **run**, verified live 2026-09-08 (dry-run in a rolled-back transaction with a real insert on the new column first, then the column confirmed `text`/nullable and a live PostgREST select returning 200; `NOTIFY pgrst` sent). Adds `programming.nutrition_week_notes.color` so a week's free-text tab can be colour-coded rather than always plain white. Same storage rule as `nutrition_week_phases.color` (0125): a palette KEY, never a hex, and no CHECK against the known keys. **The one difference from the phase column is that null is a real choice here**, not just "unset" — it is the plain white tab every existing label already is, so `noteColor()` falls back to a neutral rather than to the first swatch the way `phaseColor()` does.
+- `0126_lift_photos.sql` — **run**, verified live 2026-09-08 (table, RLS on, exactly one policy and no staff policy, 2 indexes, the bucket at 5 MB / jpeg-png-webp / private, the storage policy, and the function confirmed `prosecdef = true`; `NOTIFY pgrst` sent and a live REST call returning `200 []` rather than PGRST205). Adds `programming.lift_photos` (a photo a member attaches to one lift on one day), the private **`lift-photos`** storage bucket capped at 5 MB / jpeg-png-webp, its owner-only `storage.objects` policy, and `programming.repoint_lift_photos()`. Owner-only RLS with **no staff policy at all** — coaches and admins genuinely cannot read these, by decision. Do not reuse the `photos` bucket for anything member-private: it grants `is_coach()` ALL on its entire contents. See "A photo on a lift, in her own history" above for why the merge repoint has to be a security-definer function rather than another entry in `REFERENCE_TABLES`.
 - `0125_week_tabs.sql` — **run**, verified live 2026-09-08 (dry-run with six RLS/constraint assertions in a rolled-back transaction first, then table, policy, RLS, the new column and a live PostgREST 200 all confirmed by query). Adds `programming.nutrition_week_phases.color` (a palette KEY, never a hex, nullable so every existing marker keeps its default) and `programming.nutrition_week_notes` (free-text tabs on a week: "Mexico trip", "family vacation"). Notes are deliberately their own table rather than another column on the phases table — a phase marker is a RUN that holds until the next one, so writing a note there would create a marker on that week and silently end the phase running through it. Staff-only in every direction, no member policy, same as the phases table. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).

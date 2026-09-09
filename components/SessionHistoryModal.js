@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
-import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator, Image } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { listLogsForDate } from "../lib/programming/memberPlan";
+import { getLiftPhotoSignedUrls } from "../lib/programming/liftPhotos";
+import { LiftPhotoViewer } from "./LiftPhotoViewer";
+import { PressFade } from "./PressFade";
 import { formatDateMDY } from "../lib/formatDate";
 import { fonts, colors } from "../lib/theme";
 import { formatWeight } from "../lib/programming/setLabels";
@@ -29,14 +33,37 @@ function groupByExercise(logs) {
   return groups;
 }
 
+// Photos hang off (user, exercise, date), so they slot straight onto the
+// group for the lift they were taken on. A photo whose lift has no logs that
+// day -- she photographed the setup and then cleared her sets -- gets its own
+// card rather than being dropped, which would be a photo silently going
+// nowhere.
+function mergePhotos(groups, photos) {
+  if (!photos?.length) return groups;
+  const out = groups.map((g) => ({ ...g, photos: [] }));
+  const outBy = new Map(out.map((g) => [g.exerciseId, g]));
+  for (const photo of photos) {
+    let group = outBy.get(photo.exercise_id);
+    if (!group) {
+      group = { exerciseId: photo.exercise_id, name: photo.exercises?.name ?? "Exercise", sets: [], notes: null, photos: [] };
+      outBy.set(photo.exercise_id, group);
+      out.push(group);
+    }
+    group.photos.push(photo);
+  }
+  return out;
+}
+
 // Bottom-sheet popup for a My History "By Day" session row — reads the
 // house style set by SessionDetailModal (rounded top corners, canvas bg,
 // scrim backdrop) but is self-contained rather than reusing SessionLogger,
 // since it only has a date + label to work from, not a full workout
 // prescription (exercises/warmups/source) the way plan-block.js's caller does.
-export function SessionHistoryModal({ visible, onClose, title, date, userId }) {
+export function SessionHistoryModal({ visible, onClose, title, date, userId, photos = [] }) {
   const [logs, setLogs] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [urls, setUrls] = useState({});
+  const [viewing, setViewing] = useState(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -47,7 +74,23 @@ export function SessionHistoryModal({ visible, onClose, title, date, userId }) {
       .catch((err) => setLoadError(err.message ?? String(err)));
   }, [visible, userId, date]);
 
-  const groups = logs ? groupByExercise(logs) : [];
+  // Signed when the popup opens, not when the timeline loads: a signed url
+  // lasts five minutes, so signing every photo up front would hand back dead
+  // links by the time she scrolled down and tapped one. Its own catch -- a
+  // thumbnail that won't load must not take the whole session popup with it.
+  const photoKey = photos.map((p) => p.id).join(",");
+  useEffect(() => {
+    if (!visible || !photos.length) return;
+    let live = true;
+    getLiftPhotoSignedUrls(photos.map((p) => p.storage_path))
+      .then((map) => live && setUrls(map))
+      .catch(() => live && setUrls({}));
+    return () => {
+      live = false;
+    };
+  }, [visible, photoKey]);
+
+  const groups = logs ? mergePhotos(groupByExercise(logs), photos) : [];
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -114,6 +157,34 @@ export function SessionHistoryModal({ visible, onClose, title, date, userId }) {
                         {group.notes}
                       </Text>
                     ) : null}
+                    {group.photos?.length ? (
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                        {group.photos.map((photo) => (
+                          <PressFade
+                            key={photo.id}
+                            onPress={() => setViewing(group.photos)}
+                            accessibilityLabel={`View the photo from ${group.name}`}
+                            style={{
+                              width: 58,
+                              height: 58,
+                              borderRadius: 10,
+                              overflow: "hidden",
+                              backgroundColor: "#fdf6f2",
+                              borderWidth: 1,
+                              borderColor: "#f0ddd2",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            {urls[photo.storage_path] ? (
+                              <Image source={{ uri: urls[photo.storage_path] }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                            ) : (
+                              <Ionicons name="camera-outline" size={18} color={colors.primaryOnWhite} />
+                            )}
+                          </PressFade>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
                 ))
               )}
@@ -121,6 +192,8 @@ export function SessionHistoryModal({ visible, onClose, title, date, userId }) {
           )}
         </Pressable>
       </Pressable>
+
+      {viewing ? <LiftPhotoViewer photos={viewing} onClose={() => setViewing(null)} onDeleted={() => setViewing(null)} /> : null}
     </Modal>
   );
 }

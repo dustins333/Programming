@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Modal, View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { listLogsForExercise } from "../lib/programming/memberPlan";
+import { listLiftPhotos, groupPhotosByDate } from "../lib/programming/liftPhotos";
+import { LiftPhotoViewer } from "./LiftPhotoViewer";
 import { formatDateMD } from "../lib/formatDate";
 import { todayInBoise, daysBetween } from "../lib/boiseDate";
 import { PressFade } from "./PressFade";
@@ -143,6 +146,11 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
   const [logs, setLogs] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
+  // Photos she attached to this lift on those same days. This is the sheet
+  // she opens mid-set to decide whether to go up, and "what did the setup look
+  // like last week" is part of that question.
+  const [photos, setPhotos] = useState([]);
+  const [viewingPhotos, setViewingPhotos] = useState(null);
   // TrueCoach imports she hasn't matched to any Kova lift yet. Only fetched
   // once the sheet knows her Kova history for this lift is empty — that's the
   // one moment the "Match TrueCoach data" prompt earns a place in here. This
@@ -160,9 +168,19 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
     let cancelled = false;
     setLogs(null);
     setLoadError(null);
-    listLogsForExercise(userId, exerciseId, datePerformed ?? null)
-      .then((rows) => {
-        if (!cancelled) setLogs(rows);
+    setPhotos([]);
+    // The photos take the SAME cutoff as the logs, so this sheet can't show a
+    // photo from the session she is standing in while deliberately hiding that
+    // session's sets. Their own catch inside the Promise.all: a photo failure
+    // must not cost her the history she opened this for.
+    Promise.all([
+      listLogsForExercise(userId, exerciseId, datePerformed ?? null),
+      listLiftPhotos(userId, exerciseId, datePerformed ?? null).catch(() => []),
+    ])
+      .then(([rows, pics]) => {
+        if (cancelled) return;
+        setLogs(rows);
+        setPhotos(pics);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err.message ?? String(err));
@@ -194,6 +212,10 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
   }, [visible, historyEmpty, userId, exerciseId, retryKey]);
 
   const today = todayInBoise();
+  // Only days that already have a session row get a clip — this sheet is "the
+  // last three sessions", and a day with a photo but no sets is not one. The
+  // full-history screen does surface those.
+  const photosByDate = groupPhotosByDate(photos);
   const allGroups = logs ? groupByDate(logs) : [];
   // listLogsForExercise already comes back newest-first, so the first three
   // groups are the three most recent sessions.
@@ -309,6 +331,7 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
                   // Most recent row is tinted and tagged, so the reference she
                   // came for is found without reading three dates first.
                   const isLast = index === 0;
+                  const rowPhotos = photosByDate.get(group.date);
                   return (
                     <View
                       key={group.date}
@@ -328,6 +351,31 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
                           <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1, color: colors.primaryOnWhite }}>
                             LAST TIME
                           </Text>
+                        ) : null}
+                        {rowPhotos?.length ? (
+                          <PressFade
+                            onPress={() => setViewingPhotos(rowPhotos)}
+                            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                            accessibilityLabel={`View ${rowPhotos.length === 1 ? "the photo" : `${rowPhotos.length} photos`} from ${formatDateMD(group.date)}`}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 3,
+                              height: 24,
+                              paddingHorizontal: 7,
+                              borderRadius: 12,
+                              backgroundColor: isLast ? "#fff" : PEACH_BG,
+                              borderWidth: 1,
+                              borderColor: PEACH_BORDER,
+                            }}
+                          >
+                            <Ionicons name="attach" size={13} color={colors.primaryOnWhite} />
+                            {rowPhotos.length > 1 ? (
+                              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: colors.primaryOnWhite }}>
+                                {rowPhotos.length}
+                              </Text>
+                            ) : null}
+                          </PressFade>
                         ) : null}
                       </View>
                       <View style={{ flexDirection: "row", gap: 7 }}>
@@ -364,6 +412,16 @@ export function ExerciseHistoryModal({ visible, onClose, userId, exerciseId, exe
           )}
         </Pressable>
       </Pressable>
+      {viewingPhotos?.length ? (
+        <LiftPhotoViewer
+          photos={viewingPhotos}
+          onClose={() => setViewingPhotos(null)}
+          onDeleted={() => {
+            setViewingPhotos(null);
+            setRetryKey((k) => k + 1);
+          }}
+        />
+      ) : null}
       <TrueCoachMatchModal
         visible={matchOpen}
         onClose={() => setMatchOpen(false)}

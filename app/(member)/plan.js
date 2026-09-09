@@ -291,7 +291,32 @@ export default function MyFitness() {
               const block = await getCurrentBlock(program.id, today);
               if (!block) return { groupProgramId: program.id, programName: program.name, status: "no_block" };
 
-              const weekNumber = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), today);
+              const liveWeek = currentWeekNumber(block.block_start_date, blockLengthWeeks(block, program), today);
+
+              // "View full block" opens ONE SPECIFIC week's session, and says
+              // so with exactWeek. Without it this screen could only ever load
+              // the live week: the week was always computed from today and the
+              // param was used purely as an equality check, so tapping "Update
+              // this session" on week 2 silently landed on week 3 -- with week
+              // 3's sets, week 3's notes and week 3's photo under the same
+              // lift, which is exactly how it was found.
+              //
+              // My Week's own bubbles deliberately do NOT send exactWeek. Those
+              // links are always about the current week, and the equality check
+              // below is what stops a stale one, tapped after a week rollover,
+              // from forcing a week that is no longer current. That guard is
+              // still doing its job for them.
+              //
+              // Bounded to a week that has actually started: a future week has
+              // nothing logged and nothing to edit. The sheet already refuses
+              // to hand one off, so this is the second line rather than the
+              // first.
+              const requestedWeek =
+                params.session === "group" && params.groupProgramId === program.id && params.exactWeek === "1"
+                  ? Number(params.weekNumber)
+                  : null;
+              const weekNumber =
+                Number.isInteger(requestedWeek) && requestedWeek >= 1 && requestedWeek <= liveWeek ? requestedWeek : liveWeek;
 
               // An explicit deep link from My Week (tapping a specific
               // bubble's preview → "Log/Update session") always wins for its
@@ -408,10 +433,16 @@ export default function MyFitness() {
           // date — a lapsed or ongoing run keeps running, and completions file
           // under that same uncapped week, so the clamped legacy math would
           // stop matching them the week the run outlived its planned length.
-          const weekNumber =
+          const liveWeek =
             block.format === "sessions"
               ? calendarWeekNumber(block.block_start_date, today)
               : currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+
+          // Same as the group branch above: "View full SPC block" names the
+          // week it means, My Week's bubbles deliberately don't.
+          const requestedSpcWeek = params.session === "spc" && params.exactWeek === "1" ? Number(params.weekNumber) : null;
+          const weekNumber =
+            Number.isInteger(requestedSpcWeek) && requestedSpcWeek >= 1 && requestedSpcWeek <= liveWeek ? requestedSpcWeek : liveWeek;
           const workouts = await listSpcWorkoutsForWeek(block.id, weekNumber, block);
           if (workouts.length === 0) return { active, spc: { status: "not_published" } };
 
@@ -615,7 +646,7 @@ export default function MyFitness() {
     // screen), and adding them here recreates `load`'s identity, which
     // useFocusEffect below picks up the same way it already does for a
     // real focus event.
-  }, [profile.id, params.session, params.groupProgramId, params.weekNumber, params.sessionNumber, params.oneOffWorkoutId]);
+  }, [profile.id, params.session, params.groupProgramId, params.weekNumber, params.sessionNumber, params.oneOffWorkoutId, params.exactWeek]);
 
   // Refetch on every focus, not just first mount — same reasoning as
   // My Week: Tabs keep this screen mounted, so without this, coming back

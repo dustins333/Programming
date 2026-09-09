@@ -337,6 +337,9 @@ export default function PlanBlock() {
         groupProgramId: state.program.id,
         weekNumber: String(workout.week_number),
         sessionNumber: String(workout.session_number),
+        // This screen is the whole point of browsing other weeks, so it means
+        // the week it names. My Week's bubbles don't send this -- see plan.js.
+        exactWeek: "1",
       },
     });
   };

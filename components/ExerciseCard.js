@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Platform, Animated } from "react-native";
+import { View, Text, TextInput, Pressable, Linking, Keyboard, PanResponder, Platform, Animated, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { deleteLoggedSet, getLoggedSetsForDate, logResult } from "../lib/programming/memberPlan";
 import { repUnit, repUnitHeader } from "../lib/programming/repUnit";
@@ -14,6 +14,10 @@ import { useScrollToKeyboard } from "../lib/scrollToKeyboard";
 import { PressFade } from "./PressFade";
 import { autofillSuppressedRef } from "../lib/webAutofillSuppression";
 import { useRestTimer, parseRestSeconds, formatSeconds } from "../lib/restTimer";
+import { pickImage } from "../lib/imagePicker";
+import { uploadLiftPhoto, getLiftPhotoSignedUrls } from "../lib/programming/liftPhotos";
+import { LiftPhotoViewer } from "./LiftPhotoViewer";
+import { toastError, toastSuccess } from "../lib/toast";
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -908,6 +912,12 @@ export function ExerciseCard({
   note = null,
   previousNote = null,
   onSaveNote,
+  // Today's photos for this lift, batched for the whole session by
+  // SessionLogger. onPhotosChanged refetches that batch after an upload or
+  // a delete, so the strip below is the real stored state and never a local
+  // guess that resets on reload.
+  photos = null,
+  onPhotosChanged,
 }) {
   const targetSets = getTargetSets(item);
   // A lift with nothing to load — inverted row, push-up, plank — logs reps
@@ -938,6 +948,14 @@ export function ExerciseCard({
   const [saveState, setSaveState] = useState("idle"); // idle | pending | saving | saved | error
   const [saveRetry, setSaveRetry] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // True only while a captured photo is uploading. Deliberately not a count
+  // of how many photos this lift already has: that would need a query per
+  // card on every session load, and a count held only in local state would
+  // reset on reload and read as "my photo is gone". The icon is an action,
+  // the toast is the confirmation, and her history is where they live.
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoUrls, setPhotoUrls] = useState({});
+  const [viewingPhotos, setViewingPhotos] = useState(null);
   // Which row's calculator is open. The mark itself is always rendered (not
   // gated on the TextInput being focused) — an opacity/pointerEvents toggle
   // keyed off focus races with the tap: tapping the mark blurs the input,
@@ -1177,6 +1195,71 @@ export function ExerciseCard({
   const loggedSummary = summarizeSets(rows, item.exercise);
 
   const titleSize = compact ? 19 : 21;
+
+  // Camera icon in the notes field: take a photo, attach it to this lift on
+  // this day (0126). Hers alone -- coaches cannot read these.
+  const handleAddPhoto = async () => {
+    if (photoBusy) return;
+
+    // pickImage runs FIRST, with nothing awaited ahead of it. On web it ends
+    // in a synthetic click on a file input, and transient user activation is
+    // what lets that open the camera at all -- awaiting anything in between
+    // risks spending it. This is also the exact order the progress-photo
+    // upload uses, which is the one camera path already proven on the PWA.
+    let picked;
+    try {
+      picked = await pickImage("camera");
+    } catch (err) {
+      toastError("Couldn't open the camera", err);
+      return;
+    }
+    // null is "she backed out of the camera" on web, where permission always
+    // resolves granted. On native it is also a declined camera permission,
+    // which is silent -- same as the progress-photo flow. Native is unused
+    // today; worth distinguishing if that changes.
+    if (!picked) return;
+
+    setPhotoBusy(true);
+    try {
+      await uploadLiftPhoto({
+        userId,
+        exerciseId: item.exercise.id,
+        // The session's own date, not today: back-logging a past session has
+        // to put the photo on the day she actually trained.
+        datePerformed,
+        uri: picked.uri,
+        mimeType: picked.mimeType,
+      });
+      toastSuccess("Photo saved to this lift's history");
+      // Pull the batch again so the thumbnail appears straight away -- seeing
+      // it land is the whole point of the strip.
+      await onPhotosChanged?.();
+    } catch (err) {
+      toastError("Couldn't save that photo", err);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  // Signed only when this lift actually has a photo, which most do not, so
+  // the common case costs nothing. Keyed on the ids rather than the array --
+  // SessionLogger rebuilds that array on every refetch, and an effect keyed on
+  // the array itself would re-sign in a loop.
+  const photoKey = photos ? photos.map((p) => p.id).join(",") : "";
+  useEffect(() => {
+    if (!photos?.length) {
+      setPhotoUrls({});
+      return;
+    }
+    let live = true;
+    getLiftPhotoSignedUrls(photos.map((p) => p.storage_path))
+      .then((map) => live && setPhotoUrls(map))
+      .catch(() => live && setPhotoUrls({}));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoKey]);
 
   const handleStartRest = (seconds) => {
     const doneSets = workingSets(rows).filter(isLogged).length;
@@ -1540,6 +1623,13 @@ export function ExerciseCard({
               re-saved identical text would pile up duplicate rows. */}
           <RestFanGutter>
             <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10 }}>
+              {/* The notes box and its camera icon are wrapped together so the
+                  icon can sit inside the box. Putting the icon in the row
+                  instead would shift the rest timer button left, and the rest
+                  preset fan is positioned off the gutter's bottom-right
+                  corner rather than off the button -- so the arc would no
+                  longer line up with the button it belongs to. */}
+              <View style={{ flex: 1, minWidth: 0, position: "relative" }}>
               <TextInput
                 value={notes}
                 onChangeText={(t) => {
@@ -1574,8 +1664,6 @@ export function ExerciseCard({
                 inputAccessoryViewID={NUMERIC_DONE_ID}
                 accessibilityLabel={`Notes for ${item.exercise.name}`}
                 style={{
-                  flex: 1,
-                  minWidth: 0,
                   minHeight: noteIsWeb ? NOTE_WEB_HEIGHT : NOTE_MIN_HEIGHT,
                   height:
                     !noteIsWeb && noteHeight
@@ -1590,7 +1678,8 @@ export function ExerciseCard({
                   borderWidth: 1,
                   borderColor: INPUT_BORDER,
                   borderRadius: 10,
-                  paddingHorizontal: 12,
+                  paddingLeft: 12,
+                  paddingRight: 42,
                   paddingVertical: 10,
                   fontFamily: fonts.sans,
                   // 16 rather than the 13 this used to be: it read as too
@@ -1603,6 +1692,45 @@ export function ExerciseCard({
                   backgroundColor: "#fff",
                 }}
               />
+              {/* Hidden while the rest preset fan is open, the same way the
+                  last set row's "+" gets out of its way -- the arc sweeps up
+                  and left from the timer button and would otherwise land a
+                  preset on top of this. Faded rather than unmounted so
+                  nothing shifts under a finger mid-gesture. */}
+              <View
+                style={{
+                  position: "absolute",
+                  right: 6,
+                  bottom: 6,
+                  opacity: restPickerOpen ? 0 : 1,
+                  pointerEvents: restPickerOpen ? "none" : "auto",
+                }}
+              >
+                <PressFade
+                  onPress={handleAddPhoto}
+                  disabled={photoBusy}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel={`Add a photo to ${item.exercise.name}`}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#fdf6f2",
+                    borderWidth: 1,
+                    borderColor: "#f0ddd2",
+                    opacity: photoBusy ? 0.5 : 1,
+                  }}
+                >
+                  <Ionicons
+                    name={photoBusy ? "ellipsis-horizontal" : "camera-outline"}
+                    size={17}
+                    color={colors.primaryOnWhite}
+                  />
+                </PressFade>
+              </View>
+              </View>
               <RestTimerButton
                 seconds={parseRestSeconds(item.rest)}
                 onStart={handleStartRest}
@@ -1624,6 +1752,38 @@ export function ExerciseCard({
             />
           </RestFanGutter>
 
+          {/* Today's photos on this lift. Tapping one opens the same viewer
+              the history screens use, which is where delete lives -- so a
+              blurry shot can be dropped without leaving the session. */}
+          {photos?.length ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+              {photos.map((photo) => (
+                <PressFade
+                  key={photo.id}
+                  onPress={() => setViewingPhotos(photos)}
+                  accessibilityLabel={`View the photo you added to ${item.exercise.name}`}
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    backgroundColor: "#fdf6f2",
+                    borderWidth: 1,
+                    borderColor: "#f0ddd2",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {photoUrls[photo.storage_path] ? (
+                    <Image source={{ uri: photoUrls[photo.storage_path] }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                  ) : (
+                    <Ionicons name="image-outline" size={18} color={colors.primaryOnWhite} />
+                  )}
+                </PressFade>
+              ))}
+            </View>
+          ) : null}
+
           {/* The olive fill on a set box is the everyday "it saved" signal,
               so success stays silent — but a failure must not look
               identical to a save. Deliberately no transient "Saving…" line:
@@ -1642,6 +1802,17 @@ export function ExerciseCard({
             </View>
           ) : null}
         </View>
+      ) : null}
+
+      {viewingPhotos?.length ? (
+        <LiftPhotoViewer
+          photos={viewingPhotos}
+          onClose={() => setViewingPhotos(null)}
+          onDeleted={() => {
+            setViewingPhotos(null);
+            onPhotosChanged?.();
+          }}
+        />
       ) : null}
 
       <ExerciseHistoryModal
