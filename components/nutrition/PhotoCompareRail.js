@@ -47,6 +47,38 @@ const RIGHT = "#a46a57";
 const CHROME_HEIGHT = 330;
 const MIN_PANE_HEIGHT = 280;
 const PANE_GAP = 14;
+// ---------------------------------------------------------------------
+// Why the available width is worked out from the WINDOW and never measured
+// ---------------------------------------------------------------------
+// This used to read the row's width with onLayout and derive the photo
+// HEIGHT from it, and that is a feedback loop with a scrollbar in it:
+//
+//   taller panes -> taller page -> the ScrollView needs a vertical
+//   scrollbar -> the row inside it is ~15px narrower -> onLayout fires ->
+//   narrower panes -> SHORTER panes, because the height came from the
+//   width -> the page fits again -> the scrollbar goes away -> the row is
+//   15px wider -> repeat, forever.
+//
+// The photos visibly vibrated. It only bites when the pair is width-bound
+// rather than height-bound (a narrowish window) and the page happens to sit
+// on the scrollbar threshold, which the Photos tab does easily because the
+// photos are essentially the entire height of it.
+//
+// So the host passes `availableWidth` instead — it already knows its own
+// padding and whether CoachShell is showing a sidebar, and it works that out
+// from window dimensions, which are scrollbar-independent (innerWidth
+// INCLUDES the scrollbar, so it cannot move when one appears). That is what
+// breaks the cycle. Same approach, and the same trade of a computed rather
+// than measured width, as the Photo Compare tool page.
+//
+// Falling back to the raw viewport width when the prop is absent is
+// deliberately generous rather than clever: too wide just means the pair is
+// height-bound instead, which is the normal case anyway.
+//
+// It also means there is no onLayout left in this file, which is worth
+// something on its own: react-native-web implements onLayout with a
+// ResizeObserver, and that never fires in this repo's preview browser, so
+// anything depending on it cannot be checked before it ships.
 
 const isWeb = Platform.OS === "web";
 
@@ -55,21 +87,27 @@ const isWeb = Platform.OS === "web";
 // looked stale, but that turned out to be the harness resizing the viewport
 // without dispatching a resize event at all (a dispatched one updated
 // everything instantly). This is one short subscription with no indirection,
-// on the screen where getting the height wrong is most visible. Native keeps
+// on the screen where getting the size wrong is most visible. Native keeps
 // useWindowDimensions; there is no window to drag there.
-function useViewportHeight() {
-  const { height: nativeHeight } = useWindowDimensions();
-  const [webHeight, setWebHeight] = useState(() => (isWeb && typeof window !== "undefined" ? window.innerHeight : 0));
+//
+// Both axes, and both are scrollbar-independent: innerWidth includes the
+// scrollbar and innerHeight is unaffected by content height. That is the
+// whole reason the panes are sized from here — see the note above.
+function useViewport() {
+  const native = useWindowDimensions();
+  const [web, setWeb] = useState(() =>
+    isWeb && typeof window !== "undefined" ? { width: window.innerWidth, height: window.innerHeight } : null
+  );
 
   useEffect(() => {
     if (!isWeb || typeof window === "undefined") return;
-    const onResize = () => setWebHeight(window.innerHeight);
+    const onResize = () => setWeb({ width: window.innerWidth, height: window.innerHeight });
     onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  return isWeb ? webHeight || nativeHeight : nativeHeight;
+  return isWeb && web?.width ? web : { width: native.width, height: native.height };
 }
 
 // The date pill on each photo is also that side's picker: tap it, get every
@@ -197,9 +235,8 @@ function Pane({ photo, url, tone, options, onChange, isStart, onOpenLightbox, wi
   );
 }
 
-export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange, phaseMarkers = null }) {
-  const windowHeight = useViewportHeight();
-  const [railWidth, setRailWidth] = useState(0);
+export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange, phaseMarkers = null, availableWidth = null }) {
+  const { width: viewportWidth, height: viewportHeight } = useViewport();
   const [angle, setAngle] = useState("front");
   const [leftDate, setLeftDate] = useState(null);
   const [rightDate, setRightDate] = useState(null);
@@ -332,12 +369,16 @@ export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange,
   const setCount = new Set(photos.map((p) => p.date)).size;
 
   // Height first, then width from the 3:4 ratio, then clamp to whatever the
-  // container can actually give two panes.
-  const paneHeight = Math.max(MIN_PANE_HEIGHT, windowHeight - CHROME_HEIGHT);
+  // page can actually give two panes side by side. Every input here comes
+  // from the window, never from a measurement of this component — see the
+  // note at the top of the file for the loop that caused.
+  const usableWidth = Math.max(240, availableWidth ?? viewportWidth);
+  const paneHeight = Math.max(MIN_PANE_HEIGHT, viewportHeight - CHROME_HEIGHT);
   const widthFromHeight = paneHeight * 0.75;
-  const widthFromRail = railWidth > 0 ? (railWidth - PANE_GAP) / 2 : widthFromHeight;
-  const paneWidth = Math.max(120, Math.min(widthFromHeight, widthFromRail));
-  const finalHeight = paneWidth / 0.75;
+  const widthFromAvailable = (usableWidth - PANE_GAP) / 2;
+  // Rounded so a sub-pixel window measurement can't churn the layout.
+  const paneWidth = Math.round(Math.max(120, Math.min(widthFromHeight, widthFromAvailable)));
+  const finalHeight = Math.round(paneWidth / 0.75);
 
   return (
     <View>
@@ -424,11 +465,7 @@ export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange,
       ) : (
         <>
           <View style={{ position: "relative" }}>
-            <View
-              className="flex-row justify-center"
-              style={{ gap: PANE_GAP }}
-              onLayout={(e) => setRailWidth(e.nativeEvent.layout.width)}
-            >
+            <View className="flex-row justify-center" style={{ gap: PANE_GAP }}>
               <Pane
                 photo={leftPhoto}
                 url={leftPhoto ? urls[leftPhoto.storage_path] : null}

@@ -44,7 +44,7 @@ import { NutritionCheckinTab } from "../../../../components/nutrition/NutritionC
 import { NutritionOnboardingTab } from "../../../../components/nutrition/NutritionOnboardingTab";
 import { CoachMessageBubble, bubbleClearance } from "../../../../components/CoachMessageBubble";
 import { ClientNotesBubble } from "../../../../components/nutrition/ClientNotesBubble";
-import { CoachShell } from "../../../../components/CoachShell";
+import { CoachShell, MOBILE_BREAKPOINT, SIDEBAR_WIDTH } from "../../../../components/CoachShell";
 import { formatDateMDY } from "../../../../lib/formatDate";
 import { confirmBypassOnboarding, confirmSendToClient } from "../../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../../lib/toast";
@@ -218,6 +218,15 @@ export default function NutritionClientDetail() {
   const [viewingOnboarding, setViewingOnboarding] = useState(false);
 
   const isWide = isWeb && width >= WIDE_BREAKPOINT;
+  // What this page can actually give a full-width child: the window, less
+  // CoachShell's sidebar and this ScrollView's own horizontal padding.
+  // Computed rather than measured on purpose — the compare rail derives its
+  // photo HEIGHT from this, and a measured width oscillates against the
+  // scrollbar it ends up causing. See PhotoCompareRail's header.
+  const contentWidth = Math.max(
+    240,
+    width - (isWeb && width >= MOBILE_BREAKPOINT ? SIDEBAR_WIDTH : 0) - (isWeb ? 40 : 18) * 2
+  );
 
   const selectedWeek = useMemo(() => {
     const { currentWeek } = computeWeekWindows(today);
@@ -793,6 +802,7 @@ export default function NutritionClientDetail() {
               weeks={weekRows}
               targetChangeByWeek={targetChangeByWeek}
               phaseMarkers={weekPhases}
+            availableWidth={contentWidth}
               phaseNames={phaseNames}
               onSetPhase={handleSetWeekPhase}
               onClearPhase={handleClearWeekPhase}
