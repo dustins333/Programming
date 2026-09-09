@@ -65,9 +65,15 @@ const GOAL_H = 27; // ClientGoalLine tone="pill" size="md"
 const WARMUP_H = 45; // collapsed strip; expanding is deliberate and local
 const ROW_NAME_H = 26; // governed by the 26px completion tick, not the text
 const ROW_SCHEME_H = 18;
+// The coach's exercise note, on its own line under the prescription. RESERVED
+// whether or not this lift has one, for the same reason every other block in
+// this column is: a row that is 16px shorter than the same row in the next
+// column is a row you have to hunt for. It costs one lift of capacity in a
+// full column, which the scroller and the "N more lifts" row already handle.
+const ROW_NOTE_H = 16;
 const ROW_BUBBLES_H = 32;
-// Borders (1.5 x 2) + padding (9 + 10) + the three fixed blocks.
-const RESTING_ROW_H = 3 + 9 + ROW_NAME_H + ROW_SCHEME_H + ROW_BUBBLES_H + 10;
+// Borders (1.5 x 2) + padding (9 + 10) + the four fixed blocks.
+const RESTING_ROW_H = 3 + 9 + ROW_NAME_H + ROW_SCHEME_H + ROW_NOTE_H + ROW_BUBBLES_H + 10;
 const RESTING_ROW_GAP = 8;
 
 // "3 of 8" — which time through this session she is on, out of how many the
@@ -252,20 +258,22 @@ function RestingRow({ item, letter, logs, completed, hasNote, editOrder, canReor
         )}
       </View>
       <View style={{ height: ROW_SCHEME_H, justifyContent: "center", marginLeft: indent }}>
-        {/* The coach's note rides the prescription line rather than earning a
-            row of its own: these rows are fixed-height so the same lift lands
-            at the same y in every column, and a fourth line would break that
-            for all four clients. Clay against the muted prescription, so
-            "V-Handle" reads as an instruction and not as more of the
-            programming. Truncates on a long one — the whole note is one tap
-            away on the card. */}
         <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted }}>
           {schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }, item.exercise)}
           {item.rest ? ` | Rest ${item.rest}` : ""}
-          {coachInstruction(item) ? (
-            <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>{` | ${coachInstruction(item)}`}</Text>
-          ) : null}
         </Text>
+      </View>
+      {/* The coach's note, on its own line under the prescription rather than
+          appended to it. Appended, "V-Handle" had to be read out of the middle
+          of a run of programming; on its own line it reads as the instruction
+          it is. Clay so it can't be mistaken for more of the prescription, and
+          truncated — the whole note is one tap away on the card. */}
+      <View style={{ height: ROW_NOTE_H, justifyContent: "center", marginLeft: indent }}>
+        {coachInstruction(item) ? (
+          <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>
+            {coachInstruction(item)}
+          </Text>
+        ) : null}
       </View>
       <View style={{ height: ROW_BUBBLES_H, justifyContent: "center", overflow: "hidden", marginLeft: indent }}>
         <SetBubbleRow

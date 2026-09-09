@@ -1153,6 +1153,99 @@ be lost by a stub forgetting an export. Eleven modules, restored afterwards and
 Worth Terra's pass: a real note added and edited, a real print, and the
 Sessions tab against a client whose sessions actually load.
 
+## SPC follow-up: KEEP IN MIND everywhere, the builder is desktop-only, the exercise note gets its own line (2026-09-08)
+
+Four asks off the same sitting, all UI. No migration, no deploy step.
+
+**The mobile program overview** (`components/coach/SpcSessionPreview.js`, the
+sheet the SPC roster opens, and the same page the review deck pages through)
+loses its Print sheet button and its bottom button row. "Open client page" was
+a full-width button under every lift; it is navigation, not the conclusion of
+reading a session, so it is a **"Client page ›" link in the header** next to
+the status pill. Measured at 375px: back link, pill and link all fit with 18px
+to spare and no page overflow — and "Good to go" is the longest status label
+there is, so nothing longer can push the link off.
+
+**The bottom "Coach notes" box moves to the top as KEEP IN MIND**, collapsed,
+directly under the goal banner. Two things were wrong with it: the name (the
+block-scoped `program_comments` thread already owns "Notes" — see
+`ProgramNotes.js` for why these two are not the same feature), and the end of
+the screen. `spc_clients.notes_goals_feedback` is the injury, the cue, the
+thing you need BEFORE you read the programming, not after every lift. Same
+name, same lock glyph and same clay eyebrow as the desktop client page's
+goal-hero aside, so a coach meets one thing called KEEP IN MIND rather than
+two. **Collapsed still shows the first line** — a box that only says it has
+something in it makes you tap to find out whether it matters.
+
+**`getSpcSessionPreview` now returns `keepInMind` itself** rather than the
+page reading it off the caller's `client` object. The roster row carries
+`notesGoalsFeedback`; the review deck's clients are only `{userId, name,
+sessionNumber}`, so sourcing it from the prop would have shown a coach's notes
+on one route and silently not on the other. One indexed single-row read, its
+own catch.
+
+**The full builder is desktop-only now.** `SessionCard`'s "Full editor" button
+(`SpcSessionsTab.js`) is gated on the `isDesktop` it was already being handed.
+Add, remove and inline sets/reps stay at both widths, so a phone keeps
+everything except the restructure — same call as every other builder in this
+app. One real consequence: the **upcoming** pane passes `editable={false}`
+because that program is built entirely in the editor, so on a phone it becomes
+read-only. Its caption says so ("Build this one on a computer") rather than
+leaving the absence to be discovered.
+
+**The builder leads with the client, not the rail.** The goal card moved out
+of the 268px right rail and onto the top of the session column as the full
+`wide` band, carrying KEEP IN MIND in its `aside` — the two standing facts
+about a client were in the narrowest column on screen, or on another page
+entirely, while the session got the width. Read-only, same as limitations
+("editing belongs on her own page"); the whole band renders nothing for a
+client with neither. **`CommentThread` is gone from the SPC builder's rail**
+with it: it was the second notes box on a screen that now opens with KEEP IN
+MIND, which is exactly the "one feature drawn twice" confusion the client-page
+rebuild existed to undo. The thread still lives on that page's Sessions tab
+(`ProgramNotesRow`). The **group** builder keeps its CommentThread — a group
+block is shared, there is no one client whose goal belongs at the top of it.
+
+**The exercise note leads the lift card.** In `SessionBuilderParts.js`'s
+`SortableLift`, NOTE TO MEMBER was a small white box in the bottom-right
+corner behind tempo. It is **EXERCISE NOTE** now, full width, directly under
+the lift's own name, on peach (`#fdece5`) with a 3px `colors.primary` left
+rule — the wall display's own language for it, so a coach who has read it on
+the board recognises what she is typing into. Peach specifically, not the
+softer `#fdf6f2`: a supersetted lift row is already filled with that one and
+the field would be invisible inside it. Shared by all three builders, which is
+the point — one name for one field.
+
+**Deliberately NOT renamed on the hub or the member app**, where it still
+reads "Coach note:". It is an *exercise note* when you write it and a *coach
+note* when you receive it, and `HubLiftCard`'s own header says the wall and
+the phone in her hand are worded identically on purpose. Flag it if that reads
+wrong.
+
+**The hub row grew a line, and reserving it is the load-bearing part.**
+`RestingRow`'s coach note used to ride the prescription (`3 × 8-10 | Rest 2:00
+| V-Handle`), which meant reading the instruction out of the middle of a run
+of programming. It is its own line under it now — and `ROW_NOTE_H` is
+**reserved whether or not the lift has a note**, because this column's whole
+grid is fixed-height blocks so that "lift 3" sits at the same y in all four
+columns. Verified by measurement, not eyeball: three rows, two with notes and
+one without, all exactly **114px** with tops exactly 122 apart. Costs 16px a
+row (98 → 114), i.e. about one lift of capacity in a full column, which the
+scroller and the "N more lifts" row already handle.
+
+**Verification**: `npm run build` + `check:routes` clean; a Babel parse,
+unresolved-identifier, unused-import **and missing-named-export** pass over all
+six touched files; and every piece driven for real through a throwaway
+`app/zz-spc-harness.js` at 1280 and 375/420 (deleted; the three temporarily
+exported/stubbed files restored and **md5-verified byte-identical**, `git
+status` checked). Exercised: hub row heights above, the expanded lift card with
+its note typed into and its computed style read back (`#fdece5`, 3px
+`#a46a57`, 866px wide), the goal+KEEP IN MIND band, the session card with and
+without the editor button, and the sheet's header, collapsed preview and
+expanded note. **Not verified behind a real login** — standing limitation.
+Worth Terra's pass: a real client's sheet, and the builder against a real
+session.
+
 ## The refresh pill that never went away, on Chrome (2026-09-07)
 
 Reported from an installed Chrome PWA: tap Refresh, the page reloads, a few

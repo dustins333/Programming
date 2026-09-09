@@ -27,6 +27,11 @@ export const BUILDER_CANVAS = "#faf8f6";
 export const BUILDER_CARD_BORDER = "#ece7e1";
 
 const CARD_BORDER = BUILDER_CARD_BORDER;
+// The exercise note's own peach. Deliberately NOT the softer #fdf6f2 a
+// supersetted lift row is already filled with — inside one, that would be
+// invisible.
+const NOTE_BG = "#fdece5";
+const NOTE_BORDER = "#e0b6a5";
 const REST_CHIPS = [60, 90, 120, 180];
 
 // formatRest / schemeLabel live in lib/programming/prescription.js — pure,
@@ -623,7 +628,39 @@ export function SortableLift({
         </Pressable>
 
         {expanded ? (
-          <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", gap: 20, flexWrap: "wrap" }}>
+          <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+            {/* The exercise note leads the card, directly under the lift's own
+                name, because it is the one field here she reads rather than
+                sets — it is what reaches the member, and it used to sit in the
+                bottom-right corner behind tempo. Peach on a rust rule: the
+                same clay the wall display gives it, so a coach who has read it
+                on the board recognises the thing she is typing into. */}
+            <View style={{ marginBottom: 16 }}>
+              <Eyebrow color={colors.primaryOnWhite} style={{ marginBottom: 6 }}>
+                EXERCISE NOTE
+              </Eyebrow>
+              <TextInput
+                value={item.notes ?? ""}
+                onChangeText={(v) => onChange(item.id, { notes: v })}
+                placeholder="A cue shown under this lift on her phone and the board…"
+                placeholderTextColor="#c2a396"
+                style={{
+                  height: 36,
+                  borderWidth: 1,
+                  borderColor: NOTE_BORDER,
+                  borderLeftWidth: 3,
+                  borderLeftColor: colors.primary,
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  backgroundColor: NOTE_BG,
+                  fontFamily: fonts.sans,
+                  fontSize: 12.5,
+                  color: "#2a211c",
+                }}
+              />
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 20, flexWrap: "wrap" }}>
             <View>
               <Eyebrow style={{ marginBottom: 7 }}>SETS</Eyebrow>
               <SetTable item={item} onChange={onChange} />
@@ -633,33 +670,12 @@ export function SortableLift({
               <Eyebrow style={{ marginBottom: 7 }}>REST</Eyebrow>
               <RestChips value={item.rest} onChange={(v) => onChange(item.id, { rest: v })} />
 
-              <View style={{ flexDirection: "row", gap: 20, marginTop: 14, flexWrap: "wrap" }}>
-                {showTempo ? (
-                  <View>
-                    <Eyebrow style={{ marginBottom: 7 }}>TEMPO</Eyebrow>
-                    <TempoDigits value={item.tempo} onChange={(v) => onChange(item.id, { tempo: v })} />
-                  </View>
-                ) : null}
-                <View style={{ flex: 1, minWidth: 200 }}>
-                  <Eyebrow style={{ marginBottom: 7 }}>NOTE TO MEMBER</Eyebrow>
-                  <TextInput
-                    value={item.notes ?? ""}
-                    onChangeText={(v) => onChange(item.id, { notes: v })}
-                    placeholder="A cue shown under this lift…"
-                    style={{
-                      height: 34,
-                      borderWidth: 1,
-                      borderColor: CARD_BORDER,
-                      borderRadius: 8,
-                      paddingHorizontal: 10,
-                      backgroundColor: "#fff",
-                      fontFamily: fonts.sans,
-                      fontSize: 12.5,
-                      color: "#2a211c",
-                    }}
-                  />
+              {showTempo ? (
+                <View style={{ marginTop: 14 }}>
+                  <Eyebrow style={{ marginBottom: 7 }}>TEMPO</Eyebrow>
+                  <TempoDigits value={item.tempo} onChange={(v) => onChange(item.id, { tempo: v })} />
                 </View>
-              </View>
+              ) : null}
 
               <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 14 }}>
                 {showSuperset ? (
@@ -674,6 +690,7 @@ export function SortableLift({
                   <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "#b23a22" }}>Remove lift</Text>
                 </Pressable>
               </View>
+            </View>
             </View>
           </View>
         ) : null}

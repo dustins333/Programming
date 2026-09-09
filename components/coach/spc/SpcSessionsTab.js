@@ -305,7 +305,7 @@ function WarmupStrip({ warmups }) {
   );
 }
 
-function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, onOpenEditor, clientFirst, editable }) {
+function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, onOpenEditor, clientFirst, editable, showEditor = true }) {
   const { workout, exercises } = session;
   const empty = exercises.length === 0;
   return (
@@ -325,7 +325,12 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
         </View>
         {/* One button, top right: the way into the full editor. Adding an
             exercise moved to the foot of the card, where the list it appends
-            to actually ends. */}
+            to actually ends.
+            Desktop only — the drag-ordered builder is a build surface and
+            doesn't hold up on a phone, same call as every other builder in
+            this app. Adding, removing and editing a lift stay on the card at
+            both widths, so a phone keeps everything but the restructure. */}
+        {showEditor ? (
         <PressFade onPress={() => onOpenEditor(session)} hitSlop={8} style={{ marginLeft: "auto" }}>
           <View
             style={{
@@ -346,6 +351,7 @@ function SessionCard({ session, labels, drafts, onDraft, onRemove, onAddLift, on
             <Ionicons name="chevron-forward" size={12} color={colors.primaryOnWhite} />
           </View>
         </PressFade>
+        ) : null}
       </View>
 
       <WarmupStrip warmups={session.warmups} />
@@ -1278,6 +1284,7 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
               onOpenEditor={(session) => handleOpenEditor(session, true)}
               clientFirst={clientFirst}
               editable
+              showEditor={isDesktop}
             />
           ))}
 
@@ -1430,7 +1437,9 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
             />
           ) : (
             <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
-              Autosaves in the editor · publish it when it's ready
+              {isDesktop
+                ? "Autosaves in the editor · publish it when it's ready"
+                : "Build this one on a computer · publish it when it's ready"}
             </Text>
           )}
 
@@ -1442,6 +1451,7 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
               onOpenEditor={(session) => handleOpenEditor(session, false)}
               clientFirst={clientFirst}
               editable={false}
+              showEditor={isDesktop}
             />
           ))}
 

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { DndContext, PointerSensor, useSensor, useSensors, pointerWithin } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { listExercises, createExercise, isLibraryReviewer } from "../../../../lib/programming/exercises";
 import { getUser } from "../../../../lib/programming/clients";
+import { getSpcClient } from "../../../../lib/programming/spcClients";
 import {
   getSpcWorkout,
   listSpcWarmups,
@@ -28,7 +30,6 @@ import { ExerciseFormModal } from "../../../../components/ExerciseFormModal";
 import { ExercisePickerModal } from "../../../../components/ExercisePickerModal";
 import { ExerciseLibrarySidebar } from "../../../../components/ExerciseLibrarySidebar";
 import { SessionPreviewModal } from "../../../../components/SessionPreviewModal";
-import { CommentThread } from "../../../../components/CommentThread";
 import { ClientLimitationsCard } from "../../../../components/ClientLimitationsCard";
 import { listClientLimitations } from "../../../../lib/programming/clientNotes";
 import { getClientGoal } from "../../../../lib/programming/clientGoals";
@@ -99,6 +100,9 @@ export default function SpcWorkoutBuilderWeb() {
   // environment, and a builder must never fail to open over a rail panel.
   const [limitations, setLimitations] = useState(null);
   const [goal, setGoal] = useState(null);
+  // spc_clients.notes_goals_feedback — the standing "keep in mind" facts. Own
+  // catch for the same reason the goal has one.
+  const [keepInMind, setKeepInMind] = useState(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -131,6 +135,11 @@ export default function SpcWorkoutBuilderWeb() {
         setGoal((await getClientGoal(w.spc_blocks.spc_client_id))?.goal ?? null);
       } catch {
         setGoal(null);
+      }
+      try {
+        setKeepInMind((await getSpcClient(w.spc_blocks.spc_client_id))?.notes_goals_feedback ?? null);
+      } catch {
+        setKeepInMind(null);
       }
       setLastWeek(previousWeek);
     } catch (err) {
@@ -545,6 +554,39 @@ export default function SpcWorkoutBuilderWeb() {
 
           <View style={{ flex: 1, flexDirection: "row" }}>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 26, paddingVertical: 22, paddingBottom: 60 }}>
+              {/* Who this is for, above what you are writing for her. The goal
+                  used to lead the right rail and KEEP IN MIND wasn't here at
+                  all — so the two standing facts about a client sat in the
+                  narrowest column on screen, or on another page entirely,
+                  while the session got the width. Read-only: editing either
+                  belongs on her own page, same as the limitations below.
+                  The whole band disappears for a client with neither. */}
+              {goal || keepInMind ? (
+                <ClientGoalCard
+                  goal={goal}
+                  showSharedMark={false}
+                  wide
+                  style={{ marginBottom: 20 }}
+                  aside={
+                    keepInMind ? (
+                      <>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 }}>
+                          <Ionicons name="lock-closed" size={11} color="#f0d9d0" />
+                          <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1, color: "#f0d9d0" }}>
+                            KEEP IN MIND
+                          </Text>
+                        </View>
+                        <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: BUILDER_CARD_BORDER, borderRadius: 8, padding: 9 }}>
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 19, color: "#2a211c" }}>
+                            {keepInMind}
+                          </Text>
+                        </View>
+                      </>
+                    ) : undefined
+                  }
+                />
+              ) : null}
+
               <TextInput
                 value={workout.title ?? ""}
                 onChangeText={handleTitleChange}
@@ -614,13 +656,9 @@ export default function SpcWorkoutBuilderWeb() {
               style={{ width: 268, flexGrow: 0, flexShrink: 0, borderLeftWidth: 1, borderLeftColor: BUILDER_CARD_BORDER, backgroundColor: "#faf8f6" }}
               contentContainerStyle={{ padding: 18, flexGrow: 1 }}
             >
-              {/* The goal leads the rail, then limitations: what she's working
-                  toward is the frame, and the limitations are the constraints
-                  on it. Read-only — editing belongs on her own page. */}
-              {goal ? (
-                <ClientGoalCard goal={goal} showSharedMark={false} style={{ marginBottom: 18 }} />
-              ) : null}
-              {/* Limitations lead the constraints — they're a constraint on what
+              {/* Limitations lead the rail — the goal band moved to the top of
+                  the session column, where it has the width to carry KEEP IN
+                  MIND beside it. Limitations lead the constraints — they're a constraint on what
                   you're about to write, so they have to be read before the
                   balance and last-week panels, not after. Read-only here:
                   editing them belongs on the client's own page, which is
@@ -637,11 +675,12 @@ export default function SpcWorkoutBuilderWeb() {
               ) : null}
               <BalanceRail counts={patternCounts} note={balanceNote} />
               <LastWeekRail lastWeek={lastWeek} onCopy={handleCopyLastWeek} copying={copyingLastWeek} />
-              {/* Same reasoning as the group builder: block notes are
-                  coach-to-coach and the native builder still shows them. */}
-              <View style={{ marginTop: 26 }}>
-                <CommentThread spcBlockId={workout.spc_blocks.id} />
-              </View>
+              {/* The block's coach-to-coach thread is deliberately NOT here.
+                  It was the second notes box on a screen that now leads with
+                  KEEP IN MIND, and the two read as one feature drawn twice —
+                  the exact confusion the SPC client page was rebuilt to undo.
+                  It lives on that page's Sessions tab (ProgramNotesRow), which
+                  is where a note about the program belongs. */}
             </ScrollView>
           </View>
         </View>

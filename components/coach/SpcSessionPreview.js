@@ -95,6 +95,58 @@ function GoalBanner({ goal }) {
   );
 }
 
+// spc_clients.notes_goals_feedback: standing facts about the client — the
+// injury, the cue, what she responds to — as against the block-scoped Notes
+// thread, which is dated and attributed. Same field, same name and same clay
+// eyebrow as the desktop client page's goal-hero aside, so a coach meets one
+// thing called KEEP IN MIND rather than two.
+//
+// It used to sit at the very bottom of the sheet under every lift, labelled
+// "Coach notes" — which is both the wrong name (the Notes thread has it) and
+// the wrong end of the screen for something you want to know BEFORE you read
+// the programming. Collapsed by default with the first line showing, so it
+// costs a row here and never buries the session.
+function KeepInMindRow({ text }) {
+  const [open, setOpen] = useState(false);
+  if (!text?.trim()) return null;
+  return (
+    <View style={{ marginTop: 8, backgroundColor: TINT_BG, borderWidth: 1, borderColor: TINT_BORDER, borderRadius: 9 }}>
+      <PressFade
+        onPress={() => setOpen((v) => !v)}
+        accessibilityLabel={open ? "Hide what to keep in mind" : "Show what to keep in mind"}
+        style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7, paddingHorizontal: 11 }}
+      >
+        <Ionicons name="lock-closed" size={11} color={TINT_EYEBROW} />
+        <Eyebrow color={TINT_EYEBROW} letterSpacing={0.8}>
+          Keep in mind
+        </Eyebrow>
+        {/* Closed, the first line still reads — a box that only says it has
+            something in it makes a coach tap to find out whether it matters. */}
+        {open ? (
+          <View style={{ flex: 1 }} />
+        ) : (
+          <Text
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.15}
+            style={{ flex: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: type.caption, color: "#78716c" }}
+          >
+            {text.trim()}
+          </Text>
+        )}
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={14} color={TINT_EYEBROW} />
+      </PressFade>
+      {open ? (
+        <Text
+          maxFontSizeMultiplier={1.15}
+          style={{ paddingHorizontal: 11, paddingBottom: 10, fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 19, color: "#44403c" }}
+        >
+          {text.trim()}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 // One segment per session_number. Tapping switches which session is read;
 // the selected week deliberately survives the switch, because "how did she
 // do in week 2" is a question about the week, not the session.
@@ -493,15 +545,14 @@ function SpcSessionPreviewPage({
     return status === "published" ? null : targetWeek;
   }, [session, targetWeek, data]);
 
-  const openPrint = () => {
-    if (!data?.block || !session) return;
-    window.open(`/spc/print/${data.block.id}?session=${session.sessionNumber}`, "_blank");
-  };
-
   const openClientPage = () => {
     onClose();
     router.push(`/(coach)/spc/${userId}`);
   };
+
+  // The sheet's own read wins: the roster row carries it too, but the review
+  // deck's clients don't, and this way the box behaves the same on both.
+  const keepInMind = data?.keepInMind ?? client?.notesGoalsFeedback ?? null;
 
   const meta = data
     ? [
@@ -528,7 +579,16 @@ function SpcSessionPreviewPage({
             ) : (
               <View />
             )}
+            <View style={{ flex: 1 }} />
             {client?.label ? <StatusPill label={client.label} tone={client.tone} /> : null}
+            {/* Was a full-width button under every lift on the sheet. It is
+                navigation, not the conclusion of reading a session, so it sits
+                where the rest of this screen's navigation does. */}
+            <PressFade onPress={openClientPage} hitSlop={10} style={{ paddingVertical: 2 }}>
+              <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+                Client page ›
+              </Text>
+            </PressFade>
           </View>
 
           <Text numberOfLines={2} maxFontSizeMultiplier={1.1} style={{ marginTop: 6, fontFamily: fonts.display, fontSize: 24, color: INK }}>
@@ -546,6 +606,8 @@ function SpcSessionPreviewPage({
               <GoalBanner goal={data.goal} />
             </View>
           ) : null}
+
+          <KeepInMindRow text={keepInMind} />
 
           {onlySessionNumber != null ? (
             <View style={{ marginTop: 10 }}>
@@ -657,66 +719,6 @@ function SpcSessionPreviewPage({
               ))
             )}
 
-            {client?.notesGoalsFeedback ? (
-              <View
-                style={{
-                  marginTop: 18,
-                  backgroundColor: TINT_BG,
-                  borderWidth: 1,
-                  borderColor: TINT_BORDER,
-                  borderRadius: 12,
-                  paddingVertical: 13,
-                  paddingHorizontal: 14,
-                }}
-              >
-                <Eyebrow color={TINT_EYEBROW}>Coach notes</Eyebrow>
-                <Text
-                  maxFontSizeMultiplier={1.15}
-                  style={{ marginTop: 6, fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 19, color: "#44403c" }}
-                >
-                  {client.notesGoalsFeedback}
-                </Text>
-              </View>
-            ) : null}
-
-            <View style={{ flexDirection: "row", gap: 9, marginTop: 18 }}>
-              {/* The print sheet is a web-only route (it renders a real
-                  landscape Letter page and opens the browser's print
-                  dialog), so it's offered where it can actually work
-                  rather than pushed to a route native has no file for. */}
-              {Platform.OS === "web" ? (
-                <PressFade
-                  onPress={openPrint}
-                  style={{
-                    flex: 1,
-                    alignItems: "center",
-                    backgroundColor: "#fff",
-                    borderWidth: 1,
-                    borderColor: "#d9d4cd",
-                    borderRadius: 10,
-                    paddingVertical: 12,
-                  }}
-                >
-                  <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>
-                    Print sheet
-                  </Text>
-                </PressFade>
-              ) : null}
-              <PressFade
-                onPress={openClientPage}
-                style={{
-                  flex: 1,
-                  alignItems: "center",
-                  backgroundColor: colors.primary,
-                  borderRadius: 10,
-                  paddingVertical: 12,
-                }}
-              >
-                <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>
-                  Open client page
-                </Text>
-              </PressFade>
-            </View>
           </ScrollView>
         )}
 
