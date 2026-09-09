@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { colorForTarget, colorForStepsTarget } from "../../lib/nutrition/weekCycle";
@@ -9,6 +9,7 @@ import { PhaseEditor } from "./WeekPhaseEditor";
 import { WeekTabStrip, WeekNoteEditor, TargetChangePopup } from "./WeekTabs";
 import { resolveWeekPhase } from "../../lib/nutrition/weekPhases";
 import { fonts } from "../../lib/theme";
+import { MOBILE_BREAKPOINT } from "../CoachShell";
 
 // The Weeks tab (coach web v2, screen 20): one row per week, opening into
 // its seven days. Replaces the flat metric grid on this tab — a coach
@@ -22,18 +23,22 @@ const OK = "#4d6142";
 const OFF = "#b23a22";
 const MUTED = "#a8a29e";
 
-// Calories lead, matching the day table below — a coach reads the headline
-// number first and then how it was made up.
+// Calories lead: a coach reads the headline number first and then how it
+// was made up.
 //
-// Fibre is a lowercase f against fat's capital F: the shorthand is P/C/F/f,
-// and spelling one of them out while the rest were single letters made it
-// read as a different kind of thing.
+// Two labels each. There is room to name them properly on a desktop card,
+// and no room at all on a phone, where five rings have to fit across ~278px
+// — so the shorthand is a phone measure rather than the preferred reading.
+// It is P/C/F/f there, with fibre a lowercase f against fat's capital F:
+// spelling one of the four out while the rest were single letters made it
+// read as a different kind of thing. The full words tell them apart on
+// their own, so the case only carries meaning in the short set.
 const MACRO_BARS = [
-  { key: "calories", short: "cal", targetKey: "calories" },
-  { key: "protein_g", short: "P", targetKey: "protein_g" },
-  { key: "carb_g", short: "C", targetKey: "carb_g" },
-  { key: "fat_g", short: "F", targetKey: "fat_g" },
-  { key: "fiber_g", short: "f", targetKey: "fiber_g" },
+  { key: "calories", short: "Cal", full: "Calories", targetKey: "calories" },
+  { key: "protein_g", short: "P", full: "Protein", targetKey: "protein_g" },
+  { key: "carb_g", short: "C", full: "Carbs", targetKey: "carb_g" },
+  { key: "fat_g", short: "F", full: "Fat", targetKey: "fat_g" },
+  { key: "fiber_g", short: "f", full: "Fiber", targetKey: "fiber_g" },
 ];
 
 // Columns FLEX rather than sitting at a fixed width — the expanded day table
@@ -41,8 +46,8 @@ const MACRO_BARS = [
 // fixed-width table left a growing gap down the right-hand side as the card
 // widened. `min` is the wrap/scroll floor, not the width.
 const DAY_COLUMNS = [
-  { key: "calories", label: "Cal", min: 50, flex: 1, digits: 0 },
   { key: "weight", label: "Weight", min: 54, flex: 1.1, digits: 1 },
+  { key: "calories", label: "Cal", min: 50, flex: 1, digits: 0 },
   { key: "protein_g", label: "Prot", min: 44, flex: 0.95, digits: 0, targetKey: "protein_g" },
   { key: "carb_g", label: "Carb", min: 44, flex: 0.95, digits: 0, targetKey: "carb_g" },
   { key: "fat_g", label: "Fat", min: 40, flex: 0.85, digits: 0, targetKey: "fat_g" },
@@ -102,8 +107,8 @@ const RING_SIZE = 44;
 const RING_STROKE = 4;
 const RING_TRACK = "#f0ece6";
 
-function MacroRing({ short, value, goal }) {
-  const tone = colorFor(short, value, goal);
+function MacroRing({ label, value, goal }) {
+  const tone = colorFor(label, value, goal);
   const color = tone === "green" ? OK : tone === "red" ? OFF : MUTED;
   const logged = value !== null && value !== undefined;
   const progress = logged && goal ? Math.max(0, Math.min(1, value / goal)) : 0;
@@ -149,7 +154,7 @@ function MacroRing({ short, value, goal }) {
         </Text>
       </View>
       <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 10.5, color: "#57534e", marginTop: 4 }}>
-        {short}
+        {label}
       </Text>
       <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 10, color: "#a8a29e", marginTop: 1 }}>
         {goal ? `of ${Math.round(goal)}` : "no target"}
@@ -329,6 +334,10 @@ function DayTable({ week, target }) {
 export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, phasesEnabled, notesEnabled, onOpenTab }) {
   const target = week.target;
   const avgWeight = week.summary.averages.weight;
+  // Full macro names where there is room for them, the P/C/F/f shorthand
+  // where there isn't. Resolved once here rather than inside each ring.
+  const { width } = useWindowDimensions();
+  const wide = width >= MOBILE_BREAKPOINT;
 
   return (
     <View className="mb-2">
@@ -358,9 +367,15 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
               being read, and it cost a 118px column plus a second line of
               height on every row. Spending that on the numbers instead is
               the whole point of the change. */}
-          <Text maxFontSizeMultiplier={1.15} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e" }}>
-            {formatDateMD(week.start)} – {formatDateMD(week.end)}
-          </Text>
+          <View className="flex-row items-center justify-between">
+            <Text maxFontSizeMultiplier={1.15} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e" }}>
+              {formatDateMD(week.start)} – {formatDateMD(week.end)}
+            </Text>
+            {/* Top-right of the card, on the date's own line. In the metric
+                row it took a column the rings wanted, and on a phone that
+                was enough to push them onto a line of their own. */}
+            <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#c9c4bd" />
+          </View>
 
           <View className="flex-row flex-wrap items-center" style={{ gap: 14, marginTop: 7 }}>
             <View style={{ width: 78 }}>
@@ -385,19 +400,11 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
               </Text>
             </View>
 
-            {/* Four columns' worth, and both halves of that matter. It has to
-                be big enough that the block drops onto its OWN line rather
-                than squeezing in beside the logged-days column (which is what
-                leaves the rings a usable 278px on a phone), and small enough
-                that it never exceeds the row holding it — asking for all five
-                did exactly that, and the last ring overflowed the card instead
-                of wrapping inside it. */}
-            <View className="flex-row flex-wrap" style={{ flex: 1, minWidth: RING_COL_WIDTH * 4 + 24, gap: 8 }}>
-              {MACRO_BARS.map((bar) => (
-                <MacroRing key={bar.key} short={bar.short} value={week.summary.averages[bar.key] ?? null} goal={targetValue(target, bar.targetKey)} />
-              ))}
-            </View>
-
+            {/* Beside the logged-days dots, not after the rings. Both are
+                "how did the week go" rather than a measured number, and on
+                a phone the pair fits the first line alongside the weight,
+                which is what leaves the rings a whole line of their own
+                instead of a 132px column squeezing them onto the next one. */}
             <View className="flex-row items-center" style={{ width: 132, gap: 6 }}>
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: CHECKIN_STATE[week.checkinState].color }} />
               <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: CHECKIN_STATE[week.checkinState].color }}>
@@ -405,7 +412,18 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
               </Text>
             </View>
 
-            <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#c9c4bd" />
+            {/* Four columns' worth. It has to be big enough that on a phone
+                the block drops onto its OWN line rather than squeezing in
+                beside the weight and the check-in state, and small enough
+                that it never exceeds the row holding it — asking for all
+                five did exactly that, and the last ring overflowed the card
+                instead of wrapping inside it. */}
+            <View className="flex-row flex-wrap" style={{ flex: 1, minWidth: RING_COL_WIDTH * 4 + 24, gap: 8 }}>
+              {MACRO_BARS.map((bar) => (
+                <MacroRing key={bar.key} label={wide ? bar.full : bar.short} value={week.summary.averages[bar.key] ?? null} goal={targetValue(target, bar.targetKey)} />
+              ))}
+            </View>
+
           </View>
         </Pressable>
 
