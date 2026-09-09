@@ -1153,6 +1153,126 @@ be lost by a stub forgetting an export. Eleven modules, restored afterwards and
 Worth Terra's pass: a real note added and edited, a real print, and the
 Sessions tab against a client whose sessions actually load.
 
+## Tempo removed, SPC program notes retired, phase on the photo pickers, and a photo that vibrated (2026-09-08)
+
+Three asks in one sitting plus one bug reported mid-session. No migration,
+no deploy step — all of it is client-side.
+
+**TEMPO IS GONE**, from the builder and from every screen that displayed it
+(`TempoDigits`, the collapsed row's column, the member's `ExerciseCard`, the
+hub prescription line, `SpcSessionReadout`, and the item mappers that carried
+it). Only **9 lifts in the whole library** ever had one, checked before
+deciding. Removing only the input — which is what was literally asked — would
+have left those 9 members looking at a cue no coach could edit or clear, so
+the read surfaces went too. **The `tempo` columns are kept and unread**, the
+standing convention here, so it reverts without a migration.
+
+**SPC PROGRAM NOTES retired.** `programming.program_comments` scoped to an
+`spc_block` is no longer read or written anywhere: the client page's Overview
+and Sessions tabs, its History panel and per-run note counts, the native
+builder, the mobile block overview and the legacy web page. `ProgramNotes.js`
+and `lib/spcNotesPref.js` are deleted. **`listComments`/`addComment` now take
+a `groupBlockId` and nothing else** — reintroducing an SPC note takes a
+deliberate edit to `comments.js` rather than a stray prop, and
+`listCommentsForBlocks` (SPC-only) went with it. A GROUP block keeps its
+thread: it is shared across a whole program, so there is no one client whose
+KEEP IN MIND could carry a note about it.
+
+- **`KeepInMindField` is extracted out of `ClientContextBand`** so the phone
+  frame, the native builder and the mobile overview render the SAME box
+  rather than a lookalike — the phone frame has no goal hero, so without it
+  removing the thread would have left it with no note field at all. It
+  carries the seed-once (`value === undefined` means "not loaded") and
+  unmount-flush rules that make it safe to mount anywhere.
+- **The 11 existing rows are kept, unread, and were exported for Terra**
+  (grouped by coach, plus a CSV; script + output in that session's
+  scratchpad). Worth knowing what they were: **9 of the 11 sat on programs
+  that were still running**, 8 written in the preceding 12 days, by four
+  coaches — Lauren Bottelberghe (6, all warm-up substitutions written across
+  her roster in one sitting), Abbi Stauffer (3), Ashley Mullett (1), Kristan
+  Alford (1, written the day before the removal). So this was a live habit
+  going dark, not an unused feature retiring. **Read `coach_id` for the
+  author, never a name inside the note text** — one of them reads "game plan
+  with Alicia", and Alicia is the client it is filed against.
+- The gap this leaves, flagged and not solved: a **warm-up substitution** is
+  neither a standing fact about the client (KEEP IN MIND) nor attached to a
+  lift that exists in the session (EXERCISE NOTE). Six of the eleven were
+  exactly that.
+
+**WEEK PHASE ON THE PHOTO PICKERS.** New `phaseForDate` / `phaseLabelForDate`
+in `weekPhases.js`: snap a photo's date back to its containing Monday and
+read the marker covering it, so "Diet 3" on a photo and "Diet 3" down the
+side of a week are one fact. **`mondayOnOrBefore`, NOT weekCycle's
+`mondayOnOrAfter`** — that one anchors the photo-requirement cadence and
+would push a Tuesday photo into the following week. Wired into the coach
+client page's compare rail (a coloured chip, sharing the Weeks tab palette)
+and the Photo Compare tool (part of the label STRING, because `OptionPicker`
+is a real `<select>` on web where an option can only be text). **`phaseMarkers`
+is a prop, never a fetch**, so the member's own Photos tab neither shows it
+nor queries for it — `nutrition_week_phases` is staff-only and she could not
+read it anyway.
+
+### The compare photos vibrated, and it is a shape worth recognising
+
+Reported as the photos on the coach client page's Photos tab jittering and
+resizing continuously with nothing being touched. Not caused by that day's
+changes — it had been there since the rail was built.
+
+**`PhotoCompareRail` measured its own row with `onLayout` and derived the
+photo HEIGHT from that measured WIDTH.** That is a feedback loop with a
+scrollbar in it:
+
+> taller panes → taller page → the ScrollView needs a vertical scrollbar →
+> the row inside it is ~15px narrower → `onLayout` fires → narrower panes →
+> **shorter** panes, because the height came from the width → the page fits
+> → the scrollbar goes away → the row is 15px wider → repeat, forever.
+
+The Photos tab falls into it easily because the photos are essentially the
+whole height of the page, so it sits right on the scrollbar threshold.
+
+**Fix: the host passes `availableWidth`, computed from the window** (less
+CoachShell's sidebar and its own padding) rather than measured.
+`window.innerWidth` INCLUDES the scrollbar and so cannot move when one
+appears, which is what breaks the cycle — same approach, and the same trade
+of a computed rather than measured width, as the sibling Photo Compare tool
+page. The rail keeps no knowledge of the sidebar; it falls back to the raw
+viewport when the prop is absent. **There is now no `onLayout` left in that
+file.**
+
+**Two durable lessons:**
+
+- **Never derive a box's height from a measurement of its own width** (or
+  vice versa) when that box's size can change whether the page scrolls. The
+  scrollbar closes the loop. Reach for a computed width from
+  `window.innerWidth`, which is scrollbar-independent, or let CSS do it in
+  one pass with `flex` + `aspectRatio`.
+- **This is the `onLayout`-is-a-ResizeObserver hazard cashing in.** Confirmed
+  again this session: **0 ResizeObserver callbacks in 700ms** on a real
+  element in the preview pane, so `onLayout` never fires there and the bug
+  was not reproducible in a browser at all. Anything sized off `onLayout`
+  cannot be checked before it ships — prefer deterministic geometry.
+
+**Verified by simulating the shipped formulas** across 21,385 combinations of
+window width × window height × page chrome, since a browser repro was
+impossible: **old = 168 oscillate**, over window widths 900–1480px (ordinary
+laptop sizes) — at 900×720 with 340px of chrome the photo height alternates
+**383px ↔ 373px forever**, several times a second. **New = 0.** Then rendered
+for real at 1100×800 (height-bound, 353×471) and 900×1000 (width-bound,
+287×383 — the same 383 the loop was flickering on): stable across 2s of
+sampling at both, no horizontal overflow. Sim script is in that session's
+scratchpad as `photo-rail-oscillation-sim.mjs`. **Terra confirmed the fix on
+her own window.**
+
+**Also removed** (her ask): the resting caption under the compare panes
+("Tap either date to pick a different photo for that side…"). The Adjust
+framing caption stays — dragging a guide line is genuinely not self-evident.
+`CHROME_HEIGHT` was deliberately NOT tightened to reclaim the freed pixels:
+a taller pane is a pane closer to needing a scrollbar, and slack costs
+nothing.
+
+**Not verified behind a real login** — standing limitation. Worth Terra's
+pass on an SPC client at phone width, where KEEP IN MIND now stands alone.
+
 ## SPC follow-up: KEEP IN MIND everywhere, the builder is desktop-only, the exercise note gets its own line (2026-09-08)
 
 Four asks off the same sitting, all UI. No migration, no deploy step.
