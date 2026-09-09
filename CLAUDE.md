@@ -8376,11 +8376,40 @@ is out of the metric row entirely at both widths: it is the card's expander, and
 the row it was a column the rings wanted. The desktop line keeps `flex-wrap` as a
 safety net for a squeezed card (a coach at ~1000px still has the 232px sidebar).
 
-**Dates are unpadded and underlined** — `formatDateMDShort` ("9/7"), not
-`formatDateMD` ("09/07"). Nothing lines up under this line, so the padding was only
-making a short label look long; the calendar grids keep `formatDateMD` for exactly
-the reason it exists. The tab popups still use the padded form, deliberately —
-changing one of them and not the other would read worse than either.
+**The date is the first tab, not a line in the card**, and it carries the chevron,
+so the card's first line is all numbers and pressing the tab opens the week. It is
+unpadded — `formatDateMDShort` ("9/7"), not `formatDateMD` ("09/07"); nothing lines
+up under a tab, so the padding only made a short label look long. The calendar
+grids keep `formatDateMD` for exactly the reason it exists, and the tab popups keep
+the padded form deliberately — changing one popup and not the other would read
+worse than either.
+
+**The phase left the strip for the card's left edge**, a coloured spine spelling
+the run out a letter at a time (`PhaseRail`). A phase is a property of the whole
+week rather than one more thing filed against it, and as a tab it competed with the
+labels for a strip that wraps. Three things about it are load-bearing:
+
+- **Stacked letters, not rotated text.** RN has no dependable transform-origin, and
+  a rotated block has to be measured before it can be placed where a column of
+  single characters lays itself out. A space becomes a spacer `View`, never a
+  whitespace-only `Text` — that collapses to zero height under `numberOfLines={1}`
+  (the same trap My Week's stripe captions hit), so "Fat loss" would read "FATLOSS".
+- **A long name is taller than the card, so the letters step down a size as the
+  name grows** (`railType`). This is real, not hypothetical: the live data had
+  `Maintenance` on 4 markers, and at full size it made those cards ~65% taller than
+  their neighbours. **Terra's fix was to rename it to `Maint` in the data**, which
+  is what keeps the spread small — measured, collapsed cards now land within 12px
+  of each other across Diet/Maint/Reverse. `SUGGESTED_PHASES` follows, and the
+  ladder stays as the guard for anything long typed later.
+- The card is `flex-row` with `overflow: hidden` so the spine's fill is clipped to
+  its corners, and the content column carries `minWidth: 0` or the day table's own
+  horizontal scroller sizes that column to its content and pushes the card off the
+  page. The rail is top-aligned rather than centred: the card's height changes when
+  the day table opens, and letters floating in the middle of an expanded week drift
+  away from the row they belong to.
+
+**Deleted from the Weeks tab header**: the "Targets changed N times, tabbed on the
+week it moved" line. The tabs say it on the weeks it happened.
 
 **Calories lead `MacroRingRow` too**, the shared component behind the Dashboard,
 the Check-In tab and the nutrition queue preview. Those three share one component
@@ -8420,6 +8449,9 @@ one row with zero page overflow at every width, day headers leading Day/Weight/C
 the state measured flush to the card's content edge on a phone (17px from the card
 edge = its own 16px padding plus the border) and right of the rings above the
 breakpoint, the dashboard rings reading Calories/Protein/Carbs/Fat/Days logged,
+the date tab collapsing its week and the spine opening the phase editor (in both
+its set and its dashed unset state), collapsed card heights measured across
+Diet/Maint/Reverse,
 the + tab opening a nine-swatch picker, a save carrying `color=slate`, an existing
 label seeding its own colour, a colour-only edit enabling Save and firing
 `updateNote … color=olive`, and the phase editor still offering no "None". `npm run
@@ -8588,6 +8620,24 @@ Done at least twice now from sessions that unusually had real Bash access to Dus
 - **Real crash logs are pullable without Xcode's GUI** via `xcrun devicectl device info files --device <udid> --domain-type systemCrashLogs --search <AppName>` to list them, then `xcrun devicectl device copy from --device <udid> --domain-type systemCrashLogs --source "<Name>.ips" --destination /tmp/crash.ips` to pull one. The `.ips` file is JSON (two concatenated JSON objects, header then body) — `python3 -c "import json; ..."` parses it cleanly; the crashing thread's symbolicated frames are usually enough to diagnose without needing a `.dSYM`/full symbolication pass. Note this only surfaces hard OS-level crashes (`EXC_BREAKPOINT`, `SIGABRT`, etc.) — a plain JS exception (e.g. "Cannot find native module X") shows as a red-screen/error-boundary error on-device and never produces an `.ips` file at all, so an empty or stale crash-log search doesn't mean nothing's wrong.
 - **Adding a native (non-JS-only) dependency to `package.json` does NOT automatically reach an already-generated `ios/` folder.** Hit this for real 2026-08-02: `expo-image-picker`/`expo-image-manipulator`/`react-native-svg` were added to `package.json` during the nutrition rebuild, but nobody re-ran `pod install`, so `ios/Podfile.lock` stayed a day stale and didn't know those pods existed — every subsequent Xcode "Run" rebuilt the *same* binary still missing them, throwing a JS-catchable "Cannot find native module 'ExponentImagePicker'" the instant the photo picker (or `react-native-svg`, i.e. Trends) was used. Symptom looked exactly like a fresh-install-still-broken bug but wasn't — it was a stale `Pods/`. Fix: `cd ios && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install`, then rebuild. **Separately**, `expo-image-picker`'s `app.json` plugin config (the `photosPermission`/`cameraPermission` strings) only gets written into `Info.plist` by a real `expo prebuild` run — since this project's `ios/Info.plist` is hand-maintained (see the scene-delegate note above, prebuild would wipe those fixes), those two keys (`NSPhotoLibraryUsageDescription`/`NSCameraUsageDescription`) had to be added by hand too, or the app would hard-crash (this one *would* produce a real `.ips`) the instant camera/photo-library access was actually requested, even after `pod install` fixed the linking. **Whenever a new native dependency is added going forward: `pod install` in `ios/`, and check whether its Expo config plugin writes anything to `Info.plist`/entitlements that needs hand-porting into the gitignored `ios/` folder** — same class of "not durable, doesn't survive without `expo prebuild`" issue as the scene-delegate fix.
 - **Both Xcode installs plus simulator runtimes plus repeated `DerivedData` builds filled the disk to `ENOSPC` twice this session** — once so completely that even the harness's own Bash-output-capture file couldn't be written (every command failed, including `df -h`). Safe things to clear if this happens again: any leftover installer `.xip` in Downloads (already-extracted, multi-GB), `~/Library/Developer/Xcode/DerivedData` (fully regeneratable), and in Xcode's own Settings → Platforms / About This Mac → Storage → Developer panel — old **bridgeOS device-support entries for iOS builds the device is no longer on** (each is 10GB+; check the device's *current* build number first and keep only that one).
+
+- **2026-09-08 run, on Terra's iPhone 16 Pro Max (iOS 27.0, build 24A5390f).** Everything above still held (Xcode-beta for iOS 27, `DEVELOPER_DIR`, `LANG`/`LC_ALL` for pods, SceneDelegate fix intact). Pods were already current — no native dep has been added since Aug 2, so `pod install` was a no-op re-run. New findings:
+  - **`xcodebuild` fails with `error: No Accounts: Add a new account in Accounts settings.` when Xcode has no Apple ID signed in, and `-allowProvisioningUpdates` CANNOT work around it.** The tell is zero files in `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`. Only the user can fix it (Xcode → Settings → Accounts → **+**), since it needs their password and 2FA — hand it over rather than trying to script around it. Note `defaults read com.apple.dt.Xcode IDEProvisioningTeams` stayed absent even *after* a successful sign-in, so its absence proves nothing; check for a generated `.mobileprovision` instead.
+  - **The local Xcode project builds `com.kovastrength.app` while `app.json`/EAS build `com.kovastrength.mobile`.** Different bundle IDs, so a local dev build installs **alongside** the TestFlight app instead of replacing it — confirmed live, `devicectl device info apps` listed both. This is a feature, not a bug to fix: her working TestFlight copy stays intact. The cost is that Universal Links don't work in the dev build, since the AASA file lists `.mobile`.
+  - **Xcode issued a 7-day LOCAL fallback profile, not a portal-issued one**: `LocalProvision => true`, `TimeToLive => 7`, expiring 8 days out — despite the paid team `CDY5M385LV` and an `Apple Development` cert (`OU=CDY5M385LV`) valid to Aug 2027. **Cause not established.** Guessed it was a pending Program License Agreement and was wrong (see the next bullet). It means a rebuild roughly weekly; check Xcode → Settings → Accounts if it ever matters.
+  - **NEVER click "Perform Changes" on Xcode's "Update to recommended settings" dialog.** It is a *build settings* nag, unrelated to the developer account. It bundles **`ENABLE_USER_SCRIPT_SANDBOXING`**, which breaks RN/Expo builds outright (their script phases read and write across `node_modules`, and this repo's space-in-path problem makes it worse), and **"Use Recommended iOS Deployment Target"**, which raises the minimum out from under Expo's own config. It also bulk-rewrites `project.pbxproj`, which holds the hand-maintained SceneDelegate and space-in-path fixes that do not regenerate. Cancel it; it is a suggestion, not an error.
+  - **A failed launch is not a failed build.** `expo run:ios` exits 1 with `FBSOpenApplicationErrorDomain error 3` ("invalid code signature, inadequate entitlements or its profile has not been explicitly trusted") *after* a successful compile and install. Check `xcrun devicectl device info apps --device <udid>` before assuming the build broke; the fix is the user trusting the profile on the phone (Settings → General → VPN & Device Management).
+
+## The dev server as a PWA on a phone (2026-09-08)
+
+Terra asked to install the **local** dev server as a PWA, alongside the dev build. It needs no code changes at all: `app/+html.js` runs on the dev server too, not only during `expo export`, so `http://<host>:8081` already serves the full PWA head (`apple-mobile-web-app-capable`, `manifest`, `apple-touch-icon`), and `/manifest.json`, `/apple-touch-icon.png` and `/sw.js` all return 200 out of `public/`. Add to Home Screen therefore gives a real standalone icon, not a bookmark.
+
+- **Use the Bonjour name, never the IP** — `http://MacBook-Pro.local:8081` (`scutil --get LocalHostName`). iOS resolves `.local` natively and Safari needs no Local Network permission prompt, so the URL survives DHCP changes and the saved home-screen icon can't break. The one weakness is a second Mac with the same default name joining the network, which forces macOS to rename one to `-2`; renaming the Mac to something distinctive closes it. Their gym already relies on this working (`kova-display.local`).
+- **Safari only.** Chrome on iOS will not install it standalone.
+- **It is a separate origin from `app.kovastrength.com`**, so separate storage and a separate login — which is also why it cannot disturb her real PWA.
+- **Web push does NOT work there.** Service workers need a secure context and this is plain HTTP on a LAN name. `getWebPushStatus()` degrades cleanly to `"unsupported"`/`"ios-needs-install"` rather than throwing, so nothing breaks — it just can't be tested from the local PWA.
+- **`expo start --tunnel` would give HTTPS (and so service workers), but Terra reports it does not work on the iOS 27 beta** — she had already tried before asking, so don't suggest it as the fix.
+- **Don't set a manual static IP in macOS** to stabilise the URL. The router is Google Wifi/Nest (`192.168.86.1`, `192.168.86.0/24`) handing out a pool that includes the Mac's current `.24`, so a hand-set address can collide with another device later. A DHCP reservation in the Google Home app is the safe version — and the `.local` name makes even that unnecessary.
 
 ## Test accounts (real accounts in the live shared Supabase project, not mocks)
 
