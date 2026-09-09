@@ -41,9 +41,12 @@ const RIGHT = "#a46a57";
 // two side by side.
 //
 // Everything above the panes on this page: page padding, the back link, the
-// client header, the tab bar, this toolbar, and the caption below. Measuring
-// it would mean a page-relative measurement RN doesn't give portably, and
-// being 20px out just means 20px of slack under the images.
+// client header, the tab bar and this toolbar. Measuring it would mean a
+// page-relative measurement RN doesn't give portably, and being 20px out
+// just means 20px of slack under the images — which is the direction it errs
+// in now that the resting caption below the panes is gone. Deliberately not
+// tightened to reclaim those pixels: a taller pane is a pane closer to
+// needing a scrollbar, and slack costs nothing.
 const CHROME_HEIGHT = 330;
 const MIN_PANE_HEIGHT = 280;
 const PANE_GAP = 14;
@@ -500,11 +503,18 @@ export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange,
             </View>
             {adjusting && showGuides ? <AlignmentGuides height={finalHeight} guides={guides} onChange={setGuides} /> : null}
           </View>
-          <Text className="mt-3 text-center" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-            {adjusting
-              ? "Drag a photo to move it, zoom to fill the frame, and drag the rust lines to line up her head, waist and feet. Saves as you go, and applies wherever this photo is shown."
-              : "Tap either date to pick a different photo for that side. Tap a photo to open it full size."}
-          </Text>
+          {/* Only while adjusting. The resting caption explained that the
+              date pills are pickers and that a photo opens full size, which
+              the chevron on the pill already says and a tap discovers in one
+              go — it was a line of instructions under a screen that does not
+              need any. Adjust framing keeps its own, because dragging a
+              guide line is genuinely not self-evident. */}
+          {adjusting ? (
+            <Text className="mt-3 text-center" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+              Drag a photo to move it, zoom to fill the frame, and drag the rust lines to line up her head, waist and
+              feet. Saves as you go, and applies wherever this photo is shown.
+            </Text>
+          ) : null}
         </>
       )}
 
