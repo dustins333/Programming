@@ -24,6 +24,7 @@ import { listActiveMilestones } from "../../../../lib/nutrition/milestones";
 import { getOnboardingStatus, bypassOnboarding, listObjectiveTrackingLogs } from "../../../../lib/nutrition/onboarding";
 import { listPhases } from "../../../../lib/nutrition/planPhases";
 import { listWeekPhases, listPhaseNames, setWeekPhase, removeWeekPhaseMarker } from "../../../../lib/nutrition/weekPhases";
+import { listWeekNotes, addWeekNote, updateWeekNote, deleteWeekNote, groupNotesByWeek } from "../../../../lib/nutrition/weekNotes";
 import { computeWeekWindows, currentCalendarWeek, summarizeWeek, deriveCheckinStatus, enumerateRecentWeeks } from "../../../../lib/nutrition/weekCycle";
 import { weekOnProgram, weekDates } from "../../../../lib/nutrition/queue";
 import { listAllPhotos, photosForRequirementWeek } from "../../../../lib/nutrition/photos";
@@ -207,6 +208,7 @@ export default function NutritionClientDetail() {
   const [checkinCloseouts, setCheckinCloseouts] = useState([]);
   const [weekPhases, setWeekPhases] = useState([]);
   const [phaseNames, setPhaseNames] = useState([]);
+  const [weekNotes, setWeekNotes] = useState([]);
   const [otLogs, setOtLogs] = useState([]);
   const [bypassing, setBypassing] = useState(false);
   const [sending, setSending] = useState(false);
@@ -343,6 +345,13 @@ export default function NutritionClientDetail() {
       console.error("Failed to load week phases:", err);
     }
 
+    // Same isolation, migration 0125 (the free-text tabs on a week).
+    try {
+      setWeekNotes(await listWeekNotes(userId));
+    } catch (err) {
+      console.error("Failed to load week notes:", err);
+    }
+
     // Same isolation, migrations 0050/0059 (plan phases and their status).
     try {
       setPhases(await listPhases(userId));
@@ -413,8 +422,8 @@ export default function NutritionClientDetail() {
     }
   };
 
-  const handleSetWeekPhase = (weekStart, name) =>
-    runPhaseChange(() => setWeekPhase(userId, weekStart, name, profile.id), "Failed to set the phase");
+  const handleSetWeekPhase = (weekStart, name, color) =>
+    runPhaseChange(() => setWeekPhase(userId, weekStart, name, profile.id, color), "Failed to set the phase");
 
   // A null phase is an explicit "no phase from here", which ENDS a run
   // without erasing that it happened.
@@ -425,6 +434,17 @@ export default function NutritionClientDetail() {
   // whatever ran before it — undoing a change, rather than making one.
   const handleRemoveWeekPhaseMarker = (weekStart) =>
     runPhaseChange(() => removeWeekPhaseMarker(userId, weekStart), "Failed to remove the phase change");
+
+  // The free-text tabs (migration 0125). Same shape as the phase handlers
+  // above, and same reason for reloading rather than patching local state:
+  // the popup is already gone by the time the write lands, so a failure has
+  // to say so out loud.
+  const handleAddWeekNote = (weekStart, label) =>
+    runPhaseChange(() => addWeekNote(userId, weekStart, label, profile.id), "Failed to add the label");
+
+  const handleUpdateWeekNote = (id, label) => runPhaseChange(() => updateWeekNote(id, label), "Failed to rename the label");
+
+  const handleDeleteWeekNote = (id) => runPhaseChange(() => deleteWeekNote(id), "Failed to remove the label");
 
   // Goes straight into Approve & Set Targets right after bypassing, rather
   // than leaving the coach to remember to come back and set one later.
@@ -610,6 +630,7 @@ export default function NutritionClientDetail() {
     }
   });
   const targetChangeCount = Object.keys(targetChangeByWeek).length;
+  const notesByWeek = groupNotesByWeek(weekNotes);
 
   const photosByDate = {};
   for (const p of photos) {
@@ -761,7 +782,7 @@ export default function NutritionClientDetail() {
               </Text>
               {targetChangeCount > 0 ? (
                 <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
-                  Targets changed {targetChangeCount === 1 ? "once" : `${targetChangeCount} times`} — marked on the weeks they moved
+                  Targets changed {targetChangeCount === 1 ? "once" : `${targetChangeCount} times`}, tabbed on the week it moved
                 </Text>
               ) : null}
             </View>
@@ -773,6 +794,10 @@ export default function NutritionClientDetail() {
               onSetPhase={handleSetWeekPhase}
               onClearPhase={handleClearWeekPhase}
               onRemovePhaseMarker={handleRemoveWeekPhaseMarker}
+              notesByWeek={notesByWeek}
+              onAddNote={handleAddWeekNote}
+              onUpdateNote={handleUpdateWeekNote}
+              onDeleteNote={handleDeleteWeekNote}
             />
             {maxWeeks > WEEKS_SHOWN ? (
               <Pressable onPress={() => setShowAllWeeks((v) => !v)} className="mt-2 self-start">

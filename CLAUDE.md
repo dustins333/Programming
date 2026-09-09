@@ -7862,6 +7862,115 @@ none of it on native. Worth Terra's pass on a real client's photos --
 especially that the guides land where she wants them and that an adjusted
 photo looks right on the shareable board.
 
+## The Weeks tab gets hanging-folder tabs (2026-09-08)
+
+Terra's metaphor, and the shape follows from it: the tabs that stick up out
+of a hanging folder, so a coach running down eleven weeks can see what was
+going on in each one without opening any of them. Migration `0125` —
+applied and verified live.
+
+**What kicked it off was the targets divider, and that is the clearest case
+for the whole idea.** A target change was drawn BETWEEN two weeks, which
+reads as belonging to the week above it — wrong whenever the change landed
+mid-week, which is most of the time. `TargetChangeDivider` is deleted; it is
+a tab on the week the change actually happened in. The matching logic was
+already right (`w.end >= effective_date && w.start <= effective_date`), only
+the rendering was lying.
+
+Four tab kinds: **Phase** (colour-coded), **Targets changed**, any number of
+**free labels**, and a **+**. The phase pill that used to sit inside the row
+header is gone with `PhasePill`; `WeekPhasePill.js` is renamed
+`WeekPhaseEditor.js`, since only the popup survived the move.
+
+**Colours live on the MARKER row, not in a registry keyed on the phase
+name.** Phase names are free text with no table behind them, so a registry
+would need renames kept in sync for a purely visual concern, and it would
+stop a coach drawing this run of Diet differently from the last. Consistency
+for the common case is handled in the app instead: `listPhaseNames()` now
+returns `[{name, color}]` (the colour that name last carried) and the editor
+adopts it as you type or pick a chip. The stored value is a palette KEY, never
+a hex, so `PHASE_COLORS` can be retuned without touching a row; an unknown key
+falls back to the first entry. Eight muted swatches, deliberately no bright
+red or green — a row of eleven weeks with one of those on it would shout
+louder than anything else on the page.
+
+**Notes are their own table, NOT another column on `nutrition_week_phases`**,
+even though both hang off (user, week). A phase marker is a RUN that holds
+until the next marker; a note is about one week and nothing else. Folding
+them together would mean writing a note created a phase marker there, which
+silently ends whatever phase was running. Several notes per week are allowed,
+so the key is a plain id.
+
+**New `components/AnchoredPopup.js`**, extracted from the phase editor once
+the strip grew three popups — three copies of that clamping arithmetic is
+three chances for one to open off the bottom of a long list. `measureAnchor`
+goes with it. One popup is held by `WeekRows` for the whole list, not per
+row: sixty weeks each holding their own would mount sixty Modals.
+
+**Why the tabs overlap the card by a pixel, and it is load-bearing.** A tab
+has a border on three sides and none along the bottom, sits with
+`marginBottom: -1`, and the strip carries `zIndex: 1`. Without the z-index
+the card, being the later sibling, draws its top border straight through the
+bottom of every tab and they read as detached chips. `rowGap` is 0 on
+purpose: when the strip wraps (phone width, or several labels) each row of
+tabs then sits on the row below exactly as the bottom row sits on the card,
+which is what a stack of folder tabs looks like — a positive row gap leaves
+the upper rows floating with an open bottom edge. Measured: tab bottom 502,
+card top 501, strip z-index 1 over the card's 0.
+
+### Fiber, and the overflow it exposed
+
+Fiber is in the Weeks view now — a fifth ring and a `Fiber` day column.
+`summarizeWeek` has always averaged `fiber_g` (it is in `METRICS`); it simply
+was never rendered.
+
+**Adding the fifth ring broke phone width, and only measurement caught it.**
+The ring block's own `minWidth` was "five columns plus their gaps", which at
+the old 62px floor came to 342px inside a 310px row — so the kcal ring
+overflowed the card and was clipped, with `document.scrollWidth` still
+reporting zero. Two changes, and both halves matter: `RING_COL_WIDTH` is 48
+(the widest thing in a column is the 44px ring; "of 1735" measures 33px), and
+the block's floor is FOUR columns, which is big enough to push the block onto
+its own line rather than squeezing in beside the logged-days column, and small
+enough that it can never exceed the row holding it. Result at 390px: five
+rings on one row, block exactly 278px, zero overflow.
+
+**Worth generalising: a `minWidth` meant as "wrap below this" becomes an
+overflow the moment it exceeds the parent.** It is a floor on the element, not
+a query about the container, so it has to stay under the narrowest row that
+element ever sits in.
+
+### A silent no-op worth remembering
+
+Two of the edits in this pass were made with `str.replace` against a pattern
+that included surrounding comment text. An earlier edit in the same session
+had re-indented that block by two spaces, so the pattern no longer matched and
+`replace` did what it always does when it fails: **nothing, silently.** The
+build stayed clean, the scope pass stayed clean, and the bug only surfaced by
+reading the computed `minWidth` out of the live page. Assert after every
+scripted replace (`assert s != before`), and prefer a line-range edit when the
+anchor text has already been touched once.
+
+### Verification
+
+Migration dry-run in a rolled-back transaction with six assertions before
+applying (Monday CHECK bites, colour stores, coach writes and reads, two notes
+on one week, member sees zero and is refused 42501), then table/policy/RLS/
+column confirmed by query and a live PostgREST 200 on both. `npm run build` +
+`check:routes` clean, plus a Babel parse / unresolved-identifier / unused-import
+/ missing-named-export pass over all seven touched files. The strip was then
+driven for real at 1360 and 390 through a throwaway `app/zz-weektabs.js`
+(deleted, `git status` checked): every tab opens its own popup anchored under
+itself, picking a known phase name adopts its colour and retints the Apply
+button, the redundancy guard correctly dims Apply on a week already inside
+that run, the blast-radius line names the next change, applying repaints the
+tab in the new colour, adding a label lands it as a tab with the + moving
+along after it, and the wrapped strip stacks cleanly at phone width.
+
+**Not verified behind a real login** — standing limitation. Worth Terra's
+pass: colour a real phase, label a real week, and confirm a real target change
+lands on the week it happened in.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -7964,6 +8073,7 @@ sections; next number after 0080 is 0081.)
 - `0121_benchmark_past_events_readable.sql` — **run**, verified live 2026-09-06. Widens the member read on `programming.benchmark_events` from the event's own window to `show_from <= today`, so a FINISHED benchmark stays readable. 0120's window broke the Last time prefill outright: `getPreviousBenchmarkEvent` returned null once the previous event passed its `hide_after`, so `getBenchmarkBoard` never read last quarter's rows and the column came up blank. Her entries were never affected (`members read own benchmark entries` has no window). The lower bound stays and is the load-bearing half, or a scheduled-but-not-opened benchmark would put the button on My Week early. Proved by impersonating a real member with a closed benchmark behind her, before and after: 0 previous events visible then 1, board fetch 0 rows then 3, and a future event still invisible.
 - `0123_nutrition_roster_order.sql` — **run**, verified live 2026-09-07 (dry-run with 7 RLS impersonation assertions in a rolled-back transaction first — a coach sees and writes only her own rows, a re-drag replaces rather than duplicating, another coach sees none of it, a member sees 0 and is refused; then applied, `NOTIFY pgrst` sent and a live PostgREST call returning 200 `[]` rather than PGRST205). Adds `programming.nutrition_roster_order` (owner_id, client_id) — each coach's own drag order for the nutrition queue, scoped per status group. Own-rows-only RLS behind `core.can_access_nutrition()`. No FK on `client_id` (it points at the shared `public.clients`, same call as `payroll.nutrition_assignments`), so a client who leaves nutrition just leaves a stale row that reads join past. See the section above for why the `status` column is what makes "moves to a new stage = lands at the bottom" free.
 - `0124_photo_framing.sql` — **run**, verified live 2026-09-08 (dry-run in a rolled-back transaction first, including a real insert carrying a framing; then applied, column/constraint confirmed and all 604 existing photos still NULL, `NOTIFY pgrst` sent). Adds `public.photos.framing` (nullable jsonb `{scale,x,y,ar}`) — coach-set display framing so two photos taken at different distances can be nudged into a common frame. NULL = untouched, so nothing existing changes. The CHECK is deliberately shallow (`jsonb_typeof = 'object'`) because a constraint casting the members to numeric would ERROR rather than return false on a malformed value; the app clamps every field on the way in and again on the way out. See "Progress photos can be nudged into a common frame" above.
+- `0125_week_tabs.sql` — **run**, verified live 2026-09-08 (dry-run with six RLS/constraint assertions in a rolled-back transaction first, then table, policy, RLS, the new column and a live PostgREST 200 all confirmed by query). Adds `programming.nutrition_week_phases.color` (a palette KEY, never a hex, nullable so every existing marker keeps its default) and `programming.nutrition_week_notes` (free-text tabs on a week: "Mexico trip", "family vacation"). Notes are deliberately their own table rather than another column on the phases table — a phase marker is a RUN that holds until the next one, so writing a note there would create a marker on that week and silently end the phase running through it. Staff-only in every direction, no member policy, same as the phases table. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 
