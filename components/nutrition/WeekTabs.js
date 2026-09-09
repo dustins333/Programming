@@ -4,6 +4,8 @@ import { AnchoredPopup, measureAnchor } from "../AnchoredPopup";
 import { formatDateMD, formatDateMDY } from "../../lib/formatDate";
 import { fonts, colors } from "../../lib/theme";
 import { phaseColor } from "../../lib/nutrition/weekPhases";
+import { NOTE_COLORS, noteColor } from "../../lib/nutrition/weekNotes";
+import { Swatch } from "./WeekPhaseEditor";
 
 // Hanging-folder tabs along the top edge of a week on the Weeks tab.
 //
@@ -37,7 +39,6 @@ import { phaseColor } from "../../lib/nutrition/weekPhases";
 // bottom edge.
 
 const TAB_RADIUS = 8;
-const NEUTRAL = { bg: "white", border: "#e2ddd6", text: "#57534e" };
 // A target change is an event rather than a state, so it reads in the
 // app's own "needs a look" amber rather than borrowing a phase colour.
 const TARGETS = { bg: "#f7f0e3", border: "#e2d2b4", text: "#8a5a2e" };
@@ -121,7 +122,7 @@ export function WeekTabStrip({ phase, targetChange, notes, notesEnabled, phasesE
       {(notes ?? []).map((note) => (
         <Tab
           key={note.id}
-          tone={NEUTRAL}
+          tone={noteColor(note.color)}
           label={note.label}
           maxWidth={180}
           accessibilityLabel={`Edit the label "${note.label}"`}
@@ -160,6 +161,9 @@ export function TargetChangePopup({ visible, anchor, change, onClose }) {
 // Add a label, or edit one that's already there. `note` null means adding.
 export function WeekNoteEditor({ visible, anchor, weekStart, note, onSave, onDelete, onClose }) {
   const [label, setLabel] = useState("");
+  // null is a real value, not "unset" — it is the plain white tab, and it
+  // is the default for a new label.
+  const [color, setColor] = useState(null);
   const [busy, setBusy] = useState(null);
 
   // Seeded once per opening. Keyed on the note's id (or the week, when
@@ -175,13 +179,17 @@ export function WeekNoteEditor({ visible, anchor, weekStart, note, onSave, onDel
     if (openedFor.current === key) return;
     openedFor.current = key;
     setLabel(note?.label ?? "");
+    setColor(note?.color ?? null);
     setBusy(null);
-  }, [visible, key, note?.label]);
+  }, [visible, key, note?.label, note?.color]);
 
   if (!visible) return null;
 
   const trimmed = label.trim();
-  const canSave = trimmed.length > 0 && trimmed !== (note?.label ?? "");
+  // The colour is savable on its own — recolouring a label without
+  // retyping it is the common edit once the label itself is right.
+  const changed = trimmed !== (note?.label ?? "") || color !== (note?.color ?? null);
+  const canSave = trimmed.length > 0 && changed;
 
   const run = async (which, fn) => {
     setBusy(which);
@@ -193,7 +201,7 @@ export function WeekNoteEditor({ visible, anchor, weekStart, note, onSave, onDel
   };
 
   return (
-    <AnchoredPopup visible anchor={anchor} width={272} estimatedHeight={230} onClose={onClose}>
+    <AnchoredPopup visible anchor={anchor} width={272} estimatedHeight={330} onClose={onClose}>
       <Text style={{ fontFamily: fonts.sansBold, fontSize: 10, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
         {note ? "Label on" : "Label this week"} {formatDateMD(weekStart)}
       </Text>
@@ -206,13 +214,24 @@ export function WeekNoteEditor({ visible, anchor, weekStart, note, onSave, onDel
         // scrolling, so one long label would push everything after it onto
         // its own line.
         maxLength={32}
-        onSubmitEditing={() => canSave && run("save", () => onSave(trimmed))}
+        onSubmitEditing={() => canSave && run("save", () => onSave(trimmed, color))}
         className="mt-2.5 rounded-lg px-3 py-2"
         style={{ borderWidth: 1, borderColor: "#e2ddd6", fontFamily: fonts.sans, fontSize: 14, color: "#2a211c" }}
       />
 
+      <Text className="mt-3" style={{ fontFamily: fonts.sansBold, fontSize: 10, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
+        Colour
+      </Text>
+      {/* The same swatches as the phase editor, from the same component, so
+          a colour picked here reads identically to one picked there. */}
+      <View className="mt-1.5 flex-row flex-wrap" style={{ gap: 7 }}>
+        {NOTE_COLORS.map((swatch) => (
+          <Swatch key={swatch.key ?? "none"} swatch={swatch} active={swatch.key === color} onPress={() => setColor(swatch.key)} />
+        ))}
+      </View>
+
       <Pressable
-        onPress={() => run("save", () => onSave(trimmed))}
+        onPress={() => run("save", () => onSave(trimmed, color))}
         disabled={!canSave || busy !== null}
         className="mt-3 items-center rounded-lg py-2.5"
         style={{ backgroundColor: colors.primary, opacity: !canSave || busy !== null ? 0.45 : 1 }}

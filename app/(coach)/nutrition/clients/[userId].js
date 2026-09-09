@@ -26,7 +26,7 @@ import { listPhases } from "../../../../lib/nutrition/planPhases";
 import { listWeekPhases, listPhaseNames, setWeekPhase, removeWeekPhaseMarker } from "../../../../lib/nutrition/weekPhases";
 import { listWeekNotes, addWeekNote, updateWeekNote, deleteWeekNote, groupNotesByWeek } from "../../../../lib/nutrition/weekNotes";
 import { computeWeekWindows, currentCalendarWeek, summarizeWeek, deriveCheckinStatus, enumerateRecentWeeks } from "../../../../lib/nutrition/weekCycle";
-import { weekOnProgram, weekDates } from "../../../../lib/nutrition/queue";
+import { weekDates } from "../../../../lib/nutrition/queue";
 import { listAllPhotos, photosForRequirementWeek } from "../../../../lib/nutrition/photos";
 
 import { WeekRows } from "../../../../components/nutrition/WeekRows";
@@ -439,10 +439,10 @@ export default function NutritionClientDetail() {
   // above, and same reason for reloading rather than patching local state:
   // the popup is already gone by the time the write lands, so a failure has
   // to say so out loud.
-  const handleAddWeekNote = (weekStart, label) =>
-    runPhaseChange(() => addWeekNote(userId, weekStart, label, profile.id), "Failed to add the label");
+  const handleAddWeekNote = (weekStart, label, color) =>
+    runPhaseChange(() => addWeekNote(userId, weekStart, label, profile.id, color), "Failed to add the label");
 
-  const handleUpdateWeekNote = (id, label) => runPhaseChange(() => updateWeekNote(id, label), "Failed to rename the label");
+  const handleUpdateWeekNote = (id, label, color) => runPhaseChange(() => updateWeekNote(id, label, color), "Failed to save the label");
 
   const handleDeleteWeekNote = (id) => runPhaseChange(() => deleteWeekNote(id), "Failed to remove the label");
 
@@ -590,15 +590,10 @@ export default function NutritionClientDetail() {
     const summary = summarizeWeek(logs, w.start, w.end);
     const previous = enumerated[i + 1] ? summarizeWeek(logs, enumerated[i + 1].start, enumerated[i + 1].end) : null;
     const weekCheckin = checkins.find((c) => c.week_start === w.start) ?? null;
-    // Numbered from the week's END, not its start: the week that CONTAINS
-    // the start date is week 1 (its start is a few days before she began),
-    // and a week that finished before she started gets no number at all and
-    // falls back to its date.
-    const number = weekOnProgram(client.start_date, w.end);
+    // No week number: the row leads with its own dates now (see WeekRows).
     return {
       ...w,
       dates: weekDates(w),
-      label: number ? `Week ${number}` : formatDateMDY(w.start),
       summary,
       target: targets.find((t) => t.effective_date <= w.end) ?? null,
       weightDelta:

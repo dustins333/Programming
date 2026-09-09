@@ -39,7 +39,9 @@ function Chip({ label, active, onPress }) {
   );
 }
 
-function Swatch({ swatch, active, onPress }) {
+// Exported so the label editor draws the identical control (see
+// WeekTabs.js) rather than a lookalike that drifts from this one.
+export function Swatch({ swatch, active, onPress }) {
   return (
     <Pressable
       onPress={onPress}

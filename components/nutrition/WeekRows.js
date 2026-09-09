@@ -22,12 +22,18 @@ const OK = "#4d6142";
 const OFF = "#b23a22";
 const MUTED = "#a8a29e";
 
+// Calories lead, matching the day table below — a coach reads the headline
+// number first and then how it was made up.
+//
+// Fibre is a lowercase f against fat's capital F: the shorthand is P/C/F/f,
+// and spelling one of them out while the rest were single letters made it
+// read as a different kind of thing.
 const MACRO_BARS = [
+  { key: "calories", short: "cal", targetKey: "calories" },
   { key: "protein_g", short: "P", targetKey: "protein_g" },
   { key: "carb_g", short: "C", targetKey: "carb_g" },
   { key: "fat_g", short: "F", targetKey: "fat_g" },
-  { key: "fiber_g", short: "Fib", targetKey: "fiber_g" },
-  { key: "calories", short: "kcal", targetKey: "calories" },
+  { key: "fiber_g", short: "f", targetKey: "fiber_g" },
 ];
 
 // Columns FLEX rather than sitting at a fixed width — the expanded day table
@@ -35,12 +41,12 @@ const MACRO_BARS = [
 // fixed-width table left a growing gap down the right-hand side as the card
 // widened. `min` is the wrap/scroll floor, not the width.
 const DAY_COLUMNS = [
+  { key: "calories", label: "Cal", min: 50, flex: 1, digits: 0 },
   { key: "weight", label: "Weight", min: 54, flex: 1.1, digits: 1 },
   { key: "protein_g", label: "Prot", min: 44, flex: 0.95, digits: 0, targetKey: "protein_g" },
   { key: "carb_g", label: "Carb", min: 44, flex: 0.95, digits: 0, targetKey: "carb_g" },
   { key: "fat_g", label: "Fat", min: 40, flex: 0.85, digits: 0, targetKey: "fat_g" },
   { key: "fiber_g", label: "Fiber", min: 44, flex: 0.9, digits: 0, targetKey: "fiber_g" },
-  { key: "calories", label: "Kcal", min: 50, flex: 1, digits: 0 },
   { key: "sleep_hours", label: "Sleep", min: 46, flex: 0.95, digits: 1, targetKey: "sleep_hours_goal", suffix: " h" },
   { key: "sleep_quality", label: "Quality", min: 48, flex: 0.95, digits: 1 },
   { key: "steps", label: "Steps", min: 52, flex: 1, digits: 0, targetKey: "step_goal" },
@@ -342,59 +348,65 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
           backgroundColor: "white",
         }}
       >
-        <Pressable onPress={onToggle} className="flex-row flex-wrap items-center px-4 py-3" style={{ gap: 14 }}>
-          <View style={{ width: 118 }}>
-            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }}>
-              {week.label}
-            </Text>
-            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11, color: MUTED, marginTop: 1 }}>
-              {formatDateMD(week.start)} – {formatDateMD(week.end)}
-            </Text>
-          </View>
+        <Pressable onPress={onToggle} className="px-4 py-3">
+          {/* The week's own dates, top-left under its tabs, on their own
+              line rather than in a column of their own.
 
-          <View style={{ width: 78 }}>
-            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
-              {fmt(avgWeight, 1)}
-            </Text>
-            {week.weightDelta !== null && week.weightDelta !== undefined ? (
-              <Text
-                maxFontSizeMultiplier={1.1}
-                style={{ fontFamily: fonts.sans, fontSize: 11, color: week.weightDelta < 0 ? OK : week.weightDelta > 0 ? "#8a5a2e" : MUTED, marginTop: 1 }}
-              >
-                {week.weightDelta > 0 ? "+" : ""}
-                {week.weightDelta.toFixed(1)}
+              The running week number ("Week 12") that used to lead this row
+              is gone: it counted from the client's start date, so it said
+              how long she has been here rather than anything about the week
+              being read, and it cost a 118px column plus a second line of
+              height on every row. Spending that on the numbers instead is
+              the whole point of the change. */}
+          <Text maxFontSizeMultiplier={1.15} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e" }}>
+            {formatDateMD(week.start)} – {formatDateMD(week.end)}
+          </Text>
+
+          <View className="flex-row flex-wrap items-center" style={{ gap: 14, marginTop: 7 }}>
+            <View style={{ width: 78 }}>
+              <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
+                {fmt(avgWeight, 1)}
               </Text>
-            ) : null}
-          </View>
+              {week.weightDelta !== null && week.weightDelta !== undefined ? (
+                <Text
+                  maxFontSizeMultiplier={1.1}
+                  style={{ fontFamily: fonts.sans, fontSize: 11, color: week.weightDelta < 0 ? OK : week.weightDelta > 0 ? "#8a5a2e" : MUTED, marginTop: 1 }}
+                >
+                  {week.weightDelta > 0 ? "+" : ""}
+                  {week.weightDelta.toFixed(1)}
+                </Text>
+              ) : null}
+            </View>
 
-          <View style={{ width: 82 }}>
-            <LoggedDots count={week.summary.days.length} />
-            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11, color: MUTED, marginTop: 4 }}>
-              {week.summary.days.length} of 7
-            </Text>
-          </View>
+            <View style={{ width: 82 }}>
+              <LoggedDots count={week.summary.days.length} />
+              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11, color: MUTED, marginTop: 4 }}>
+                {week.summary.days.length} of 7
+              </Text>
+            </View>
 
-          {/* Four columns' worth, and both halves of that matter. It has to
-              be big enough that the block drops onto its OWN line rather
-              than squeezing in beside the logged-days column (which is what
-              leaves the rings a usable 278px on a phone), and small enough
-              that it never exceeds the row holding it — asking for all five
-              did exactly that, and the last ring overflowed the card instead
-              of wrapping inside it. */}
-          <View className="flex-row flex-wrap" style={{ flex: 1, minWidth: RING_COL_WIDTH * 4 + 24, gap: 8 }}>
-            {MACRO_BARS.map((bar) => (
-              <MacroRing key={bar.key} short={bar.short} value={week.summary.averages[bar.key] ?? null} goal={targetValue(target, bar.targetKey)} />
-            ))}
-          </View>
+            {/* Four columns' worth, and both halves of that matter. It has to
+                be big enough that the block drops onto its OWN line rather
+                than squeezing in beside the logged-days column (which is what
+                leaves the rings a usable 278px on a phone), and small enough
+                that it never exceeds the row holding it — asking for all five
+                did exactly that, and the last ring overflowed the card instead
+                of wrapping inside it. */}
+            <View className="flex-row flex-wrap" style={{ flex: 1, minWidth: RING_COL_WIDTH * 4 + 24, gap: 8 }}>
+              {MACRO_BARS.map((bar) => (
+                <MacroRing key={bar.key} short={bar.short} value={week.summary.averages[bar.key] ?? null} goal={targetValue(target, bar.targetKey)} />
+              ))}
+            </View>
 
-          <View className="flex-row items-center" style={{ width: 132, gap: 6 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: CHECKIN_STATE[week.checkinState].color }} />
-            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: CHECKIN_STATE[week.checkinState].color }}>
-              {CHECKIN_STATE[week.checkinState].label}
-            </Text>
-          </View>
+            <View className="flex-row items-center" style={{ width: 132, gap: 6 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: CHECKIN_STATE[week.checkinState].color }} />
+              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: CHECKIN_STATE[week.checkinState].color }}>
+                {CHECKIN_STATE[week.checkinState].label}
+              </Text>
+            </View>
 
-          <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#c9c4bd" />
+            <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#c9c4bd" />
+          </View>
         </Pressable>
 
         {expanded ? (
@@ -493,7 +505,7 @@ export function WeekRows({
           anchor={popup?.anchor ?? null}
           weekStart={popup?.week?.start ?? null}
           note={popup?.kind === "note" ? popup.note : null}
-          onSave={(label) => runAndClose((p) => (p.note ? onUpdateNote(p.note.id, label) : onAddNote(p.week.start, label)))}
+          onSave={(label, color) => runAndClose((p) => (p.note ? onUpdateNote(p.note.id, label, color) : onAddNote(p.week.start, label, color)))}
           onDelete={() => runAndClose((p) => onDeleteNote(p.note.id))}
           onClose={() => setPopup(null)}
         />
