@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
@@ -331,7 +331,20 @@ function DayTable({ week, target }) {
 }
 
 // `week`: { label, start, end, dates, summary, target, checkinState, weightDelta }
-export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, phasesEnabled, notesEnabled, onOpenTab }) {
+// Memoised, and that is load-bearing rather than a micro-optimisation: a
+// long-running client's list runs to well over a hundred weeks, and without
+// it opening ONE week re-rendered every card and its five SVG rings.
+// Measured at 131 weeks (the gym's longest history), expanding a week took
+// 217-346ms unmemoised against 21-33ms with it.
+//
+// It only holds if the props are stable, which is why `onToggle`/`onOpenTab`
+// take the week rather than closing over it, and why the phase objects are
+// resolved once into a map below instead of per render.
+//
+// Measure this with a MutationObserver, never a setTimeout poll: the
+// preview browser clamps timers to ~1s while hidden, which reports every
+// interaction as a flat 999ms whatever the truth is.
+export const WeekRow = memo(function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, phasesEnabled, notesEnabled, onOpenTab }) {
   const target = week.target;
   const avgWeight = week.summary.averages.weight;
   // Full macro names where there is room for them, the P/C/F/f shorthand
@@ -405,7 +418,7 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
       <WeekTabStrip
         dateLabel={dateLabel}
         expanded={expanded}
-        onToggle={onToggle}
+        onToggle={() => onToggle(week.start)}
         targetChange={targetChange}
         notes={notes}
         notesEnabled={notesEnabled}
@@ -427,7 +440,7 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
         {/* minWidth 0 or the day table's horizontal scroller sizes this
             column to its own content and pushes the card past the page. */}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Pressable onPress={onToggle} className="px-4 py-3">
+          <Pressable onPress={() => onToggle(week.start)} className="px-4 py-3">
             {/* The same four blocks, arranged two ways.
                 Desktop puts them all on one line with the check-in state last,
                 after the numbers. On a phone there is no room for that, and
@@ -463,7 +476,7 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
       </View>
     </View>
   );
-}
+});
 
 // Every tab group is optional and independently so. Without `onSetPhase`
 // the phase tab doesn't render; without `onAddNote` neither the labels nor
@@ -490,6 +503,21 @@ export function WeekRows({
   const phasesEnabled = typeof onSetPhase === "function";
   const notesEnabled = typeof onAddNote === "function";
 
+  // Stable identities, so WeekRow's memo actually holds. An inline arrow
+  // per row is a new prop on every render, which defeats it entirely.
+  const handleToggle = useCallback((start) => setExpanded((cur) => (cur === start ? null : start)), []);
+  const handleOpenTab = useCallback((w, kind, anchor, note) => setPopup({ kind, week: w, anchor, note: note ?? null }), []);
+
+  // Resolved once per marker change rather than per render: resolveWeekPhase
+  // builds a fresh object each call, and a new object every render is the
+  // same broken prop as an inline arrow.
+  const phaseByWeek = useMemo(() => {
+    if (!phasesEnabled) return {};
+    const map = {};
+    for (const w of weeks) map[w.start] = resolveWeekPhase(phaseMarkers, w.start);
+    return map;
+  }, [phasesEnabled, weeks, phaseMarkers]);
+
   if (weeks.length === 0) {
     return (
       <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
@@ -514,13 +542,13 @@ export function WeekRows({
           key={week.start}
           week={week}
           expanded={expanded === week.start}
-          onToggle={() => setExpanded((cur) => (cur === week.start ? null : week.start))}
-          phase={phasesEnabled ? resolveWeekPhase(phaseMarkers, week.start) : null}
+          onToggle={handleToggle}
+          phase={phaseByWeek[week.start] ?? null}
           targetChange={targetChangeByWeek?.[week.start] ?? null}
           notes={notesByWeek?.[week.start] ?? null}
           phasesEnabled={phasesEnabled}
           notesEnabled={notesEnabled}
-          onOpenTab={(w, kind, anchor, note) => setPopup({ kind, week: w, anchor, note: note ?? null })}
+          onOpenTab={handleOpenTab}
         />
       ))}
 

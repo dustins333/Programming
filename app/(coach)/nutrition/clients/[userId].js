@@ -263,7 +263,15 @@ export default function NutritionClientDetail() {
         getClient(userId),
         listCoaches(),
         listTargets(userId),
-        listLogs(userId, { limit: 400 }),
+        // Her whole history, not a window on it. listLogs orders newest
+        // first and truncates, so the old 400 silently dropped the oldest
+        // 377 of the gym's longest-running client (777 logs back to March
+        // 2024) — those weeks rendered as "nothing logged" while the rows
+        // sat in the table. 2000 is roughly five and a half years of daily
+        // logging, against a real maximum of 777 today; it runs in the same
+        // Promise.all as getClient, so bounding by her start_date instead
+        // would cost a round trip on the critical path for no gain.
+        listLogs(userId, { limit: 2000 }),
         getCheckinForWeek(userId, selectedWeek.start),
         getOnboardingStatus(userId),
       ]);
@@ -583,7 +591,13 @@ export default function NutritionClientDetail() {
   // Weeks tab. The list runs newest-first and stops at the client's own
   // start date — enumerating back past it would render empty weeks for a
   // period she wasn't a client.
-  const maxWeeks = Math.max(1, Math.min(60, Math.ceil((new Date(calendarWeek.end) - new Date(client.start_date)) / (7 * 86400000)) + 1));
+  //
+  // No cap. It used to be Math.min(60, ...), which hid two thirds of a
+  // long-running client's history behind nothing at all AND made the
+  // header claim she had been on program 60 weeks when it was 131. Only
+  // WEEKS_SHOWN limits what renders on arrival; the rest is one press
+  // away, and the count in that press is now the true one.
+  const maxWeeks = Math.max(1, Math.ceil((new Date(calendarWeek.end) - new Date(client.start_date)) / (7 * 86400000)) + 1);
   const weekCount = showAllWeeks ? maxWeeks : Math.min(WEEKS_SHOWN, maxWeeks);
   const enumerated = enumerateRecentWeeks(calendarWeek, addDays, weekCount);
   const weekRows = enumerated.map((w, i) => {
