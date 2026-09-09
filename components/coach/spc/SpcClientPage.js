@@ -6,7 +6,6 @@ import { useAuth } from "../../../lib/auth/AuthProvider";
 import { getUser, listCoaches } from "../../../lib/programming/clients";
 import { getSpcClient, updateSpcClient, setSpcStatus } from "../../../lib/programming/spcClients";
 import { listBlocksForSpcClient, listSpcWorkoutsForBlock, listSpcWorkoutsForBlocks } from "../../../lib/programming/spcBlocks";
-import { listCommentsForBlocks } from "../../../lib/programming/comments";
 import { listSpcCompletionDetailsForWorkouts } from "../../../lib/programming/sessionCompletions";
 import { getExerciseStats } from "../../../lib/programming/exerciseStats";
 import { getClient as getNutritionClient } from "../../../lib/nutrition/clients";
@@ -27,7 +26,7 @@ import { SegmentedControl } from "../../SegmentedControl";
 import { PressFade } from "../../PressFade";
 import { SpcSessionsTab } from "./SpcSessionsTab";
 import { LiftHistory } from "./LiftHistory";
-import { ProgramNotesRow, ProgramNotesPanel } from "./ProgramNotes";
+import { KeepInMindCard } from "./KeepInMindField";
 import { statusColors, fonts, colors } from "../../../lib/theme";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { confirmTurnSpcOff } from "../../../lib/confirmDialog";
@@ -41,11 +40,14 @@ import { confirmTurnSpcOff } from "../../../lib/confirmDialog";
 //   The right rail is gone. It held NOTES and CLIENT SETTINGS beside a main
 //   column that then had ~850px to fit two side-by-side Sessions panes in,
 //   which is why every lift row in them wrapped. Settings became its own tab;
-//   the thread became a fold-away row (see ProgramNotes.js).
+//   Settings became its own tab.
 //
-//   Two different things were both labelled COACH NOTES. The client-row field
-//   is KEEP IN MIND now and lives in the goal hero; the block-scoped thread is
-//   Notes, and follows its program into History when the program closes.
+//   Two different things were both labelled COACH NOTES. The block-scoped
+//   thread (program_comments) is gone from every SPC surface as of
+//   2026-09-08, at the coaches' request: what they write about a client is
+//   KEEP IN MIND, and what they write about one lift is that lift's own
+//   EXERCISE NOTE in the builder. The existing rows are kept but no longer
+//   read anywhere.
 //
 //   Overview is banner / THIS WEEK / CURRENT PROGRAM and nothing else. The
 //   banner's title and supporting line went with the RECENT PRS and LAST
@@ -320,7 +322,7 @@ function WeekRow({ week, weekStart, future, current, entries, onOpenSession }) {
 /* ------------------------------------------------------------- overview */
 
 // Exported for the visual harness — a real component boundary, not a test seam.
-export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, completionKeys, activity = new Map(), sessionWorkouts, coachId, onOpenSession, onGoSessions }) {
+export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, completionKeys, activity = new Map(), sessionWorkouts, onOpenSession, onGoSessions }) {
   const target = spcClient?.sessions_per_week ?? 1;
   const tone = statusColors[derived.tone] ?? statusColors.paused;
 
@@ -496,11 +498,6 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
               </Text>
             </View>
           ) : null}
-
-          {/* The block-scoped thread, at the foot of the program it belongs
-              to. Second mount is the Sessions tab; both share their open
-              state, so it cannot be open in one place and shut in the other. */}
-          <ProgramNotesRow spcBlockId={current.id} coachId={coachId} />
         </View>
       ) : null}
     </View>
@@ -555,11 +552,6 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
         const pastIds = past.map((b) => b.id);
         const workouts = await listSpcWorkoutsForBlocks(pastIds);
         const details = await listSpcCompletionDetailsForWorkouts(userId, workouts.map((w) => w.id)).catch(() => new Map());
-        // Batched rather than lazy-per-run like the sessions below: the count
-        // sits on every collapsed row's meta line, so fetching on expand would
-        // be one query per row to draw a list nobody has opened yet. Its own
-        // catch — a notes failure costs the counts, never the runs.
-        const notesByBlock = await listCommentsForBlocks({ spcBlockIds: pastIds }).catch(() => new Map());
         const blockByWorkout = new Map(workouts.map((w) => [w.id, w.spc_block_id]));
         const loggedByBlock = new Map();
         for (const key of details.keys()) {
@@ -569,7 +561,7 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
         }
         const rows = past
           .sort((a, b) => (a.block_start_date < b.block_start_date ? 1 : -1))
-          .map((b) => ({ block: b, logged: loggedByBlock.get(b.id) ?? 0, notes: notesByBlock.get(b.id) ?? [] }));
+          .map((b) => ({ block: b, logged: loggedByBlock.get(b.id) ?? 0 }));
         if (!cancelled) setRuns(rows);
       } catch {
         if (!cancelled) setRuns([]);
@@ -612,7 +604,7 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
   }
   return (
     <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, overflow: "hidden" }}>
-      {runs.map(({ block, logged, notes }, i) => {
+      {runs.map(({ block, logged }, i) => {
         const expanded = openBlock === block.id;
         const data = inner[block.id];
         return (
@@ -627,7 +619,6 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
                 </Text>
                 <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
                   {block.block_length_weeks} week{block.block_length_weeks === 1 ? "" : "s"}
-                  {notes.length ? ` · ${notes.length} note${notes.length === 1 ? "" : "s"}` : ""}
                 </Text>
               </View>
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: logged > 0 ? "#4d6142" : "#a8a29e" }}>
@@ -637,36 +628,29 @@ function ProgramRuns({ userId, blocks, today, onOpenSession }) {
             </PressFade>
 
             {expanded ? (
-              <>
-                <View style={{ paddingHorizontal: 16, paddingBottom: 6, backgroundColor: "#fdfcfa" }}>
-                  {!data ? (
-                    <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
-                  ) : (
-                    Array.from({ length: block.block_length_weeks ?? 0 }, (_, k) => k + 1).map((w) => (
-                      <WeekRow
-                        key={w}
-                        week={w}
-                        weekStart={addDays(block.block_start_date, (w - 1) * 7)}
-                        future={false}
-                        current={false}
-                        entries={buildWeekEntries({
-                          block,
-                          workouts: data.workouts,
-                          completionKeys: data.completions,
-                          activity: data.activity,
-                          week: w,
-                        })}
-                        onOpenSession={(e) => onOpenSession?.(e, block.id)}
-                      />
-                    ))
-                  )}
-                </View>
-                {/* Read-only: the notes written on this program while it ran,
-                    which is the whole point of scoping the thread to a block.
-                    Its own ground and padding, so it sits outside the padded
-                    sessions container rather than inside it. */}
-                <ProgramNotesPanel notes={notes} />
-              </>
+              <View style={{ paddingHorizontal: 16, paddingBottom: 6, backgroundColor: "#fdfcfa" }}>
+                {!data ? (
+                  <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+                ) : (
+                  Array.from({ length: block.block_length_weeks ?? 0 }, (_, k) => k + 1).map((w) => (
+                    <WeekRow
+                      key={w}
+                      week={w}
+                      weekStart={addDays(block.block_start_date, (w - 1) * 7)}
+                      future={false}
+                      current={false}
+                      entries={buildWeekEntries({
+                        block,
+                        workouts: data.workouts,
+                        completionKeys: data.completions,
+                        activity: data.activity,
+                        week: w,
+                      })}
+                      onOpenSession={(e) => onOpenSession?.(e, block.id)}
+                    />
+                  ))
+                )}
+              </View>
             ) : null}
           </View>
         );
@@ -1054,7 +1038,6 @@ export function SpcClientPage({ userId }) {
           completionKeys={completionKeys}
           activity={activity}
           sessionWorkouts={sessionWorkouts}
-          coachId={profile?.id}
           onOpenSession={openSession}
           onGoSessions={() => setTab("Sessions")}
         />
@@ -1142,7 +1125,17 @@ export function SpcClientPage({ userId }) {
             Coach {coaches.find((c) => c.id === spcClient?.assigned_coach_id)?.name?.split(" ")[0] ?? "unassigned"} ·{" "}
             {spcClient?.sessions_per_week ?? "—"}× / week
           </Text>
-          <View style={{ marginTop: 12 }}>{tabStrip}</View>
+          {/* The goal hero is desktop-only, so KEEP IN MIND gets its own
+              card here. Without it the phone frame would carry no free-text
+              note about the client anywhere, which is exactly what removing
+              the block thread would otherwise have cost it. */}
+          <KeepInMindCard
+            userId={userId}
+            value={spcClient?.notes_goals_feedback}
+            onSaved={(text) => setSpcClient((c) => ({ ...c, notes_goals_feedback: text }))}
+            style={{ marginTop: 14 }}
+          />
+          <View style={{ marginTop: 14 }}>{tabStrip}</View>
           {tabContent}
         </ScrollView>
         <CoachMessageBubble userId={userId} clientName={member.name} />

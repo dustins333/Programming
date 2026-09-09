@@ -5,6 +5,7 @@ import { OptionStepper } from "../OptionPicker";
 import { ZoomableImage } from "./ZoomableImage";
 import { FramedPhoto } from "./FramedPhoto";
 import { formatDateMDY } from "../../lib/formatDate";
+import { phaseLabelForDate } from "../../lib/nutrition/weekPhases";
 import { fonts, colors } from "../../lib/theme";
 
 const ANGLES = [
@@ -13,12 +14,18 @@ const ANGLES = [
   { key: "back", label: "Back" },
 ];
 
-function photoOptionLabel(photo) {
-  return `${formatDateMDY(photo.date)}${photo.weight ? ` | ${photo.weight} lb` : ""}`;
+// The phase is part of the LABEL STRING rather than a coloured pill because
+// OptionPicker is a real <select> on web, where an option can only be text.
+// Coaches are the only ones who ever see it: phaseMarkers is a prop, not a
+// fetch, so the member's own Photos tab never asks for it — and could not
+// read it anyway, since nutrition_week_phases is staff-only.
+function photoOptionLabel(photo, phaseMarkers) {
+  const phase = phaseMarkers ? phaseLabelForDate(phaseMarkers, photo.date) : null;
+  return [formatDateMDY(photo.date), photo.weight ? `${photo.weight} lb` : null, phase].filter(Boolean).join(" | ");
 }
 
-export function DateStepper({ anglePhotos, selectedDate, onChange }) {
-  const options = anglePhotos.map((p) => ({ value: p.date, label: photoOptionLabel(p) }));
+export function DateStepper({ anglePhotos, selectedDate, onChange, phaseMarkers }) {
+  const options = anglePhotos.map((p) => ({ value: p.date, label: photoOptionLabel(p, phaseMarkers) }));
   return <OptionStepper options={options} value={selectedDate} onChange={onChange} placeholder="Pick a date" />;
 }
 
@@ -68,7 +75,7 @@ export function defaultDates(anglePhotos, count) {
 // manual screenshot, not an automated export. Shared by the coach and
 // member sides. `slots` defaults to 2 (a client's own quick before/after) —
 // only the dedicated coach Photo Compare tool page opts into 3.
-export function PhotoCompare({ photos, slots = 2 }) {
+export function PhotoCompare({ photos, slots = 2, phaseMarkers = null }) {
   const [angle, setAngle] = useState("front");
   const [urls, setUrls] = useState({});
   const [slotDates, setSlotDates] = useState(() => Array(slots).fill(null));
@@ -127,7 +134,7 @@ export function PhotoCompare({ photos, slots = 2 }) {
               const url = photo ? urls[photo.storage_path] : null;
               return (
                 <View key={i} className="flex-1">
-                  <DateStepper anglePhotos={anglePhotos} selectedDate={date} onChange={(d) => setSlotDate(i, d)} />
+                  <DateStepper anglePhotos={anglePhotos} selectedDate={date} onChange={(d) => setSlotDate(i, d)} phaseMarkers={phaseMarkers} />
                   <View className="mt-1.5">
                     <Slot photo={photo} url={url} onPress={() => photo && url && setLightboxUrl(url)} />
                   </View>

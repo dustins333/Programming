@@ -1474,17 +1474,6 @@ export function ExerciseCard({
               {item.exercise.cues}
             </Text>
           ) : null}
-          {/* Sets and reps moved into the boxes and rest is under the
-              stopwatch, but tempo has no box of its own — without a line here
-              it would simply stop reaching the member, which is the same way
-              coach cues went unseen for months. Only rendered when the coach
-              actually set one, so a lift without tempo carries no extra line. */}
-          {item.tempo ? (
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#57534e", marginBottom: 8 }}>
-              <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>Tempo: </Text>
-              {item.tempo}
-            </Text>
-          ) : null}
 
           {/* The count column and LB, said once for the whole lift. A
               reps-only lift drops the LB column altogether, so the count

@@ -684,12 +684,10 @@ export default function SpcWorkoutBuilderWeb() {
               ) : null}
               <BalanceRail counts={patternCounts} note={balanceNote} />
               <LastWeekRail lastWeek={lastWeek} onCopy={handleCopyLastWeek} copying={copyingLastWeek} />
-              {/* The block's coach-to-coach thread is deliberately NOT here.
-                  It was the second notes box on a screen that now leads with
-                  KEEP IN MIND, and the two read as one feature drawn twice —
-                  the exact confusion the SPC client page was rebuilt to undo.
-                  It lives on that page's Sessions tab (ProgramNotesRow), which
-                  is where a note about the program belongs. */}
+              {/* No block-scoped notes thread here, and none anywhere else
+                  in SPC as of 2026-09-08. The coaches asked for two notes and
+                  two only: KEEP IN MIND about the client, at the top of this
+                  page, and the per-lift EXERCISE NOTE on each card. */}
             </ScrollView>
           </View>
         </View>

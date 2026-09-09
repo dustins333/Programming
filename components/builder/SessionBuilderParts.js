@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { View, Text, Pressable, TextInput, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSortable } from "@dnd-kit/sortable";
@@ -18,10 +18,18 @@ import { fonts, colors } from "../../lib/theme";
 // three files for the same reason.
 //
 // What differs between them is passed in, not forked:
-//   group     — tempo, supersets, balance + last-week rails, draft/publish
+//   group     — supersets, balance + last-week rails, draft/publish
 //   SPC       — same, per-client rather than per-program
-//   templates — no tempo, no supersets, no rails (a template is one flat
-//               prescription with no block or siblings to compare against)
+//   templates — no supersets, no rails (a template is one flat prescription
+//               with no block or siblings to compare against)
+//
+// TEMPO IS GONE, 2026-09-08, at the coaches' request: it was never used
+// (9 lifts across the whole library carried one) and it took a column on
+// every collapsed row for a field nobody filled in. The `tempo` columns are
+// left in place and unread rather than dropped, same convention as every
+// other superseded column here — nothing writes one now, and nothing
+// renders one, so a stale value can't be shown to a member with no way for
+// a coach to correct it.
 
 export const BUILDER_CANVAS = "#faf8f6";
 export const BUILDER_CARD_BORDER = "#ece7e1";
@@ -405,65 +413,6 @@ export function SetTable({ item, onChange }) {
   );
 }
 
-// Four digits, not a free string — a tempo is always four numbers and the
-// old text field let "3-1-1-0", "3110" and "3/1/1/0" all mean the same thing.
-const parseTempoDigits = (value) =>
-  String(value ?? "").replace(/[^0-9xX]/g, "").padEnd(4, " ").slice(0, 4).split("");
-
-export function TempoDigits({ value, onChange }) {
-  // Local digit state, NOT derived from the prop each render. The old
-  // derived version made tempo un-deletable: clearing a box zero-filled it
-  // in the saved value, the optimistic prop echoed "0-1-1-0" back, and the
-  // "0" popped straight back into the box — so all four boxes could never
-  // be blank at once, which was the only path to saving null. Now blanks
-  // stay blank on screen, and emptying all four writes null (the reported
-  // "coach couldn't delete a tempo" bug, 2026-08-23).
-  const [digits, setDigits] = useState(() => parseTempoDigits(value));
-  const lastEmitted = useRef(value ?? null);
-  useEffect(() => {
-    // Reseed only on a genuinely external change (copy-last-week, switching
-    // lifts) — never off the echo of our own optimistic write.
-    if ((value ?? null) !== lastEmitted.current) {
-      setDigits(parseTempoDigits(value));
-      lastEmitted.current = value ?? null;
-    }
-  }, [value]);
-  const set = (i, v) => {
-    const next = [...digits];
-    next[i] = (v.replace(/[^0-9xX]/g, "").slice(-1) || " ").toUpperCase();
-    setDigits(next);
-    const anyFilled = next.some((d) => d !== " ");
-    const out = anyFilled ? next.map((d) => (d === " " ? "0" : d)).join("-") : null;
-    lastEmitted.current = out;
-    onChange(out);
-  };
-  return (
-    <View style={{ flexDirection: "row", gap: 5 }}>
-      {digits.map((d, i) => (
-        <TextInput
-          key={i}
-          value={d.trim()}
-          onChangeText={(v) => set(i, v)}
-          maxLength={1}
-          placeholder="–"
-          style={{
-            width: 30,
-            height: 34,
-            textAlign: "center",
-            borderWidth: 1,
-            borderColor: CARD_BORDER,
-            borderRadius: 8,
-            fontFamily: fonts.sansSemiBold,
-            fontSize: 13,
-            color: "#2a211c",
-            backgroundColor: "#fff",
-          }}
-        />
-      ))}
-    </View>
-  );
-}
-
 export function RestChips({ value, onChange }) {
   const current = value == null || value === "" ? null : Number(String(value).replace(/[^0-9]/g, ""));
   const isCustom = current != null && !REST_CHIPS.includes(current);
@@ -544,7 +493,6 @@ export function SortableLift({
   // Was passed by the group builder and never destructured here, so the
   // "these two are joined" cue never rendered at all.
   linkedToNext = false,
-  showTempo = true,
   showSuperset = true,
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
@@ -610,11 +558,6 @@ export function SortableLift({
               <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", width: 52, textAlign: "right" }}>
                 {formatRest(item.rest)}
               </Text>
-              {showTempo ? (
-                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e", width: 62, textAlign: "right" }}>
-                  {item.tempo || "—"}
-                </Text>
-              ) : null}
             </>
           )}
 
@@ -669,13 +612,6 @@ export function SortableLift({
             <View style={{ flex: 1, minWidth: 280 }}>
               <Eyebrow style={{ marginBottom: 7 }}>REST</Eyebrow>
               <RestChips value={item.rest} onChange={(v) => onChange(item.id, { rest: v })} />
-
-              {showTempo ? (
-                <View style={{ marginTop: 14 }}>
-                  <Eyebrow style={{ marginBottom: 7 }}>TEMPO</Eyebrow>
-                  <TempoDigits value={item.tempo} onChange={(v) => onChange(item.id, { tempo: v })} />
-                </View>
-              ) : null}
 
               <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 14 }}>
                 {showSuperset ? (

@@ -37,7 +37,6 @@ import {
   confirmCancelQueuedProgram,
 } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
-import { ProgramNotesRow } from "./ProgramNotes";
 
 // The Sessions tab — the whole SPC programming workflow
 // (design_handoff_spc_rework_v1, 1c/1d).
@@ -1270,7 +1269,6 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
               open in the other. Its own white card here, so it reads as a peer
               of the session cards below rather than a caption on the dates
               panel above. */}
-          <ProgramNotesRow spcBlockId={current.id} coachId={coachId} variant="card" style={{ marginTop: 14 }} />
 
           {currentSessions.map((s) => (
             <SessionCard

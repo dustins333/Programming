@@ -886,6 +886,7 @@ export default function NutritionClientDetail() {
           <PhotoCompareRail
             photos={photos}
             startDate={client.start_date}
+            phaseMarkers={weekPhases}
             onManage={() => setManagingPhotos(true)}
             onFramingChange={(photoId, framing) =>
               setPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, framing } : p)))

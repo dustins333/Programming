@@ -44,7 +44,6 @@ import { nextPosition } from "../../../lib/position";
 // the group and SPC builders have don't apply and are switched off rather
 // than faked:
 //   · no draft/publish — a template isn't visible to any member directly
-//   · no tempo — template_exercises has no tempo column
 //   · no balance / last-week rails — there's no block or sibling sessions
 //     to compare a standalone template against
 //
@@ -414,7 +413,6 @@ export default function TemplateBuilderWeb() {
                       linkedToNext={Boolean(
                         item.superset_group_id && item.superset_group_id === exercises[i + 1]?.superset_group_id
                       )}
-                      showTempo={false}
                     />
                   ))
                 )}

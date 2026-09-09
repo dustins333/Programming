@@ -18,7 +18,7 @@ import { BlockProgressHero } from "../BlockProgressHero";
 import { SpcBlockCalendar } from "./SpcBlockCalendar";
 import { calendarMeta } from "./spcCalendarModel";
 import { BlockPicker, blockHeroTitle } from "../BlockPicker";
-import { CommentThread } from "../CommentThread";
+import { KeepInMindCard } from "./spc/KeepInMindField";
 import { PressFade } from "../PressFade";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { fonts, colors } from "../../lib/theme";
@@ -257,14 +257,21 @@ export function CoachSpcOverview({ userId, showBack = false, embedded = false, f
             onToggleShowAll={() => setShowAllWeeks((v) => !v)}
           />
 
-          {/* Coach-to-coach notes on the block being viewed. The pre-overview
-              version of this page carried them and the restructure dropped
-              them; on a phone this screen IS the block, so it's where a note
-              about the block belongs. Keyed on the selected block, so the
-              picker re-reads its notes. */}
-          <View style={{ marginTop: 18 }}>
-            <CommentThread spcBlockId={state.block.id} />
-          </View>
+          {/* The block-scoped thread used to sit here. It is gone from every
+              SPC surface (2026-09-08) in favour of the two notes coaches
+              actually wanted: this client-wide one, and the per-lift EXERCISE
+              NOTE in the builder. Keyed on the client rather than the block,
+              so switching blocks in the picker does not change it. */}
+          <KeepInMindCard
+            userId={userId}
+            value={state.spcClient?.notes_goals_feedback}
+            onSaved={(text) =>
+              setState((prev) =>
+                prev?.status === "ready" ? { ...prev, spcClient: { ...prev.spcClient, notes_goals_feedback: text } } : prev
+              )
+            }
+            style={{ marginTop: 18 }}
+          />
         </>
       )}
 

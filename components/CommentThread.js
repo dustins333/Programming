@@ -11,7 +11,11 @@ import { fonts, colors } from "../lib/theme";
 import { toastError } from "../lib/toast";
 import { confirmDeleteCoachNote } from "../lib/confirmDialog";
 
-// Coach-to-coach notes on a block. Rebuilt 2026-08-21 to the nutrition Focus
+// Coach-to-coach notes on a GROUP block, and only a group block. The SPC
+// side of this thread was removed 2026-09-08 — see lib/programming/comments.js
+// for why a group block keeps it when an SPC one does not.
+//
+// Rebuilt 2026-08-21 to the nutrition Focus
 // box's shape (rows you can edit and delete in place, an explicit add field
 // and button) — minus the checkboxes, since a note isn't a task.
 //
@@ -55,10 +59,7 @@ function ControlButton({ icon, onPress, disabled, label }) {
 // auto-growing version was tried and feeds back on itself here, because
 // onContentSizeChange measures the element whose height it just set, so an
 // EMPTY draft field inflated itself to the cap on first render.
-// Exported for components/coach/spc/ProgramNotes.js, which renders the same
-// thread in the SPC page's collapsed-row idiom. One definition of the field,
-// so the fixed-height rule above cannot be lost by a second implementation.
-export function NoteField({ value, onChangeText, placeholder, fieldRef, onFocus, autoFocus, height }) {
+function NoteField({ value, onChangeText, placeholder, fieldRef, onFocus, autoFocus, height }) {
   return (
     <TextInput
       ref={fieldRef}
@@ -202,7 +203,7 @@ function NoteRow({ note, canEdit, onChanged, scrollFieldIntoView }) {
   );
 }
 
-export function CommentThread({ groupBlockId, spcBlockId, scrollViewRef, scrollOffsetRef }) {
+export function CommentThread({ groupBlockId, scrollViewRef, scrollOffsetRef }) {
   const { profile } = useAuth();
   const [comments, setComments] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -214,11 +215,11 @@ export function CommentThread({ groupBlockId, spcBlockId, scrollViewRef, scrollO
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      setComments(await listComments({ groupBlockId, spcBlockId }));
+      setComments(await listComments({ groupBlockId }));
     } catch (err) {
       setLoadError(err.message ?? String(err));
     }
-  }, [groupBlockId, spcBlockId]);
+  }, [groupBlockId]);
 
   useEffect(() => {
     load();
@@ -229,7 +230,7 @@ export function CommentThread({ groupBlockId, spcBlockId, scrollViewRef, scrollO
     if (!trimmed) return;
     setPosting(true);
     try {
-      await addComment({ groupBlockId, spcBlockId, coachId: profile.id, commentText: trimmed });
+      await addComment({ groupBlockId, coachId: profile.id, commentText: trimmed });
       setDraft("");
       await load();
     } catch (err) {

@@ -44,7 +44,6 @@ export function coachInstruction(item) {
 function prescriptionLine(item, letter) {
   return [
     schemeLabel({ rep_scheme: item.repScheme, sets: item.targetSets, reps: item.targetReps }, item.exercise),
-    item.tempo ? `Tempo ${item.tempo}` : null,
     item.rest ? `Rest ${formatRest(item.rest)}` : null,
     letter || null,
     item.exercise?.tracks_weight === false ? "no weight tracked" : null,

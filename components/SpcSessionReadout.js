@@ -151,7 +151,6 @@ function ExerciseRow({ row, supersetLetter, showSupersetHeader, inSuperset, narr
           {[
             `Asked for ${row.programmed}`,
             supersetLetter ? `SS ${supersetLetter}` : null,
-            row.lift.tempo ? `tempo ${row.lift.tempo}` : null,
             row.lift.rest ? `rest ${formatRest(row.lift.rest)}` : null,
           ]
             .filter(Boolean)
@@ -188,11 +187,9 @@ function ExerciseRow({ row, supersetLetter, showSupersetHeader, inSuperset, narr
         <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }} numberOfLines={2}>
           {row.name}
         </Text>
-        {row.lift.tempo || row.lift.rest ? (
+        {row.lift.rest ? (
           <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 2 }}>
-            {[row.lift.tempo ? `Tempo ${row.lift.tempo}` : null, row.lift.rest ? `rest ${formatRest(row.lift.rest)}` : null]
-              .filter(Boolean)
-              .join(" · ")}
+            rest {formatRest(row.lift.rest)}
           </Text>
         ) : null}
         {row.note ? (

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { listClients } from "../../../lib/nutrition/clients";
 import { listAllPhotos, getPhotoSignedUrls } from "../../../lib/nutrition/photos";
+import { listWeekPhases } from "../../../lib/nutrition/weekPhases";
 import { DateStepper, defaultDates } from "../../../components/nutrition/PhotoCompare";
 import { PhotoCompareBoard } from "../../../components/nutrition/PhotoCompareBoard";
 import { CoachShell, MOBILE_BREAKPOINT, SIDEBAR_WIDTH } from "../../../components/CoachShell";
@@ -42,6 +43,10 @@ export default function NutritionPhotoCompare() {
   const [clients, setClients] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [photos, setPhotos] = useState(null);
+  // The phase each photo's week was in, so the date pickers can say "Diet 3"
+  // rather than a bare date. Its own state and its own catch: a phase lookup
+  // failing costs the labels, never the board.
+  const [phaseMarkers, setPhaseMarkers] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [angle, setAngle] = useState("front");
   const [slotCount, setSlotCount] = useState(3);
@@ -81,6 +86,20 @@ export default function NutritionPhotoCompare() {
     setPhotos(null);
     loadPhotos(selectedId);
   }, [selectedId, loadPhotos]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    setPhaseMarkers([]);
+    listWeekPhases(selectedId)
+      .then((rows) => {
+        if (!cancelled) setPhaseMarkers(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
 
   const anglePhotos = useMemo(
     () => (photos ?? []).filter((p) => p.angle === angle).slice().sort((a, b) => (a.date < b.date ? -1 : 1)),
@@ -272,7 +291,7 @@ export default function NutritionPhotoCompare() {
                 <View className="mb-4 flex-row gap-3" style={{ width: boardWidth }}>
                   {slotDates.map((date, i) => (
                     <View key={i} style={{ flex: 1 }}>
-                      <DateStepper anglePhotos={anglePhotos} selectedDate={date} onChange={(d) => setSlotDate(i, d)} />
+                      <DateStepper anglePhotos={anglePhotos} selectedDate={date} onChange={(d) => setSlotDate(i, d)} phaseMarkers={phaseMarkers} />
                     </View>
                   ))}
                 </View>

@@ -3,17 +3,20 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from "r
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getUser } from "../../../../lib/programming/clients";
+import { getSpcClient } from "../../../../lib/programming/spcClients";
 import { getSpcWorkout, listSpcWarmups, listSpcWorkoutExercises, getSpcSiblingLifts } from "../../../../lib/programming/spcWorkouts";
 import { summarizeRepScheme } from "../../../../lib/programming/exercises";
-import { CommentThread } from "../../../../components/CommentThread";
+import { KeepInMindCard } from "../../../../components/coach/spc/KeepInMindField";
 import { PatternTally } from "../../../../components/PatternTally";
 import { fonts, colors } from "../../../../lib/theme";
 
 // Native is view-only — same policy as the group builder's native screen
 // (see its header comment): coaches shouldn't be able to build/edit
 // programming from the app, so this just reads whatever the web builder
-// last published/drafted. Comments stay live (communication, not
-// programming).
+// last published/drafted. KEEP IN MIND stays editable: it is a standing fact
+// about the client rather than programming, and it is the one note a coach
+// might want to add from the floor. The block-scoped thread that used to sit
+// here is gone from every SPC surface (2026-09-08).
 export default function SpcWorkoutBuilderNative() {
   const { workoutId } = useLocalSearchParams();
   const router = useRouter();
@@ -21,6 +24,7 @@ export default function SpcWorkoutBuilderNative() {
 
   const [workout, setWorkout] = useState(null);
   const [member, setMember] = useState(null);
+  const [spcClient, setSpcClient] = useState(null);
   const [warmups, setWarmups] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [siblingLifts, setSiblingLifts] = useState([]);
@@ -31,13 +35,17 @@ export default function SpcWorkoutBuilderNative() {
       setLoadError(null);
       const w = await getSpcWorkout(workoutId);
       setWorkout(w);
-      const [memberRow, warmupRows, exerciseRows, siblings] = await Promise.all([
+      const [memberRow, clientRow, warmupRows, exerciseRows, siblings] = await Promise.all([
         getUser(w.spc_blocks.spc_client_id),
+        // Its own catch: KEEP IN MIND is an extra on this screen, so failing
+        // to read it must not take the session down with it.
+        getSpcClient(w.spc_blocks.spc_client_id).catch(() => null),
         listSpcWarmups(workoutId),
         listSpcWorkoutExercises(workoutId),
         getSpcSiblingLifts(w.spc_blocks.id, w.week_number, workoutId),
       ]);
       setMember(memberRow);
+      setSpcClient(clientRow);
       setWarmups(warmupRows);
       setExercises(exerciseRows);
       setSiblingLifts(siblings);
@@ -170,7 +178,11 @@ export default function SpcWorkoutBuilderNative() {
         <PatternTally currentLifts={currentLifts} siblingLifts={siblingLifts} />
       </View>
 
-      <CommentThread spcBlockId={workout.spc_blocks.id} />
+      <KeepInMindCard
+        userId={workout.spc_blocks.spc_client_id}
+        value={spcClient?.notes_goals_feedback}
+        onSaved={(text) => setSpcClient((c) => (c ? { ...c, notes_goals_feedback: text } : c))}
+      />
     </ScrollView>
   );
 }

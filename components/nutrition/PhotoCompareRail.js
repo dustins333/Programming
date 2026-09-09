@@ -8,6 +8,7 @@ import { AdjustablePhoto, AlignmentGuides, DEFAULT_GUIDES } from "./PhotoFraming
 import { toastError } from "../../lib/toast";
 import { formatDateMD, formatDateMDY } from "../../lib/formatDate";
 import { daysBetween } from "../../lib/boiseDate";
+import { phaseForDate, phaseColor } from "../../lib/nutrition/weekPhases";
 import { fonts, colors } from "../../lib/theme";
 
 // The coach's Photos tab (coach web v2, screen 23) — compare first, browse
@@ -75,8 +76,30 @@ function useViewportHeight() {
 // date on file for this angle, choose the one you want in that frame. Its own
 // modal rather than OptionPicker because the trigger has to stay the pill
 // sitting on the image — a bare <select> can't be that.
-function DatePill({ tone, photo, options, onChange, isStart }) {
+// A small phase chip in its own colour, so "Diet 3" here and the coloured
+// spine on the Weeks tab read as the same fact. Renders nothing at all when
+// the week has no phase set, or when no markers were passed — the member's
+// own Photos tab never gets them.
+function PhaseChip({ phase, style }) {
+  if (!phase) return null;
+  const tone = phaseColor(phase.color);
+  return (
+    <View
+      style={[
+        { backgroundColor: tone.bg, borderWidth: 1, borderColor: tone.border, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
+        style,
+      ]}
+    >
+      <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 10, color: tone.text }}>
+        {phase.name} {phase.number}
+      </Text>
+    </View>
+  );
+}
+
+function DatePill({ tone, photo, options, onChange, isStart, phaseMarkers }) {
   const [open, setOpen] = useState(false);
+  const phase = phaseMarkers ? phaseForDate(phaseMarkers, photo.date) : null;
 
   return (
     <>
@@ -91,8 +114,12 @@ function DatePill({ tone, photo, options, onChange, isStart }) {
           </Text>
           <Text style={{ fontFamily: fonts.sans, fontSize: 10, color: "rgba(255,255,255,0.75)" }}>▾</Text>
         </View>
-        {photo.weight ? (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "rgba(255,255,255,0.82)", marginTop: 1 }}>{photo.weight} lb</Text>
+        {/* Weight and phase share one line rather than stacking a third onto
+            a pill that sits over the photo. */}
+        {photo.weight || phase ? (
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "rgba(255,255,255,0.82)", marginTop: 1 }}>
+            {[photo.weight ? `${photo.weight} lb` : null, phase ? `${phase.name} ${phase.number}` : null].filter(Boolean).join(" | ")}
+          </Text>
         ) : null}
       </Pressable>
 
@@ -116,9 +143,12 @@ function DatePill({ tone, photo, options, onChange, isStart }) {
                   className="flex-row items-center justify-between rounded-xl px-3 py-2.5"
                   style={option.date === photo.date ? { backgroundColor: "#fdf6f2" } : undefined}
                 >
-                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13.5, color: option.date === photo.date ? colors.primaryOnWhite : "#44403c" }}>
-                    {formatDateMDY(option.date)}
-                  </Text>
+                  <View className="flex-row items-center" style={{ flex: 1, minWidth: 0, gap: 7 }}>
+                    <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13.5, color: option.date === photo.date ? colors.primaryOnWhite : "#44403c" }}>
+                      {formatDateMDY(option.date)}
+                    </Text>
+                    <PhaseChip phase={phaseMarkers ? phaseForDate(phaseMarkers, option.date) : null} />
+                  </View>
                   <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>{option.weight ? `${option.weight} lb` : "—"}</Text>
                 </Pressable>
               ))}
@@ -130,7 +160,7 @@ function DatePill({ tone, photo, options, onChange, isStart }) {
   );
 }
 
-function Pane({ photo, url, tone, options, onChange, isStart, onOpenLightbox, width, height, adjusting, framing, onFramingChange, onFramingCommit }) {
+function Pane({ photo, url, tone, options, onChange, isStart, onOpenLightbox, width, height, adjusting, framing, onFramingChange, onFramingCommit, phaseMarkers }) {
   if (!photo) {
     return (
       <View
@@ -162,12 +192,12 @@ function Pane({ photo, url, tone, options, onChange, isStart, onOpenLightbox, wi
           <ActivityIndicator color={colors.primary} />
         </View>
       )}
-      <DatePill tone={tone} photo={photo} options={options} onChange={onChange} isStart={isStart} />
+      <DatePill tone={tone} photo={photo} options={options} onChange={onChange} isStart={isStart} phaseMarkers={phaseMarkers} />
     </View>
   );
 }
 
-export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange }) {
+export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange, phaseMarkers = null }) {
   const windowHeight = useViewportHeight();
   const [railWidth, setRailWidth] = useState(0);
   const [angle, setAngle] = useState("front");
@@ -413,6 +443,7 @@ export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange 
                 framing={framingFor(leftPhoto)}
                 onFramingChange={(next) => setFraming(leftPhoto, next)}
                 onFramingCommit={() => commitFraming(leftPhoto)}
+                phaseMarkers={phaseMarkers}
               />
               <Pane
                 photo={rightPhoto}
@@ -427,6 +458,7 @@ export function PhotoCompareRail({ photos, startDate, onManage, onFramingChange 
                 framing={framingFor(rightPhoto)}
                 onFramingChange={(next) => setFraming(rightPhoto, next)}
                 onFramingCommit={() => commitFraming(rightPhoto)}
+                phaseMarkers={phaseMarkers}
               />
             </View>
             {adjusting && showGuides ? <AlignmentGuides height={finalHeight} guides={guides} onChange={setGuides} /> : null}

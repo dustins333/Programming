@@ -4,7 +4,7 @@ import { fonts, colors } from "../lib/theme";
 // Read-only "what's in this lift" popup for the member Today overview — no
 // logging inputs here, that's still My Fitness's job. Callers pre-format
 // warmups/exercises into plain label/detail strings so this component
-// stays shape-agnostic between group's {sets, reps, tempo} and SPC's
+// stays shape-agnostic between group's {sets, reps} and SPC's
 // per-week {sets, reps, rest} exercise rows.
 export function SessionPreviewModal({ visible, onClose, title, subtitle, loading, error, onRetry, warmups, exercises, completed, onLogPress }) {
   return (

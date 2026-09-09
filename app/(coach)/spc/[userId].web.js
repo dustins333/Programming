@@ -28,7 +28,6 @@ import { NewSpcBlockChoiceModal } from "../../../components/NewSpcBlockChoiceMod
 import { SendSpcBlockModal } from "../../../components/SendSpcBlockModal";
 import { PrintBlockPickerModal } from "../../../components/PrintBlockPickerModal";
 import { CoachMessageBubble, bubbleClearance } from "../../../components/CoachMessageBubble";
-import { CommentThread } from "../../../components/CommentThread";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
 import { CoachSpcOverview } from "../../../components/coach/CoachSpcOverview";
 import { SpcClientPage } from "../../../components/coach/spc/SpcClientPage";
@@ -1154,15 +1153,12 @@ function SpcClientDesktop() {
 
               {rail === "Notes" ? (
                 <>
-                  {/* Coach-to-coach notes on this block. They already lived on
-                      the SPC builder, but the builder is one session — this is
-                      the page where the whole block is in front of you, which
-                      is where a note about it belongs. Keyed on the selected
-                      block, so stepping the block picker re-reads its notes. */}
-                  <View style={{ marginBottom: 16 }}>
-                    <CommentThread spcBlockId={detail.block.id} />
-                  </View>
-
+                  {/* The block-scoped coach-to-coach thread used to lead this
+                      rail. Gone from every SPC surface (2026-09-08) — what a
+                      coach writes about a client is KEEP IN MIND on her own
+                      page, and what she writes about a lift is that lift's
+                      EXERCISE NOTE. Below is a different thing entirely: the
+                      MEMBER's own per-set notes, read back out of her logs. */}
                   <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 12, padding: 15, marginBottom: 16 }}>
                     <Eyebrow style={{ marginBottom: 10 }}>CLIENT NOTES</Eyebrow>
                     <BlockNotes notes={blockNotes} />
