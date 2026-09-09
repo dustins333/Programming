@@ -352,13 +352,28 @@ export default function SpcWorkoutBuilderWeb() {
     }
   };
 
+  // The one thing leaving by the button does that the back arrow doesn't:
+  // send an unsent session. Everything else is already saved. Declared above
+  // the handler that closes over it, and optional-chained, because the
+  // component early-returns while `workout` is still null.
+  const needsSending = exercises.length > 0 && workout?.status !== "published";
+  const clientFirst = (member?.name ?? "").trim().split(/\s+/)[0] || "";
+
   // Sessions-format only: everything already autosaved, so this just makes
   // the row visible-when-live (published iff it has lifts) and returns to the
   // client's Sessions page, which refetches on focus.
+  //
+  // It used to be labelled "Save & go back", which is what a coach asked
+  // about: it reads as though the back arrow beside it throws work away.
+  // Nothing here is ever unsaved — every field writes on the keystroke and
+  // the header's light reports the round trip — so the only thing this button
+  // actually adds is SENDING an unsent session, and it says that now. Both
+  // the label and the write read `needsSending`, so they cannot disagree
+  // about whether there is anything to send.
   const handleSaveAndBack = async () => {
     setPublishing(true);
     try {
-      if (exercises.length > 0 && workout.status !== "published") {
+      if (needsSending) {
         await setSpcWorkoutStatus(workoutId, "published");
       }
       if (router.canGoBack()) router.back();
@@ -529,7 +544,15 @@ export default function SpcWorkoutBuilderWeb() {
                   opacity: publishing ? 0.6 : 1,
                 }}
               >
-                <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>Save & go back</Text>
+                <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>
+                  {publishing && needsSending
+                    ? "Sending…"
+                    : needsSending
+                      ? clientFirst
+                        ? `Send to ${clientFirst}`
+                        : "Send to client"
+                      : "Done"}
+                </Text>
               </Pressable>
             ) : (
               <Pressable

@@ -1236,6 +1236,28 @@ keeping if this is ever touched:
   Coach notes have been lost to exactly that before (see GamePlan, 2026-08-28)
   on a field that only saved on an explicit action.
 
+**"Save & go back" is "Send to {name}" now**, and the question that produced
+it is worth keeping: *"in the top left corner there is just a back button. If
+someone clicks that do they lose their progress?"* **No — nothing in this
+builder is ever unsaved.** Every field writes on the keystroke through
+`track()` (verified: no debounce, no buffer anywhere in the route or in
+`SessionBuilderParts`; `TempoDigits` holds local digit state but emits on
+every change), and the header's Saved/Saving light is reporting the real round
+trip. The back arrow, and closing the tab, lose nothing.
+
+The one thing the button did that the arrow doesn't is **send** — flip a
+session with lifts from draft to published, which is the gate that lets the
+client see it. So a brand-new session left by the arrow is fully saved and
+still invisible to her. That case was already caught by the Sessions tab's "↑
+Send N new sessions · built but not sent" banner, but the label was actively
+misleading: it read as though the arrow beside it threw work away. The button
+now says what it does — `Send to Rae` / `Sending…` when there is something
+unsent, `Done` when the session is already live or empty — and **both the
+label and the write read one `needsSending`**, so they cannot disagree about
+whether there is anything to send. `needsSending` is declared above the
+handler that closes over it and optional-chains `workout`, because the
+component early-returns while that is still null.
+
 **Deliberately NOT renamed on the hub or the member app**, where it still
 reads "Coach note:". It is an *exercise note* when you write it and a *coach
 note* when you receive it, and `HubLiftCard`'s own header says the wall and
