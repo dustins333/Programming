@@ -4,7 +4,7 @@ import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { colorForTarget, colorForStepsTarget } from "../../lib/nutrition/weekCycle";
 import { deriveCalories } from "../../lib/nutrition/targets";
-import { formatDateMD } from "../../lib/formatDate";
+import { formatDateMDShort } from "../../lib/formatDate";
 import { PhaseEditor } from "./WeekPhaseEditor";
 import { WeekTabStrip, WeekNoteEditor, TargetChangePopup } from "./WeekTabs";
 import { resolveWeekPhase } from "../../lib/nutrition/weekPhases";
@@ -339,6 +339,64 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
   const { width } = useWindowDimensions();
   const wide = width >= MOBILE_BREAKPOINT;
 
+  // Declared once and placed twice, so the two arrangements below cannot
+  // drift into rendering different things.
+  const weightBlock = (
+    <View style={{ width: 78 }}>
+      <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
+        {fmt(avgWeight, 1)}
+      </Text>
+      {week.weightDelta !== null && week.weightDelta !== undefined ? (
+        <Text
+          maxFontSizeMultiplier={1.1}
+          style={{ fontFamily: fonts.sans, fontSize: 11, color: week.weightDelta < 0 ? OK : week.weightDelta > 0 ? "#8a5a2e" : MUTED, marginTop: 1 }}
+        >
+          {week.weightDelta > 0 ? "+" : ""}
+          {week.weightDelta.toFixed(1)}
+        </Text>
+      ) : null}
+    </View>
+  );
+
+  const dotsBlock = (
+    <View style={{ width: 82 }}>
+      <LoggedDots count={week.summary.days.length} />
+      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11, color: MUTED, marginTop: 4 }}>
+        {week.summary.days.length} of 7
+      </Text>
+    </View>
+  );
+
+  // Fixed-width on a desktop card, where it is the last column and holding
+  // a width keeps the labels aligned down the list. On a phone it sizes to
+  // its own text and `marginLeft: auto` pins it to the right edge — a fixed
+  // width there would leave the label floating short of the edge.
+  const statusBlock = (
+    <View className="flex-row items-center" style={{ width: wide ? 132 : undefined, marginLeft: wide ? 0 : "auto", gap: 6 }}>
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: CHECKIN_STATE[week.checkinState].color }} />
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.1}
+        style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: CHECKIN_STATE[week.checkinState].color }}
+      >
+        {CHECKIN_STATE[week.checkinState].label}
+      </Text>
+    </View>
+  );
+
+  // `minWidth` is the wrap floor for the desktop line, not the width: four
+  // columns' worth, big enough that a squeezed card drops the whole block
+  // onto its own line rather than clipping the fifth ring, and small enough
+  // that it can never exceed the row holding it. On a phone the block is
+  // alone on its line and simply fills it.
+  const ringsBlock = (
+    <View className="flex-row flex-wrap" style={{ flex: 1, minWidth: RING_COL_WIDTH * 4 + 24, gap: 8 }}>
+      {MACRO_BARS.map((bar) => (
+        <MacroRing key={bar.key} label={wide ? bar.full : bar.short} value={week.summary.averages[bar.key] ?? null} goal={targetValue(target, bar.targetKey)} />
+      ))}
+    </View>
+  );
+
   return (
     <View className="mb-2">
       <WeekTabStrip
@@ -359,7 +417,9 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
       >
         <Pressable onPress={onToggle} className="px-4 py-3">
           {/* The week's own dates, top-left under its tabs, on their own
-              line rather than in a column of their own.
+              line rather than in a column of their own. Unpadded (9/7, not
+              09/07) — nothing lines up under it here, so the padding was
+              only ever making a short label look long.
 
               The running week number ("Week 12") that used to lead this row
               is gone: it counted from the client's start date, so it said
@@ -368,8 +428,12 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
               height on every row. Spending that on the numbers instead is
               the whole point of the change. */}
           <View className="flex-row items-center justify-between">
-            <Text maxFontSizeMultiplier={1.15} numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e" }}>
-              {formatDateMD(week.start)} – {formatDateMD(week.end)}
+            <Text
+              maxFontSizeMultiplier={1.15}
+              numberOfLines={1}
+              style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#57534e", textDecorationLine: "underline" }}
+            >
+              {formatDateMDShort(week.start)} – {formatDateMDShort(week.end)}
             </Text>
             {/* Top-right of the card, on the date's own line. In the metric
                 row it took a column the rings wanted, and on a phone that
@@ -377,54 +441,30 @@ export function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, 
             <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#c9c4bd" />
           </View>
 
-          <View className="flex-row flex-wrap items-center" style={{ gap: 14, marginTop: 7 }}>
-            <View style={{ width: 78 }}>
-              <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#2a211c" }}>
-                {fmt(avgWeight, 1)}
-              </Text>
-              {week.weightDelta !== null && week.weightDelta !== undefined ? (
-                <Text
-                  maxFontSizeMultiplier={1.1}
-                  style={{ fontFamily: fonts.sans, fontSize: 11, color: week.weightDelta < 0 ? OK : week.weightDelta > 0 ? "#8a5a2e" : MUTED, marginTop: 1 }}
-                >
-                  {week.weightDelta > 0 ? "+" : ""}
-                  {week.weightDelta.toFixed(1)}
-                </Text>
-              ) : null}
+          {/* The same four blocks, arranged two ways.
+              Desktop puts them all on one line with the check-in state last,
+              after the numbers. On a phone there is no room for that, and
+              the state next to the rings is what pushed them onto a line of
+              their own; so the weight, the dots and the state take the first
+              line (the state pinned right, where a status belongs) and the
+              rings get the whole of the second. */}
+          {wide ? (
+            <View className="flex-row flex-wrap items-center" style={{ gap: 14, marginTop: 7 }}>
+              {weightBlock}
+              {dotsBlock}
+              {ringsBlock}
+              {statusBlock}
             </View>
-
-            <View style={{ width: 82 }}>
-              <LoggedDots count={week.summary.days.length} />
-              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 11, color: MUTED, marginTop: 4 }}>
-                {week.summary.days.length} of 7
-              </Text>
-            </View>
-
-            {/* Beside the logged-days dots, not after the rings. Both are
-                "how did the week go" rather than a measured number, and on
-                a phone the pair fits the first line alongside the weight,
-                which is what leaves the rings a whole line of their own
-                instead of a 132px column squeezing them onto the next one. */}
-            <View className="flex-row items-center" style={{ width: 132, gap: 6 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: CHECKIN_STATE[week.checkinState].color }} />
-              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: CHECKIN_STATE[week.checkinState].color }}>
-                {CHECKIN_STATE[week.checkinState].label}
-              </Text>
-            </View>
-
-            {/* Four columns' worth. It has to be big enough that on a phone
-                the block drops onto its OWN line rather than squeezing in
-                beside the weight and the check-in state, and small enough
-                that it never exceeds the row holding it — asking for all
-                five did exactly that, and the last ring overflowed the card
-                instead of wrapping inside it. */}
-            <View className="flex-row flex-wrap" style={{ flex: 1, minWidth: RING_COL_WIDTH * 4 + 24, gap: 8 }}>
-              {MACRO_BARS.map((bar) => (
-                <MacroRing key={bar.key} label={wide ? bar.full : bar.short} value={week.summary.averages[bar.key] ?? null} goal={targetValue(target, bar.targetKey)} />
-              ))}
-            </View>
-
-          </View>
+          ) : (
+            <>
+              <View className="flex-row items-center" style={{ gap: 14, marginTop: 7 }}>
+                {weightBlock}
+                {dotsBlock}
+                {statusBlock}
+              </View>
+              <View className="flex-row" style={{ marginTop: 10 }}>{ringsBlock}</View>
+            </>
+          )}
         </Pressable>
 
         {expanded ? (

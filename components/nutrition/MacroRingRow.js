@@ -64,11 +64,13 @@ function Ring({ size, stroke, value, goal, digits }) {
 // label it properly.
 export function MacroRingRow({ averages, target, size = 72, stroke = 6, days = null }) {
   const calorieGoal = target ? Math.round(deriveCalories(target)) : null;
+  // Calories lead, matching the Weeks tab's own rings: a coach reads the
+  // headline number first and then how it was made up.
   const rings = [
+    { key: "calories", label: "Calories", value: averages?.calories ?? null, goal: calorieGoal, digits: 0 },
     { key: "protein_g", label: "Protein", value: averages?.protein_g ?? null, goal: target?.protein_g ?? null, digits: 0 },
     { key: "carb_g", label: "Carbs", value: averages?.carb_g ?? null, goal: target?.carb_g ?? null, digits: 0 },
     { key: "fat_g", label: "Fat", value: averages?.fat_g ?? null, goal: target?.fat_g ?? null, digits: 0 },
-    { key: "calories", label: "Calories", value: averages?.calories ?? null, goal: calorieGoal, digits: 0 },
   ];
 
   const columns = days ? [...rings, { key: "days", label: "Days logged", value: days.logged, goal: days.of, digits: 0 }] : rings;
