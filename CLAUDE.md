@@ -8418,6 +8418,32 @@ labels for a strip that wraps. Three things about it are load-bearing:
 **Deleted from the Weeks tab header**: the "Targets changed N times, tabbed on the
 week it moved" line. The tabs say it on the weeks it happened.
 
+**Two caps were hiding most of a long client's history, and neither was the
+import's fault.** Terra reported only seeing data from 7/20 on. The Weeks tab
+fetched `listLogs(userId, { limit: 400 })` — and `listLogs` orders newest-first
+and truncates, so the gym's longest-running client (777 logs back to March 2024,
+730 of them before 7/20) had her oldest 377 never asked for; those weeks would
+have rendered "nothing logged" with the rows sitting in the table. `maxWeeks` was
+separately `Math.min(60, ...)`, which both truncated the list and made the header
+claim she had been on program 60 weeks when it was 131. Both are gone; the only
+limit left is `WEEKS_SHOWN` (what renders on arrival, one press from the rest).
+**Check the fetch limit before concluding an import is incomplete** — the data
+was all there.
+
+**`WeekRow` is memoised, and it has to be.** A 131-week list re-rendered every
+card and its five SVG rings to open one week. `onToggle`/`onOpenTab` take the week
+rather than closing over it, and `resolveWeekPhase` is resolved once into a map,
+because a fresh object per render defeats the memo exactly as an inline arrow
+does. Measured at 131 weeks: 217-346ms unmemoised against 21-33ms with it.
+
+**Measure interactions with a `MutationObserver`, never a `setTimeout` poll.** The
+preview browser clamps timers to ~1s while the pane is hidden, so every
+interaction reports as a flat 999ms whatever the truth is — and a
+`document.body.textContent` scan used as the poll's own detector is itself
+expensive enough to dominate the result on a large DOM. Between them they produced
+a confident "~800ms" that was pure artifact and nearly went into a code comment as
+a measured fact. A MutationObserver fires on a microtask and is immune to both.
+
 **Calories lead `MacroRingRow` too**, the shared component behind the Dashboard,
 the Check-In tab and the nutrition queue preview. Those three share one component
 precisely so they cannot disagree about what a ring means, so the reorder lands on
