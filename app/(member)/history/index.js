@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, TextInput, Image } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, TextInput, Image, useWindowDimensions } from "react-native";
+import { listConditioningLogs, describeConditioningLog, feelOption } from "../../../lib/programming/conditioning";
+import { ConditioningSheet } from "../../../components/conditioning/ConditioningSheet";
+import { TrendChart } from "../../../components/TrendChart";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -135,7 +138,8 @@ function TimelineRow({ entry, onPress, isLast, photos, onOpenPhotos }) {
   const isSession = entry.type === "session";
   const isMilestone = entry.type === "milestone";
   const isPr = entry.type === "pr";
-  const isPressable = isSession || isMilestone;
+  const isConditioning = entry.type === "conditioning";
+  const isPressable = isSession || isMilestone || isConditioning;
   const Wrapper = isPressable ? PressFade : View;
   return (
     <Wrapper
@@ -161,10 +165,12 @@ function TimelineRow({ entry, onPress, isLast, photos, onOpenPhotos }) {
           borderRadius: 13,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: isSession ? OLIVE : isPr ? OCHRE : isMilestone ? "#eef1e7" : "#f5f1ec",
+          backgroundColor: isSession || isConditioning ? OLIVE : isPr ? OCHRE : isMilestone ? "#eef1e7" : "#f5f1ec",
         }}
       >
-        {isPr ? (
+        {isConditioning ? (
+          <Ionicons name="heart" size={12} color="#fff" />
+        ) : isPr ? (
           <Text maxFontSizeMultiplier={1} style={{ fontSize: 12, color: "#fff" }}>
             ★
           </Text>
@@ -223,6 +229,7 @@ function ByDayView({ profile, prEntries, sessionCount, streak, statsError }) {
   // Its own counter — this is a separate component from HistoryIndex
   // below, and the timeline it loads goes stale for the same reason.
   const focusKey = useRefreshOnFocus();
+  const router = useRouter();
 
   const [entries, setEntries] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -344,11 +351,142 @@ function ByDayView({ profile, prEntries, sessionCount, streak, statsError }) {
         />
       ) : null}
       <MilestoneDetailModal milestone={selectedEntry?.type === "milestone" ? selectedEntry : null} onClose={() => setSelectedEntry(null)} />
+      <ConditioningSheet
+        visible={selectedEntry?.type === "conditioning"}
+        log={selectedEntry?.log ?? null}
+        onClose={() => setSelectedEntry(null)}
+        onCta={() => {
+          const log = selectedEntry?.log;
+          setSelectedEntry(null);
+          if (log) router.push({ pathname: "/(member)/plan", params: { session: "conditioning", conditioningLogId: log.id } });
+        }}
+      />
     </View>
   );
 }
 
-function ByWorkoutView({ exercises, loadError, onRetry }) {
+// Conditioning's own row at the top of the Exercises view, opening in place
+// into its trend. The number worth watching in zone 2 is average heart rate
+// for the same kind of session: when it drifts down, the aerobic base is
+// building.
+function ConditioningPanel({ logs }) {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState(null);
+
+  const ascending = useMemo(
+    () => [...(logs ?? [])].sort((a, b) => (a.performed_on < b.performed_on ? -1 : a.performed_on > b.performed_on ? 1 : 0)),
+    [logs]
+  );
+  if (!logs || logs.length === 0) return null;
+
+  const hrPoints = ascending.filter((l) => l.avg_heart_rate != null).map((l) => ({ date: l.performed_on, value: l.avg_heart_rate }));
+  const minutePoints = ascending.map((l) => ({ date: l.performed_on, value: l.duration_minutes }));
+  const recent = logs.slice(0, 8);
+  const feels = recent.map((l) => l.feel).filter((f) => f != null);
+  const avgFeel = feels.length ? feelOption(Math.round(feels.reduce((s, f) => s + f, 0) / feels.length)) : null;
+  const chartWidth = Math.min(width - 48 - 32, 520);
+  const last = logs[0];
+
+  return (
+    <View
+      style={{
+        marginBottom: 12,
+        borderRadius: 16,
+        backgroundColor: "#fff",
+        borderWidth: 1,
+        borderColor: CARD_BORDER,
+        ...CARD_SHADOW,
+      }}
+    >
+      <PressFade
+        onPress={() => setOpen((o) => !o)}
+        accessibilityLabel={open ? "Hide conditioning history" : "Show conditioning history"}
+        style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}
+      >
+        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: OLIVE, alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="heart" size={12} color="#fff" />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#44403c" }}>
+            Conditioning
+          </Text>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted, marginTop: 2 }}>
+            Last done {formatDateMDY(last.performed_on)} | {describeConditioningLog(last)}
+          </Text>
+        </View>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={16} color={CHEVRON_COLOR} />
+      </PressFade>
+
+      {open ? (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14, borderTopWidth: 1, borderTopColor: "#f4efe9" }}>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+            <StatTile value={logs.length} label="Sessions logged" color={CLAY} />
+            <StatTile value={avgFeel ? avgFeel.emoji : "–"} label={avgFeel ? `Feel, recently: ${avgFeel.label}` : "Feel, recently"} color={OLIVE} />
+          </View>
+
+          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: colors.muted, marginTop: 16 }}>
+            Average heart rate
+          </Text>
+          {hrPoints.length >= 2 ? (
+            <>
+              <TrendChart points={hrPoints} width={chartWidth} unit="bpm" />
+              <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.muted, marginTop: 4 }}>
+                Heart rate drifting down for the same kind of session means your aerobic base is building.
+              </Text>
+            </>
+          ) : (
+            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, marginTop: 6 }}>
+              Log your heart rate on two sessions to see the trend.
+            </Text>
+          )}
+
+          {minutePoints.length >= 2 ? (
+            <>
+              <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: colors.muted, marginTop: 16 }}>
+                Time
+              </Text>
+              <TrendChart points={minutePoints} width={chartWidth} unit="min" />
+            </>
+          ) : null}
+
+          <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: colors.muted, marginTop: 16, marginBottom: 6 }}>
+            Every session
+          </Text>
+          {logs.map((log) => (
+            <PressFade
+              key={log.id}
+              onPress={() => setSelected(log)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: "#f4efe9" }}
+            >
+              <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c", width: 92 }}>
+                {formatDateMDY(log.performed_on)}
+              </Text>
+              <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={{ flex: 1, minWidth: 0, fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted }}>
+                {describeConditioningLog(log)}
+              </Text>
+              <Ionicons name="chevron-forward" size={15} color={CHEVRON_COLOR} />
+            </PressFade>
+          ))}
+        </View>
+      ) : null}
+
+      <ConditioningSheet
+        visible={!!selected}
+        log={selected}
+        onClose={() => setSelected(null)}
+        onCta={() => {
+          const log = selected;
+          setSelected(null);
+          if (log) router.push({ pathname: "/(member)/plan", params: { session: "conditioning", conditioningLogId: log.id } });
+        }}
+      />
+    </View>
+  );
+}
+
+function ByWorkoutView({ exercises, loadError, onRetry, conditioningLogs }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
@@ -389,6 +527,8 @@ function ByWorkoutView({ exercises, loadError, onRetry }) {
         />
       </View>
 
+      {!query ? <ConditioningPanel logs={conditioningLogs} /> : null}
+
       {jump && !query ? (
         <View style={{ backgroundColor: HERO_DARK, borderRadius: 20, padding: 16, marginBottom: 16 }}>
           <Text
@@ -416,7 +556,7 @@ function ByWorkoutView({ exercises, loadError, onRetry }) {
         </View>
       ) : null}
 
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && !(exercises.length === 0 && conditioningLogs?.length > 0 && !query) ? (
         <Text className="text-stone-500" style={{ fontFamily: fonts.sans }}>
           {exercises.length === 0 ? "No logged results yet — once you log a set, it'll show up here." : "No exercises match your search."}
         </Text>
@@ -482,12 +622,25 @@ export default function HistoryIndex() {
   const [stats, setStats] = useState(null);
   const [statsError, setStatsError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [conditioningLogs, setConditioningLogs] = useState([]);
 
   useEffect(() => {
     setStatsError(null);
     getExerciseStats(profile.id)
       .then(setStats)
       .catch((err) => setStatsError(err.message ?? String(err)));
+  }, [profile.id, retryKey, focusKey]);
+
+  // Its own fetch and its own catch: a member with no conditioning just has
+  // none, and a failure here must not take the lift history with it.
+  useEffect(() => {
+    let live = true;
+    listConditioningLogs(profile.id, { limit: 200 })
+      .then((rows) => live && setConditioningLogs(rows))
+      .catch(() => live && setConditioningLogs([]));
+    return () => {
+      live = false;
+    };
   }, [profile.id, retryKey, focusKey]);
 
   const prEntries = useMemo(
@@ -527,7 +680,12 @@ export default function HistoryIndex() {
            what actually failed. */
         <ByDayView profile={profile} prEntries={prEntries} sessionCount={sessionCount} streak={streak} statsError={statsError} />
       ) : (
-        <ByWorkoutView exercises={stats?.exercises ?? null} loadError={statsError} onRetry={() => setRetryKey((k) => k + 1)} />
+        <ByWorkoutView
+          exercises={stats?.exercises ?? null}
+          loadError={statsError}
+          onRetry={() => setRetryKey((k) => k + 1)}
+          conditioningLogs={conditioningLogs}
+        />
       )}
     </ScrollView>
   );

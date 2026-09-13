@@ -111,7 +111,35 @@ export function GymWeekModal({ visible, onClose, view, week }) {
     if (view === "sessionsToday" || view === "sessionsWeek") {
       const list = view === "sessionsToday" ? week.sessionsToday : week.sessions;
       if (list.length === 0) return <Empty text="Nothing finalized yet." />;
-      return list.map((session) => (
+      return list.map((session) =>
+        session.conditioning ? (
+          // A conditioning session has no sets to expand into, so it gets a
+          // plain row rather than SessionRow (which would fetch that day's
+          // lift logs and show the wrong thing).
+          <PressFade
+            key={session.id}
+            onPress={() => open(session.userId)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3efe9" }}
+          >
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#f5efe9", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 12, color: colors.primaryOnWhite }}>{initials(session.userName)}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: "#44403c" }}>
+                {session.userName}
+              </Text>
+              <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, marginTop: 1 }}>
+                {[
+                  view === "sessionsToday" ? formatTimeInBoise(session.completedAt) : formatDateMD(session.date),
+                  session.label,
+                  session.sessionTitle,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
+            </View>
+          </PressFade>
+        ) : (
         <SessionRow
           key={session.id}
           userId={session.userId}
@@ -127,7 +155,8 @@ export function GymWeekModal({ visible, onClose, view, week }) {
             .join(" · ")}
           onOpenClient={() => open(session.userId)}
         />
-      ));
+        )
+      );
     }
     const list = view === "membersWeek" ? week.seen : week.notSeen;
     if (list.length === 0) {

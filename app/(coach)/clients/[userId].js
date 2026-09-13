@@ -13,6 +13,14 @@ import { ClientGoalCard } from "../../../components/ClientGoalCard";
 import { getSpcClient, assignSpcClient, setSpcStatus, updateSpcClient, isSpcActive, isSpcEnrolled } from "../../../lib/programming/spcClients";
 import { getCurrentSpcBlock } from "../../../lib/programming/spcBlocks";
 import { getClient as getNutritionClient, createOrReactivateClient, setClientStatus as setNutritionStatus } from "../../../lib/nutrition/clients";
+import {
+  getConditioningClient,
+  isConditioningActive,
+  setConditioningEnrolled,
+  updateConditioningClient,
+  listConditioningLogs,
+} from "../../../lib/programming/conditioning";
+import { ConditioningHistoryCard } from "../../../components/conditioning/ConditioningHistoryCard";
 import { listTemplates } from "../../../lib/programming/templates";
 import { listOneOffWorkoutsForUser, createOneOffFromTemplate, deleteOneOffWorkout } from "../../../lib/programming/oneOffWorkouts";
 import {
@@ -278,6 +286,12 @@ export default function ClientProfile() {
   // actually enrolled.
   const [spcError, setSpcError] = useState(null);
   const [nutritionError, setNutritionError] = useState(null);
+  // Conditioning (0130). Same isolation as SPC/Nutrition: its own error slot,
+  // and the switch is withheld while errored.
+  const [conditioningClient, setConditioningClient] = useState(null);
+  const [conditioningError, setConditioningError] = useState(null);
+  const [conditioningLogs, setConditioningLogs] = useState([]);
+  const [conditioningLogsError, setConditioningLogsError] = useState(null);
   const [oneOffs, setOneOffs] = useState([]);
   const [alternatePrograms, setAlternatePrograms] = useState([]);
   // Own error slot, isolated from the page's main load: alternate
@@ -388,6 +402,20 @@ export default function ClientProfile() {
         setNutritionError(null);
       } else {
         setNutritionError(nutritionResult.reason?.message ?? String(nutritionResult.reason));
+      }
+
+      try {
+        setConditioningClient(await getConditioningClient(userId));
+        setConditioningError(null);
+      } catch (err) {
+        setConditioningError(err.message ?? String(err));
+      }
+      try {
+        setConditioningLogs(await listConditioningLogs(userId, { limit: 60 }));
+        setConditioningLogsError(null);
+      } catch (err) {
+        setConditioningLogs([]);
+        setConditioningLogsError(err.message ?? String(err));
       }
 
       // Staff-only, reads auth.users.last_sign_in_at (migration 0022) — real
@@ -599,6 +627,25 @@ export default function ClientProfile() {
     }
   };
 
+  const conditioningActive = isConditioningActive(conditioningClient);
+  const handleConditioningToggle = async (enrolled) => {
+    try {
+      await setConditioningEnrolled(userId, enrolled);
+      await load();
+    } catch (err) {
+      toastError("Failed to update conditioning", err);
+    }
+  };
+
+  const handleConditioningFrequencySelect = async (sessionsPerWeek) => {
+    try {
+      await updateConditioningClient(userId, { sessions_per_week: sessionsPerWeek });
+      await load();
+    } catch (err) {
+      toastError("Failed to update conditioning frequency", err);
+    }
+  };
+
   // The "single session" shape. Each pick becomes its own independent
   // one-off, exactly as before — assigning three trial sessions at once is
   // three assignments, not one bundle.
@@ -775,9 +822,13 @@ export default function ClientProfile() {
   ];
 
   const weekStart = addDays(today, dayOfWeekInBoise(today) === 0 ? -6 : 1 - dayOfWeekInBoise(today));
-  const weekCompleted = recentSessions.filter((s) => s.date >= weekStart).length;
+  const weekCompleted =
+    recentSessions.filter((s) => s.date >= weekStart).length +
+    (conditioningActive ? conditioningLogs.filter((l) => l.performed_on >= weekStart).length : 0);
   const weeklyTarget =
-    assignments.reduce((sum, a) => sum + (a.sessions_per_week ?? 3), 0) + (spcActive ? spcClient?.sessions_per_week ?? 0 : 0);
+    assignments.reduce((sum, a) => sum + (a.sessions_per_week ?? 3), 0) +
+    (spcActive ? spcClient?.sessions_per_week ?? 0 : 0) +
+    (conditioningActive ? conditioningClient?.sessions_per_week ?? 1 : 0);
   const wideCards = isWeb && width >= 1100;
   const visibleTabs = DETAIL_TABS.filter((t) => t.key !== "messages" || messagingEnabled);
 
@@ -919,7 +970,7 @@ export default function ClientProfile() {
               lastSession={recentSessions[0] ?? null}
               weekCompleted={weekCompleted}
               weeklyTarget={weeklyTarget}
-              hasProgram={assignments.length > 0 || spcActive}
+              hasProgram={assignments.length > 0 || spcActive || conditioningActive}
               onOpenBlock={(row) => router.push(row.href ?? `/(coach)/blocks?program=${row.programId}`)}
             />,
             <NutritionCard
@@ -1112,6 +1163,49 @@ export default function ClientProfile() {
           </View>
         </View>
 
+        <SettingsCard
+          icon="heart-outline"
+          title="Conditioning"
+          headerRight={conditioningActive ? <StatusBadge tone="onTrack" label="Active" /> : null}
+        >
+          {conditioningError ? (
+            <Text className="text-red-600" style={{ fontFamily: fonts.sans }}>
+              Couldn't load conditioning status: {conditioningError}
+            </Text>
+          ) : (
+            <>
+              <View className="flex-row items-center gap-3">
+                <Switch
+                  value={conditioningActive}
+                  onValueChange={handleConditioningToggle}
+                  trackColor={{ false: "#e7e5e4", true: "#4d6142" }}
+                  thumbColor="#ffffff"
+                />
+                <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                  {conditioningActive ? "Enrolled" : "Not enrolled"}
+                </Text>
+              </View>
+              {conditioningActive ? (
+                <View className="mt-3 rounded-lg px-3.5 py-3" style={{ backgroundColor: "#faf8f6" }}>
+                  <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+                    Frequency
+                  </Text>
+                  <View style={{ maxWidth: 220 }}>
+                    <SegmentedControl
+                      segments={[1, 2, 3].map((n) => ({ key: String(n), label: `${n}x` }))}
+                      activeKey={String(conditioningClient?.sessions_per_week ?? 1)}
+                      onSelect={(key) => handleConditioningFrequencySelect(Number(key))}
+                    />
+                  </View>
+                </View>
+              ) : null}
+              <Text className="mt-3 text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
+                Zone 2 cardio. They log time, average heart rate, how it felt and notes.
+              </Text>
+            </>
+          )}
+        </SettingsCard>
+
         <SettingsCard icon="add-circle-outline" title="Alternate programming">
           {alternateError ? (
             <View className="mb-3 rounded-lg border border-stone-200 px-4 py-3">
@@ -1236,6 +1330,12 @@ export default function ClientProfile() {
         {tab === "history" ? (
           <Card>
             <RecentSessionsCard userId={userId} sessions={recentSessions} />
+          </Card>
+        ) : null}
+
+        {tab === "history" && (conditioningLogs.length > 0 || conditioningLogsError) ? (
+          <Card>
+            <ConditioningHistoryCard logs={conditioningLogs} error={conditioningLogsError} />
           </Card>
         ) : null}
 

@@ -8841,6 +8841,66 @@ unused-import / missing-export pass over all touched files. **Not verified**:
 behind a real login, the coach editor's new fields and Duplicate, the leave
 confirm and toast (need real navigation), and the tab dot's look.
 
+## Conditioning: zone 2 cardio as its own program (2026-09-13)
+
+A new program type with no programming behind it. Migration `0130`, applied
+and verified live. Decisions taken with Terra: it **counts as being in the
+gym** (dashboard "girls in this week"), a member **can log more than her
+target** and it still counts, **no missed-session flags**, and the coach gets
+a **1x/2x/3x frequency** control now even though everyone starts at 1x.
+
+**Its own two tables, deliberately not a group program, not SPC, and not
+`programming.logs`.** Group/SPC carry blocks, weeks and exercises that every
+reader would have to learn to skip for a program with none. `logs` is
+set-shaped and its unique index broke production once when widened. A
+session is one `conditioning_logs` row: `performed_on` (a Boise DATE, so
+"which week" is string comparison, never a timezone bug), required
+`duration_minutes`, optional `avg_heart_rate` (not everyone wears a monitor),
+optional `feel` 1-5, `notes`. Logging IS finishing: there is no finalize step.
+Enrolment mirrors `spc_clients`: switching off writes `inactive` so her
+frequency survives. Everything lives in `lib/programming/conditioning.js`,
+including `FEEL_OPTIONS` (😣 Rough, 🙁 Hard, 😐 Okay, 🙂 Good, 😄 Great, the
+word under each face is load-bearing) and `describeConditioningLog`.
+
+- **Coach**: a Conditioning card on the client page's Programs tab (switch +
+  1x/2x/3x), and on My Training for a coach's own account. The Training
+  history tab adds `ConditioningHistoryCard` under the lift history. Weekly
+  target/completed on the Programming snapshot include it. No membership pill:
+  there is no conditioning page to link to.
+- **My Week**: a `ConditioningSection` card, one stripe per target session plus
+  one per extra she logged, logged stripes captioned with the weekday, open
+  ones "Anytime". Tapping opens `ConditioningSheet` ("Log this session", or the
+  logged numbers + "Update this session"), which hands off to My Fitness with
+  `session: "conditioning"` (+ `conditioningLogId`). The hero offers it after
+  every lifting option; hero totals cap it at the target so "4 of 3" can't show.
+- **My Fitness**: `focus.type === "conditioning"` renders `ConditioningForm`.
+  Once the week's target is met it shows a done card with "Log another
+  session" and this week's entries. A deep link naming an older log (from My
+  History) fetches it as `extraLog`. It joins the program picker only while
+  due, and becomes the focus automatically when it's all she has.
+- **My History**: By Day gets a "Conditioning" row (opens the sheet); the
+  Exercises view gets an expandable `ConditioningPanel` with average heart
+  rate and time trend charts and every session. The panel lives inline rather
+  than as a `history/conditioning` route on purpose: a new route in that
+  folder needs a `href: null` line in `app/(member)/_layout.js`, which another
+  session had open.
+- **Gym week band** (`gymWeek.js`): conditioning enrolment joins the training
+  roster and this week's logs count as sessions; `GymWeekModal` renders them as
+  plain rows (a `SessionRow` would fetch that day's lift logs).
+  `useHasFitness` includes it, so a conditioning-only member gets My Fitness.
+
+**Placeholders are a dash, never a sample number**: a grey "45" in the time
+box read as already entered, the same trap as the old warm-up placeholders.
+
+**Verified**: RLS as a real member (above); `npm run build` + `check:routes`
+clean; a Babel parse / unresolved-identifier / unused-import /
+missing-named-export pass over all 13 touched files; the form and sheet driven
+at 390px through a throwaway route (deleted): blank time blocked with a message,
+feel select and re-tap clear, logged sheet showing minutes/bpm/feel and Update.
+**Not verified behind a real login**: My Week's card, the My Fitness hand-off,
+My History, the coach toggle. Worth Terra's pass: turn it on for a test client,
+log one from My Week, check it on the coach's Training history.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -8948,6 +9008,7 @@ sections; next number after 0080 is 0081.)
 - `0126_lift_photos.sql` — **run**, verified live 2026-09-08 (table, RLS on, exactly one policy and no staff policy, 2 indexes, the bucket at 5 MB / jpeg-png-webp / private, the storage policy, and the function confirmed `prosecdef = true`; `NOTIFY pgrst` sent and a live REST call returning `200 []` rather than PGRST205). Adds `programming.lift_photos` (a photo a member attaches to one lift on one day), the private **`lift-photos`** storage bucket capped at 5 MB / jpeg-png-webp, its owner-only `storage.objects` policy, and `programming.repoint_lift_photos()`. Owner-only RLS with **no staff policy at all** — coaches and admins genuinely cannot read these, by decision. Do not reuse the `photos` bucket for anything member-private: it grants `is_coach()` ALL on its entire contents. See "A photo on a lift, in her own history" above for why the merge repoint has to be a security-definer function rather than another entry in `REFERENCE_TABLES`.
 - `0125_week_tabs.sql` — **run**, verified live 2026-09-08 (dry-run with six RLS/constraint assertions in a rolled-back transaction first, then table, policy, RLS, the new column and a live PostgREST 200 all confirmed by query). Adds `programming.nutrition_week_phases.color` (a palette KEY, never a hex, nullable so every existing marker keeps its default) and `programming.nutrition_week_notes` (free-text tabs on a week: "Mexico trip", "family vacation"). Notes are deliberately their own table rather than another column on the phases table — a phase marker is a RUN that holds until the next one, so writing a note there would create a marker on that week and silently end the phase running through it. Staff-only in every direction, no member policy, same as the phases table. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - `0128_hub_one_off_sessions.sql` — **run**, verified live 2026-09-13 (dry run plus a rolled-back end-to-end RLS test; function, 3 display policies, the new column, and `hub_add_client`'s single 6-arg signature confirmed by query). A third live-board slot kind: `hub_session_clients.one_off_workout_id` with a three-way XOR, two security-definer predicates, display reads on the one_off tables, a one-off arm on `hub_startable_clients()` (not gated on SPC enrollment), and `oneOffWorkoutId` on `hub_start_session` / `hub_add_client`. Drops the 5-arg `hub_add_client`. See "One-off sessions from the SPC client page".
+- `0130_conditioning.sql` — **run**, verified live 2026-09-13 (dry run, then applied; both tables and all 4 policies confirmed, plus a rolled-back impersonation test as a real member: own insert/update ok, another user's insert refused 42501, own enrolment update affects 0 rows, feel 9 refused by the check). Adds `programming.conditioning_clients` (enrolment, `active`/`inactive`, `sessions_per_week` 1-3 default 1) and `programming.conditioning_logs` (one row per zone 2 session: `performed_on` date, optional `avg_heart_rate`, required `duration_minutes`, optional `feel` 1-5, `notes`). Staff manage both; a member reads her own enrolment and fully owns her own logs. See "Conditioning" below.
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 

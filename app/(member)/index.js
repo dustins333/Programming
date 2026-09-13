@@ -52,6 +52,12 @@ import { retryOnce } from "../../lib/retry";
 import { formatDateMDY } from "../../lib/formatDate";
 import { SessionSheet } from "../../components/SessionSheet";
 import { MakeupSessionSheet } from "../../components/session/MakeupSessionSheet";
+import { ConditioningSheet } from "../../components/conditioning/ConditioningSheet";
+import {
+  getConditioningClient,
+  isConditioningActive,
+  listConditioningLogsThisWeek,
+} from "../../lib/programming/conditioning";
 import { NextBlockSheet } from "../../components/NextBlockSheet";
 import { ProgressRing } from "../../components/ProgressRing";
 import { PressFade } from "../../components/PressFade";
@@ -564,6 +570,38 @@ function AlternateSection({ program, onNavigate, onPressSession }) {
   );
 }
 
+// Conditioning (0130): zone 2 cardio, no programming. One stripe per session
+// in her weekly target, plus one more for every session she logged past it
+// (extra sessions count). A logged stripe is captioned with the day she did
+// it; an open one reads "Anytime", since there's no day-of-week routing.
+function ConditioningSection({ conditioning, onNavigate, onPressRow }) {
+  const target = conditioning.sessionsPerWeek;
+  const count = Math.max(target, conditioning.logs.length);
+  const rows = Array.from({ length: count }, (_, i) => {
+    const log = conditioning.logs[i] ?? null;
+    return {
+      key: log?.id ?? `conditioning-${i}`,
+      completed: !!log,
+      published: true,
+      label: `Session ${i + 1}`,
+      sessionLabel: count > 1 ? `S${i + 1}` : null,
+      caption: log ? WEEKDAYS[dayOfWeekInBoise(log.performed_on)].slice(0, 3) : "Anytime",
+      isToday: false,
+      onPress: () => onPressRow(log),
+    };
+  });
+  return (
+    <ProgramCard
+      title="Conditioning"
+      rows={rows}
+      target={target}
+      completedCount={conditioning.logs.length}
+      onNavigate={onNavigate}
+      navigateLabel="Go to Conditioning in My Fitness"
+    />
+  );
+}
+
 // Mid-onboarding version of the Nutrition card — same shell, but where the
 // 7 day circles would be there's a single button into the hub. Deliberately
 // no progress numbers and no "not set up yet" copy: nothing on My Week
@@ -831,7 +869,7 @@ function MyWeekSkeleton() {
   );
 }
 
-const CACHE_SECTIONS = ["groups", "spc", "nutrition", "oneOffs", "alternate", "messaging", "events", "benchmark"];
+const CACHE_SECTIONS = ["groups", "spc", "nutrition", "oneOffs", "alternate", "conditioning", "messaging", "events", "benchmark"];
 
 export default function MemberHome() {
   const { profile } = useAuth();
@@ -844,6 +882,9 @@ export default function MemberHome() {
   const [nutritionEnrolled, setNutritionEnrolled] = useState(false);
   const [oneOffs, setOneOffs] = useState([]);
   const [alternate, setAlternate] = useState(null);
+  // null = not on conditioning. Otherwise { sessionsPerWeek, logs } for this week.
+  const [conditioning, setConditioning] = useState(null);
+  const [conditioningSheet, setConditioningSheet] = useState(null); // { log } while open
   const [hasUnread, setHasUnread] = useState(false);
   // Benchmark Day. Its own isolated fetch, like every other domain on this
   // screen — the quarterly self-test failing must not blank her training week.
@@ -915,6 +956,7 @@ export default function MemberHome() {
     }
     if ("oneOffs" in cached) setOneOffs(cached.oneOffs);
     if ("alternate" in cached) setAlternate(cached.alternate);
+    if ("conditioning" in cached) setConditioning(cached.conditioning);
     if ("messaging" in cached) {
       setMessagingEnabled(cached.messaging?.enabled ?? false);
       setHasUnread(cached.messaging?.unread ?? false);
@@ -1271,6 +1313,26 @@ export default function MemberHome() {
         }
       })(),
 
+      // Conditioning (0130). Isolated like every other section: it has
+      // nothing to do with lifting or nutrition and must not hide either.
+      (async () => {
+        try {
+          const result = await retryOnce(async () => {
+            const client = await getConditioningClient(profile.id);
+            if (!isConditioningActive(client)) return null;
+            const logs = await listConditioningLogsThisWeek(profile.id, today);
+            return { sessionsPerWeek: client.sessions_per_week ?? 1, logs };
+          });
+          if (!isStale()) {
+            setConditioning(result);
+            save("conditioning", result);
+          }
+        } catch (err) {
+          console.error("My Week: failed to load conditioning", err);
+          if (!isStale() && !("conditioning" in cached)) setConditioning(null);
+        }
+      })(),
+
       // Admin-configurable kill switch/audience (lib/programming/
       // messagingSettings.js) — the unread check stays chained behind it
       // rather than running alongside, since both the icon and its dot are
@@ -1373,7 +1435,11 @@ export default function MemberHome() {
 
   const readyGroups = useMemo(() => groups.filter((g) => g.status === "ready"), [groups]);
   const hasTraining =
-    readyGroups.length > 0 || spc?.status === "ready" || oneOffs.length > 0 || (alternate?.rows.length ?? 0) > 0;
+    readyGroups.length > 0 ||
+    spc?.status === "ready" ||
+    oneOffs.length > 0 ||
+    (alternate?.rows.length ?? 0) > 0 ||
+    !!conditioning;
 
   // Hero precedence (README 1a): today's group session if incomplete → else
   // SPC's next incomplete → else a quiet state. Never mentions a second
@@ -1449,6 +1515,24 @@ export default function MemberHome() {
       };
     }
 
+    if (conditioning && conditioning.logs.length < conditioning.sessionsPerWeek) {
+      return {
+        kind: "session",
+        source: "conditioning",
+        // No workout behind it, so no exercise count to fetch.
+        workoutId: null,
+        eyebrow: "Conditioning",
+        chip: conditioning.sessionsPerWeek > 1 ? `${conditioning.logs.length} of ${conditioning.sessionsPerWeek} this week` : null,
+        title: "Zone 2 cardio",
+        logParams: { session: "conditioning" },
+      };
+    }
+
+    // Capped at the target so "Training complete, 4 of 3" can't happen when
+    // she logged an extra cardio session.
+    const conditioningCompleted = conditioning ? Math.min(conditioning.logs.length, conditioning.sessionsPerWeek) : 0;
+    const conditioningTarget = conditioning ? conditioning.sessionsPerWeek : 0;
+
     if (!hasTraining) {
       // Nutrition-only member (7b): the hero becomes tonight's log. No empty
       // program slots, no line implying missing training.
@@ -1482,20 +1566,27 @@ export default function MemberHome() {
           ? `${alternate.name} done for this week`
           : oneOffs.length > 0
             ? "Extras all done"
-            : "Nothing scheduled",
+            : conditioning
+              ? "Conditioning done for this week"
+              : "Nothing scheduled",
         meta:
           alternate && alternate.week < alternate.totalWeeks
             ? "Next week's sessions open Monday."
-            : "Your coach will add more when there's more to do.",
+            : conditioning && !alternate && oneOffs.length === 0
+              ? "Back Monday."
+              : "Your coach will add more when there's more to do.",
       };
     }
 
     if (targetsMet) {
       const completed =
         readyGroups.reduce((sum, g) => sum + g.rows.filter((r) => r.completed).length, 0) +
-        (spc?.status === "ready" ? spc.rows.filter((r) => r.completed).length : 0);
+        (spc?.status === "ready" ? spc.rows.filter((r) => r.completed).length : 0) +
+        conditioningCompleted;
       const target =
-        readyGroups.reduce((sum, g) => sum + g.sessionsPerWeek, 0) + (spc?.status === "ready" ? spc.sessionsPerWeek : 0);
+        readyGroups.reduce((sum, g) => sum + g.sessionsPerWeek, 0) +
+        (spc?.status === "ready" ? spc.sessionsPerWeek : 0) +
+        conditioningTarget;
       return { kind: "week_done", completed, target };
     }
 
@@ -1517,11 +1608,14 @@ export default function MemberHome() {
     // covers) and the week isn't finished yet.
     const completed =
       readyGroups.reduce((sum, g) => sum + g.rows.filter((r) => r.completed).length, 0) +
-      (spc?.status === "ready" ? spc.rows.filter((r) => r.completed).length : 0);
+      (spc?.status === "ready" ? spc.rows.filter((r) => r.completed).length : 0) +
+      conditioningCompleted;
     const target =
-      readyGroups.reduce((sum, g) => sum + g.sessionsPerWeek, 0) + (spc?.status === "ready" ? spc.sessionsPerWeek : 0);
+      readyGroups.reduce((sum, g) => sum + g.sessionsPerWeek, 0) +
+      (spc?.status === "ready" ? spc.sessionsPerWeek : 0) +
+      conditioningTarget;
     return { kind: "rest_day", completed, target };
-  }, [readyGroups, spc, oneOffs, alternate, nutrition, nutritionEnrolled, hasTraining]);
+  }, [readyGroups, spc, oneOffs, alternate, conditioning, nutrition, nutritionEnrolled, hasTraining]);
 
   // The hero's meta line ("6 exercises") is the one number My Week doesn't
   // already have in hand — everything else on this screen comes from the
@@ -1839,6 +1933,7 @@ export default function MemberHome() {
     if (hero.source === "group") openGroupPreview(hero.group, hero.row);
     else if (hero.source === "spc") openSpcPreview(hero.spc, hero.row);
     else if (hero.source === "alternate") openAlternatePreview(alternate, hero.alternateRow);
+    else if (hero.source === "conditioning") setConditioningSheet({ log: null });
     else openOneOffPreview(hero.oneOff);
   };
 
@@ -1962,7 +2057,7 @@ export default function MemberHome() {
         );
       })()}
 
-      {(readyGroups.length > 0 || spc?.status === "ready" || oneOffs.length > 0 || nutrition || groups.some((g) => g.status !== "ready")) && (
+      {(readyGroups.length > 0 || spc?.status === "ready" || oneOffs.length > 0 || conditioning || nutrition || groups.some((g) => g.status !== "ready")) && (
         <Eyebrow style={{ marginBottom: 10 }}>Your week</Eyebrow>
       )}
 
@@ -2036,6 +2131,14 @@ export default function MemberHome() {
         />
       )}
 
+      {conditioning && (
+        <ConditioningSection
+          conditioning={conditioning}
+          onNavigate={() => router.push({ pathname: "/(member)/plan", params: { program: "conditioning" } })}
+          onPressRow={(log) => setConditioningSheet({ log })}
+        />
+      )}
+
       {pendingEvents.length > 0 && (
         <EventsTeaser events={pendingEvents} onOpen={() => router.push("/(member)/events")} />
       )}
@@ -2088,6 +2191,20 @@ export default function MemberHome() {
         session={preview?.session}
         ctaBusy={savingBacklog}
         onCta={handleLogPress}
+      />
+
+      <ConditioningSheet
+        visible={!!conditioningSheet}
+        log={conditioningSheet?.log ?? null}
+        onClose={() => setConditioningSheet(null)}
+        onCta={() => {
+          const log = conditioningSheet?.log;
+          setConditioningSheet(null);
+          router.push({
+            pathname: "/(member)/plan",
+            params: log ? { session: "conditioning", conditioningLogId: log.id } : { session: "conditioning" },
+          });
+        }}
       />
 
       <NextBlockSheet

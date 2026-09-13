@@ -12,6 +12,12 @@ import { CoachShell } from "../../components/CoachShell";
 import { toastError } from "../../lib/toast";
 import { confirmRemoveGroupMembership } from "../../lib/confirmDialog";
 import { SPC_ENROLLMENT_LABELS, SPC_ENROLLMENT_TONES } from "../../lib/programming/spcState";
+import {
+  getConditioningClient,
+  isConditioningActive,
+  setConditioningEnrolled,
+  updateConditioningClient,
+} from "../../lib/programming/conditioning";
 import { fonts, colors } from "../../lib/theme";
 
 // A coach's own training — the group and SPC memberships on their OWN
@@ -63,15 +69,22 @@ export default function MyTrainingScreen() {
   const [programs, setPrograms] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [spcClient, setSpcClient] = useState(null);
+  const [conditioningClient, setConditioningClient] = useState(null);
 
   const load = useCallback(async () => {
     if (!userId) return;
     try {
       setLoadError(null);
-      const [progs, assigns, spc] = await Promise.all([listGroupPrograms(), listAssignmentsForUser(userId), getSpcClient(userId)]);
+      const [progs, assigns, spc, conditioning] = await Promise.all([
+        listGroupPrograms(),
+        listAssignmentsForUser(userId),
+        getSpcClient(userId),
+        getConditioningClient(userId),
+      ]);
       setPrograms(progs);
       setAssignments(assigns);
       setSpcClient(spc);
+      setConditioningClient(conditioning);
     } catch (err) {
       setLoadError(err.message ?? String(err));
     } finally {
@@ -128,6 +141,24 @@ export default function MyTrainingScreen() {
       await load();
     } catch (err) {
       toastError("Failed to update SPC session frequency", err);
+    }
+  };
+
+  const conditioningActive = isConditioningActive(conditioningClient);
+  const handleConditioningToggle = async (enrolled) => {
+    try {
+      await setConditioningEnrolled(userId, enrolled);
+      await load();
+    } catch (err) {
+      toastError("Failed to update conditioning", err);
+    }
+  };
+  const handleConditioningFrequencySelect = async (sessionsPerWeek) => {
+    try {
+      await updateConditioningClient(userId, { sessions_per_week: sessionsPerWeek });
+      await load();
+    } catch (err) {
+      toastError("Failed to update conditioning frequency", err);
     }
   };
 
@@ -240,6 +271,29 @@ export default function MyTrainingScreen() {
                 <Pressable onPress={() => router.push(`/(coach)/spc/${userId}`)} className="mt-3 self-start">
                   <Text style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite, fontSize: 13 }}>View my SPC program ›</Text>
                 </Pressable>
+              ) : null}
+            </SettingsCard>
+
+            <SettingsCard icon="heart-outline" title="Conditioning">
+              <View className="flex-row items-center gap-3">
+                <Switch value={conditioningActive} onValueChange={handleConditioningToggle} trackColor={{ false: "#e7e5e4", true: "#4d6142" }} thumbColor="#ffffff" />
+                <Text style={{ fontFamily: fonts.sansMedium }} className="text-stone-700">
+                  {conditioningActive ? "Enrolled" : "Not enrolled"}
+                </Text>
+              </View>
+              {conditioningActive ? (
+                <View className="mt-3 rounded-lg px-3.5 py-3" style={{ backgroundColor: "#faf8f6" }}>
+                  <Text className="mb-2 text-xs uppercase text-stone-400" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.5 }}>
+                    Frequency
+                  </Text>
+                  <View style={{ maxWidth: 220 }}>
+                    <SegmentedControl
+                      segments={[1, 2, 3].map((n) => ({ key: String(n), label: `${n}x` }))}
+                      activeKey={String(conditioningClient?.sessions_per_week ?? 1)}
+                      onSelect={(key) => handleConditioningFrequencySelect(Number(key))}
+                    />
+                  </View>
+                </View>
               ) : null}
             </SettingsCard>
           </>

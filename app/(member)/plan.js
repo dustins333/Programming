@@ -53,6 +53,15 @@ import {
   holdUntil,
 } from "../../components/session/FinalizeCelebration";
 import { getClient as getNutritionClient } from "../../lib/nutrition/clients";
+import {
+  getConditioningClient,
+  isConditioningActive,
+  listConditioningLogsThisWeek,
+  getConditioningLog,
+  describeConditioningLog,
+} from "../../lib/programming/conditioning";
+import { ConditioningForm } from "../../components/conditioning/ConditioningForm";
+import { formatDateMDY } from "../../lib/formatDate";
 import { buildLiftFinalizePlate } from "../../lib/finalizePlate";
 import { getGroupWeeklyProgress, getSpcWeeklyProgress } from "../../lib/programming/weeklyProgress";
 import { fonts, colors, type } from "../../lib/theme";
@@ -204,6 +213,14 @@ export default function MyFitness() {
   const [spcDetailRetryKey, setSpcDetailRetryKey] = useState(0);
   const [oneOffs, setOneOffs] = useState([]);
   const [alternate, setAlternate] = useState(null);
+  // Conditioning (0130): null = not enrolled, else { sessionsPerWeek, logs
+  // (this week), extraLog (a specific older log a deep link asked for) }.
+  const [conditioning, setConditioning] = useState(null);
+  // Once the week's target is met the page shows what she logged, and this
+  // opens a fresh form for an extra session.
+  const [conditioningAddNew, setConditioningAddNew] = useState(false);
+  // Bumped after a new log saves, so the blank form remounts empty.
+  const [conditioningFormKey, setConditioningFormKey] = useState(0);
   const [goal, setGoal] = useState(null);
   const [hasNutrition, setHasNutrition] = useState(false);
   // Set once the member picks an option from ProgramPickerModal — either the
@@ -613,6 +630,26 @@ export default function MyFitness() {
       })(),
 
       (async () => {
+      // Conditioning (0130). Isolated like everything else on this page.
+      try {
+        const result = await retryOnce(async () => {
+          const client = await getConditioningClient(profile.id);
+          if (!isConditioningActive(client)) return null;
+          const logs = await listConditioningLogsThisWeek(profile.id, today);
+          // "Update this session" from My History can name a session from an
+          // earlier week, which this week's list doesn't hold.
+          const wantedId = params.session === "conditioning" ? params.conditioningLogId : null;
+          const extraLog = wantedId && !logs.some((l) => l.id === wantedId) ? await getConditioningLog(wantedId) : null;
+          return { sessionsPerWeek: client.sessions_per_week ?? 1, logs, extraLog };
+        });
+        if (!isStale()) setConditioning(result);
+      } catch (err) {
+        console.error("My Fitness: failed to load conditioning", err);
+        if (!isStale()) setConditioning(null);
+      }
+      })(),
+
+      (async () => {
       // What their coach wrote they're working toward. Own try/catch, same as
       // every other domain on this page — and this one throws outright until
       // migration 0078 is run.
@@ -643,7 +680,7 @@ export default function MyFitness() {
     // screen), and adding them here recreates `load`'s identity, which
     // useFocusEffect below picks up the same way it already does for a
     // real focus event.
-  }, [profile.id, params.session, params.groupProgramId, params.weekNumber, params.sessionNumber, params.oneOffWorkoutId, params.exactWeek]);
+  }, [profile.id, params.session, params.groupProgramId, params.weekNumber, params.sessionNumber, params.oneOffWorkoutId, params.exactWeek, params.conditioningLogId]);
 
   // Refetch on every focus, not just first mount — same reasoning as
   // My Week: Tabs keep this screen mounted, so without this, coming back
@@ -899,11 +936,14 @@ export default function MyFitness() {
     params.session === "alternate" && params.alternateSessionId && alternate
       ? alternate.sessions.find((entry) => entry.session.id === params.alternateSessionId)
       : null;
+  const explicitConditioningTarget = params.session === "conditioning" && !!conditioning;
+  const conditioningDue = !!conditioning && conditioning.logs.length < conditioning.sessionsPerWeek;
   const validProgramParam =
     groupProgramIds.includes(params.program) ||
     params.program === "spc" ||
     params.program === "extras" ||
-    (params.program === "alternate" && alternate)
+    (params.program === "alternate" && alternate) ||
+    (params.program === "conditioning" && conditioning)
       ? params.program
       : null;
 
@@ -935,6 +975,9 @@ export default function MyFitness() {
           },
         ]
       : []),
+    ...(conditioningDue
+      ? [{ key: "conditioning", label: "Conditioning | Zone 2 cardio", focus: { type: "conditioning" } }]
+      : []),
   ];
 
   // A pick made from the hero's program chip has to outrank the params that
@@ -951,6 +994,7 @@ export default function MyFitness() {
     params.weekNumber,
     params.oneOffWorkoutId,
     params.alternateSessionId,
+    params.conditioningLogId,
     params.program,
   ]
     .map((p) => p ?? "")
@@ -965,7 +1009,8 @@ export default function MyFitness() {
     params.program ||
     params.groupProgramId ||
     params.oneOffWorkoutId ||
-    params.alternateSessionId
+    params.alternateSessionId ||
+    params.conditioningLogId
   );
   const activePick = pickedFocus && (!hasNavParams || pickedFocus.signature === paramSignature) ? pickedFocus.focus : null;
 
@@ -980,6 +1025,8 @@ export default function MyFitness() {
     focus = { type: "extras", oneOffWorkoutId: explicitOneOffTarget.workout.id };
   } else if (explicitAlternateTarget) {
     focus = { type: "alternate", alternateSessionId: explicitAlternateTarget.session.id };
+  } else if (explicitConditioningTarget) {
+    focus = { type: "conditioning", conditioningLogId: params.conditioningLogId ?? null };
   } else if (validProgramParam) {
     focus =
       validProgramParam === "spc"
@@ -988,9 +1035,15 @@ export default function MyFitness() {
           ? { type: "extras" }
           : validProgramParam === "alternate"
             ? { type: "alternate" }
-            : { type: "group", groupProgramId: validProgramParam };
+            : validProgramParam === "conditioning"
+              ? { type: "conditioning" }
+              : { type: "group", groupProgramId: validProgramParam };
   } else if (candidates.length === 1) {
     focus = candidates[0].focus;
+  } else if (candidates.length === 0 && conditioning && groups.length === 0 && !hasSpc && oneOffs.length === 0 && !alternate) {
+    // Conditioning is all she has and this week is already done: show what
+    // she logged rather than an empty page.
+    focus = { type: "conditioning" };
   }
   const needsPicker = !focus && candidates.length >= 2;
   // SPC's empty-state chatter is only meaningful when SPC is the thing being
@@ -1057,7 +1110,7 @@ export default function MyFitness() {
   // `!alternate` on both of these: a member whose only training this week is
   // an away run has no group and no SPC, and without it she was told she
   // isn't assigned to a program while looking at one.
-  if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && !alternate && spcLoadError) {
+  if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && !alternate && !conditioning && spcLoadError) {
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
         <Text className="mb-3 text-center text-red-600" style={{ fontFamily: fonts.sans }}>
@@ -1070,7 +1123,7 @@ export default function MyFitness() {
     );
   }
 
-  if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && !alternate) {
+  if (groups.length === 0 && !hasSpc && oneOffs.length === 0 && !alternate && !conditioning) {
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: CANVAS }}>
         {hasNutrition ? (
@@ -1119,6 +1172,17 @@ export default function MyFitness() {
           tabs={activeFinalize.tabs}
           selectedTab={activeFinalize.selectedTab}
           onSelectTab={activeFinalize.onSelectTab}
+          goal={goal}
+        />
+      </View>
+    ) : focus?.type === "conditioning" && conditioning ? (
+      <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
+        <SessionHeroBar
+          programLabel="Conditioning"
+          onPickProgram={candidates.length > 1 ? () => setPickerOpen(true) : null}
+          eyebrowDetail={`${conditioning.logs.length} of ${conditioning.sessionsPerWeek} this week`}
+          title="Zone 2 cardio"
+          onOpenSettings={() => router.push("/(member)/settings")}
           goal={goal}
         />
       </View>
@@ -1444,6 +1508,92 @@ export default function MyFitness() {
             />
           </FitnessCard>
         ))}
+
+      {!needsPicker && focus?.type === "conditioning" && conditioning
+        ? (() => {
+            const refresh = () => {
+              void clearScreen(SCREEN_MY_WEEK, profile.id);
+              load();
+            };
+            const editingLog = focus.conditioningLogId
+              ? conditioning.logs.find((l) => l.id === focus.conditioningLogId) ??
+                (conditioning.extraLog?.id === focus.conditioningLogId ? conditioning.extraLog : null)
+              : null;
+            const weekDone = conditioning.logs.length >= conditioning.sessionsPerWeek;
+            const openLog = (log) =>
+              router.push({ pathname: "/(member)/plan", params: { session: "conditioning", conditioningLogId: log.id } });
+
+            if (editingLog) {
+              return (
+                <FitnessCard title={null}>
+                  <ConditioningForm userId={profile.id} log={editingLog} onSaved={refresh} onDeleted={refresh} />
+                </FitnessCard>
+              );
+            }
+
+            return (
+              <FitnessCard title={null} celebrating={celebration?.key === "conditioning"}>
+                {weekDone && !conditioningAddNew ? (
+                  <View style={{ backgroundColor: "#fff", borderRadius: 18, borderWidth: 1, borderColor: CARD_BORDER, padding: 16, marginBottom: 16 }}>
+                    <Text className="mb-2 text-center text-sm" style={{ fontFamily: fonts.sansMedium, color: "#4d6142" }}>
+                      ✓ Conditioning done for this week
+                    </Text>
+                    <Text className="text-center" style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.muted }}>
+                      Did another one? Extra sessions count too.
+                    </Text>
+                    <Pressable
+                      onPress={() => setConditioningAddNew(true)}
+                      className="mt-3 self-center rounded-xl px-5 py-3"
+                      style={{ backgroundColor: colors.primary }}
+                    >
+                      <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
+                        Log another session
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <ConditioningForm
+                    key={conditioningFormKey}
+                    userId={profile.id}
+                    log={null}
+                    onSaved={() => {
+                      setConditioningAddNew(false);
+                      setConditioningFormKey((k) => k + 1);
+                      celebrate("conditioning");
+                      refresh();
+                    }}
+                  />
+                )}
+
+                {conditioning.logs.length > 0 ? (
+                  <View>
+                    <Text className="mb-2 text-xs uppercase" style={{ fontFamily: fonts.sansBold, letterSpacing: 0.8, color: colors.muted }}>
+                      This week
+                    </Text>
+                    {conditioning.logs.map((log) => (
+                      <Pressable
+                        key={log.id}
+                        onPress={() => openLog(log)}
+                        className="mb-2 flex-row items-center rounded-2xl bg-white px-4 py-3"
+                        style={{ borderWidth: 1, borderColor: CARD_BORDER, gap: 10 }}
+                      >
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: "#44403c" }}>
+                            {formatDateMDY(log.performed_on)}
+                          </Text>
+                          <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 12.5, color: colors.muted, marginTop: 1 }}>
+                            {describeConditioningLog(log)}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color="#c9c4bd" />
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+              </FitnessCard>
+            );
+          })()
+        : null}
     </ScrollView>
     </View>
 
