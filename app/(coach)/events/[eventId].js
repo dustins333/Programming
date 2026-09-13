@@ -6,6 +6,8 @@ import { useAuth } from "../../../lib/auth/AuthProvider";
 import { CoachShell } from "../../../components/CoachShell";
 import { PressFade } from "../../../components/PressFade";
 import { GraphicPicker } from "../../../components/GraphicPicker";
+import { GraphicImage } from "../../../components/GraphicImage";
+import { pickGraphic, uploadGraphic } from "../../../lib/media/graphics";
 import { DateField } from "../../../components/DateField";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NativePickerField } from "../../../components/NativePickerField";
@@ -38,6 +40,7 @@ import {
   eventPhase,
   duplicateEvent,
   parsePrice,
+  itemOptions,
 } from "../../../lib/programming/events";
 import {
   confirmPublishEvent,
@@ -167,6 +170,67 @@ function Field({ label, hint, children }) {
   );
 }
 
+// One option under an item (Vanilla under Protein): its name, its own
+// photo, and remove. The name isn't editable here on purpose: it's what a
+// member's order stores, so renaming would orphan anything already ordered.
+function OptionRow({ option, onPhoto, onRemove }) {
+  const [busy, setBusy] = useState(false);
+  const handlePick = async () => {
+    setBusy(true);
+    try {
+      const picked = await pickGraphic();
+      if (!picked) return;
+      onPhoto(await uploadGraphic({ ...picked, folder: "event-items" }));
+    } catch (err) {
+      toastError("Couldn't add that photo", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View className="mb-2 flex-row items-center gap-3 rounded-lg px-2 py-2" style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#f0ddd2" }}>
+      <PressFade
+        onPress={handlePick}
+        disabled={busy}
+        accessibilityLabel={option.image_path ? `Replace ${option.name} photo` : `Add ${option.name} photo`}
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 8,
+          overflow: "hidden",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "white",
+          borderWidth: option.image_path ? 0 : 1,
+          borderStyle: "dashed",
+          borderColor: "#d6d3d1",
+        }}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : option.image_path ? (
+          <GraphicImage path={option.image_path} coverHeight={48} radius={0} />
+        ) : (
+          <Ionicons name="image-outline" size={18} color={colors.primary} />
+        )}
+      </PressFade>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>{option.name}</Text>
+        {option.image_path ? (
+          <PressFade onPress={() => onPhoto(null)} disabled={busy} style={{ alignSelf: "flex-start" }}>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>Remove photo</Text>
+          </PressFade>
+        ) : (
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>Tap the square to add a photo</Text>
+        )}
+      </View>
+      <PressFade onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={`Remove ${option.name}`}>
+        <Ionicons name="close" size={18} color="#a8a29e" />
+      </PressFade>
+    </View>
+  );
+}
+
 // One orderable item on an order event. Options are the variants a member
 // picks between (S/M/L, Vanilla/Chocolate) — an empty list means the item
 // has none and is ordered by quantity alone.
@@ -175,17 +239,19 @@ function ItemRow({ item, onPatch, onRemove }) {
   const [description, setDescription] = useState(item.description ?? "");
   const [priceText, setPriceText] = useState(item.price != null ? String(Number(item.price)) : "");
   const [newOption, setNewOption] = useState("");
-  const options = item.options ?? [];
+  // Always written back as objects, so an older plain-string option picks
+  // up the { name, image_path } shape the first time anything is edited.
+  const options = itemOptions(item);
 
   const addOption = async () => {
     const trimmed = newOption.trim();
     if (!trimmed) return;
-    if (options.includes(trimmed)) {
+    if (options.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
       toastError("That option is already on this item");
       return;
     }
     setNewOption("");
-    await onPatch({ options: [...options, trimmed] });
+    await onPatch({ options: [...options, { name: trimmed, image_path: null }] });
   };
 
   return (
@@ -268,28 +334,17 @@ function ItemRow({ item, onPatch, onRemove }) {
       </View>
 
       <Text className="mb-2 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-        Options (flavor, size) · leave empty if there aren't any
+        Options (flavor, size), each with its own photo · leave empty if there aren't any
       </Text>
 
-      {options.length > 0 ? (
-        <View className="mb-2 flex-row flex-wrap gap-2">
-          {options.map((opt) => (
-            <View
-              key={opt}
-              className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
-              style={{ backgroundColor: "#fdf6f2", borderWidth: 1, borderColor: "#f0ddd2" }}
-            >
-              <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: colors.primaryOnWhite }}>{opt}</Text>
-              <PressFade
-                onPress={() => onPatch({ options: options.filter((o) => o !== opt) })}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="close" size={12} color={colors.primaryOnWhite} />
-              </PressFade>
-            </View>
-          ))}
-        </View>
-      ) : null}
+      {options.map((opt) => (
+        <OptionRow
+          key={opt.name}
+          option={opt}
+          onPhoto={(path) => onPatch({ options: options.map((o) => (o.name === opt.name ? { ...o, image_path: path } : o)) })}
+          onRemove={() => onPatch({ options: options.filter((o) => o.name !== opt.name) })}
+        />
+      ))}
 
       <View className="flex-row items-center gap-2">
         <TextInput

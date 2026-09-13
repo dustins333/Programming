@@ -8824,6 +8824,24 @@ Also: the detail's date line is now just `Closes Sep 17` (date only, Boise,
 event date dropped) plus location, and the "No payment in the app" line is
 removed.
 
+**Products are parents; options carry their own photo** (third follow-up
+the same day). The "Choose one" dropdown and quantity stepper are gone. A
+product with options (Protein) is a collapsed card (photo, name, price,
+"2 options | 3 in your bag"); tapping it opens one row per option with that
+option's own photo and a + that goes straight into the bag, turning into
+- count + once it's in. A product with no options gets the + on its card.
+Price stays on the parent and is shared by its options. **No migration**:
+`event_items.options` was already jsonb, and each entry can now be
+`{ name, image_path }` instead of a plain string. `itemOptions(item)` in
+`lib/programming/events.js` is the one reader and normalizes both shapes, so
+older string options keep working and pick up the object shape the first
+time the coach edits that item. The option `name` is still what
+`event_response_items.option` stores, which is why the coach can add a photo
+or remove an option but can't rename one (a rename would orphan existing
+orders). The coach editor lists options as rows with a tap-to-add photo
+square. Verified on a harness with mixed string/object options, including
+submitting and reading back the line items.
+
 **The Events tab badge does persist across sessions**, checked because Terra
 suspected it reappeared on every load. Seen ids live in device storage
 (`eventSeen.js`), verified by marking events seen, reloading, and reading them

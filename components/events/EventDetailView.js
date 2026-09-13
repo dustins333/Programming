@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, TextInput, Linking, Modal, Platform, ScrollView, Pressable } from "react-native";
+import { View, Text, TextInput, Linking, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressFade } from "../PressFade";
 import { GraphicImage } from "../GraphicImage";
@@ -8,7 +8,7 @@ import { CARD_BORDER, DONE_BORDER } from "./EventCard";
 import { formatDateShort } from "../../lib/formatDate";
 import { dateInBoise } from "../../lib/boiseDate";
 import { setBottomDockHeight } from "../../lib/bottomDock";
-import { formatPrice } from "../../lib/programming/events";
+import { formatPrice, itemOptions } from "../../lib/programming/events";
 import { readBag, saveBag, clearBag, sameBag, normalizeBag } from "../../lib/programming/eventBag";
 import { fonts, colors } from "../../lib/theme";
 
@@ -106,83 +106,6 @@ function ChoiceAnswer({ question, value, onChange, disabled }) {
   );
 }
 
-// Web gets a real <select> (big enough for a thumb, unlike the coach-side
-// OptionPicker); native gets a tap-to-open list.
-function ChoiceSelect({ options, value, onChange, placeholder, disabled }) {
-  const [open, setOpen] = useState(false);
-  if (Platform.OS === "web") {
-    return (
-      <select
-        value={value ?? ""}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value || null)}
-        style={{
-          fontFamily: fonts.sans,
-          fontSize: 15,
-          width: "100%",
-          padding: "11px 12px",
-          borderRadius: 12,
-          border: "1px solid #d6d3d1",
-          color: value ? "#292524" : "#78716c",
-          backgroundColor: "white",
-        }}
-      >
-        <option value="">{placeholder}</option>
-        {options.map((opt) => (
-          <option key={opt} value={opt}>
-            {opt}
-          </option>
-        ))}
-      </select>
-    );
-  }
-  return (
-    <>
-      <PressFade
-        onPress={() => setOpen(true)}
-        disabled={disabled}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderWidth: 1,
-          borderColor: "#d6d3d1",
-          borderRadius: 12,
-          paddingVertical: 12,
-          paddingHorizontal: 12,
-          backgroundColor: "white",
-        }}
-      >
-        <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: value ? "#292524" : "#78716c" }}>{value ?? placeholder}</Text>
-        <Ionicons name="chevron-down" size={16} color="#78716c" />
-      </PressFade>
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable
-          onPress={() => setOpen(false)}
-          style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, backgroundColor: "rgba(0,0,0,0.4)" }}
-        >
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 320, maxHeight: "70%", borderRadius: 16, backgroundColor: "white", padding: 8 }}>
-            <ScrollView>
-              {options.map((opt) => (
-                <PressFade
-                  key={opt}
-                  onPress={() => {
-                    onChange(opt);
-                    setOpen(false);
-                  }}
-                  style={{ borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: opt === value ? "#fdf6f2" : "transparent" }}
-                >
-                  <Text style={{ fontFamily: fonts.sansMedium, fontSize: 15, color: opt === value ? colors.primaryOnWhite : "#44403c" }}>{opt}</Text>
-                </PressFade>
-              ))}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
-  );
-}
-
 function MiniStepper({ value, onChange, min = 1, disabled, label }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -208,70 +131,119 @@ function MiniStepper({ value, onChange, min = 1, disabled, label }) {
   );
 }
 
-// One product, store-style: photo, name, price, pick a variant, how many,
-// Add to bag. Adding the same variant again adds to what's already in the
-// bag rather than making a second line.
-function ProductCard({ item, onAdd, preview }) {
-  const options = item.options ?? [];
-  const [choice, setChoice] = useState(null);
-  const [qty, setQty] = useState(1);
-  const needsChoice = options.length > 0 && !choice;
-  const price = formatPrice(item.price);
-
-  const handleAdd = () => {
-    if (preview || needsChoice) return;
-    onAdd(item, options.length > 0 ? choice : null, qty);
-    setQty(1);
-  };
-
+// A square photo for a product or one of its options, or nothing at all when
+// there isn't one (an empty grey square in every row reads as broken).
+function Thumb({ path, size = 56 }) {
+  if (!path) return null;
   return (
-    <Card style={{ padding: 0, overflow: "hidden" }}>
-      {item.image_path ? (
-        <View style={{ backgroundColor: "#f7f4f1", paddingVertical: 12 }}>
-          <GraphicImage path={item.image_path} minRatio={0.8} maxHeight={220} radius={10} style={{ backgroundColor: "transparent" }} />
-        </View>
-      ) : null}
-      <View style={{ padding: 16 }}>
-        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-          <Text style={{ flex: 1, fontFamily: fonts.sansBold, fontSize: 17, color: "#292524" }}>{item.name}</Text>
-          {price ? <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, color: colors.primaryOnWhite }}>{price}</Text> : null}
-        </View>
+    <View style={{ width: size, height: size, borderRadius: 10, overflow: "hidden", backgroundColor: "#f1efed" }}>
+      <GraphicImage path={path} coverHeight={size} radius={0} />
+    </View>
+  );
+}
+
+// The control on a sellable row: a single + until it's in the bag, then
+// - count + so the bag can be adjusted right where it was added.
+function BagStepper({ qty, onChange, disabled, label }) {
+  if (!qty) {
+    return (
+      <PressFade
+        onPress={() => onChange(1)}
+        disabled={disabled}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityLabel={`Add ${label} to bag`}
+      >
+        <Ionicons name="add-circle" size={34} color={colors.primary} />
+      </PressFade>
+    );
+  }
+  return <MiniStepper value={qty} min={0} onChange={onChange} disabled={disabled} label={label} />;
+}
+
+// One product, store-style. A product with options (Protein: Vanilla,
+// Chocolate) is a parent: tap it to open its options, each with its own
+// photo and a + that goes straight into the bag. A product with no options
+// gets the + on the card itself. Price is the parent's, shared by its
+// options.
+function ProductCard({ item, quantities, onChangeQty, preview }) {
+  const options = itemOptions(item);
+  const [expanded, setExpanded] = useState(false);
+  const price = formatPrice(item.price);
+  const inBag = options.reduce((sum, opt) => sum + (Number(quantities[lineKey(item.id, opt.name)]) || 0), 0);
+
+  const summary = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14 }}>
+      <Thumb path={item.image_path} size={72} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 17, color: "#292524" }}>{item.name}</Text>
+        {price ? <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: colors.primaryOnWhite, marginTop: 2 }}>{price}</Text> : null}
         {item.description ? (
-          <Text className="mt-1 text-sm" style={{ fontFamily: fonts.sans, color: colors.muted }}>
+          <Text className="text-xs" style={{ fontFamily: fonts.sans, color: colors.muted, marginTop: 2 }}>
             {item.description}
           </Text>
         ) : null}
-
         {options.length > 0 ? (
-          <View style={{ marginTop: 12 }}>
-            <ChoiceSelect options={options} value={choice} onChange={setChoice} placeholder="Choose one" disabled={preview} />
-          </View>
+          <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: inBag ? colors.primaryOnWhite : colors.muted, marginTop: 4 }}>
+            {options.length} {options.length === 1 ? "option" : "options"}
+            {inBag ? ` | ${inBag} in your bag` : ""}
+          </Text>
         ) : null}
-
-        <View style={{ marginTop: 14, flexDirection: "row", alignItems: "center", gap: 14 }}>
-          <MiniStepper value={qty} onChange={setQty} disabled={preview} label={item.name} />
-          <PressFade
-            onPress={handleAdd}
-            disabled={preview || needsChoice}
-            style={{
-              flex: 1,
-              opacity: needsChoice ? 0.45 : 1,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              borderRadius: 12,
-              paddingVertical: 12,
-              backgroundColor: colors.primary,
-            }}
-          >
-            <Ionicons name="bag-add-outline" size={17} color="white" />
-            <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 15 }}>
-              Add to bag
-            </Text>
-          </PressFade>
-        </View>
       </View>
+      {options.length > 0 ? (
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color="#78716c" />
+      ) : (
+        <BagStepper
+          qty={Number(quantities[lineKey(item.id, null)]) || 0}
+          onChange={(q) => onChangeQty(lineKey(item.id, null), q)}
+          disabled={preview}
+          label={item.name}
+        />
+      )}
+    </View>
+  );
+
+  return (
+    <Card style={{ padding: 0, overflow: "hidden" }}>
+      {options.length > 0 ? (
+        <PressFade onPress={() => setExpanded((v) => !v)} accessibilityLabel={`${expanded ? "Hide" : "Show"} ${item.name} options`}>
+          {summary}
+        </PressFade>
+      ) : (
+        summary
+      )}
+
+      {expanded
+        ? options.map((opt) => {
+            const key = lineKey(item.id, opt.name);
+            return (
+              <View
+                key={opt.name}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderTopWidth: 1,
+                  borderTopColor: CARD_BORDER,
+                  backgroundColor: "#fdfbf9",
+                }}
+              >
+                <Thumb path={opt.image_path} size={56} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: "#292524" }}>{opt.name}</Text>
+                  {price ? <Text className="text-xs" style={{ fontFamily: fonts.sans, color: colors.muted, marginTop: 1 }}>{price}</Text> : null}
+                </View>
+                <BagStepper
+                  qty={Number(quantities[key]) || 0}
+                  onChange={(q) => onChangeQty(key, q)}
+                  disabled={preview}
+                  label={`${item.name} ${opt.name}`}
+                />
+              </View>
+            );
+          })
+        : null}
     </Card>
   );
 }
@@ -426,7 +398,7 @@ export function EventDetailView({
           const [itemId, option] = key.split("::");
           const item = itemsById[itemId];
           if (!item) return null;
-          const opts = item.options ?? [];
+          const opts = itemOptions(item).map((o) => o.name);
           if (opts.length > 0 ? !opts.includes(option) : option) return null;
           return { key, item, option: option || null, qty };
         })
@@ -466,13 +438,6 @@ export function EventDetailView({
   useEffect(() => {
     onBagDirtyChangeRef.current?.(bagDirty, orderTotal);
   }, [bagDirty, orderTotal]);
-
-  const addToBag = (item, option, qty) => {
-    const key = lineKey(item.id, option);
-    // No toast: the pinned bag bar counts up in view, and a toast per tap
-    // stacked over the event title.
-    setQuantities((prev) => ({ ...prev, [key]: (Number(prev[key]) || 0) + qty }));
-  };
 
   const setLineQty = (key, qty) => setQuantities((prev) => ({ ...prev, [key]: qty }));
 
@@ -588,7 +553,9 @@ export function EventDetailView({
               </Text>
             </Card>
           ) : (
-            items.map((item) => <ProductCard key={item.id} item={item} onAdd={addToBag} preview={preview} />)
+            items.map((item) => (
+            <ProductCard key={item.id} item={item} quantities={quantities} onChangeQty={setLineQty} preview={preview} />
+          ))
           )
         ) : null}
 
