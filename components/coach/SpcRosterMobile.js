@@ -738,10 +738,6 @@ export function SpcRosterMobile() {
                 ))
               )}
             </View>
-
-            <Text maxFontSizeMultiplier={1.15} style={{ marginTop: 12, fontFamily: fonts.sans, fontSize: 12, color: colors.muted }}>
-              Status comes from the current program's end date. No one sets it by hand.
-            </Text>
           </>
         )}
       </ScrollView>

@@ -13,12 +13,16 @@ import {
   unmarkSpcExerciseComplete,
   markGroupExerciseComplete,
   unmarkGroupExerciseComplete,
+  markOneOffExerciseComplete,
+  unmarkOneOffExerciseComplete,
 } from "../../lib/programming/exerciseCompletions";
 import {
   finalizeSpcSession,
   unfinalizeSpcSession,
   finalizeGroupSession,
   unfinalizeGroupSession,
+  finalizeOneOffSession,
+  unfinalizeOneOffSession,
 } from "../../lib/programming/sessionCompletions";
 import { addCoachingNote } from "../../lib/programming/coachingNotes";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
@@ -55,7 +59,7 @@ const REVIEW_POLL_MS = 10000;
 // this hook consumes belongs here; leaving one out is silent and permanent.
 function clientsSignature(clients) {
   return (clients ?? [])
-    .map((c) => `${c.user_id}:${c.position}:${c.group_workout_id ?? c.spc_workout_id ?? ""}:${c.instance ?? 1}`)
+    .map((c) => `${c.user_id}:${c.position}:${c.one_off_workout_id ?? c.group_workout_id ?? c.spc_workout_id ?? ""}:${c.instance ?? 1}`)
     .join("|");
 }
 
@@ -184,13 +188,13 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
       setWarmups(new Map());
     }
     const missing = hubSession.clients.filter((c) => {
-      const workoutId = c.group_workout_id ?? c.spc_workout_id;
+      const workoutId = c.one_off_workout_id ?? c.group_workout_id ?? c.spc_workout_id;
       return workoutId && !warmupsFetchedRef.current.has(workoutId);
     });
     if (missing.length === 0) return;
     // Marked before the request so a re-render mid-flight doesn't fire it
     // twice; a failure clears the marks below so the next poll retries.
-    const ids = missing.map((c) => c.group_workout_id ?? c.spc_workout_id);
+    const ids = missing.map((c) => c.one_off_workout_id ?? c.group_workout_id ?? c.spc_workout_id);
     for (const id of ids) warmupsFetchedRef.current.add(id);
     let cancelled = false;
     fetchHubWarmups(missing)
@@ -297,7 +301,7 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
           setNumber: i + 1,
           reps: row.reps === "" || row.reps == null ? null : Number(row.reps) || null,
           weight: row.weight === "" || row.weight == null ? null : Number(row.weight),
-          source: entry.kind === "group" ? "group" : "spc",
+          source: entry.kind === "group" ? "group" : entry.kind === "one_off" ? "one_off" : "spc",
           session,
         })
       )
@@ -350,7 +354,10 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
         copy.set(userId, { ...entry, completedItemIds: ids });
         return copy;
       });
-      if (entry.kind === "group") {
+      if (entry.kind === "one_off") {
+        if (next) await markOneOffExerciseComplete(userId, item.id);
+        else await unmarkOneOffExerciseComplete(userId, item.id);
+      } else if (entry.kind === "group") {
         if (next) await markGroupExerciseComplete(userId, item.id);
         else await unmarkGroupExerciseComplete(userId, item.id);
       } else if (next) {
@@ -377,7 +384,9 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
     if (outstanding.length === 0) return;
     await Promise.all(
       outstanding.map((item) =>
-        entry.kind === "group"
+        entry.kind === "one_off"
+          ? markOneOffExerciseComplete(userId, item.id)
+          : entry.kind === "group"
           ? markGroupExerciseComplete(userId, item.id)
           : markSpcExerciseComplete(userId, item.id, entry.completionWeek ?? entry.weekNumber, entry.instance ?? 1)
       )
@@ -389,7 +398,10 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
       const entry = boardRef.current?.get(userId);
       if (!entry) return;
       const finalizing = !entry.finalized;
-      if (entry.kind === "group") {
+      if (entry.kind === "one_off") {
+        if (entry.finalized) await unfinalizeOneOffSession(userId, entry.oneOffWorkoutId);
+        else await finalizeOneOffSession(userId, entry.oneOffWorkoutId);
+      } else if (entry.kind === "group") {
         if (entry.finalized) await unfinalizeGroupSession(userId, entry.groupWorkoutId);
         else await finalizeGroupSession(userId, entry.groupWorkoutId);
       } else if (entry.finalized) {
@@ -420,7 +432,8 @@ export function useHubBoard({ idlePoll = true, reviewSession = null } = {}) {
       // Position lives on the shared join row, so reordering a group column
       // would rewrite that week's session for every member of the program.
       // The UI hides the arrows; this is the belt to that brace.
-      if (entry.kind === "group") return;
+      // A one-off has no reorder RPC, and hub_reorder_exercises is SPC-only.
+      if (entry.kind !== "spc") return;
       const ordered = [...entry.items];
       const index = ordered.findIndex((i) => i.id === itemId);
       const target = index + dir;

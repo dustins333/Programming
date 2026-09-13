@@ -28,6 +28,12 @@ import {
   listSpcWarmupsForWorkouts,
 } from "../../../lib/programming/spcWorkouts";
 import { listExercises } from "../../../lib/programming/exercises";
+import {
+  listOneOffWarmups,
+  listOneOffExercises,
+  deleteOneOffWorkout,
+  updateOneOff,
+} from "../../../lib/programming/oneOffWorkouts";
 import { liftLabelsFor, warmupNumbersFor } from "../../../lib/programming/sessionLabels";
 import { monthDay } from "../../../lib/programming/spcState";
 import {
@@ -35,6 +41,7 @@ import {
   confirmOpenLiveEditor,
   confirmDeleteDraftBlock,
   confirmCancelQueuedProgram,
+  confirmRemoveOneOff,
 } from "../../../lib/confirmDialog";
 import { toastError, toastSuccess } from "../../../lib/toast";
 
@@ -835,7 +842,115 @@ function QueuedProgramStrip({ block, clientFirst, busy, onReschedule, onCancel }
 
 /* -------------------------------------------------------------- main tab */
 
-export function SpcSessionsTab({ userId, member, spcClient, coachId, current, currentNotStarted = false, upcoming, onChanged, isDesktop }) {
+// One one-off session (0008), read-only here like the upcoming pane's cards:
+// its lifts are edited in the builder, and the card's own job is to show what
+// she will get, send a draft, or take it away.
+function OneOffCard({ oneOff, detail, clientFirst, showEditor, busy, onEdit, onSend, onRemove }) {
+  const draft = oneOff.status !== "published";
+  const exercises = detail?.exercises ?? null;
+  const labels = exercises ? liftLabelsFor(exercises) : {};
+  return (
+    <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, marginTop: 14, overflow: "hidden" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10, paddingVertical: 12, paddingHorizontal: 14 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: TITLE_MIN }}>
+          <Text style={{ flexShrink: 1, minWidth: 0, fontFamily: fonts.sansBold, fontSize: 15, color: "#2a211c" }} numberOfLines={1}>
+            {oneOff.title}
+          </Text>
+          <Badge label={draft ? "NOT SENT" : `SENT TO ${clientFirst.toUpperCase()}`} live={!draft} />
+        </View>
+        {showEditor ? (
+          <PressFade onPress={() => onEdit(oneOff)} hitSlop={8} style={{ marginLeft: "auto" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                paddingVertical: 7,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: "#dcc9bf",
+                backgroundColor: "#fdf6f2",
+              }}
+            >
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>Edit</Text>
+              <Ionicons name="chevron-forward" size={12} color={colors.primaryOnWhite} />
+            </View>
+          </PressFade>
+        ) : null}
+      </View>
+
+      {exercises == null ? (
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: 14 }} />
+      ) : detail.failed ? (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+          <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#b23a22" }}>Couldn't load what's in it.</Text>
+        </View>
+      ) : (
+        <>
+          <WarmupStrip warmups={detail.warmups} />
+          {exercises.length === 0 ? (
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
+                Nothing in it yet.{showEditor ? " Open Edit to build it." : " Build it on a computer."}
+              </Text>
+            </View>
+          ) : (
+            exercises.map((row) => <LiftRow key={row.id} label={labels[row.id]} row={row} editable={false} />)
+          )}
+        </>
+      )}
+
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          borderTopWidth: 1,
+          borderTopColor: "#f4f1ec",
+          paddingVertical: 10,
+          paddingHorizontal: 14,
+        }}
+      >
+        <PressFade onPress={() => onRemove(oneOff)} disabled={busy} hitSlop={6}>
+          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: "#b23a22" }}>Remove</Text>
+        </PressFade>
+        {draft && (exercises?.length ?? 0) > 0 ? (
+          <PressFade
+            onPress={() => onSend(oneOff)}
+            disabled={busy}
+            style={{ backgroundColor: "#33251f", borderRadius: 9, paddingVertical: 8, paddingHorizontal: 14, opacity: busy ? 0.5 : 1 }}
+          >
+            <Text style={{ fontFamily: fonts.sansBold, fontSize: 12.5, color: "#f7f3ee" }}>{`Send to ${clientFirst}`}</Text>
+          </PressFade>
+        ) : (
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+            {draft ? `Hidden from ${clientFirst} until it's sent` : "Open until she does it"}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+export function SpcSessionsTab({
+  userId,
+  member,
+  spcClient,
+  coachId,
+  current,
+  currentNotStarted = false,
+  upcoming,
+  onChanged,
+  isDesktop,
+  // Her one-offs that aren't finished yet (0008). When there are any, the
+  // program side grows a second tab for them; when the last one is done the
+  // tab drops away on its own.
+  oneOffs = [],
+  // Bumped by the Overview's one-off card, to land straight on that tab.
+  oneOffFocus = 0,
+}) {
   const router = useRouter();
   const today = todayInBoise();
   const clientFirst = firstNameOf(member?.name);
@@ -855,6 +970,59 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pane, setPane] = useState("current");
+  // Which side of the program column is showing when there are one-offs:
+  // "program" (the current program) or "oneoffs".
+  const [leftTab, setLeftTab] = useState("program");
+  const [oneOffDetails, setOneOffDetails] = useState(new Map());
+  const hasOneOffs = oneOffs.length > 0;
+  const oneOffKey = oneOffs.map((o) => `${o.id}:${o.status}:${o.updated_at ?? ""}`).join("|");
+
+  const loadOneOffDetails = useCallback(async () => {
+    if (oneOffs.length === 0) {
+      setOneOffDetails(new Map());
+      return;
+    }
+    try {
+      const rows = await Promise.all(
+        oneOffs.map(async (o) => {
+          const [warmups, exercises] = await Promise.all([listOneOffWarmups(o.id), listOneOffExercises(o.id)]);
+          return [o.id, { warmups, exercises }];
+        })
+      );
+      setOneOffDetails(new Map(rows));
+    } catch (err) {
+      toastError("Couldn't load the one-off sessions", err);
+      // Stop the cards spinning; each says it couldn't load instead of
+      // pretending to be empty.
+      setOneOffDetails(new Map(oneOffs.map((o) => [o.id, { warmups: [], exercises: [], failed: true }])));
+    }
+    // oneOffKey carries everything about the list that matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oneOffKey]);
+
+  // Coming back from the builder returns to an already-mounted page, so this
+  // reloads on focus as well as when the list itself changes.
+  useFocusEffect(
+    useCallback(() => {
+      loadOneOffDetails();
+    }, [loadOneOffDetails])
+  );
+
+  // The last one-off finished or removed: the tab it lived on is gone, so
+  // don't leave the column pointing at nothing.
+  useEffect(() => {
+    if (hasOneOffs) return;
+    setLeftTab("program");
+    setPane((p) => (p === "oneoffs" ? "current" : p));
+  }, [hasOneOffs]);
+
+  useEffect(() => {
+    if (!oneOffFocus || !hasOneOffs) return;
+    setLeftTab("oneoffs");
+    setPane("oneoffs");
+    // Only the signal re-runs this; hasOneOffs is read, not watched.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oneOffFocus]);
 
   const reloadSessions = useCallback(async () => {
     try {
@@ -1158,6 +1326,39 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
       onChanged();
     } catch (err) {
       toastError("Couldn't send it", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* ----------------------------- one-offs ------------------------------ */
+
+  const handleEditOneOff = (oneOff) => {
+    router.push({ pathname: "/(coach)/one-offs/[oneOffId]", params: { oneOffId: oneOff.id } });
+  };
+
+  const handleSendOneOff = async (oneOff) => {
+    setBusy(true);
+    try {
+      await updateOneOff(oneOff.id, { status: "published" });
+      toastSuccess(`Sent. ${clientFirst} sees it now.`);
+      onChanged();
+    } catch (err) {
+      toastError("Couldn't send it", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemoveOneOff = async (oneOff) => {
+    if (!(await confirmRemoveOneOff(oneOff.title))) return;
+    setBusy(true);
+    try {
+      await deleteOneOffWorkout(oneOff.id);
+      toastSuccess("Removed.");
+      onChanged();
+    } catch (err) {
+      toastError("Couldn't remove it", err);
     } finally {
       setBusy(false);
     }
@@ -1522,20 +1723,73 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
     </View>
   );
 
+  const oneOffPane = (
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
+        <Text style={{ fontFamily: fonts.display, fontSize: 20, color: "#2a211c" }}>One-off sessions</Text>
+      </View>
+      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c", marginTop: 6 }}>
+        {`Open on ${clientFirst}'s week until she does them. They don't count toward her SPC sessions.`}
+      </Text>
+      {oneOffs.map((o) => (
+        <OneOffCard
+          key={o.id}
+          oneOff={o}
+          detail={oneOffDetails.get(o.id)}
+          clientFirst={clientFirst}
+          showEditor={isDesktop}
+          busy={busy}
+          onEdit={handleEditOneOff}
+          onSend={handleSendOneOff}
+          onRemove={handleRemoveOneOff}
+        />
+      ))}
+    </View>
+  );
+
+  // The program column's own tabs, desktop side-by-side only. On narrower
+  // widths the one-offs are the middle of the Current / One-off / Upcoming
+  // sub-tabs instead.
+  const leftTabs = hasOneOffs ? (
+    <View style={{ flexDirection: "row", gap: 4, borderBottomWidth: 1, borderBottomColor: CARD_BORDER, marginBottom: 14 }}>
+      {[
+        { key: "program", label: "Current program" },
+        { key: "oneoffs", label: `One-off sessions (${oneOffs.length})` },
+      ].map((t) => (
+        <PressFade
+          key={t.key}
+          onPress={() => setLeftTab(t.key)}
+          style={{ paddingVertical: 9, paddingHorizontal: 12, borderBottomWidth: 2, borderBottomColor: leftTab === t.key ? colors.primary : "transparent" }}
+        >
+          <Text style={{ fontFamily: leftTab === t.key ? fonts.sansBold : fonts.sansSemiBold, fontSize: 13, color: leftTab === t.key ? "#2a211c" : "#a8a29e" }}>
+            {t.label}
+          </Text>
+        </PressFade>
+      ))}
+    </View>
+  ) : null;
+
+  const phoneTabs = [
+    { key: "current", label: "Current", dot: OLIVE },
+    ...(hasOneOffs ? [{ key: "oneoffs", label: `One-off (${oneOffs.length})`, dot: colors.primary }] : []),
+    { key: "upcoming", label: "Upcoming", dot: null },
+  ];
+
   return (
     <View>
       {sideBySide ? (
         <View style={{ flexDirection: "row", gap: 26, alignItems: "stretch" }}>
-          {currentPane}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {leftTabs}
+            {hasOneOffs && leftTab === "oneoffs" ? oneOffPane : currentPane}
+          </View>
           {upcomingPane}
         </View>
       ) : (
         <View>
           <View style={{ flexDirection: "row", gap: 6, marginBottom: 4 }}>
-            {[
-              { key: "current", label: "Current", live: true },
-              { key: "upcoming", label: "Upcoming", live: false },
-            ].map((t) => (
+            {phoneTabs.map((t) => (
               <PressFade
                 key={t.key}
                 onPress={() => setPane(t.key)}
@@ -1557,8 +1811,8 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
                     width: 7,
                     height: 7,
                     borderRadius: 4,
-                    backgroundColor: t.live ? OLIVE : "transparent",
-                    borderWidth: t.live ? 0 : 1.5,
+                    backgroundColor: t.dot ?? "transparent",
+                    borderWidth: t.dot ? 0 : 1.5,
                     borderColor: "#c9c4bd",
                   }}
                 />
@@ -1568,7 +1822,7 @@ export function SpcSessionsTab({ userId, member, spcClient, coachId, current, cu
               </PressFade>
             ))}
           </View>
-          {pane === "current" ? currentPane : upcomingPane}
+          {pane === "oneoffs" && hasOneOffs ? oneOffPane : pane === "upcoming" ? upcomingPane : currentPane}
         </View>
       )}
 

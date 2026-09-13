@@ -616,10 +616,6 @@ function SpcRosterDesktop() {
             ))
           )}
         </View>
-
-        <Text style={{ marginTop: 12, fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>
-          Status comes from the current program's end date. No one sets it by hand.
-        </Text>
       </ScrollView>
     </CoachShell>
   );

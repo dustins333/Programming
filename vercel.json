@@ -36,6 +36,7 @@
     { "source": "/spc/overview/:userId", "destination": "/spc/overview/[userId]" },
     { "source": "/spc/sessions/:sessionId", "destination": "/spc/sessions/[sessionId]" },
     { "source": "/templates/:templateId", "destination": "/templates/[templateId]" },
+    { "source": "/one-offs/:oneOffId", "destination": "/one-offs/[oneOffId]" },
     { "source": "/spc/:userId", "destination": "/spc/[userId]" }
   ]
 }

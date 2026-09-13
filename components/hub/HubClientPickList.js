@@ -120,13 +120,16 @@ function SessionRow({ session, active, onPress, onPreview }) {
   const text = active ? "#fff" : INK;
   const sub = active ? "rgba(255,255,255,0.75)" : colors.muted;
 
-  const numberLabel = `Session ${session.sessionNumber}`;
+  // A one-off (0128) has no session number: it is one session, named by its
+  // title, and it has never been logged (it would have dropped off otherwise).
+  const oneOff = Boolean(session.oneOffWorkoutId);
+  const numberLabel = oneOff ? "One-off session" : `Session ${session.sessionNumber}`;
   const title = (session.title ?? "").trim();
   const last = lastLoggedLabel(session.lastLoggedAt);
   // "Not logged yet" only where we actually know that. A count above zero
   // with no date means the roster predates this field, and inventing "never"
   // there would be a lie the coach would act on.
-  const dateLine = last ?? ((session.loggedCount ?? 0) === 0 ? "Not logged yet" : null);
+  const dateLine = oneOff ? null : last ?? ((session.loggedCount ?? 0) === 0 ? "Not logged yet" : null);
   const subLine = [title ? numberLabel : null, dateLine].filter(Boolean).join(" · ");
 
   return (
@@ -159,7 +162,9 @@ function SessionRow({ session, active, onPress, onPreview }) {
             </Text>
           ) : null}
         </View>
-        <CountCircle count={session.loggedCount ?? 0} tone={active ? "rgba(255,255,255,0.3)" : done ? DONE_BORDER : "#c9c4bd"} />
+        {oneOff ? null : (
+          <CountCircle count={session.loggedCount ?? 0} tone={active ? "rgba(255,255,255,0.3)" : done ? DONE_BORDER : "#c9c4bd"} />
+        )}
       </PressFade>
       {onPreview ? (
         <PressFade
@@ -198,8 +203,9 @@ export function HubClientRow({
   const selected = Boolean(selectedWorkout);
   // A session row carries one of the two ids (0106); the picked value is
   // whichever it was, so compare against the same coalesce everywhere.
-  const idOf = (s) => s.groupWorkoutId ?? s.spcWorkoutId;
+  const idOf = (s) => s.oneOffWorkoutId ?? s.groupWorkoutId ?? s.spcWorkoutId;
   const chosen = (row.sessions ?? []).find((s) => idOf(s) === selectedWorkout);
+  const oneOff = row.programKind === "one_off";
   return (
     <View
       style={{
@@ -227,7 +233,11 @@ export function HubClientRow({
           <Text style={{ fontFamily: fonts.sans, fontSize: type.caption, color: unavailable ? "#b23a22" : colors.muted, marginTop: 2 }}>
             {unavailable
               ? reason
-              : selected
+              : oneOff
+                ? selected
+                  ? `One-off · ${chosen?.title ?? ""}`
+                  : `${row.sessions.length} one-off session${row.sessions.length === 1 ? "" : "s"}`
+                : selected
                 ? `Week ${row.weekNumber} · Session ${chosen?.sessionNumber ?? ""}${makeup ? " · doing it again" : ""}`
                 : `Week ${row.weekNumber} · ${row.sessions.length} session${row.sessions.length === 1 ? "" : "s"}`}
           </Text>
@@ -445,12 +455,16 @@ export function HubClientPickList({
       if (r.programKind !== "group" || !r.programId) continue;
       if (!byId.has(r.programId)) byId.set(r.programId, r.programName ?? "Group");
     }
-    if (byId.size === 0) return [];
+    // One-offs (0128) get their own segment, last: that is where a prospect
+    // trying SPC is, and she has no SPC row to appear under.
+    const hasOneOffs = roster.some((r) => r.programKind === "one_off");
+    if (byId.size === 0 && !hasOneOffs) return [];
     return [
       { key: "spc", label: "SPC" },
       ...[...byId.entries()]
         .sort((a, b) => a[1].localeCompare(b[1]))
         .map(([id, name]) => ({ key: id, label: name })),
+      ...(hasOneOffs ? [{ key: "one_off", label: "One-offs" }] : []),
     ];
   }, [roster, allowPrograms]);
 
@@ -466,6 +480,8 @@ export function HubClientPickList({
         if (r.programKind !== "spc") return false;
       } else if (activeProgram === "spc") {
         if (r.programKind !== "spc") return false;
+      } else if (activeProgram === "one_off") {
+        if (r.programKind !== "one_off") return false;
       } else if (r.programId !== activeProgram) {
         return false;
       }
@@ -480,15 +496,17 @@ export function HubClientPickList({
     const slots = Object.entries(next).map(([key, workoutId]) => {
       const row = (roster ?? []).find((r) => r.key === key);
       const session = (row?.sessions ?? []).find(
-        (s) => (s.groupWorkoutId ?? s.spcWorkoutId) === workoutId
+        (s) => (s.oneOffWorkoutId ?? s.groupWorkoutId ?? s.spcWorkoutId) === workoutId
       );
+      const oneOffWorkoutId = session?.oneOffWorkoutId ?? null;
       return {
         userId: row?.userId ?? null,
         name: row?.name ?? "",
         programKind: row?.programKind ?? "spc",
         programId: row?.programId ?? null,
-        spcWorkoutId: session?.groupWorkoutId ? null : workoutId,
+        spcWorkoutId: session?.groupWorkoutId || oneOffWorkoutId ? null : workoutId,
         groupWorkoutId: session?.groupWorkoutId ?? null,
+        oneOffWorkoutId,
         sessionNumber: session?.sessionNumber ?? null,
         // The SESSION's authored week, not the client's current calendar week.
         // Since 0101 a session can be moved into a different week, and its
@@ -496,7 +514,8 @@ export function HubClientPickList({
         // slot carrying the calendar week would file both somewhere nothing
         // can find them. Falls back to the client row for a roster fetched
         // before the RPC started returning it.
-        weekNumber: session?.weekNumber ?? row?.weekNumber ?? null,
+        // A one-off has no week; the slot column needs a value, so 1 (0128).
+        weekNumber: oneOffWorkoutId ? 1 : session?.weekNumber ?? row?.weekNumber ?? null,
         // "She already did this — start a second one." An intent, not a
         // record: the caller opens it after the board write, because the
         // display account may only write a completion for a client already
@@ -521,7 +540,7 @@ export function HubClientPickList({
     // Switching session for someone already picked isn't a new slot, so the
     // cap only applies to a client who isn't on the list yet.
     if (mode === "multi" && !picked[row.key] && Object.keys(next).length >= MAX_SLOTS) return;
-    next[row.key] = session.groupWorkoutId ?? session.spcWorkoutId;
+    next[row.key] = session.oneOffWorkoutId ?? session.groupWorkoutId ?? session.spcWorkoutId;
     emit(next, nextMakeups);
   };
 
@@ -546,7 +565,7 @@ export function HubClientPickList({
   };
 
   const chooseSession = (row, session) => {
-    const workoutId = session.groupWorkoutId ?? session.spcWorkoutId;
+    const workoutId = session.oneOffWorkoutId ?? session.groupWorkoutId ?? session.spcWorkoutId;
     if (picked[row.key] === workoutId) {
       const next = { ...picked };
       delete next[row.key];
@@ -625,12 +644,15 @@ export function HubClientPickList({
               ? "Nobody has a block running today."
               : search.trim()
                 ? "No clients match."
-                : "Nobody on this program has a block running today."}
+                : activeProgram === "one_off"
+                  ? "Nobody has a one-off waiting."
+                  : "Nobody on this program has a block running today."}
           </Text>
         ) : null}
         {rows.map((row) => {
           const selectedWorkout = picked[row.key];
-          const betweenBlocks = row.weekNumber == null;
+          // A one-off has no block by design, so a null week means nothing there.
+          const betweenBlocks = row.programKind !== "one_off" && row.weekNumber == null;
           const unavailable = betweenBlocks || row.sessions.length === 0;
           return (
             <HubClientRow
@@ -648,7 +670,9 @@ export function HubClientPickList({
               compact={compact}
               onToggleExpand={() => toggleExpand(row)}
               onChooseSession={(session) => chooseSession(row, session)}
-              onPreview={onPreview ? (session) => onPreview(row, session) : undefined}
+              // The preview sheet reads an SPC/group session; a one-off has no
+              // preview there yet, so the eye is left off rather than broken.
+              onPreview={onPreview && row.programKind !== "one_off" ? (session) => onPreview(row, session) : undefined}
             />
           );
         })}

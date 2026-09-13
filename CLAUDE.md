@@ -8634,6 +8634,86 @@ checker was itself proved to catch a planted fault). **Not verified behind a rea
 login** — standing limitation. Worth Terra's pass: colour a real label, and confirm
 the date line reads right on a client with a long history.
 
+## One-off sessions from the SPC client page, and on the live board (2026-09-13)
+
+Terra's ask: add a one-off session from the SPC client page's header, either
+from a template or built new, and be able to run it on the live board. The
+main reason it exists is **letting a prospect try SPC**. Migration `0128`,
+applied and verified live.
+
+**Decisions she made, worth not relitigating:** "also save as a template" is a
+checkbox; a one-off does **not** count toward her SPC week; it stays open with
+no date (the existing 0008 rule); finished ones go to History with their sets;
+two open one-offs share one tab; at phone width only templates are offered (no
+builder); removing lives on the Sessions tab, where all editing happens; the
+phone Sessions tab is three sub-tabs, Current / One-off / Upcoming.
+
+**The page.** "+ Add a session" sits in the header at both widths and opens
+`components/coach/spc/AddOneOffModal.js` (choose, then template list or a name
++ checkbox). A template assignment is published immediately, same as the group
+client page. **Build new creates a DRAFT** (`createBlankOneOff`), because it is
+empty the moment it exists and a published empty one-off would sit on her My
+Week. Overview gets a ONE-OFF SESSIONS card between THIS WEEK and CURRENT
+PROGRAM; Sessions gets a "One-off sessions (n)" tab over the program column
+that disappears when none are open; History gets a third "One-offs" segment
+only once she has finished one. `listOneOffCompletionDetails` splits open from
+finished.
+
+**The builder is shared now.** `components/builder/FlatSessionBuilder.js` is
+the old template web builder with its tables passed in as an `api` object, and
+both `templates/[templateId].web.js` and the new
+`one-offs/[oneOffId].web.js` are thin wrappers. A superset or warm-up fix lands
+on both. The one-off wrapper adds an editable title, the template checkbox
+(seeded from `?saveTemplate=1`), and a button that reads **Send to {name}**
+while it is a draft and **Done** once published. The template copy
+(`saveOneOffAsTemplate`) happens on the way out, once, and only if the session
+has at least one lift. `one-offs/` has a `_layout.js` Stack and is registered
+`href: null` in the coach Tabs, same trap as `exercises/merge`.
+`one-offs/[oneOffId].js` is a native "build this on a computer" stub so the
+route resolves.
+
+**The board (0128).** A third slot kind, `one_off`, beside `spc` and `group`:
+- `hub_session_clients.one_off_workout_id` and a three-way XOR check.
+- `hub_one_off_belongs_to` / `hub_active_one_off_workout`, the same
+  security-definer pair shape as 0106 (a policy on a table cannot select it).
+- Display read policies on the three `one_off_*` tables. **Writes needed
+  nothing**: the display's logs / completions / notes policies key on
+  `hub_active_client(user_id)`, which already covers one-off rows.
+- `hub_startable_clients()` gains a one-off arm **not gated on spc_clients** (a
+  prospect has no SPC row). The SPC and group arms were generated from
+  `pg_get_functiondef`, not retyped.
+- `hub_add_client` gained `p_one_off_workout_id`, so the 5-arg overload is
+  dropped in the same migration (the 0119 lesson). `hub_start_session` reads
+  `oneOffWorkoutId` off the jsonb, no signature change.
+- `week_number` is NOT NULL, so a one-off slot carries 1; the board branches on
+  kind first and reports `weekNumber: null` for it.
+
+In JS, `slotSession()` returns `kind: "one_off"` and every branch that used to
+be `group ? … : spc` became three-way: `sessionRefFor`, `fetchHubWarmups`,
+`fetchHubBoard` (its own four queries), the tick/finalize writers in
+`useHubBoard` (new `unfinalizeOneOffSession`), `clientsSignature`, and
+`hubHistory`'s set counts. **Reorder is SPC-only** (`canReorder = kind ===
+"spc"`), since `hub_reorder_exercises` is. The picker gets a "One-offs" segment
+last; its rows are never "between blocks", show no count circle and no preview
+eye (the preview sheet reads SPC/group). Staging still excludes everything but
+SPC.
+
+**Verification.** Migration dry-run, then applied; then a rolled-back
+end-to-end test as real accounts: a coach adds a one-off slot through the RPC,
+the display reads that workout and its lifts and warm-ups but **zero** other
+one-offs, the display writes a log, a tick and a finalize, the finished one-off
+drops off the startable list, and `hub_one_off_belongs_to` rejects another
+client's one-off. **A board was live during that test** (Terra's, 2 slots), so
+the transaction ended it only inside itself and rolled back; confirmed still
+open afterwards. `npm run build` + `check:routes` clean, and a parse /
+unresolved-identifier / unused-import / missing-export pass over all 17 touched
+files. Overview card, Sessions tabs at 1280 and 390, History segment, the
+picker's segment emitting `{oneOffWorkoutId, weekNumber: 1}`, and the add
+window were driven in a throwaway `app/zz-oneoff.js` (deleted; the stubbed
+`hub.js` restored md5-identical). **Not verified**: the builder route itself
+and a real board run, both behind a login. Worth Terra's pass: build a new
+session, send it, start it on the wall, finish it, and find it in History.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -8739,6 +8819,7 @@ sections; next number after 0080 is 0081.)
 - `0127_week_note_color.sql` — **run**, verified live 2026-09-08 (dry-run in a rolled-back transaction with a real insert on the new column first, then the column confirmed `text`/nullable and a live PostgREST select returning 200; `NOTIFY pgrst` sent). Adds `programming.nutrition_week_notes.color` so a week's free-text tab can be colour-coded rather than always plain white. Same storage rule as `nutrition_week_phases.color` (0125): a palette KEY, never a hex, and no CHECK against the known keys. **The one difference from the phase column is that null is a real choice here**, not just "unset" — it is the plain white tab every existing label already is, so `noteColor()` falls back to a neutral rather than to the first swatch the way `phaseColor()` does.
 - `0126_lift_photos.sql` — **run**, verified live 2026-09-08 (table, RLS on, exactly one policy and no staff policy, 2 indexes, the bucket at 5 MB / jpeg-png-webp / private, the storage policy, and the function confirmed `prosecdef = true`; `NOTIFY pgrst` sent and a live REST call returning `200 []` rather than PGRST205). Adds `programming.lift_photos` (a photo a member attaches to one lift on one day), the private **`lift-photos`** storage bucket capped at 5 MB / jpeg-png-webp, its owner-only `storage.objects` policy, and `programming.repoint_lift_photos()`. Owner-only RLS with **no staff policy at all** — coaches and admins genuinely cannot read these, by decision. Do not reuse the `photos` bucket for anything member-private: it grants `is_coach()` ALL on its entire contents. See "A photo on a lift, in her own history" above for why the merge repoint has to be a security-definer function rather than another entry in `REFERENCE_TABLES`.
 - `0125_week_tabs.sql` — **run**, verified live 2026-09-08 (dry-run with six RLS/constraint assertions in a rolled-back transaction first, then table, policy, RLS, the new column and a live PostgREST 200 all confirmed by query). Adds `programming.nutrition_week_phases.color` (a palette KEY, never a hex, nullable so every existing marker keeps its default) and `programming.nutrition_week_notes` (free-text tabs on a week: "Mexico trip", "family vacation"). Notes are deliberately their own table rather than another column on the phases table — a phase marker is a RUN that holds until the next one, so writing a note there would create a marker on that week and silently end the phase running through it. Staff-only in every direction, no member policy, same as the phases table. Needs `NOTIFY pgrst, 'reload schema'` after running.
+- `0128_hub_one_off_sessions.sql` — **run**, verified live 2026-09-13 (dry run plus a rolled-back end-to-end RLS test; function, 3 display policies, the new column, and `hub_add_client`'s single 6-arg signature confirmed by query). A third live-board slot kind: `hub_session_clients.one_off_workout_id` with a three-way XOR, two security-definer predicates, display reads on the one_off tables, a one-off arm on `hub_startable_clients()` (not gated on SPC enrollment), and `oneOffWorkoutId` on `hub_start_session` / `hub_add_client`. Drops the 5-arg `hub_add_client`. See "One-off sessions from the SPC client page".
 - **Numbering collision worth knowing about**: there are **two** files numbered `0063` — `0063_blocks_start_on_monday.sql` and `0063_logs_session_reference.sql`, committed separately (`52fdd72` and `b9140e9`) by parallel sessions. **Both are applied** (verified live 2026-08-17: the logs session-reference columns exist), so nothing is broken — but filename order no longer tells you what ran, and "the 0063 migration" is ambiguous.
 - `0047_member_settings_read_and_group_rest.sql` — **run**, confirmed live 2026-08-09 (policy + column verified by direct query). Two fixes from the UX-overhaul plan: (a) a narrow member-read RLS policy on `core.settings` whitelisted to `messaging_enabled`/`messaging_audience` — before this, members couldn't read the messaging kill switch at all (staff-only select policy from 0001), so `getSetting`'s default `true` made the message bubble show for members even with messaging off gym-wide; (b) `group_workout_exercises.rest` — group was the only exercise table without a rest column (SPC/templates/one-offs all have one).
 

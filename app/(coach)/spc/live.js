@@ -354,6 +354,7 @@ export default function SpcLiveSessions() {
           clientName: s.name,
           spcWorkoutId: s.spcWorkoutId,
           groupWorkoutId: s.groupWorkoutId ?? null,
+          oneOffWorkoutId: s.oneOffWorkoutId ?? null,
           weekNumber: s.weekNumber,
           newInstance: s.newInstance,
         })),

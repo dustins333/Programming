@@ -30,6 +30,14 @@ import { KeepInMindCard } from "./KeepInMindField";
 import { statusColors, fonts, colors } from "../../../lib/theme";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { confirmTurnSpcOff } from "../../../lib/confirmDialog";
+import {
+  listOneOffWorkoutsForUser,
+  createOneOffFromTemplate,
+  createBlankOneOff,
+  listOneOffLogs,
+} from "../../../lib/programming/oneOffWorkouts";
+import { listOneOffCompletionDetails } from "../../../lib/programming/sessionCompletions";
+import { AddOneOffModal } from "./AddOneOffModal";
 
 // The SPC client page. Rendered by [userId].web.js for clients on the new
 // model (no live weekly-format block); legacy clients keep the old page.
@@ -322,7 +330,7 @@ function WeekRow({ week, weekStart, future, current, entries, onOpenSession }) {
 /* ------------------------------------------------------------- overview */
 
 // Exported for the visual harness — a real component boundary, not a test seam.
-export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, completionKeys, activity = new Map(), sessionWorkouts, onOpenSession, onGoSessions }) {
+export function OverviewTab({ derived, current, notStarted = false, upcoming, weekNumber, spcClient, completionKeys, activity = new Map(), sessionWorkouts, onOpenSession, onGoSessions, openOneOffs = [], onGoOneOffs }) {
   const target = spcClient?.sessions_per_week ?? 1;
   const tone = statusColors[derived.tone] ?? statusColors.paused;
 
@@ -449,6 +457,51 @@ export function OverviewTab({ derived, current, notStarted = false, upcoming, we
         </View>
       ) : null}
 
+      {/* One-off sessions (0008): open until she does them, and deliberately
+          outside THIS WEEK's count, so they get their own card rather than
+          a pill among her SPC sessions. Tapping goes to the Sessions tab,
+          where all the editing lives. */}
+      {openOneOffs.length > 0 ? (
+        <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, padding: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Eyebrow>ONE-OFF SESSIONS</Eyebrow>
+            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: "#78716c" }}>not counted in her week</Text>
+          </View>
+          <View style={{ gap: 8, marginTop: 10 }}>
+            {openOneOffs.map((o) => {
+              const draft = o.status !== "published";
+              return (
+                <PressFade
+                  key={o.id}
+                  onPress={onGoOneOffs}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    borderRadius: 10,
+                    padding: 12,
+                    borderWidth: 1.5,
+                    borderStyle: draft ? "dashed" : "solid",
+                    borderColor: draft ? "#d9d4cd" : "#dcc9bf",
+                    backgroundColor: draft ? "#fff" : "#fdf6f2",
+                  }}
+                >
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }}>
+                      {o.title}
+                    </Text>
+                    <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#78716c", marginTop: 2 }}>
+                      {draft ? "Not sent yet" : "Waiting for her to do it"}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={15} color="#c9c4bd" />
+                </PressFade>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
       {/* Current program timeline */}
       {current ? (
         <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, padding: 16 }}>
@@ -516,18 +569,108 @@ const HISTORY_SEGMENTS = [
 ];
 
 // Exported for the visual harness, same as OverviewTab.
-export function HistoryTab({ userId, blocks, today, stats, statsError, onRetryStats, isDesktop, onOpenSession }) {
+export function HistoryTab({ userId, blocks, today, stats, statsError, onRetryStats, isDesktop, onOpenSession, finishedOneOffs = [] }) {
   const [view, setView] = useState("lifts");
+  // A third segment only once she has finished a one-off, so a client who
+  // never had one doesn't get an empty tab.
+  const segments =
+    finishedOneOffs.length > 0 ? [...HISTORY_SEGMENTS, { key: "oneoffs", label: "One-offs" }] : HISTORY_SEGMENTS;
+  const active = segments.some((s) => s.key === view) ? view : "lifts";
   return (
     <View>
-      <View style={{ maxWidth: 320 }}>
-        <SegmentedControl segments={HISTORY_SEGMENTS} activeKey={view} onSelect={setView} dense />
+      <View style={{ maxWidth: finishedOneOffs.length > 0 ? 420 : 320 }}>
+        <SegmentedControl segments={segments} activeKey={active} onSelect={setView} dense />
       </View>
-      {view === "lifts" ? (
+      {active === "lifts" ? (
         <LiftHistory userId={userId} stats={stats} statsError={statsError} onRetry={onRetryStats} isDesktop={isDesktop} />
+      ) : active === "oneoffs" ? (
+        <OneOffRuns userId={userId} items={finishedOneOffs} />
       ) : (
         <ProgramRuns userId={userId} blocks={blocks} today={today} onOpenSession={onOpenSession} />
       )}
+    </View>
+  );
+}
+
+// Finished one-offs, newest first. Opening one shows every set she logged in
+// it, lift by lift. Logs carry the one-off's id since 0063, so this is exact
+// rather than matched on the day.
+function OneOffRuns({ userId, items }) {
+  const [open, setOpen] = useState(null);
+  const [logs, setLogs] = useState({});
+
+  const toggle = async (oneOff) => {
+    if (open === oneOff.id) {
+      setOpen(null);
+      return;
+    }
+    setOpen(oneOff.id);
+    if (logs[oneOff.id]) return;
+    try {
+      const rows = await listOneOffLogs(userId, oneOff.id);
+      setLogs((m) => ({ ...m, [oneOff.id]: rows }));
+    } catch (err) {
+      toastError("Couldn't open that session", err);
+      setOpen(null);
+    }
+  };
+
+  return (
+    <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 14, overflow: "hidden", marginTop: 14 }}>
+      {items.map(({ oneOff, completedAt }, i) => {
+        const expanded = open === oneOff.id;
+        const rows = logs[oneOff.id];
+        const byLift = [];
+        for (const r of rows ?? []) {
+          let lift = byLift.find((l) => l.exerciseId === r.exercise_id);
+          if (!lift) {
+            lift = { exerciseId: r.exercise_id, name: r.exercises?.name ?? "Exercise", sets: [] };
+            byLift.push(lift);
+          }
+          lift.sets.push(r);
+        }
+        return (
+          <View key={oneOff.id} style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: "#f4f1ec" }}>
+            <PressFade onPress={() => toggle(oneOff)} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13, paddingHorizontal: 16 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: "#2a211c" }}>
+                  {oneOff.title}
+                </Text>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e", marginTop: 1 }}>
+                  {completedAt ? `Done ${weekdayOf(dateInBoise(new Date(completedAt)))} ${monthDay(dateInBoise(new Date(completedAt)))}` : "Done"}
+                </Text>
+              </View>
+              <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={15} color="#a8a29e" />
+            </PressFade>
+            {expanded ? (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 12, backgroundColor: "#fdfcfa" }}>
+                {!rows ? (
+                  <ActivityIndicator color={colors.primary} style={{ marginVertical: 14 }} />
+                ) : byLift.length === 0 ? (
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c", paddingVertical: 10 }}>
+                    Finalized with no sets logged.
+                  </Text>
+                ) : (
+                  byLift.map((lift) => (
+                    <View key={lift.exerciseId} style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: "#f4f1ec" }}>
+                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#2a211c" }}>{lift.name}</Text>
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#57534e", marginTop: 3 }}>
+                        {lift.sets
+                          .map((s) => {
+                            const reps = s.reps != null ? `${s.reps}` : "–";
+                            const weight = s.weight != null && s.exercises?.tracks_weight !== false ? ` @ ${s.weight} lb` : "";
+                            return `${s.set_type === "ramp_up" ? "Ramp " : ""}${reps}${weight}`;
+                          })
+                          .join(" | ")}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -690,6 +833,12 @@ export function SpcClientPage({ userId }) {
   const [readoutKey, setReadoutKey] = useState(null);
   const [openingSession, setOpeningSession] = useState(false);
   const [tab, setTab] = useState("Overview");
+  // Her one-offs (0008), any status, plus which are finished. Open ones live
+  // on the Sessions tab and the Overview; finished ones go to History.
+  const [oneOffs, setOneOffs] = useState([]);
+  const [oneOffDone, setOneOffDone] = useState(new Map());
+  const [addOpen, setAddOpen] = useState(false);
+  const [oneOffFocus, setOneOffFocus] = useState(0);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
@@ -721,6 +870,16 @@ export function SpcClientPage({ userId }) {
 
       loadStats();
       getNutritionClient(userId).then(setNutritionClient).catch(() => setNutritionClient(null));
+      // Isolated: a one-off failure must not blank the page it sits on.
+      Promise.all([listOneOffWorkoutsForUser(userId), listOneOffCompletionDetails(userId)])
+        .then(([rows, done]) => {
+          setOneOffs(rows ?? []);
+          setOneOffDone(done);
+        })
+        .catch(() => {
+          setOneOffs([]);
+          setOneOffDone(new Map());
+        });
 
       // The current run's sessions + her completions, for the Overview's
       // this-week card and timeline. Isolated — a failure here degrades to
@@ -868,6 +1027,58 @@ export function SpcClientPage({ userId }) {
     toastSuccess("Session reopened");
     await afterSettle();
   }, [readoutSession, userId, afterSettle]);
+
+  const openOneOffs = oneOffs.filter((o) => !oneOffDone.has(o.id)).sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+  const finishedOneOffs = oneOffs
+    .filter((o) => oneOffDone.has(o.id))
+    .map((o) => ({ oneOff: o, completedAt: oneOffDone.get(o.id) }))
+    .sort((a, b) => ((a.completedAt ?? "") < (b.completedAt ?? "") ? 1 : -1));
+  const clientFirstName = (member?.name ?? "").trim().split(/\s+/)[0] || "her";
+
+  const goToOneOffs = () => {
+    setTab("Sessions");
+    setOneOffFocus((n) => n + 1);
+  };
+
+  const handleUseTemplate = async (template) => {
+    try {
+      await createOneOffFromTemplate({
+        userId,
+        templateId: template.id,
+        templateName: template.name,
+        assignedBy: profile?.id,
+      });
+      toastSuccess(`Added. ${clientFirstName} sees it now.`);
+      setAddOpen(false);
+      await load();
+      goToOneOffs();
+    } catch (err) {
+      toastError("Couldn't add that session", err);
+    }
+  };
+
+  const handleBuildNew = async ({ title, saveAsTemplate }) => {
+    try {
+      const created = await createBlankOneOff({ userId, title, assignedBy: profile?.id });
+      setAddOpen(false);
+      router.push({
+        pathname: "/(coach)/one-offs/[oneOffId]",
+        params: { oneOffId: created.id, saveTemplate: saveAsTemplate ? "1" : "0" },
+      });
+    } catch (err) {
+      toastError("Couldn't start that session", err);
+    }
+  };
+
+  const addSessionButton = (
+    <PressFade
+      onPress={() => setAddOpen(true)}
+      style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.primary, borderRadius: 9, paddingVertical: 8, paddingHorizontal: 13 }}
+    >
+      <Ionicons name="add" size={16} color="#fff" />
+      <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: "#fff" }}>Add a session</Text>
+    </PressFade>
+  );
 
   const patch = async (fields, message) => {
     try {
@@ -1040,6 +1251,8 @@ export function SpcClientPage({ userId }) {
           sessionWorkouts={sessionWorkouts}
           onOpenSession={openSession}
           onGoSessions={() => setTab("Sessions")}
+          openOneOffs={openOneOffs}
+          onGoOneOffs={goToOneOffs}
         />
       ) : null}
       {tab === "Sessions" ? (
@@ -1053,6 +1266,8 @@ export function SpcClientPage({ userId }) {
           upcoming={upcoming}
           onChanged={load}
           isDesktop={isDesktop}
+          oneOffs={openOneOffs}
+          oneOffFocus={oneOffFocus}
         />
       ) : null}
       {tab === "History" ? (
@@ -1065,9 +1280,20 @@ export function SpcClientPage({ userId }) {
           onRetryStats={loadStats}
           isDesktop={isDesktop}
           onOpenSession={openSession}
+          finishedOneOffs={finishedOneOffs}
         />
       ) : null}
       {tab === "Settings" ? settingsCard : null}
+
+      <AddOneOffModal
+        visible={addOpen}
+        clientFirst={clientFirstName}
+        // The builder is desktop-only; a phone gets templates.
+        allowBuild={isDesktop}
+        onClose={() => setAddOpen(false)}
+        onUseTemplate={handleUseTemplate}
+        onBuildNew={handleBuildNew}
+      />
 
       {/* Opening a session pulls the whole block, which is not instant. Said
           out loud rather than leaving a tap look like it did nothing. */}
@@ -1125,6 +1351,7 @@ export function SpcClientPage({ userId }) {
             Coach {coaches.find((c) => c.id === spcClient?.assigned_coach_id)?.name?.split(" ")[0] ?? "unassigned"} ·{" "}
             {spcClient?.sessions_per_week ?? "—"}× / week
           </Text>
+          <View style={{ flexDirection: "row", marginTop: 12 }}>{addSessionButton}</View>
           {/* The goal hero is desktop-only, so KEEP IN MIND gets its own
               card here. Without it the phone frame would carry no free-text
               note about the client anywhere, which is exactly what removing
@@ -1175,6 +1402,7 @@ export function SpcClientPage({ userId }) {
             <Ionicons name="radio-outline" size={15} color={colors.primaryOnWhite} />
             <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Live session</Text>
           </PressFade>
+          {addSessionButton}
         </View>
 
         {/* Meta line. No "Coach:" prefix and no "training" — the two facts

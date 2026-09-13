@@ -381,7 +381,8 @@ export function HubClientColumn({
   // by everyone on it — so reordering an LLYL column would rewrite that week's
   // session for the whole group. The toggle stays (it is also where dropping a
   // client lives) but it opens drop-only.
-  const canReorder = entry.kind !== "group";
+  // A one-off has no reorder path either (hub_reorder_exercises is SPC-only).
+  const canReorder = entry.kind === "spc";
   const [showWarmups, setShowWarmups] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [rows, setRows] = useState([]);
@@ -996,7 +997,11 @@ export function HubClientColumn({
               {entry.clientName}
             </Text>
             <Text numberOfLines={1} style={{ height: HEADER_META_H, lineHeight: HEADER_META_H, fontFamily: fonts.sans, fontSize: type.caption, color: colors.muted }}>
-              {[`Week ${entry.weekNumber}`, entry.sessionNumber ? `Session ${entry.sessionNumber}` : null, entry.title || null]
+              {[
+                entry.kind === "one_off" ? "One-off" : `Week ${entry.weekNumber}`,
+                entry.sessionNumber ? `Session ${entry.sessionNumber}` : null,
+                entry.title || null,
+              ]
                 .filter(Boolean)
                 .join(" | ")}
             </Text>
