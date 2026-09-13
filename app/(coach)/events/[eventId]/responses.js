@@ -6,7 +6,13 @@ import { useAuth } from "../../../../lib/auth/AuthProvider";
 import { CoachShell } from "../../../../components/CoachShell";
 import { PressFade } from "../../../../components/PressFade";
 import { SegmentedControl } from "../../../../components/SegmentedControl";
-import { getLiveEventDetail, listEventResponses, rollUpOrders } from "../../../../lib/programming/events";
+import {
+  getLiveEventDetail,
+  listEventResponses,
+  rollUpOrders,
+  lineItemsTotal,
+  formatPrice,
+} from "../../../../lib/programming/events";
 import { buildResponsesCsv, csvFilename, downloadCsv } from "../../../../lib/programming/eventsCsv";
 import { toastError, toastSuccess } from "../../../../lib/toast";
 import { formatDateTimeInBoise } from "../../../../lib/boiseDate";
@@ -76,6 +82,13 @@ export default function EventResponses() {
     [responses]
   );
 
+  // null when nothing ordered has a price, so the header says nothing
+  // rather than "$0".
+  const grandTotal = useMemo(
+    () => (event?.response_type === "order" ? lineItemsTotal(responses.flatMap((r) => r.lineItems ?? []), items) : null),
+    [event, responses, items]
+  );
+
   if (profile && profile.role !== "admin") {
     return <Redirect href="/(coach)" />;
   }
@@ -130,6 +143,7 @@ export default function EventResponses() {
               {event.response_type === "signup" && totalGuests > 0
                 ? ` · ${totalGuests} ${totalGuests === 1 ? "guest" : "guests"} on top`
                 : ""}
+              {grandTotal != null ? ` · ${formatPrice(grandTotal)} total` : ""}
             </Text>
 
             {responses.length === 0 ? (
@@ -169,7 +183,7 @@ export default function EventResponses() {
                             </Text>
                           </>
                         }
-                        right={`× ${line.qty}`}
+                        right={line.price != null ? `× ${line.qty} · ${formatPrice(Number(line.price) * line.qty)}` : `× ${line.qty}`}
                       />
                     ))
                   ) : (
@@ -196,6 +210,12 @@ export default function EventResponses() {
                             </Text>
                           );
                         })}
+
+                        {event.response_type === "order" && lineItemsTotal(response.lineItems, items) != null ? (
+                          <Text className="mt-0.5 text-sm" style={{ fontFamily: fonts.sansSemiBold, color: "#44403c" }}>
+                            {formatPrice(lineItemsTotal(response.lineItems, items))}
+                          </Text>
+                        ) : null}
 
                         {(response.answers ?? [])
                           .filter((a) => a.answer)

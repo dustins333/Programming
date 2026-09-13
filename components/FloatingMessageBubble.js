@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth/AuthProvider";
 import { listMessages, sendMemberMessage, markThreadReadByMember, hasUnreadMessages } from "../lib/programming/messages";
 import { isMessagingEnabledForUser } from "../lib/programming/messagingSettings";
 import { useShowMessageBubble } from "../lib/messageBubblePref";
+import { useBottomDockHeight } from "../lib/bottomDock";
 import { MessageThread } from "./MessageThread";
 import { fonts, colors } from "../lib/theme";
 
@@ -46,6 +47,7 @@ export function FloatingMessageBubble() {
   const { profile } = useAuth();
   const showBubble = useShowMessageBubble();
   const insets = useSafeAreaInsets();
+  const dockHeight = useBottomDockHeight();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -118,7 +120,8 @@ export function FloatingMessageBubble() {
         accessibilityLabel="Message your coach"
         style={{
           position: "absolute",
-          bottom: insets.bottom + 74,
+          // Lifted above a pinned bottom bar when one is showing.
+          bottom: insets.bottom + 74 + dockHeight,
           right: 16,
           width: 52,
           height: 52,

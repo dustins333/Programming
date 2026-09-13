@@ -1,4 +1,4 @@
-import { Text, ScrollView } from "react-native";
+import { View, Text } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../lib/auth/AuthProvider";
@@ -17,19 +17,22 @@ export default function MemberEventDetail() {
   const { eventId } = useLocalSearchParams();
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.canvas }}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 18, paddingBottom: 48 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <PressFade
-        onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)/events"))}
-        style={{ marginBottom: 14, alignSelf: "flex-start" }}
-      >
-        <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Events</Text>
-      </PressFade>
-
-      <EventDetailScreen eventId={eventId} userId={session?.user?.id} />
-    </ScrollView>
+    // The event owns its scroll so its Submit bar can pin below it; the back
+    // link rides along as the top of that scroll.
+    <View style={{ flex: 1, backgroundColor: colors.canvas }}>
+      <EventDetailScreen
+        eventId={eventId}
+        userId={session?.user?.id}
+        contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 18 }}
+        header={
+          <PressFade
+            onPress={() => (router.canGoBack() ? router.back() : router.push("/(member)/events"))}
+            style={{ marginBottom: 14, alignSelf: "flex-start" }}
+          >
+            <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>‹ Events</Text>
+          </PressFade>
+        }
+      />
+    </View>
   );
 }

@@ -55,6 +55,28 @@ export default function MemberEvents() {
   // can't drift.
   const onlyEvent = !loading && !loadError && events.length === 1 ? events[0] : null;
 
+  // One event: the event owns the whole screen, because its Submit bar pins
+  // to the bottom outside its own scroll. The tab's name rides along as the
+  // top of that scroll, dropped to an eyebrow since the event title is the
+  // page heading.
+  if (onlyEvent) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.canvas }}>
+        <EventDetailScreen
+          eventId={onlyEvent.id}
+          userId={userId}
+          contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 18 }}
+          header={
+            <View className="flex-row items-center justify-between" style={{ marginBottom: 10 }}>
+              <Eyebrow>Events</Eyebrow>
+              <Image source={require("../../../assets/kova-logo.jpg")} style={{ width: 34, height: 34, borderRadius: 17 }} />
+            </View>
+          }
+        />
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.canvas }}

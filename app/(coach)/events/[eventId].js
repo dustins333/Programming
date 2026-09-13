@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { View, Text, TextInput, ScrollView, ActivityIndicator, Platform, Modal } from "react-native";
 import { Redirect, useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,6 +6,7 @@ import { useAuth } from "../../../lib/auth/AuthProvider";
 import { CoachShell } from "../../../components/CoachShell";
 import { PressFade } from "../../../components/PressFade";
 import { GraphicPicker } from "../../../components/GraphicPicker";
+import { DateField } from "../../../components/DateField";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { NativePickerField } from "../../../components/NativePickerField";
 import { QuestionListEditor } from "../../../components/nutrition/QuestionListEditor";
@@ -35,6 +36,8 @@ import {
   deleteEventQuestion,
   countResponsesByEvent,
   eventPhase,
+  duplicateEvent,
+  parsePrice,
 } from "../../../lib/programming/events";
 import {
   confirmPublishEvent,
@@ -45,7 +48,6 @@ import {
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { boiseInstantFrom, formatDateTimeInBoise } from "../../../lib/boiseDate";
 import {
-  buildDateOptions,
   TIME_OPTIONS,
   toDateValue,
   toTimeValue,
@@ -96,7 +98,7 @@ const RESPONSE_OPTIONS = [
 const RESPONSE_HINT = {
   none: "Members just read it. No response collected.",
   signup: "Members tap a button to put their name down — a class, a program, a bring-a-friend day.",
-  order: "Members pick quantities from the item list below.",
+  order: "Members shop the items below: photo, price, pick a flavor or size, add to bag, submit.",
   link: "Members get one button out to a page you host elsewhere.",
 };
 
@@ -170,6 +172,8 @@ function Field({ label, hint, children }) {
 // has none and is ordered by quantity alone.
 function ItemRow({ item, onPatch, onRemove }) {
   const [name, setName] = useState(item.name);
+  const [description, setDescription] = useState(item.description ?? "");
+  const [priceText, setPriceText] = useState(item.price != null ? String(Number(item.price)) : "");
   const [newOption, setNewOption] = useState("");
   const options = item.options ?? [];
 
@@ -207,8 +211,64 @@ function ItemRow({ item, onPatch, onRemove }) {
         </PressFade>
       </View>
 
-      <Text className="mb-2 mt-3 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-        Options (size, flavor…) — leave empty if there aren't any
+      <View className="mt-3 flex-row flex-wrap items-start gap-4">
+        <View style={{ width: 130 }}>
+          <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
+            Price
+          </Text>
+          <View className="flex-row items-center rounded-lg border border-stone-300 px-3">
+            <Text style={{ fontFamily: fonts.sans, color: "#78716c" }}>$</Text>
+            <TextInput
+              value={priceText}
+              onChangeText={setPriceText}
+              onBlur={() => {
+                const parsed = parsePrice(priceText);
+                if (parsed === undefined) {
+                  toastError("That doesn't look like a price");
+                  setPriceText(item.price != null ? String(Number(item.price)) : "");
+                  return;
+                }
+                const current = item.price != null ? Number(item.price) : null;
+                if (parsed !== current) onPatch({ price: parsed });
+                setPriceText(parsed != null ? String(parsed) : "");
+              }}
+              placeholder="Optional"
+              keyboardType="decimal-pad"
+              inputAccessoryViewID={NUMERIC_DONE_ID}
+              style={{ fontFamily: fonts.sans, flex: 1, minWidth: 0, paddingVertical: 8, paddingLeft: 4 }}
+            />
+          </View>
+        </View>
+        <View style={{ flex: 1, minWidth: 200 }}>
+          <Text className="mb-1 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
+            Description
+          </Text>
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            onBlur={() => {
+              const trimmed = description.trim();
+              if (trimmed !== (item.description ?? "")) onPatch({ description: trimmed || null });
+            }}
+            placeholder="Optional, e.g. 30 servings"
+            className="rounded-lg border border-stone-300 px-3 py-2"
+            style={{ fontFamily: fonts.sans }}
+          />
+        </View>
+      </View>
+
+      <View className="mt-3">
+        <GraphicPicker
+          value={item.image_path ?? null}
+          onChange={(path) => onPatch({ image_path: path })}
+          folder="event-items"
+          label="Photo"
+          hint="Optional. A product shot on a plain background looks best."
+        />
+      </View>
+
+      <Text className="mb-2 text-xs text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
+        Options (flavor, size) · leave empty if there aren't any
       </Text>
 
       {options.length > 0 ? (
@@ -279,6 +339,11 @@ export default function EventComposer() {
   const [askGuestCount, setAskGuestCount] = useState(false);
   const [ctaLabel, setCtaLabel] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  // The practice response inside Preview. Local only: Submit in the preview
+  // sets this instead of writing anything, so a coach can run the whole
+  // flow (add to bag, submit, change it, update, cancel) on a draft.
+  const [practiceResponse, setPracticeResponse] = useState(null);
+  const [practiceKey, setPracticeKey] = useState(0);
   // Publishing alone only makes the tab appear. These are what actively tell
   // people — together they write a normal announcement pointing back at this
   // event, so both channels come free from the existing pipeline. They are
@@ -302,8 +367,7 @@ export default function EventComposer() {
   const [goLiveDate, setGoLiveDate] = useState(() => toDateValue(defaultGoLive()));
   const [goLiveTime, setGoLiveTime] = useState(() => toTimeValue(defaultGoLive()));
 
-  const dateOptions = useMemo(() => buildDateOptions(120), []);
-  const optionalDateOptions = useMemo(() => buildDateOptions(120, { includeNone: true, noneLabel: "No specific date" }), []);
+  const [duplicating, setDuplicating] = useState(false);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -547,6 +611,21 @@ export default function EventComposer() {
     }
   };
 
+  // Copies the event as it's SAVED, so an unsaved edit on screen isn't
+  // silently carried into (or left out of) the copy without anyone noticing.
+  const handleDuplicate = async () => {
+    setDuplicating(true);
+    try {
+      const copy = await duplicateEvent(eventId, profile.id);
+      toastSuccess("Copied. Set the new dates, then publish.");
+      router.push(`/(coach)/events/${copy.id}`);
+    } catch (err) {
+      toastError("Couldn't copy the event", err);
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   const handleDelete = async () => {
     const confirmed = await confirmDeleteEvent(event.title, responseCount);
     if (!confirmed) return;
@@ -670,7 +749,11 @@ export default function EventComposer() {
               buttons are a long scroll down past the item list, and a
               preview is something you reach for mid-compose. */}
           <PressFade
-            onPress={() => setPreviewOpen(true)}
+            onPress={() => {
+              setPracticeResponse(null);
+              setPracticeKey((k) => k + 1);
+              setPreviewOpen(true);
+            }}
             style={{
               flexDirection: "row",
               alignItems: "center",
@@ -684,6 +767,27 @@ export default function EventComposer() {
           >
             <Ionicons name="eye-outline" size={15} color={colors.primaryOnWhite} />
             <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: colors.primaryOnWhite }}>Preview</Text>
+          </PressFade>
+
+          <PressFade
+            onPress={handleDuplicate}
+            disabled={duplicating}
+            style={{
+              opacity: duplicating ? 0.5 : 1,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              borderWidth: 1,
+              borderColor: "#d6d3d1",
+              borderRadius: 999,
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+            }}
+          >
+            <Ionicons name="copy-outline" size={15} color={colors.primaryOnWhite} />
+            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: colors.primaryOnWhite }}>
+              {duplicating ? "Copying…" : "Duplicate"}
+            </Text>
           </PressFade>
         </View>
 
@@ -714,16 +818,18 @@ export default function EventComposer() {
           </Field>
 
           <Field label="Date of the event" hint="Shown to members. Leave blank for something like an order window.">
-            <Select options={optionalDateOptions} value={eventDate} onChange={(v) => setEventDate(v ?? "")} />
+            <DateField value={eventDate} onChange={setEventDate} clearLabel="No specific date" placeholder="No specific date" />
           </Field>
 
           <Field
             label="Closes"
             hint="Responses stop here, and the event disappears from members' tab on its own."
           >
-            <View className="flex-row gap-2" style={{ maxWidth: 420 }}>
-              <Select options={dateOptions} value={closesDate} onChange={(v) => setClosesDate(v ?? "")} maxWidth={200} />
-              <Select options={TIME_OPTIONS} value={closesTime} onChange={(v) => setClosesTime(v ?? "")} maxWidth={140} />
+            <View className="flex-row items-start gap-2" style={{ maxWidth: 420 }}>
+              <DateField value={closesDate} onChange={setClosesDate} />
+              <View style={{ width: 140 }}>
+                <Select options={TIME_OPTIONS} value={closesTime} onChange={(v) => setClosesTime(v ?? "")} maxWidth={140} />
+              </View>
             </View>
           </Field>
 
@@ -833,7 +939,7 @@ export default function EventComposer() {
               What they can order
             </Text>
             <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: fonts.sans }}>
-              No prices — this collects the order, not the money.
+              Prices are shown to members for reference. Nothing is charged in the app.
             </Text>
 
             {items.map((item) => (
@@ -884,9 +990,11 @@ export default function EventComposer() {
             <SegmentedControl segments={GO_LIVE_OPTIONS} activeKey={goLiveTiming} onSelect={setGoLiveTiming} />
             {goLiveTiming === "later" ? (
               <View className="mt-2">
-                <View className="flex-row gap-2" style={{ maxWidth: 420 }}>
-                  <Select options={dateOptions} value={goLiveDate} onChange={(v) => setGoLiveDate(v ?? "")} maxWidth={200} />
-                  <Select options={TIME_OPTIONS} value={goLiveTime} onChange={(v) => setGoLiveTime(v ?? "")} maxWidth={140} />
+                <View className="flex-row items-start gap-2" style={{ maxWidth: 420 }}>
+                  <DateField value={goLiveDate} onChange={setGoLiveDate} />
+                  <View style={{ width: 140 }}>
+                    <Select options={TIME_OPTIONS} value={goLiveTime} onChange={(v) => setGoLiveTime(v ?? "")} maxWidth={140} />
+                  </View>
                 </View>
                 <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
                   Nobody sees it until then — the tab, the popup and the notification all land together. Times are
@@ -1000,7 +1108,7 @@ export default function EventComposer() {
                 <View>
                   <Text style={{ fontFamily: fonts.sansBold, color: "#44403c" }}>What they'll see</Text>
                   <Text className="mt-0.5 text-xs" style={{ fontFamily: fonts.sans, color: "#a8a29e" }}>
-                    Your unsaved changes included. Nothing here is tappable.
+                    Practice run with your unsaved changes. Try it all; nothing is saved or sent.
                   </Text>
                 </View>
                 <PressFade onPress={() => setPreviewOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -1018,14 +1126,59 @@ export default function EventComposer() {
                     In their Events list
                   </Text>
                   <View style={{ backgroundColor: colors.canvas, borderRadius: 18, padding: 12 }}>
-                    <EventCard event={previewEvent} response={null} onPress={() => {}} />
+                    <EventCard event={previewEvent} response={practiceResponse} onPress={() => {}} />
                   </View>
 
-                  <Text className="mb-2 mt-6 text-xs uppercase" style={{ fontFamily: fonts.sansBold, color: "#a8a29e", letterSpacing: 1 }}>
-                    When they open it
-                  </Text>
-                  <View style={{ backgroundColor: colors.canvas, borderRadius: 18, padding: 14 }}>
-                    <EventDetailView event={previewEvent} items={items} questions={questions} preview />
+                  <View className="mb-2 mt-6 flex-row items-center justify-between">
+                    <Text className="text-xs uppercase" style={{ fontFamily: fonts.sansBold, color: "#a8a29e", letterSpacing: 1 }}>
+                      When they open it
+                    </Text>
+                    <PressFade
+                      onPress={() => {
+                        setPracticeResponse(null);
+                        setPracticeKey((k) => k + 1);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>Start over</Text>
+                    </PressFade>
+                  </View>
+                  {/* A phone-height frame: the member view scrolls inside it and
+                      pins its bag and Submit to the frame's bottom, just as
+                      it pins to the bottom of her screen. */}
+                  <View style={{ backgroundColor: colors.canvas, borderRadius: 18, height: 640, overflow: "hidden" }}>
+                    {/* Interactive, but with no bagUserId the bag is never
+                        saved to the device, and submit/cancel only touch
+                        practiceResponse. Keyed so Start over also resets the
+                        bag and every product card's picked flavor. */}
+                    <EventDetailView
+                      key={practiceKey}
+                      event={previewEvent}
+                      items={items}
+                      questions={questions}
+                      response={practiceResponse}
+                      contentContainerStyle={{ padding: 14 }}
+                      onSubmit={(payload) => {
+                        if (previewEvent.response_type === "order" && payload.orderTotal === 0) {
+                          toastError(practiceResponse ? "The bag is empty. Use Cancel my order to take it back." : "Add something to the bag first.");
+                          return;
+                        }
+                        setPracticeResponse({
+                          guest_count: payload.guestCount,
+                          answers: payload.answers,
+                          lineItems: payload.lineItems.map((li) => ({
+                            event_item_id: li.eventItemId,
+                            option: li.option,
+                            qty: li.qty,
+                          })),
+                        });
+                        toastSuccess(practiceResponse ? "Practice: order updated. Nothing was sent." : "Practice: order sent. Nothing was saved.");
+                      }}
+                      onCancel={() => {
+                        setPracticeResponse(null);
+                        toastSuccess("Practice: cancelled.");
+                      }}
+                    />
                   </View>
                 </View>
               </ScrollView>

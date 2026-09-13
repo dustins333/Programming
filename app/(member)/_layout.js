@@ -61,6 +61,9 @@ const TAB_ICON_STYLE = { height: 24 };
 // notification colour. Badge derives its text colour from this background,
 // so white text comes for free.
 const EVENT_BADGE_STYLE = { backgroundColor: "#b23a22" };
+// No count, just a dot: "you have an order you haven't sent". Overrides the
+// Badge's own size-derived height/minWidth.
+const EVENT_DOT_STYLE = { backgroundColor: "#b23a22", height: 10, minWidth: 10, width: 10, borderRadius: 5, paddingHorizontal: 0, top: 0, end: 0 };
 
 export default function MemberLayout() {
   const { session, profile, ready } = useAuth();
@@ -85,7 +88,7 @@ export default function MemberLayout() {
   // a live event is targeted at this member, and hides itself again when the
   // last one closes. Defaults hidden (see useEventsAccess.js for why that's
   // the opposite default from My Fitness).
-  const { showTab: showEventsTab, unseenCount: unseenEvents } = useEventsAccess(session?.user?.id);
+  const { showTab: showEventsTab, unseenCount: unseenEvents, unsentBagCount } = useEventsAccess(session?.user?.id);
 
   if (!ready) {
     return (
@@ -116,6 +119,7 @@ export default function MemberLayout() {
         showNutritionTab={showNutritionTab}
         showEventsTab={showEventsTab}
         unseenEvents={unseenEvents}
+        unsentBagCount={unsentBagCount}
         isStaff={isStaff}
       />
     </RestTimerProvider>
@@ -130,7 +134,7 @@ export default function MemberLayout() {
 // second time or they'd all sit under ~60px of dead space. Overriding
 // SafeAreaInsetsContext for the tab subtree is the one place that can be
 // said once instead of in every member screen.
-function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, unseenEvents, isStaff }) {
+function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, unseenEvents, unsentBagCount, isStaff }) {
   const { timer } = useRestTimer();
   const insets = useSafeAreaInsets();
   const barVisible = !!timer;
@@ -190,8 +194,10 @@ function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, unseenEve
           tabBarIcon: TabIcon("calendar"),
           tabBarLabel: TabLabel("Events"),
           href: showEventsTab ? undefined : null,
-          tabBarBadge: unseenEvents > 0 ? unseenEvents : undefined,
-          tabBarBadgeStyle: EVENT_BADGE_STYLE,
+          // A count of unseen events wins; otherwise a plain dot while an
+          // order bag sits unsent.
+          tabBarBadge: unseenEvents > 0 ? unseenEvents : unsentBagCount > 0 ? "" : undefined,
+          tabBarBadgeStyle: unseenEvents > 0 ? EVENT_BADGE_STYLE : EVENT_DOT_STYLE,
           // Events is the only tab with its own nested Stack (every other
           // folder is flattened as href:null siblings), so it is the only one
           // that can retain a pushed screen across a tab switch. Without this,

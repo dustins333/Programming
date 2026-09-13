@@ -13,6 +13,7 @@ import {
   countResponsesByEvent,
   unpublishEvent,
   eventPhase,
+  duplicateEvent,
 } from "../../../lib/programming/events";
 import { deletePendingAnnouncementsForEvent } from "../../../lib/programming/announcements";
 import { confirmUnpublishEvent } from "../../../lib/confirmDialog";
@@ -56,7 +57,7 @@ function Section({ title, hint, children }) {
   );
 }
 
-function EventRow({ event, groupPrograms, responseCount, phase, onOpen, onTakeDown }) {
+function EventRow({ event, groupPrograms, responseCount, phase, onOpen, onTakeDown, onDuplicate, duplicating }) {
   const tone =
     phase === "live"
       ? statusColors.onTrack
@@ -96,13 +97,27 @@ function EventRow({ event, groupPrograms, responseCount, phase, onOpen, onTakeDo
         </Text>
       </PressFade>
 
-      {phase === "live" || phase === "scheduled" ? (
-        <PressFade onPress={onTakeDown} style={{ paddingHorizontal: 4, paddingVertical: 2 }}>
-          <Text style={{ fontFamily: fonts.sansMedium, color: "#b23a22", fontSize: 12 }}>
-            {phase === "scheduled" ? "Cancel" : "Take down"}
+      <View style={{ alignItems: "flex-end", gap: 8 }}>
+        {phase === "live" || phase === "scheduled" ? (
+          <PressFade onPress={onTakeDown} style={{ paddingHorizontal: 4, paddingVertical: 2 }}>
+            <Text style={{ fontFamily: fonts.sansMedium, color: "#b23a22", fontSize: 12 }}>
+              {phase === "scheduled" ? "Cancel" : "Take down"}
+            </Text>
+          </PressFade>
+        ) : null}
+        {/* On every row, closed ones included: copying last round's order is
+            the whole point, and that event is usually closed by then. */}
+        <PressFade
+          onPress={onDuplicate}
+          disabled={duplicating}
+          style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4, paddingVertical: 2, opacity: duplicating ? 0.5 : 1 }}
+        >
+          <Ionicons name="copy-outline" size={13} color={colors.primaryOnWhite} />
+          <Text style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite, fontSize: 12 }}>
+            {duplicating ? "Copying…" : "Duplicate"}
           </Text>
         </PressFade>
-      ) : null}
+      </View>
     </View>
   );
 }
@@ -116,6 +131,7 @@ export default function EventsIndex() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -168,6 +184,19 @@ export default function EventsIndex() {
     }
   };
 
+  const handleDuplicate = async (event) => {
+    setDuplicatingId(event.id);
+    try {
+      const copy = await duplicateEvent(event.id, profile.id);
+      toastSuccess("Copied. Set the new dates, then publish.");
+      router.push(`/(coach)/events/${copy.id}`);
+    } catch (err) {
+      toastError("Couldn't copy the event", err);
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
   const handleTakeDown = async (event) => {
     const wasScheduled = eventPhase(event) === "scheduled";
     const confirmed = await confirmUnpublishEvent(event.title, wasScheduled);
@@ -202,6 +231,8 @@ export default function EventsIndex() {
       responseCount={counts[event.id] ?? 0}
       onOpen={() => router.push(`/(coach)/events/${event.id}`)}
       onTakeDown={() => handleTakeDown(event)}
+      onDuplicate={() => handleDuplicate(event)}
+      duplicating={duplicatingId === event.id}
     />
   );
 

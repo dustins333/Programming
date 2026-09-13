@@ -8714,6 +8714,133 @@ window were driven in a throwaway `app/zz-oneoff.js` (deleted; the stubbed
 and a real board run, both behind a login. Worth Terra's pass: build a new
 session, send it, start it on the wall, finish it, and find it in History.
 
+## Events: order events become a store, dates get a calendar, Duplicate (2026-09-13)
+
+Three asks on events. Migration `0129` applied and verified live.
+
+**Every event date is a calendar now, not a 120-row list.** New
+`components/DateField.js`: an input reading "Fri, Sep 18" that opens a small
+month calendar INLINE underneath it (pushes the form down, no popup to
+position). Days before today are inert, picking a day closes it, and an
+optional date gets a clear link ("No specific date"). Values stay plain
+Boise `YYYY-MM-DD` strings, the same shape the old option lists produced, so
+the three call sites in the event editor (event date, closes, go-live) needed
+no change to how they save. Time stays a quarter-hour `<select>` beside it,
+because `scan-announcements` polls every 15 minutes. `buildDateOptions` is
+still used by announcements, so it stays.
+
+**Order items carry a photo and a price** (`event_items.image_path`,
+`event_items.price numeric(10,2)`, both nullable). The photo uses the public
+`graphics` bucket via `GraphicPicker` (folder `event-items`): product shots
+are marketing, never client data. Price is display only, nothing is charged.
+The item editor also gained a description field, which the column always had
+and nothing wrote.
+
+**The member order screen is a store** (`EventDetailView`): one card per
+product (photo, name, price, description, a "Choose one" dropdown when the
+item has options, a quantity stepper, **Add to bag**), then any extra
+questions, then the **bag** at the bottom with per-line steppers (to 0
+removes), a price total, and **Submit order** / **Update order**. Adding the
+same flavor again adds to that line rather than making a second one. The data
+model did NOT change: `event_response_items` already stored a quantity per
+(item, option), so 2 cherry + 1 blueberry was always representable, and the
+coach's roll-up and CSV keep working. They gained price columns/totals.
+
+- **Bag lines are filtered against the current items and options**, so a
+  flavor the coach deleted after someone bagged it quietly drops out rather
+  than being submitted against an option that no longer exists.
+- Once an order is sent and untouched, the bag reads **Order sent** and the
+  submit button disappears; any change brings back "Not sent yet" and
+  **Update order**.
+
+**The bag is saved on the device while it's unsent** (`lib/programming/eventBag.js`,
+one AsyncStorage key holding every bag, pub-sub like `eventSeen.js`). It is
+only stored while it DIFFERS from what was submitted, so an entry there means
+exactly "unsent". Three things read that:
+- The member's **Events tab shows a plain dot** while any live event has an
+  unsent bag (`useEventsAccess`'s `unsentBagCount`). An unseen-events count
+  still wins over the dot. The dot is the Badge with `""` children plus a
+  style override for its size.
+- **Backing out of a pushed event** asks "Leave without submitting?"
+  (`confirmLeaveUnsentBag`, via `beforeRemove` in `EventDetailScreen`).
+- **Switching tabs** can't be cleanly held up, so it shows a toast instead.
+  `blur` fires before the Events tab's `popToTopOnBlur` pops the stack, and a
+  `leavingRef` set on blur stops that pop from raising a confirm on a screen
+  she's already left. Web also gets `beforeunload` while dirty.
+
+Two ordering rules in `EventDetailView` that are load-bearing: the persist
+effect waits for `bagReady` (or the empty initial state overwrites a saved
+bag), and it compares against a `submittedRef`, not the `response` prop, so a
+cancel's refetch can't write the old bag straight back. Submit and cancel
+both `clearBag` BEFORE refetching. `onBagDirtyChange` is read through a ref,
+because an inline callback in a parent otherwise loops ("Maximum update
+depth", hit in the harness).
+
+**Duplicate** (`duplicateEvent` in `lib/programming/events.js`), on every row
+of the Events list (closed ones included, since last round's order is usually
+closed) and in the editor header. Copies the event, its items (photos and
+prices included) and questions into a new DRAFT, then opens it. Nothing that
+describes what went OUT is copied (status, publish_at, pushed_at). Dates are
+kept when still ahead, otherwise closes resets to two weeks out and the event
+date clears. Image paths are shared rather than re-uploaded, which is safe
+only because nothing in the app deletes a graphic from storage
+(`deleteGraphic` has no callers); if that ever changes, copies share files.
+A failed child insert deletes the half-made copy. Terra chose Duplicate over a
+supplement library.
+
+**Preview is a practice run, not a static picture** (follow-up the same
+day, Terra's ask: see the whole flow without publishing). The editor's
+Preview modal renders `EventDetailView` interactively: add to bag, submit,
+change the bag, update, cancel, sign up. Submit and cancel only set a local
+`practiceResponse` in the editor, and with no `bagUserId` the bag is never
+written to the device, so nothing is saved or sent and it works on a draft.
+Opening Preview and "Start over" both reset it, keyed via `practiceKey` so
+each product card's picked flavor resets too. The static `preview` prop on
+`EventDetailView` still exists and is simply unused by the editor now.
+
+**Submit and the bag pin to the bottom of the screen** (second follow-up
+the same day). `EventDetailView` now owns its own ScrollView and renders an
+absolutely positioned bar under it: Submit (or Sign me up / Update) always,
+and the bag above it once there's anything in it or an order was sent.
+Collapsed, the bag is one row (Your bag / Order sent, item count, total,
+chevron); tapping opens the lines with steppers. "Cancel my order" stays at
+the end of the scroll, not in the bar. Consequences worth knowing:
+- **Hosts pass their header in** (`header`, `contentContainerStyle`) instead
+  of wrapping the view in their own ScrollView. The pushed
+  `events/[eventId].js` passes its back link; the Events tab, with one live
+  event, returns the event full-screen with the eyebrow as its header.
+  `EventDetailScreen` wraps its own loading/error states the same way.
+- The coach Preview renders it in a 640px phone-height frame so the pinned
+  bar pins there too.
+- **The floating message bubble sat exactly on Submit.** New
+  `lib/bottomDock.js` (pub-sub): the bar reports its measured height, only on
+  a real member's screen, and `FloatingMessageBubble` adds it to its bottom
+  offset. The scroll's bottom padding uses the same measured height, with a
+  150px fallback, since onLayout can't be verified in the preview pane.
+- The "Added to bag" toast is gone: the pinned bag counts up in view, and a
+  toast per tap stacked over the event title.
+
+Also: the detail's date line is now just `Closes Sep 17` (date only, Boise,
+event date dropped) plus location, and the "No payment in the app" line is
+removed.
+
+**The Events tab badge does persist across sessions**, checked because Terra
+suspected it reappeared on every load. Seen ids live in device storage
+(`eventSeen.js`), verified by marking events seen, reloading, and reading them
+back. What does bring it back: she never opened the Events tab (only opening
+it clears the badge), a different browser or the home-screen app vs a Safari
+tab (separate storage), or a new event going live.
+
+**Verified** through a throwaway `app/zz-events.js` on a scratch server at
+390px (deleted): past days greyed and inert, picking a date, choosing a
+flavor, Add to bag twice merging to one line, the bag saved to storage and
+restored after a reload, submit sending exactly the bag's lines, clearing the
+saved bag and showing Order sent, and seen events surviving a reload.
+`npm run build` + `check:routes` clean, plus the parse / unresolved /
+unused-import / missing-export pass over all touched files. **Not verified**:
+behind a real login, the coach editor's new fields and Duplicate, the leave
+confirm and toast (need real navigation), and the tab dot's look.
+
 ## Database migrations
 
 Flat-numbered SQL files in `supabase/migrations/`, applied manually via the Supabase SQL Editor — no CLI/DB-password access is wired up in this environment, same as the Nutrition Tracker app's workflow. **All of 0001-0004 have been run** against the live project as of this writing:
@@ -8817,6 +8944,7 @@ sections; next number after 0080 is 0081.)
 - `0123_nutrition_roster_order.sql` — **run**, verified live 2026-09-07 (dry-run with 7 RLS impersonation assertions in a rolled-back transaction first — a coach sees and writes only her own rows, a re-drag replaces rather than duplicating, another coach sees none of it, a member sees 0 and is refused; then applied, `NOTIFY pgrst` sent and a live PostgREST call returning 200 `[]` rather than PGRST205). Adds `programming.nutrition_roster_order` (owner_id, client_id) — each coach's own drag order for the nutrition queue, scoped per status group. Own-rows-only RLS behind `core.can_access_nutrition()`. No FK on `client_id` (it points at the shared `public.clients`, same call as `payroll.nutrition_assignments`), so a client who leaves nutrition just leaves a stale row that reads join past. See the section above for why the `status` column is what makes "moves to a new stage = lands at the bottom" free.
 - `0124_photo_framing.sql` — **run**, verified live 2026-09-08 (dry-run in a rolled-back transaction first, including a real insert carrying a framing; then applied, column/constraint confirmed and all 604 existing photos still NULL, `NOTIFY pgrst` sent). Adds `public.photos.framing` (nullable jsonb `{scale,x,y,ar}`) — coach-set display framing so two photos taken at different distances can be nudged into a common frame. NULL = untouched, so nothing existing changes. The CHECK is deliberately shallow (`jsonb_typeof = 'object'`) because a constraint casting the members to numeric would ERROR rather than return false on a malformed value; the app clamps every field on the way in and again on the way out. See "Progress photos can be nudged into a common frame" above.
 - `0127_week_note_color.sql` — **run**, verified live 2026-09-08 (dry-run in a rolled-back transaction with a real insert on the new column first, then the column confirmed `text`/nullable and a live PostgREST select returning 200; `NOTIFY pgrst` sent). Adds `programming.nutrition_week_notes.color` so a week's free-text tab can be colour-coded rather than always plain white. Same storage rule as `nutrition_week_phases.color` (0125): a palette KEY, never a hex, and no CHECK against the known keys. **The one difference from the phase column is that null is a real choice here**, not just "unset" — it is the plain white tab every existing label already is, so `noteColor()` falls back to a neutral rather than to the first swatch the way `phaseColor()` does.
+- `0129_event_item_photo_price.sql` — **run**, verified live 2026-09-13 (dry-run in a rolled-back transaction first, then both columns confirmed). Adds `programming.event_items.image_path` and `price numeric(10,2)` (nullable, `>= 0`), so an order event can show a product photo and a price per item. Additive, and the member/admin selects are `*`, so older deployed JS is unaffected. No RLS change. (`0128` belongs to a parallel session's hub one-off work.)
 - `0126_lift_photos.sql` — **run**, verified live 2026-09-08 (table, RLS on, exactly one policy and no staff policy, 2 indexes, the bucket at 5 MB / jpeg-png-webp / private, the storage policy, and the function confirmed `prosecdef = true`; `NOTIFY pgrst` sent and a live REST call returning `200 []` rather than PGRST205). Adds `programming.lift_photos` (a photo a member attaches to one lift on one day), the private **`lift-photos`** storage bucket capped at 5 MB / jpeg-png-webp, its owner-only `storage.objects` policy, and `programming.repoint_lift_photos()`. Owner-only RLS with **no staff policy at all** — coaches and admins genuinely cannot read these, by decision. Do not reuse the `photos` bucket for anything member-private: it grants `is_coach()` ALL on its entire contents. See "A photo on a lift, in her own history" above for why the merge repoint has to be a security-definer function rather than another entry in `REFERENCE_TABLES`.
 - `0125_week_tabs.sql` — **run**, verified live 2026-09-08 (dry-run with six RLS/constraint assertions in a rolled-back transaction first, then table, policy, RLS, the new column and a live PostgREST 200 all confirmed by query). Adds `programming.nutrition_week_phases.color` (a palette KEY, never a hex, nullable so every existing marker keeps its default) and `programming.nutrition_week_notes` (free-text tabs on a week: "Mexico trip", "family vacation"). Notes are deliberately their own table rather than another column on the phases table — a phase marker is a RUN that holds until the next one, so writing a note there would create a marker on that week and silently end the phase running through it. Staff-only in every direction, no member policy, same as the phases table. Needs `NOTIFY pgrst, 'reload schema'` after running.
 - `0128_hub_one_off_sessions.sql` — **run**, verified live 2026-09-13 (dry run plus a rolled-back end-to-end RLS test; function, 3 display policies, the new column, and `hub_add_client`'s single 6-arg signature confirmed by query). A third live-board slot kind: `hub_session_clients.one_off_workout_id` with a three-way XOR, two security-definer predicates, display reads on the one_off tables, a one-off arm on `hub_startable_clients()` (not gated on SPC enrollment), and `oneOffWorkoutId` on `hub_start_session` / `hub_add_client`. Drops the 5-arg `hub_add_client`. See "One-off sessions from the SPC client page".
