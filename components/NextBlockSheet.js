@@ -114,7 +114,7 @@ function SessionRow({ row, onPress }) {
 // `loadExercises` is the real fetch by default and exists as a prop only so
 // this sheet can be driven end to end from a throwaway harness route, which
 // is the only way anything member-facing gets looked at in this environment.
-export function NextBlockSheet({ visible, onClose, programName, preview, loadExercises = listWorkoutExercises }) {
+export function NextBlockSheet({ visible, onClose, programName, preview, eyebrowLabel = "Next block", loadExercises = listWorkoutExercises }) {
   const insets = useSafeAreaInsets();
   // null = the session list; otherwise the row being previewed.
   const [openRow, setOpenRow] = useState(null);
@@ -168,7 +168,10 @@ export function NextBlockSheet({ visible, onClose, programName, preview, loadExe
   const meta = openRow
     ? [openRow.sessionLabel, openRow.caption ? openRow.caption.toUpperCase() : null].filter(Boolean).join(" | ")
     : preview
-      ? `${formatDateRange(preview.weekStartDate, preview.weekEndDate)} | Week ${preview.weekNumber} of ${preview.lengthWeeks}`
+      ? `${formatDateRange(preview.weekStartDate, preview.weekEndDate)} | ${
+          // An ongoing SPC program (0103) has no length to count against.
+          preview.lengthWeeks ? `Week ${preview.weekNumber} of ${preview.lengthWeeks}` : "Ongoing program"
+        }`
       : "";
 
   return (
@@ -215,7 +218,7 @@ export function NextBlockSheet({ visible, onClose, programName, preview, loadExe
                 </PressFade>
               ) : (
                 <SheetEyebrow style={{ flexShrink: 1 }}>
-                  {["Next block", programName].filter(Boolean).join(" | ")}
+                  {[eyebrowLabel, programName].filter(Boolean).join(" | ")}
                 </SheetEyebrow>
               )}
               <PressFade onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Close" style={{}}>

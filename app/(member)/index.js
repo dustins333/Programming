@@ -8,7 +8,7 @@ import { readSections, writeSection, SCREEN_MY_WEEK } from "../../lib/screenCach
 import { todayInBoise, dayOfWeekInBoise, dateInBoise, addDays } from "../../lib/boiseDate";
 import { currentWeekNumber, calendarWeekNumber, sessionNumberForDate, formatSessionDays, blockLengthWeeks } from "../../lib/programming/schedule";
 import { listMyAssignments, getCurrentBlock, listWorkoutsForWeek, listLogsForSession } from "../../lib/programming/memberPlan";
-import { getNextBlockPreview, isFinalWeekOfBlock, nextBlockPreviewIsDue } from "../../lib/programming/nextBlockPreview";
+import { getNextBlockPreview, getNextSpcProgramPreview, isFinalWeekOfBlock, nextBlockPreviewIsDue } from "../../lib/programming/nextBlockPreview";
 import { listWarmups, listWorkoutExercises } from "../../lib/programming/workouts";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listSpcWorkoutsForWeek } from "../../lib/programming/spcBlocks";
@@ -454,11 +454,11 @@ function ProgramCard({ title, rows, target, completedCount, onNavigate, navigate
 // exists on the final day of a block (see nextBlockPreview.js), so it reads
 // as an event rather than another permanent control competing with "View
 // full block ›" in the header.
-function NextBlockButton({ onPress }) {
+function NextBlockButton({ onPress, label = "Preview next block" }) {
   return (
     <PressFade
       onPress={onPress}
-      accessibilityLabel="Preview next block"
+      accessibilityLabel={label}
       style={{
         marginTop: 12,
         backgroundColor: TODAY_BG,
@@ -478,7 +478,7 @@ function NextBlockButton({ onPress }) {
         maxFontSizeMultiplier={1.15}
         style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: BRAND_TEXT, flex: 1, minWidth: 0 }}
       >
-        Preview next block
+        {label}
       </Text>
       <Text maxFontSizeMultiplier={1} style={{ fontSize: 16, color: BRAND_TEXT }}>
         ›
@@ -1152,7 +1152,19 @@ export default function MemberHome() {
               };
             });
 
-            return { status: "ready", weekNumber, blockLengthWeeks: block.block_length_weeks, sessionsPerWeek, rows, block };
+            // The next program, but only worth a round trip during this one's
+            // final week (nextBlockPreview.js). Its own try/catch: a
+            // look-ahead that fails must never take down this week's card.
+            let nextProgram = null;
+            if (nextBlockPreviewIsDue(block.block_end_date, today)) {
+              try {
+                nextProgram = await getNextSpcProgramPreview({ userId: profile.id, block, sessionsPerWeek });
+              } catch (err) {
+                console.error("My Week: couldn't load the next SPC program preview", err);
+              }
+            }
+
+            return { status: "ready", weekNumber, blockLengthWeeks: block.block_length_weeks, sessionsPerWeek, rows, block, nextProgram };
           });
           if (!isStale()) {
             const value = spcResult.status === "inactive" ? null : spcResult;
@@ -2132,6 +2144,21 @@ export default function MemberHome() {
           completedCount={spc.rows.filter((r) => r.completed).length}
           onNavigate={() => router.push({ pathname: "/(member)/plan", params: { program: "spc" } })}
           onViewBlock={() => router.push("/(member)/plan-spc-block")}
+          footer={
+            spc.nextProgram && nextBlockPreviewIsDue(spc.block?.block_end_date) ? (
+              <NextBlockButton
+                label="Preview next program"
+                onPress={() =>
+                  setNextBlockFor({
+                    programName: "SPC",
+                    nextBlock: spc.nextProgram,
+                    eyebrowLabel: "Next program",
+                    loadExercises: listSpcWorkoutExercises,
+                  })
+                }
+              />
+            ) : null
+          }
         />
       )}
 
@@ -2216,6 +2243,8 @@ export default function MemberHome() {
         onClose={() => setNextBlockFor(null)}
         programName={nextBlockFor?.programName}
         preview={nextBlockFor?.nextBlock}
+        eyebrowLabel={nextBlockFor?.eyebrowLabel}
+        loadExercises={nextBlockFor?.loadExercises}
       />
 
       <MakeupSessionSheet
