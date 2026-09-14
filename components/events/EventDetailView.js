@@ -219,17 +219,26 @@ function ProductCard({ item, quantities, onChangeQty, preview }) {
               <View
                 key={opt.name}
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  paddingVertical: 10,
+                  paddingVertical: 12,
                   paddingHorizontal: 14,
                   borderTopWidth: 1,
                   borderTopColor: CARD_BORDER,
                   backgroundColor: "#fdfbf9",
                 }}
               >
-                <Thumb path={opt.image_path} size={56} />
+                {/* The photo is what tells flavors apart, so it leads the
+                    row, centered, at a size that shows the tub rather than a
+                    thumbnail of it. Contain, not cover: a product shot must
+                    not lose its label to a crop. Capped well short of full
+                    width so the list still reads as a list. */}
+                {opt.image_path ? (
+                  <View style={{ alignItems: "center", marginBottom: 10 }}>
+                    <View style={{ width: 170, borderRadius: 14, backgroundColor: "white", borderWidth: 1, borderColor: CARD_BORDER, padding: 8 }}>
+                      <GraphicImage path={opt.image_path} minRatio={0.75} maxHeight={170} radius={8} style={{ backgroundColor: "transparent" }} />
+                    </View>
+                  </View>
+                ) : null}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: "#292524" }}>{opt.name}</Text>
                   {price ? <Text className="text-xs" style={{ fontFamily: fonts.sans, color: colors.muted, marginTop: 1 }}>{price}</Text> : null}
@@ -240,6 +249,7 @@ function ProductCard({ item, quantities, onChangeQty, preview }) {
                   disabled={preview}
                   label={`${item.name} ${opt.name}`}
                 />
+                </View>
               </View>
             );
           })

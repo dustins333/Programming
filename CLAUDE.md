@@ -8839,7 +8839,11 @@ time the coach edits that item. The option `name` is still what
 `event_response_items.option` stores, which is why the coach can add a photo
 or remove an option but can't rename one (a rename would orphan existing
 orders). The coach editor lists options as rows with a tap-to-add photo
-square. Verified on a harness with mixed string/object options, including
+square. **Option photos lead their row** (Terra: "the pictures make a
+difference"): centered above the name and the +, about 150px inside a 170px
+white frame, `contain` rather than cover so a tub's label is never cropped,
+and capped well short of full width so the options still read as a list. An
+option with no photo renders just the name row, no empty box. Verified on a harness with mixed string/object options, including
 submitting and reading back the line items.
 
 **The Events tab badge does persist across sessions**, checked because Terra
