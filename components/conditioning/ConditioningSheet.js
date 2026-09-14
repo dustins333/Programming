@@ -47,12 +47,14 @@ export function ConditioningSheet({ visible, onClose, log, onCta, ctaLabel }) {
         >
           <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: "#d5cdc4" }} />
 
-          <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1, color: colors.muted, marginTop: 16 }}>
-            {log ? `CONDITIONING | LOGGED ${formatDateMDY(log.performed_on)}` : "CONDITIONING"}
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.display, fontSize: 24, color: colors.primary, marginTop: 16 }}>
+            Conditioning
           </Text>
-          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.display, fontSize: 24, color: colors.primary, marginTop: 4 }}>
-            Zone 2 cardio
-          </Text>
+          {log ? (
+            <Text maxFontSizeMultiplier={1.15} style={{ fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1, color: colors.muted, marginTop: 2 }}>
+              LOGGED {formatDateMDY(log.performed_on)}
+            </Text>
+          ) : null}
 
           {log ? (
             <>

@@ -178,6 +178,9 @@ function SessionHero({ eyebrow, chip, title, meta, ctaLabel, onStart, onPreview 
           backgroundColor: "rgba(190,172,149,0.12)",
         }}
       />
+      {/* Skipped entirely when there's nothing to say, so a hero with no
+          eyebrow (Conditioning) doesn't carry an empty line above its title. */}
+      {eyebrow || chip ? (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
@@ -199,10 +202,11 @@ function SessionHero({ eyebrow, chip, title, meta, ctaLabel, onStart, onPreview 
           </View>
         ) : null}
       </View>
+      ) : null}
       <Text
         numberOfLines={2}
         maxFontSizeMultiplier={1.15}
-        style={{ fontFamily: fonts.display, fontSize: 34, lineHeight: 38, color: HERO_CREAM, marginTop: 8 }}
+        style={{ fontFamily: fonts.display, fontSize: 34, lineHeight: 38, color: HERO_CREAM, marginTop: eyebrow || chip ? 8 : 0 }}
       >
         {title}
       </Text>
@@ -1521,9 +1525,9 @@ export default function MemberHome() {
         source: "conditioning",
         // No workout behind it, so no exercise count to fetch.
         workoutId: null,
-        eyebrow: "Conditioning",
+        eyebrow: null,
         chip: conditioning.sessionsPerWeek > 1 ? `${conditioning.logs.length} of ${conditioning.sessionsPerWeek} this week` : null,
-        title: "Zone 2 cardio",
+        title: "Conditioning",
         logParams: { session: "conditioning" },
       };
     }

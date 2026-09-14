@@ -976,7 +976,7 @@ export default function MyFitness() {
         ]
       : []),
     ...(conditioningDue
-      ? [{ key: "conditioning", label: "Conditioning | Zone 2 cardio", focus: { type: "conditioning" } }]
+      ? [{ key: "conditioning", label: "Conditioning", focus: { type: "conditioning" } }]
       : []),
   ];
 
@@ -1178,10 +1178,10 @@ export default function MyFitness() {
     ) : focus?.type === "conditioning" && conditioning ? (
       <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 14, backgroundColor: CANVAS }}>
         <SessionHeroBar
-          programLabel="Conditioning"
+          programLabel={null}
           onPickProgram={candidates.length > 1 ? () => setPickerOpen(true) : null}
           eyebrowDetail={`${conditioning.logs.length} of ${conditioning.sessionsPerWeek} this week`}
-          title="Zone 2 cardio"
+          title="Conditioning"
           onOpenSettings={() => router.push("/(member)/settings")}
           goal={goal}
         />

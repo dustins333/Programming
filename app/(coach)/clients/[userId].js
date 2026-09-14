@@ -1200,7 +1200,7 @@ export default function ClientProfile() {
                 </View>
               ) : null}
               <Text className="mt-3 text-xs" style={{ fontFamily: fonts.sans, color: colors.muted }}>
-                Zone 2 cardio. They log time, average heart rate, how it felt and notes.
+                They log time, average heart rate, how it felt and notes.
               </Text>
             </>
           )}
