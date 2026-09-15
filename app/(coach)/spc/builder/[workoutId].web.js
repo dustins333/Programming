@@ -13,6 +13,8 @@ import {
   addSpcWarmup,
   updateSpcWarmup,
   removeSpcWarmup,
+  replaceSpcWarmups,
+  listSpcWarmupsForWorkouts,
   listSpcWorkoutExercises,
   addSpcWorkoutExercise,
   updateSpcWorkoutExercise,
@@ -33,6 +35,7 @@ import { ClientLimitationsCard } from "../../../../components/ClientLimitationsC
 import { listClientLimitations } from "../../../../lib/programming/clientNotes";
 import { getClientGoal } from "../../../../lib/programming/clientGoals";
 import { ClientContextBand } from "../../../../components/coach/spc/ClientContextBand";
+import { CopyWarmupModal } from "../../../../components/coach/spc/CopyWarmupModal";
 import { PressFade } from "../../../../components/PressFade";
 import {
   BUILDER_CANVAS,
@@ -49,7 +52,7 @@ import {
   balanceNoteFor,
 } from "../../../../components/builder/SessionBuilderParts";
 import { liftLabelsFor } from "../../../../lib/programming/sessionLabels";
-import { confirmOverwrite } from "../../../../lib/confirmDialog";
+import { confirmOverwrite, confirmReplaceWarmups } from "../../../../lib/confirmDialog";
 import { toastError, toastSuccess, showToast } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
 import { nextPosition } from "../../../../lib/position";
@@ -94,6 +97,11 @@ export default function SpcWorkoutBuilderWeb() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [copyingLastWeek, setCopyingLastWeek] = useState(false);
+  // Warm-up "Copy to...": null while closed, else the other sessions with
+  // their current warm-up counts (warmupCount null until those load).
+  const [copyWarmupTargets, setCopyWarmupTargets] = useState(null);
+  const [copyWarmupLoading, setCopyWarmupLoading] = useState(false);
+  const [copyingWarmup, setCopyingWarmup] = useState(false);
   const [saveState, setSaveState] = useState("saved"); // saved | saving | error
   // Own state, own failure mode — migration 0057 may not be run in every
   // environment, and a builder must never fail to open over a rail panel.
@@ -418,6 +426,44 @@ export default function SpcWorkoutBuilderWeb() {
     }
   };
 
+  // A sessions-format program has one row per session that repeats every
+  // week, so "Session 2" is enough. A weekly-format block has a row per week,
+  // so the week has to be named too.
+  const sessionLabel = (w) =>
+    workout?.spc_blocks?.format === "sessions" ? `Session ${w.session_number}` : `Week ${w.week_number}, Session ${w.session_number}`;
+  const otherSessions = blockWorkouts.filter((w) => w.id !== workoutId);
+
+  const openCopyWarmup = async () => {
+    setCopyWarmupTargets(otherSessions.map((w) => ({ id: w.id, label: sessionLabel(w), warmupCount: null })));
+    setCopyWarmupLoading(true);
+    try {
+      const byWorkout = await listSpcWarmupsForWorkouts(otherSessions.map((w) => w.id));
+      setCopyWarmupTargets(
+        otherSessions.map((w) => ({ id: w.id, label: sessionLabel(w), warmupCount: byWorkout.get(w.id)?.length ?? 0 }))
+      );
+    } catch (err) {
+      toastError("Couldn't load the other sessions", err);
+      setCopyWarmupTargets(null);
+    } finally {
+      setCopyWarmupLoading(false);
+    }
+  };
+
+  const handleCopyWarmup = async (ids) => {
+    const replacing = copyWarmupTargets.filter((t) => ids.includes(t.id) && t.warmupCount > 0).map((t) => t.label);
+    if (replacing.length > 0 && !(await confirmReplaceWarmups(replacing))) return;
+    setCopyingWarmup(true);
+    try {
+      await replaceSpcWarmups(ids, warmups);
+      setCopyWarmupTargets(null);
+      toastSuccess(`Warm-up copied to ${ids.length} session${ids.length === 1 ? "" : "s"}`);
+    } catch (err) {
+      toastError("Couldn't copy the warm-up", err);
+    } finally {
+      setCopyingWarmup(false);
+    }
+  };
+
   const liftLabels = useMemo(() => liftLabelsFor(exercises), [exercises]);
   const patternCounts = useMemo(() => patternCountsFor(exercises, siblingLifts), [exercises, siblingLifts]);
   const balanceNote = useMemo(() => balanceNoteFor(patternCounts), [patternCounts]);
@@ -617,6 +663,24 @@ export default function SpcWorkoutBuilderWeb() {
                 onRemove={handleRemoveWarmup}
                 onAdd={() => setWarmupPickerVisible(true)}
                 onToggleLink={handleToggleWarmupLink}
+                showAdd={false}
+                headerAction={
+                  warmups.length > 0 && otherSessions.length > 0 ? (
+                    <PressFade
+                      onPress={openCopyWarmup}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: "#d9d4cd",
+                        borderRadius: 99,
+                        paddingVertical: 5,
+                        paddingHorizontal: 13,
+                        backgroundColor: "#fff",
+                      }}
+                    >
+                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>Copy to...</Text>
+                    </PressFade>
+                  ) : null
+                }
               />
 
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 26, marginBottom: 9 }}>
@@ -720,6 +784,14 @@ export default function SpcWorkoutBuilderWeb() {
         onClose={() => setExercisePickerVisible(false)}
         onPick={handleInsertExercise}
         onCreateNew={openCreateAndInsert("lift")}
+      />
+      <CopyWarmupModal
+        visible={copyWarmupTargets !== null}
+        targets={copyWarmupTargets ?? []}
+        loading={copyWarmupLoading}
+        saving={copyingWarmup}
+        onClose={() => setCopyWarmupTargets(null)}
+        onCopy={handleCopyWarmup}
       />
       <SessionPreviewModal
         visible={previewOpen}

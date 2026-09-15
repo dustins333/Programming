@@ -1861,3 +1861,20 @@ My Week's "Preview next block" row existed for group programs only, and only fro
 **Why the migration was needed**: 0102 made a queued SPC program's content unreadable to the member until its start date, so the preview could never load. 0131 widens that by exactly seven days, matching the preview window. The group side needed no RLS change (0004's member policy has no date gate).
 
 **Verified**: dry run, then applied; impersonated a real member whose next program starts tomorrow and confirmed she reads its sessions, exercises and warm-ups but nothing starting more than seven days out; the date rule checked at the window's edges; `npm run build` + `check:routes` clean and an unresolved-identifier pass over the three touched files. **Not click-tested behind a real login.**
+
+## Warm-up "Copy to..." in the SPC builder (2026-09-14)
+
+The coaches asked to reuse a warm-up across a program's sessions. SPC only, not Group.
+
+**Shape chosen: a one-time copy, not a shared/global warm-up.** Measured against live data first: of 30 SPC programs with warm-ups in more than one session, only 6 used identical moves in every session, 11 shared half or more, 8 shared some, 5 shared nothing. Coaches start from one warm-up and tweak it per session, so a live link would either silently change other sessions or need an "unlink" step. Under the sessions format a session repeats every week, so "across sessions" already means "across the program".
+
+**Direction: "Copy to..." on the session you're in**, not "Copy from". You build the warm-up where you are and push it out once, rather than visiting every other session to pull it in.
+
+- `WarmupGrid` (`components/builder/SessionBuilderParts.js`) gained an optional `headerAction` node beside "+ Add". Group, templates and one-offs don't pass it and render unchanged. SPC also passes `showAdd={false}`, removing the header's "+ Add" (Terra: ugly next to "Copy to..."). Nothing is lost: the empty slots' "+ Insert warm-up" opens the same picker, the library sidebar adds too, and "+ Add" already hid itself at six. "Copy to..." is drawn as a white bordered pill (same `PressFade` and `#d9d4cd` border as the header's Preview button, radius 99) so it reads as a button rather than a stray link.
+- The SPC web builder shows "Copy to..." only when this session has warm-ups and the block has another session. It opens `components/coach/spc/CopyWarmupModal.js`: every other session, all ticked, each saying whether it already has a warm-up. Labels are "Session N" for sessions format, "Week W, Session N" for a weekly block.
+- **Replace, not append** (Terra's call). `confirmReplaceWarmups` names the sessions that already have one before anything is deleted.
+- `replaceSpcWarmups(toWorkoutIds, rows)` in `lib/programming/spcWorkouts.js` is deliberately **source-agnostic** so future **warm-up templates** can reuse it ("Use template" passes template rows; "Save as template" would be the reverse). It re-mints `superset_group_id` per target so a copy never makes two sessions share one superset id. It is delete-then-insert per session, not atomic, the same as `copySpcWorkoutContent`.
+
+No migration. Native SPC builder not touched (coaches build on web).
+
+**Verified**: `npm run build` + `check:routes` clean; Babel parse, unresolved-identifier and unused-import pass over all five touched files; the button and modal driven through a throwaway `app/zz-harness.js` (button renders beside "+ Add", both targets start ticked, unticking one relabels to "Copy to 1 session" and hands back only that id), harness deleted. **Not driven behind a real login**, so the actual database write has not been exercised end to end.

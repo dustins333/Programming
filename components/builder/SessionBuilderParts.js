@@ -89,7 +89,11 @@ export const WARMUP_SLOTS = 6;
 // rows — per Terra 2026-08-23, matching how the paper sheet reads. Numbers
 // come from warmupNumbersFor, so superset members repeat the shared number
 // (3,4,5 supersetted all read "3") and empty slots continue the sequence.
-export function WarmupGrid({ warmups, onChange, onRemove, onAdd, onToggleLink, editable = true }) {
+// `headerAction` is an optional node for the header's right side (SPC's
+// "Copy to..."). `showAdd={false}` drops the header's "+ Add", which only
+// duplicates the empty slots' own "+ Insert warm-up"; SPC turned it off so
+// the header holds one link, not two. Callers passing neither render as before.
+export function WarmupGrid({ warmups, onChange, onRemove, onAdd, onToggleLink, editable = true, headerAction = null, showAdd = true }) {
   // Pad to six, but never truncate past it. This used to render
   // slots.slice(0, 6), so a seventh warm-up saved fine and then simply was
   // not drawn — invisible to the coach who added it, while still showing to
@@ -243,11 +247,14 @@ export function WarmupGrid({ warmups, onChange, onRemove, onAdd, onToggleLink, e
     <View>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
         <Eyebrow>WARM-UP · {warmups.length} OF {WARMUP_SLOTS}</Eyebrow>
-        {warmups.length < WARMUP_SLOTS ? (
-          <Pressable onPress={onAdd}>
-            <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>+ Add</Text>
-          </Pressable>
-        ) : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+          {headerAction}
+          {showAdd && warmups.length < WARMUP_SLOTS ? (
+            <Pressable onPress={onAdd}>
+              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.primaryOnWhite }}>+ Add</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
         {columns.map((column, c) => (
