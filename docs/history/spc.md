@@ -1116,6 +1116,22 @@ new tabbed page. Verified by query, not assumed.
 1. Print route: a sessions-format run prints one week column; it should print
    the run's weeks. `plan-spc-block.js` (member "View full SPC block") likewise
    shows one week — degraded, not broken.
+   **Member half DONE 2026-09-14.** It was worse than "degraded": members could
+   not see or open any week they had already trained, which Terra reported as
+   "they can only see an overview of the sessions, not their previous ones."
+   The page now expands a sessions-format run into one card per calendar week
+   (start through end date, or through this week for an ongoing/lapsed run),
+   every session in every week, everything keyed on (workout, week) the way
+   `spcBlockDetail.js` does it for the coach. Three week-1 traps fixed with it:
+   the sheet's logged sets are cut to that week's date window
+   (`listLogsForSession` has no week filter and returned every week's sets);
+   "Update this session" hands My Fitness the calendar week rather than the
+   authored 1 (it had always opened week 1 or the live week); and a back-logged
+   completion is filed in local state under the week of the picked date, since
+   `finalizeSpcSession` files it there. Ongoing programs drop "of N" from the
+   hero. Weekly-format blocks take the old path unchanged. Verified:
+   `npm run build` + `check:routes`, Babel parse/scope/unused-import/
+   missing-export pass. **Not driven behind a login.** Print route still open.
 2. `coachDashboard.js`'s `spcIssues`/attention items still use the old taxonomy
    internally; align with `deriveSpcState` v2.
 3. The scan's replacement due-soon/due-now coach push (one per status change,

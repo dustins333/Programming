@@ -4,7 +4,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { todayInBoise, dateInBoise } from "../../lib/boiseDate";
-import { currentWeekNumber } from "../../lib/programming/schedule";
+import { currentWeekNumber, calendarWeekNumber } from "../../lib/programming/schedule";
+import { weekWindow } from "../../lib/programming/spcBlockDetail";
 import { getSpcClient, isSpcActive } from "../../lib/programming/spcClients";
 import { getCurrentSpcBlock, listPublishedSpcWorkoutsForBlock } from "../../lib/programming/spcBlocks";
 import { listSpcWarmups, listSpcWorkoutExercises } from "../../lib/programming/spcWorkouts";
@@ -67,18 +68,26 @@ function groupLogsByExercise(logs, exerciseRows) {
 // shows the real SessionLogger accordion (view + edit whatever was
 // logged — no video links, those stay My Fitness-only, and no Finalize
 // button, this is for correcting history not first-time logging); one that
-// hasn't happened yet shows its plain prescription. SPC now has one
-// independent row per (week, session) same as group, so each week's tiles
-// are simply that week's own workout rows — no more shared exercise list
-// or per-week sets/reps lookup across a recurring session.
+// hasn't happened yet shows its plain prescription.
+//
+// A sessions-format run (0105) has ONE row per session for the whole program,
+// every row authored week 1, so the rows alone can't draw weeks: each
+// calendar week repeats every session, and everything week-specific
+// (completion, logged sets, the week handed to My Fitness) is keyed on
+// (workout, week), never the workout alone. Reading the authored week here
+// drew a single "Week 1" row and hid every week she'd already trained. Same
+// expansion the coach's client page does in spcBlockDetail.js.
+const tileKey = (workoutId, week) => `${workoutId}:${week}`;
+
 export default function PlanSpcBlock() {
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [state, setState] = useState({ status: "loading" });
   const [currentWeek, setCurrentWeek] = useState(null);
-  const [sessionContent, setSessionContent] = useState({}); // workoutId -> { warmups, exerciseRows }
-  const [modalWorkoutId, setModalWorkoutId] = useState(null);
+  const [sessionContent, setSessionContent] = useState({}); // tileKey -> { warmups, exerciseRows, loggedSets }
+  // { workoutId, week } — the week is the tile's, not the row's authored one.
+  const [modalTarget, setModalTarget] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState(null);
   const [savingSession, setSavingSession] = useState(false);
@@ -103,7 +112,17 @@ export default function PlanSpcBlock() {
         const workouts = await listPublishedSpcWorkoutsForBlock(block.id);
         if (workouts.length === 0) return { status: "not_published" };
 
-        const week = currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+        // Sessions format counts weeks uncapped off the start date, the same
+        // as plan.js and every completion it files. The page runs to the end
+        // date, or to this week for an ongoing or lapsed run, so a week she
+        // trained past a planned end still shows.
+        const sessionsFormat = block.format === "sessions";
+        const week = sessionsFormat
+          ? calendarWeekNumber(block.block_start_date, today)
+          : currentWeekNumber(block.block_start_date, block.block_length_weeks, today);
+        const weekCount = sessionsFormat
+          ? Math.max(week, block.block_end_date ? calendarWeekNumber(block.block_start_date, block.block_end_date) : week)
+          : block.block_length_weeks;
         const completions = await listSpcCompletionDetailsForWorkouts(profile.id, workouts.map((w) => w.id));
 
         // "Block 4" — SPC blocks already have a canonical numbering
@@ -117,7 +136,7 @@ export default function PlanSpcBlock() {
           console.error("Plan SPC block: couldn't number the block", err);
         }
 
-        return { status: "ready", spcClient, block, blockLabel, workouts, completions, week };
+        return { status: "ready", spcClient, block, blockLabel, workouts, completions, week, weekCount, sessionsFormat };
       });
       if (result.status === "ready") setCurrentWeek(result.week);
       setState(result);
@@ -138,7 +157,7 @@ export default function PlanSpcBlock() {
 
   const weeksInBlock = useMemo(() => {
     if (state.status !== "ready") return [];
-    return Array.from({ length: state.block.block_length_weeks }, (_, i) => i + 1);
+    return Array.from({ length: state.weekCount }, (_, i) => i + 1);
   }, [state]);
 
   // Same week model as the group block page. SPC has no day-of-week routing,
@@ -147,15 +166,17 @@ export default function PlanSpcBlock() {
   // is measured against.
   const blockView = useMemo(() => {
     if (state.status !== "ready") return null;
-    const { workouts, completions, spcClient } = state;
+    const { workouts, completions, spcClient, sessionsFormat } = state;
     const slots = Math.max(1, ...workouts.map((w) => w.session_number));
     const target = Math.min(spcClient?.sessions_per_week ?? slots, slots);
 
     const weeks = weeksInBlock
       .map((week) => {
-        const sessions = workouts.filter((w) => w.week_number === week).sort((a, b) => a.session_number - b.session_number);
+        const sessions = workouts
+          .filter((w) => sessionsFormat || w.week_number === week)
+          .sort((a, b) => a.session_number - b.session_number);
         if (sessions.length === 0) return null;
-        const doneCount = sessions.filter((w) => completions.has(`${w.id}:${week}`)).length;
+        const doneCount = sessions.filter((w) => completions.has(tileKey(w.id, week))).length;
         const isCurrent = week === currentWeek;
         const isPast = week < currentWeek;
         const missed = Math.max(0, target - doneCount);
@@ -169,10 +190,10 @@ export default function PlanSpcBlock() {
           // current week, and only that one, or every current-week tile would
           // light up at once.
           sessions: (() => {
-            const nextUp = isCurrent ? sessions.find((w) => !completions.has(`${w.id}:${week}`)) : null;
+            const nextUp = isCurrent ? sessions.find((w) => !completions.has(tileKey(w.id, week))) : null;
             return sessions.map((workout) => ({
               workout,
-              state: completions.has(`${workout.id}:${week}`)
+              state: completions.has(tileKey(workout.id, week))
                 ? "done"
                 : isPast
                   ? "missed"
@@ -188,23 +209,30 @@ export default function PlanSpcBlock() {
     return { weeks, slots, totalDone: weeks.reduce((sum, w) => sum + w.doneCount, 0), totalTarget: weeksInBlock.length * target };
   }, [state, weeksInBlock, currentWeek]);
 
-  const openSession = async (workout) => {
-    setModalWorkoutId(workout.id);
-    if (sessionContent[workout.id]) return;
+  const openSession = async (workout, week) => {
+    const key = tileKey(workout.id, week);
+    setModalTarget({ workoutId: workout.id, week });
+    if (sessionContent[key]) return;
     setModalLoading(true);
     setModalError(null);
     try {
-      const completedAt = state.status === "ready" ? state.completions.get(`${workout.id}:${workout.week_number}`) : null;
-      const [warmups, exerciseRows, logs] = await Promise.all([
+      const completedAt = state.status === "ready" ? state.completions.get(key) : null;
+      const [warmups, exerciseRows, allLogs] = await Promise.all([
         listSpcWarmups(workout.id),
         listSpcWorkoutExercises(workout.id),
-        completedAt
-          ? listLogsForSession(profile.id, { spcWorkoutId: workout.id, weekNumber: workout.week_number })
-          : Promise.resolve(null),
+        completedAt ? listLogsForSession(profile.id, { spcWorkoutId: workout.id, weekNumber: week }) : Promise.resolve(null),
       ]);
+      // listLogsForSession doesn't filter on week (it predates one row
+      // spanning every week), so a sessions run gets every week's sets for
+      // this session. Keep the ones dated inside this tile's week.
+      let logs = allLogs;
+      if (logs && state.sessionsFormat) {
+        const { start, end } = weekWindow(state.block, week);
+        logs = logs.filter((l) => l.date_performed >= start && l.date_performed <= end);
+      }
       setSessionContent((prev) => ({
         ...prev,
-        [workout.id]: {
+        [key]: {
           warmups: warmups.map((w) => w.exercises?.name ?? w.label).filter(Boolean),
           exerciseRows,
           loggedSets: groupLogsByExercise(logs, exerciseRows),
@@ -218,7 +246,7 @@ export default function PlanSpcBlock() {
     }
   };
 
-  const closeModal = () => setModalWorkoutId(null);
+  const closeModal = () => setModalTarget(null);
 
   // Same split as the group block page: log/update hand off to My Fitness,
   // a back-log finishes here because its sets are already in the sheet.
@@ -228,7 +256,7 @@ export default function PlanSpcBlock() {
     if (modalState === "backlog") {
       setSavingSession(true);
       try {
-        await handleFinalizeMissedSession(workout, logDate);
+        await handleFinalizeMissedSession(workout, modalTarget.week, logDate);
         closeModal();
         toastSuccess("Session saved.");
       } catch (err) {
@@ -245,7 +273,7 @@ export default function PlanSpcBlock() {
       // bubbles, which are always about the current one. See plan.js.
       params: {
         session: "spc",
-        weekNumber: String(workout.week_number),
+        weekNumber: String(modalTarget.week),
         sessionNumber: String(workout.session_number),
         exactWeek: "1",
       },
@@ -254,7 +282,7 @@ export default function PlanSpcBlock() {
 
   // Logging a missed past session — see plan-block.js's
   // handleFinalizeMissedSession for the full reasoning (same pattern here).
-  const handleFinalizeMissedSession = async (workout, logDate) => {
+  const handleFinalizeMissedSession = async (workout, week, logDate) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
       throw new Error("Enter the date as YYYY-MM-DD.");
     }
@@ -267,7 +295,10 @@ export default function PlanSpcBlock() {
     setState((prev) => {
       if (prev.status !== "ready") return prev;
       const next = new Map(prev.completions);
-      next.set(`${workout.id}:${workout.week_number}`, completedAt);
+      // A sessions run files the completion under the week of the date she
+      // picked (spcCompletionWeek), which can be a later week than the tile.
+      const filedWeek = prev.sessionsFormat ? calendarWeekNumber(prev.block.block_start_date, logDate) : week;
+      next.set(tileKey(workout.id, filedWeek), completedAt);
       return { ...prev, completions: next };
     });
   };
@@ -286,9 +317,11 @@ export default function PlanSpcBlock() {
     );
   }
 
-  const modalWorkout = modalWorkoutId && state.status === "ready" ? state.workouts.find((w) => w.id === modalWorkoutId) : null;
-  const modalRaw = modalWorkoutId ? sessionContent[modalWorkoutId] : null;
-  const modalCompletedAt = modalWorkout ? state.completions?.get(`${modalWorkout.id}:${modalWorkout.week_number}`) : null;
+  const modalWorkout = modalTarget && state.status === "ready" ? state.workouts.find((w) => w.id === modalTarget.workoutId) : null;
+  const modalWeek = modalTarget?.week ?? null;
+  const modalKey = modalTarget ? tileKey(modalTarget.workoutId, modalTarget.week) : null;
+  const modalRaw = modalKey ? sessionContent[modalKey] : null;
+  const modalCompletedAt = modalWorkout ? state.completions?.get(modalKey) : null;
   const modalTitle = modalWorkout ? modalWorkout.title || `Session ${modalWorkout.session_number}` : "";
   const modalExercises = modalRaw
     ? modalRaw.exerciseRows.map((ex) => ({
@@ -307,9 +340,9 @@ export default function PlanSpcBlock() {
     ? "future"
     : modalCompletedAt
       ? "logged"
-      : modalWorkout.week_number > currentWeek
+      : modalWeek > currentWeek
         ? "future"
-        : modalWorkout.week_number < currentWeek
+        : modalWeek < currentWeek
           ? "backlog"
           : "today";
 
@@ -337,7 +370,10 @@ export default function PlanSpcBlock() {
       ) : (
         <>
           <BlockProgressHero
-            title={`${state.blockLabel ? `${state.blockLabel} | ` : ""}Week ${currentWeek} of ${weeksInBlock.length}`}
+            // An ongoing program has no length, so "of N" would invent one.
+            title={`${state.blockLabel ? `${state.blockLabel} | ` : ""}Week ${currentWeek}${
+              state.sessionsFormat && !state.block.block_end_date ? "" : ` of ${weeksInBlock.length}`
+            }`}
             done={blockView.totalDone}
             total={blockView.totalTarget}
           />
@@ -350,10 +386,10 @@ export default function PlanSpcBlock() {
               missed={week.missed}
               slots={blockView.slots}
               sessions={week.sessions.map((s) => ({
-                key: s.workout.id,
+                key: tileKey(s.workout.id, week.week),
                 label: `Session ${s.workout.session_number}`,
                 state: s.state,
-                onPress: () => openSession(s.workout),
+                onPress: () => openSession(s.workout, week.week),
               }))}
             />
           ))}
@@ -367,25 +403,25 @@ export default function PlanSpcBlock() {
       )}
 
       <SessionSheet
-        key={modalWorkoutId ?? "none"}
-        visible={!!modalWorkoutId}
+        key={modalKey ?? "none"}
+        visible={!!modalTarget}
         onClose={closeModal}
-        eyebrow={modalWorkout ? `Week ${modalWorkout.week_number} | Session ${modalWorkout.session_number}` : ""}
+        eyebrow={modalWorkout ? `Week ${modalWeek} | Session ${modalWorkout.session_number}` : ""}
         title={modalTitle}
         state={modalState}
         // SPC has no day-of-week routing, so a current-week session is open
         // rather than "today's".
         pillLabel={modalState === "today" ? "THIS WEEK" : undefined}
         completedDateLabel={modalCompletedAt ? formatDateMDY(dateInBoise(new Date(modalCompletedAt))) : null}
-        futureLabel={modalWorkout ? (modalWorkout.week_number === currentWeek + 1 ? "Next week" : `Week ${modalWorkout.week_number}`) : null}
+        futureLabel={modalWorkout ? (modalWeek === currentWeek + 1 ? "Next week" : `Week ${modalWeek}`) : null}
         loading={modalLoading || (!modalError && !modalRaw)}
         error={modalError}
-        onRetry={() => modalWorkout && openSession(modalWorkout)}
+        onRetry={() => modalWorkout && openSession(modalWorkout, modalWeek)}
         exercises={modalExercises}
         loggedSets={modalRaw?.loggedSets}
         userId={profile.id}
         source="spc"
-        session={modalWorkout ? { spcWorkoutId: modalWorkout.id, weekNumber: modalWorkout.week_number } : undefined}
+        session={modalWorkout ? { spcWorkoutId: modalWorkout.id, weekNumber: modalWeek } : undefined}
         ctaBusy={savingSession}
         onCta={handleSessionCta}
       />
