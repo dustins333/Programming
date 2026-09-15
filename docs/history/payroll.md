@@ -542,3 +542,66 @@ Terra's click-through of a real day's autosave → submit → edit-clears-
 submission round trip, the Extra pay merge against real requests, a real
 finalize, and on the admin side a real approve / send-back / reopen round
 trip and a period close.
+
+
+## Payroll paid hidden duplicate rows (2026-09-14)
+
+Reported by Sarah Cunningham: she opened payroll and found an entry she didn't
+remember making. Real bug, and it cost money. Migration `0132`, applied and
+verified live. Captured state and a full write-up are outside the repo in
+`~/kova-payroll-duplicates-2026-09-14/` (FINDINGS.md).
+
+**The model to keep in mind**: a coach's day on the Log screen is ONE "core"
+`pay_entries` row (group / programs / welcome / strategy / admin / ops, all
+adjustable while the period is open), plus one row per SPC session and one per
+Other item. `partitionDayEntries` takes the newest core row for display, and
+`computeTotals` adds **every** row. So a second core row is invisible on screen
+and still paid.
+
+**How a second one got written, reproduced** (a copy of the real screen against
+an in-memory fake data layer), not reasoned:
+1. Counter taps save after a 600ms debounce. The screen only learned a new row
+   existed after the whole save finished (insert, clear submission, reload), so a
+   second tap about a second later started another save that also saw no row and
+   inserted. Two + taps wrote A=1, B=2, then A=2. Tapping minus only reached the
+   newer row, so the screen said 0 while A still paid 2. That is exactly Sarah's
+   9/14.
+2. Leaving the screen mid-save and coming straight back loaded before the insert
+   landed, showed 0, and one tap inserted again (the 1-and-1 pattern).
+
+A fresh open with no taps writes nothing; one tap writes one row.
+
+Duplicates often summed to the right pay by accident. Sarah's three days did,
+and only Ashley Mullett's 9/3 was overpaid, by one session. The real damage was
+a screen showing a smaller number than was logged, which invites a coach to
+"correct" it into a real overpayment.
+
+**The fix is layered, and the database rule is the one that matters**:
+- `pay_entries_one_core_row_per_day`: unique `(user_id, entry_date)` where
+  `source = 'coach_entry'`, the core-row predicate, and `pay_period_start >=
+  '2026-09-03'`. The date floor exists because the closed Aug 20 period holds four
+  duplicate days (Kristan Alford 8/24, 8/25, 8/31; Leslie Romero 8/24) that Terra
+  chose to leave as paid, and they would stop the index being created. Closed
+  periods can't be written anyway. `legacy_import` days legitimately carry several
+  rows (128 such days); admin payee rows have no `user_id`.
+- `upsertCoreEntryFields` (`lib/payroll/dayEntries.js`) catches 23505 and updates
+  the row that won. That covers any stale view of the day, including a second copy
+  of the screen.
+- `app/(coach)/payroll/entries.js`: `persistDay` runs saves strictly one at a
+  time, and every core write goes through `upsertCore`, which reads the known row
+  when the write runs and records the saved row the instant it resolves.
+
+The four open-period days were merged to the counts the coaches confirmed (2
+group sessions each), keeping the oldest row, behind guards that abort if any row
+changed since it was checked. Terra decided against a standing duplicate check on
+the review screen: the rule makes it unnecessary, and she'll ask for a one-off
+check if she wants one.
+
+**Worth generalising**:
+- **Any "create if missing" write that a debounce, a retry or a second screen can
+  run twice needs a database uniqueness rule**, not app code that believes it knows
+  the row exists. Same lesson as `logs_unique_set_idx` (0073).
+- **Dry-run a new unique index.** The first dry run failed on closed-period
+  duplicates nobody had counted in.
+- **Check a date's weekday before writing it.** 9/3 was called a Wednesday in the
+  list Terra was verifying against. Pay periods start on Thursday.

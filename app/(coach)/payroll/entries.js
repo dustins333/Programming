@@ -301,6 +301,27 @@ export default function PayrollEntries() {
   const coreRowRef = useRef(null);
   const submittedDatesRef = useRef(submittedDates);
   submittedDatesRef.current = submittedDates;
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+
+  // Every write to the day's core row goes through here. It reads the known
+  // core row at the moment the write actually runs (not when it was queued)
+  // and records the saved row the instant the write resolves, before the
+  // slower submission-clear and reload that follow, so the next queued write
+  // already knows the row exists. The database's one-row-per-day rule (0132)
+  // backs this up for anything a single screen can't see, like a second copy
+  // of this screen that loaded before this write landed.
+  const upsertCore = (writePeriodStart, date, fields, fallbackCoreRow = null) =>
+    upsertCoreEntryFields(
+      profile.id,
+      writePeriodStart,
+      date,
+      date === selectedDateRef.current ? coreRowRef.current : fallbackCoreRow,
+      fields
+    ).then((saved) => {
+      if (saved && date === selectedDateRef.current) coreRowRef.current = saved;
+      return saved;
+    });
 
   useEffect(() => {
     coreRowRef.current = partition.core || null;
@@ -333,12 +354,24 @@ export default function PayrollEntries() {
   // Deliberately rethrows rather than toasting here — every popup that
   // calls into it already reports its own failure and stays open with the
   // user's input intact. The non-popup callers below add their own catch.
+  //
+  // Saves run strictly one at a time. Overlapping saves are what created
+  // duplicate core rows (payroll, 2026-09-14): a second counter save started
+  // while the first insert was still in flight, decided no row existed yet,
+  // and inserted another. Both were paid; the screen showed only one.
+  const saveChainRef = useRef(Promise.resolve());
   const persistDay = useCallback(
-    async (date, fn) => {
-      const result = await fn();
-      if (submittedDatesRef.current.has(date)) await clearDaySubmission(profile.id, date);
-      await refresh();
-      return result;
+    (date, fn) => {
+      const run = async () => {
+        const result = await fn();
+        if (submittedDatesRef.current.has(date)) await clearDaySubmission(profile.id, date);
+        await refresh();
+        return result;
+      };
+      const next = saveChainRef.current.then(run);
+      // A failed save must not stall every save after it.
+      saveChainRef.current = next.catch(() => {});
+      return next;
     },
     [profile?.id, refresh]
   );
@@ -351,12 +384,8 @@ export default function PayrollEntries() {
     const pending = pendingWriteRef.current;
     pendingWriteRef.current = null;
     if (!pending) return;
-    const existingCore = pending.date === selectedDate ? coreRowRef.current : pending.coreRow;
     try {
-      const saved = await persistDay(pending.date, () =>
-        upsertCoreEntryFields(profile.id, pending.periodStart, pending.date, existingCore, pending.fields)
-      );
-      if (saved && pending.date === selectedDate) coreRowRef.current = saved;
+      await persistDay(pending.date, () => upsertCore(pending.periodStart, pending.date, pending.fields, pending.coreRow));
     } catch (err) {
       toastError("Failed to save", err);
     }
@@ -474,9 +503,8 @@ export default function PayrollEntries() {
           ? { strategy_sessions: rowCount, strategy_notes: joinedNames }
           : { programs_written: rowCount, program_notes: joinedNames };
     const date = selectedDate;
-    const saved = await persistDay(date, () => upsertCoreEntryFields(profile.id, periodStart, date, coreRowRef.current, fields));
+    const saved = await persistDay(date, () => upsertCore(periodStart, date, fields));
     if (saved && date === selectedDate) {
-      coreRowRef.current = saved;
       if (kind === "welcome") setPendingWelcome(rowCount);
       else if (kind === "strategy") setPendingStrategy(rowCount);
       else setPendingPrograms(rowCount);
@@ -486,8 +514,7 @@ export default function PayrollEntries() {
   const handleSaveHours = async (decimal) => {
     const field = hoursPopup.kind === "admin" ? "admin_hours" : "ops_hours";
     const date = selectedDate;
-    const saved = await persistDay(date, () => upsertCoreEntryFields(profile.id, periodStart, date, coreRowRef.current, { [field]: decimal }));
-    if (saved && date === selectedDate) coreRowRef.current = saved;
+    await persistDay(date, () => upsertCore(periodStart, date, { [field]: decimal }));
   };
 
   const handleSubmitDay = async () => {

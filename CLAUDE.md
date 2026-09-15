@@ -53,6 +53,7 @@ A feature often spans files (SPC touches spc.md and live-hub.md; nutrition photo
 - **Non-blocking overlays go through `PassThroughOverlay`**, never a plain RN `Modal` on web (it eats every touch). *(member-app: non-blocking overlays)*
 - **An RLS-filtered UPDATE reports success with 0 rows**; select the row back and throw on none. *(coach-web: RLS-filtered write)*
 - **PostgREST rejects a write naming a column the table lacks, even with null**, and embeds fail at runtime, not build. Curl new selects first. *(coach-web: shared editor columns)*
+- **A "create the row if it doesn't exist yet" write needs a database uniqueness rule**, not app code that thinks it knows the row exists; debounced saves and a second screen will both double-insert. *(payroll: hidden duplicate rows)*
 - **Never widen a unique index an `ON CONFLICT` column list names** in the same step as a deploy. *(spc: alternate programming)*
 - **`supabase secrets list` prints SHA-256 digests, not values**; a pg_net cron can 401 forever while `cron.job_run_details` says success. Check `net._http_response`. *(messaging: popup and push)*
 - **Don't rename/drop a schema listed in Exposed schemas**; rename its tables instead. *(platform: backend audit follow-up)*
