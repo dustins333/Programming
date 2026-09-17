@@ -605,3 +605,80 @@ check if she wants one.
   duplicates nobody had counted in.
 - **Check a date's weekday before writing it.** 9/3 was called a Wednesday in the
   list Terra was verifying against. Pay periods start on Thursday.
+
+## A custom pay request picks its own day (2026-09-17)
+
+Terra filed a $2,000 owner-pay custom request for herself, approved it on the
+admin side, and it landed in the pay period today sits in rather than the one
+she meant to pay it in. Not a bug in the strict sense — there was simply no
+way to say otherwise — but the outcome was wrong money in the wrong fortnight.
+
+**What the flow actually did.** A request carried a `pay_period_start` and
+nothing finer. `approveRequest` dated the linked pay entry
+`clampToPeriod(todayInBoise(), request.pay_period_start)` — today, pinned into
+whatever period the request was filed against. The staff form did have a
+picker, but it offered periods, not days, hid itself whenever only one period
+was writable (`listSelectablePeriods` returns the current period plus the
+previous one, and the previous one was closed), and by construction could
+never reach a period ahead of today. The admin approval card had no date
+control at all. So for a same-day file-and-approve there was exactly one
+possible destination.
+
+**What replaces it.** The day is now the thing that gets picked, on both
+sides, and the period is derived from it:
+
+- `payroll.custom_requests.entry_date` (**0133**, nullable, backfilled from
+  each approved request's linked pay entry). `pay_period_start` stays
+  denormalised alongside it — the RLS closed-period checks, the dedup index
+  and the close-period gate all key on it — and `lib/payroll/requests.js` is
+  what keeps the two in step.
+- `submitRequest(userId, entryDate, description, amount)` derives the period
+  from the day rather than taking both, so they cannot disagree.
+- `approveRequest(..., entryDate)` recomputes the period from the chosen day,
+  **moves the request into it** if that differs from where it was filed, and
+  refuses outright if that period is closed. Three sources for the day, in
+  order: what the admin picked, what the coach asked for, and (only for rows
+  predating the column) the old today-clamped-into-the-period behaviour.
+- `components/payroll/PayDatePicker.js` — one month grid, two skins, because
+  the staff form sits on white and the admin approval card is dark. Built on
+  `lib/monthGrid.js` like every other calendar in the app.
+
+**Range.** Any open period, past or future — Terra's call, and it is the point:
+parking owner pay in an upcoming cycle had nowhere to go before. A *closed*
+period is the only hard refusal, and it is a real one (RLS blocks writes to a
+closed period for everyone, admin included). The staff form additionally
+refuses a period that coach has already finalized with no send-back, which is
+this screen's own rule rather than an RLS one, and the same rule the Log tab
+enforces — so "which periods am I still working on" still means one thing
+across payroll. Reaching further back is still an admin sending the period
+back.
+
+**Blocked days stay visible.** They dim and, when pressed, say why, rather
+than disappearing: a closed period is a fact worth seeing, and a calendar with
+holes in it reads as broken. Same reasoning as the dimmed-but-pressable submit
+buttons on these screens.
+
+Both the staff request row and the admin history row now show the day
+(`for 10/01` while pending, `paid 10/01` once approved), and the approval card
+names the period only when the chosen day would move the request out of the
+one it was filed against — the common case stays quiet.
+
+The staff form's old period-pill row is gone, along with the "this pay period
+is closed" branch that used to replace the whole form. A closed period is now
+reported on the day itself, so the form is always available.
+
+**Verified**: `npm run build` clean plus a Babel parse / unresolved-identifier
+/ unused-import pass over all four touched files; `computePeriodStart` run
+from the shipped source over 840 consecutive days (every day maps to its own
+period start, boundaries exactly 14 days, and a day picked this way is never
+clamped); and the real `ApprovalCard` and `PayDatePicker` driven in the browser
+through a throwaway `app/zz-harness.js` — picking Oct 1 from a Sep 17 request
+showed "Moves to the 10/01 – 10/14 period" and handed `2026-10-01` to the
+approve callback, while days in a closed period stayed inert.
+
+**Worth generalising**: `flexBasis` on a card that lives in a `flex-row wrap`
+container is a *width*; drop that same card into a plain (column) `View` for a
+harness and it becomes a *height*, and the card's background stops mid-content
+while the children spill out below it. That looked exactly like a real
+overflow bug for one screenshot. A harness has to reproduce the container, not
+just the component.

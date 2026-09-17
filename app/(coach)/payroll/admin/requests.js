@@ -2,9 +2,18 @@ import { useState, useCallback } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Redirect, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../../lib/auth/AuthProvider";
-import { getCurrentPeriodStart, computePeriodEnd } from "../../../../lib/payroll/periods";
+import {
+  getCurrentPeriodStart,
+  getPeriodAnchor,
+  computePeriodStart,
+  computePeriodEnd,
+  listPayPeriods,
+  isPeriodClosed,
+} from "../../../../lib/payroll/periods";
 import { listAllRequests, approveRequest, denyRequest } from "../../../../lib/payroll/requests";
-import { formatDateMDY, formatDateRange } from "../../../../lib/formatDate";
+import { formatDateMDY, formatDateMD, formatDateRange } from "../../../../lib/formatDate";
+import { todayInBoise } from "../../../../lib/boiseDate";
+import { PayDatePicker } from "../../../../components/payroll/PayDatePicker";
 import { toastError, toastSuccess } from "../../../../lib/toast";
 import { fonts, colors } from "../../../../lib/theme";
 import { CoachShell } from "../../../../components/CoachShell";
@@ -41,7 +50,7 @@ function money(v) {
 // linked pay entry at exactly this number. What was asked stays on screen
 // underneath whenever the two differ, and `amount_requested` is never
 // overwritten, so the history row can always show both.
-function ApprovalCard({ r, busy, onApprove, onDeny, periodLabelFor }) {
+function ApprovalCard({ r, busy, onApprove, onDeny, periodLabelFor, today, dateStatus, periodStartFor, currentPeriodStart }) {
   // A coach can file without naming a figure (holiday pay, say), which
   // stores 0. Seed the field empty in that case rather than with a "0" to
   // edit around, and say so \u2014 an empty box on its own looks like a bug,
@@ -58,9 +67,18 @@ function ApprovalCard({ r, busy, onApprove, onDeny, periodLabelFor }) {
   // this codebase has now been bitten by three separate times.
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
+  // The day this gets paid on, and therefore which fortnight it lands in.
+  // Seeded from what the coach asked for; rows filed before requests
+  // carried a day fall back to today, which is what approving used to do
+  // unconditionally — and is exactly how a $2,000 owner-pay request meant
+  // for another cycle ended up in the period today sits in (2026-09-17).
+  const [payDate, setPayDate] = useState(() => r.entry_date || today);
+  const payPeriodStart = periodStartFor(payDate);
+  const dateBlocked = dateStatus(payDate);
+  const movesPeriod = payPeriodStart && r.pay_period_start && payPeriodStart !== r.pay_period_start;
   const trimmedNote = note.trim() || null;
   const parsed = Number(amountText);
-  const valid = amountText.trim() !== "" && Number.isFinite(parsed) && parsed > 0;
+  const valid = amountText.trim() !== "" && Number.isFinite(parsed) && parsed > 0 && !dateBlocked;
   const adjusted = valid && !noAmountAsked && parsed !== asked;
 
   return (
@@ -115,6 +133,31 @@ function ApprovalCard({ r, busy, onApprove, onDeny, periodLabelFor }) {
           ) : null}
         </View>
       </View>
+      <View className="mb-3">
+        <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11, color: "#a49890", marginBottom: 5 }}>Paid on</Text>
+        <PayDatePicker
+          value={payDate}
+          today={today}
+          onChange={setPayDate}
+          dateStatus={dateStatus}
+          onBlocked={(reason) => toastError(`Can't pay on that day \u2014 ${reason}`)}
+          variant="dark"
+          /* The period is only named when the day would move this out of
+             the one it was filed against, or when it is blocked — the
+             common case is a request paid where it was asked for, and
+             restating that on every card is noise. */
+          periodLabel={
+            dateBlocked
+              ? `Can't pay here \u2014 ${dateBlocked}`
+              : movesPeriod
+                ? `Moves to the ${formatDateMD(payPeriodStart)} \u2013 ${formatDateMD(computePeriodEnd(payPeriodStart))} period${
+                    payPeriodStart === currentPeriodStart ? " \u00b7 current" : ""
+                  }`
+                : null
+          }
+          periodWarning={Boolean(dateBlocked || movesPeriod)}
+        />
+      </View>
       {noteOpen ? (
         <View className="mb-3">
           <TextInput
@@ -150,7 +193,11 @@ function ApprovalCard({ r, busy, onApprove, onDeny, periodLabelFor }) {
         {/* Dimmed rather than hard-disabled while the amount is unusable, so
             pressing it explains what is wrong instead of doing nothing. */}
         <Pressable
-          onPress={() => (valid ? onApprove(r, parsed, trimmedNote) : toastError("Enter an amount above $0 before approving"))}
+          onPress={() =>
+            valid
+              ? onApprove(r, parsed, trimmedNote, payDate)
+              : toastError(dateBlocked ? `Pick another day \u2014 ${dateBlocked}` : "Enter an amount above $0 before approving")
+          }
           disabled={busy}
           className="items-center"
           style={{ flex: 1, backgroundColor: "#8fb473", borderRadius: 9, paddingVertical: 10, opacity: busy || !valid ? 0.5 : 1 }}
@@ -201,6 +248,14 @@ function HistoryRow({ r }) {
         </Text>
         {/* Whatever was typed at decision time \u2014 usually how an adjusted
             amount was arrived at, which is the whole reason to keep it. */}
+        {/* Which day the money carries — the one thing this row could not
+            say before, and the reason an approval could only ever land in
+            the period it was decided in. */}
+        {r.entry_date ? (
+          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 3 }}>
+            {r.status === "approved" ? "Paid" : "For"} {formatDateMDY(r.entry_date)}
+          </Text>
+        ) : null}
         {r.admin_notes ? (
           <Text numberOfLines={2} style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e", marginTop: 3 }}>
             {r.admin_notes}
@@ -226,14 +281,23 @@ export default function AdminPayrollRequests() {
   const isAdmin = profile?.role === "admin";
 
   const [currentPeriodStart, setCurrentPeriodStart] = useState(null);
+  const [anchor, setAnchor] = useState(null);
+  const [allPeriods, setAllPeriods] = useState([]);
   const [allRequests, setAllRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [decidingId, setDecidingId] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [start, requests] = await Promise.all([getCurrentPeriodStart(), listAllRequests()]);
+      const [start, anchorDate, periods, requests] = await Promise.all([
+        getCurrentPeriodStart(),
+        getPeriodAnchor(),
+        listPayPeriods(),
+        listAllRequests(),
+      ]);
       setCurrentPeriodStart(start);
+      setAnchor(anchorDate);
+      setAllPeriods(periods);
       setAllRequests(requests);
     } catch (err) {
       toastError("Failed to load requests", err);
@@ -252,6 +316,17 @@ export default function AdminPayrollRequests() {
     return <Redirect href="/(coach)/payroll" />;
   }
 
+  // A closed period is the only hard stop on where money can be paid — RLS
+  // blocks writes to one for everyone, admin included — so it is the only
+  // thing the day picker refuses. Everything else, past or future, is fair
+  // game: parking owner pay in an upcoming cycle is the case this exists for.
+  const closedStarts = new Set(allPeriods.filter(isPeriodClosed).map((p) => p.start_date));
+  const periodStartFor = (date) => (anchor ? computePeriodStart(date, anchor) : null);
+  const dateStatus = (date) => {
+    const start = periodStartFor(date);
+    return start && closedStarts.has(start) ? "that pay period is closed" : null;
+  };
+
   // Split by decision, not by period. Grouping by period buried a pending
   // request from a *previous* fortnight under "History", which is the one
   // request that most needs deciding — an undecided request is also the
@@ -260,14 +335,22 @@ export default function AdminPayrollRequests() {
   const decided = allRequests.filter((r) => r.status !== "pending");
   const pendingTotal = pending.reduce((sum, r) => sum + Number(r.amount_requested || 0), 0);
 
-  const handleApprove = async (request, approvedAmount, adminNotes) => {
+  const handleApprove = async (request, approvedAmount, adminNotes, payDate) => {
     setDecidingId(request.id);
     try {
-      await approveRequest(request, approvedAmount, profile.id, adminNotes);
-      toastSuccess(`Approved \u2014 $${Number(approvedAmount).toFixed(2)} added to their payroll`);
+      await approveRequest(request, approvedAmount, profile.id, adminNotes, payDate);
+      toastSuccess(`Approved \u2014 $${Number(approvedAmount).toFixed(2)} paid on ${formatDateMDY(payDate)}`);
       await load();
     } catch (err) {
-      toastError("Failed to approve", err);
+      // custom_requests_dedup_idx is (staff_email, pay_period_start,
+      // description, amount_requested), so moving a request into a period
+      // that already holds an identical one collides. Say what to do about
+      // it rather than surfacing a raw 23505.
+      if (err?.code === "23505") {
+        toastError("There's already an identical request in that pay period \u2014 pick a different day, or edit the amount");
+      } else {
+        toastError("Failed to approve", err);
+      }
     } finally {
       setDecidingId(null);
     }
@@ -342,6 +425,10 @@ export default function AdminPayrollRequests() {
                     busy={decidingId === r.id}
                     onApprove={handleApprove}
                     onDeny={handleDeny}
+                    today={todayInBoise()}
+                    dateStatus={dateStatus}
+                    periodStartFor={periodStartFor}
+                    currentPeriodStart={currentPeriodStart}
                     // Only named when it isn't the period you're in, so the
                     // common case stays quiet and a straggler stands out.
                     periodLabelFor={

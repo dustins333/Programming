@@ -22,13 +22,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import {
   getCurrentPeriodStart,
-  getPayPeriod,
+  getPeriodAnchor,
   isPeriodClosed,
+  computePeriodStart,
   computePeriodEnd,
-  listPayPeriodOptions,
-  listSelectablePeriods,
+  listPayPeriods,
 } from "../../../lib/payroll/periods";
-import { listOwnFinalizations } from "../../../lib/payroll/finalizations";
+import { listOwnFinalizations, isLocked } from "../../../lib/payroll/finalizations";
 import { listOwnRequests, submitRequest, cancelOwnPendingRequest } from "../../../lib/payroll/requests";
 import { listClientsForCoach } from "../../../lib/nutrition/clients";
 import {
@@ -38,6 +38,8 @@ import {
   removeNutritionAssignment,
 } from "../../../lib/payroll/nutritionAssignments";
 import { formatDateMDY, formatDateMD } from "../../../lib/formatDate";
+import { todayInBoise } from "../../../lib/boiseDate";
+import { PayDatePicker } from "../../../components/payroll/PayDatePicker";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { confirmDelete } from "../../../lib/confirmDialog";
 import { fonts, colors } from "../../../lib/theme";
@@ -118,6 +120,11 @@ function OwnRequestRow({ request, onCancel }) {
       </View>
       <Text className="mt-1 text-xs text-stone-400" style={{ fontFamily: fonts.sans }}>
         Requested {formatDateMDY(request.created_at?.slice(0, 10))}
+        {/* The day it is paid on, which is the coach's own answer to
+            "which pay cheque does this land in". Absent on rows filed
+            before requests carried a day. An admin can move it at approval
+            time, so this always shows where it actually went. */}
+        {request.entry_date ? ` \u00b7 ${approved ? "paid" : "for"} ${formatDateMDY(request.entry_date)}` : ""}
         {approved && Number(request.approved_amount) !== Number(request.amount_requested)
           ? ` · asked ${money(request.amount_requested)}`
           : ""}
@@ -147,17 +154,22 @@ export default function PayrollExtraPay() {
 
   const [segment, setSegment] = useState(params.segment === "nutrition" ? "nutrition" : "requests");
 
-  const [periodStart, setPeriodStart] = useState(null);
-  const [period, setPeriod] = useState(null);
-  // The current period, plus the previous while it's still open and this
-  // coach hasn't submitted it. custom_requests itself has no finalization
-  // gate in RLS (only the closed check), so the database would take a
-  // request against any open period — this matches the Log tab's own picker
-  // instead, so "which periods am I still working on" means one thing
-  // across payroll rather than two. A request for a period already
-  // submitted goes through the admin sending it back, same as a missed
-  // line item.
-  const [writablePeriods, setWritablePeriods] = useState([]);
+  // The day this request is paid on. It is the thing that decides the pay
+  // period, rather than a period being picked directly: a row of period
+  // pills could only ever reach the current fortnight and the one before
+  // it, so owner pay meant for an upcoming cycle had nowhere to go (a real
+  // $2,000 request, 2026-09-17). Defaults to today, which is right for
+  // almost every reimbursement.
+  const [entryDate, setEntryDate] = useState(() => todayInBoise());
+  const [anchor, setAnchor] = useState(null);
+  const [allPeriods, setAllPeriods] = useState([]);
+  // Periods this coach has already submitted and had no send-back on. The
+  // database only blocks *closed* periods for custom_requests, so this is a
+  // UI rule rather than an RLS one — but it is the same rule the Log tab
+  // enforces, so "which periods am I still working on" means one thing
+  // across payroll. Reaching further back goes through an admin sending the
+  // period back, same as a missed line item.
+  const [lockedStarts, setLockedStarts] = useState(() => new Set());
   const [currentPeriodStart, setCurrentPeriodStart] = useState(null);
   const [ownRequests, setOwnRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -184,9 +196,6 @@ export default function PayrollExtraPay() {
   const scrollOffsetRef = useRef(0);
   const scrollFieldIntoView = useScrollToKeyboard(scrollViewRef, scrollOffsetRef);
   const requestCardRef = useRef(null);
-  // loadRequests runs on every focus and must read the actual choice, not
-  // the value captured when the callback was first created.
-  const selectedPeriodRef = useRef(null);
   const newDayRowRefs = useRef(new Map());
   const editDayRowRefs = useRef(new Map());
   const keyboardHeight = useKeyboardHeight();
@@ -197,23 +206,20 @@ export default function PayrollExtraPay() {
   const loadRequests = useCallback(async () => {
     if (!profile?.id) return;
     try {
-      const [current, options, mine, finalizations] = await Promise.all([
+      const [current, anchorDate, periods, mine, finalizations] = await Promise.all([
         getCurrentPeriodStart(),
-        listPayPeriodOptions(),
+        getPeriodAnchor(),
+        listPayPeriods(),
         listOwnRequests(profile.id),
         listOwnFinalizations(profile.id),
       ]);
       setCurrentPeriodStart(current);
-      const writable = listSelectablePeriods(options, current, finalizations);
-      setWritablePeriods(writable);
-      // Keep whatever was picked if it is still open, so a refocus doesn't
-      // silently drop the choice back to the current period.
-      const keep = writable.some((o) => o.start_date === selectedPeriodRef.current);
-      const start = keep ? selectedPeriodRef.current : current;
-      selectedPeriodRef.current = start;
-      const periodRow = writable.find((o) => o.start_date === start) ?? (await getPayPeriod(start));
-      setPeriodStart(start);
-      setPeriod(periodRow);
+      setAnchor(anchorDate);
+      setAllPeriods(periods);
+      setLockedStarts(new Set(finalizations.filter(isLocked).map((f) => f.pay_period_start)));
+      // The picked day deliberately survives a refocus — it is plain state,
+      // not re-derived here, so coming back to this screen doesn't silently
+      // drop the choice back to today.
       setOwnRequests(mine);
     } catch (err) {
       toastError("Failed to load requests", err);
@@ -221,14 +227,6 @@ export default function PayrollExtraPay() {
       setLoading(false);
     }
   }, [profile?.id]);
-
-  const selectPeriod = useCallback(
-    (start) => {
-      selectedPeriodRef.current = start;
-      loadRequests();
-    },
-    [loadRequests]
-  );
 
   const loadNutrition = useCallback(async () => {
     if (!profile?.id) return;
@@ -258,7 +256,22 @@ export default function PayrollExtraPay() {
     if (segment === "nutrition" && !nutritionLoaded && !nutritionLoading) loadNutrition();
   }, [segment, nutritionLoaded, nutritionLoading, loadNutrition]);
 
-  const closed = isPeriodClosed(period);
+  // Only ever a *closed* period blocks a date outright; the lock above is
+  // this screen's own rule. Both are reported per day rather than by hiding
+  // days, so a calendar never has holes in it.
+  const closedStarts = useMemo(() => new Set(allPeriods.filter(isPeriodClosed).map((p) => p.start_date)), [allPeriods]);
+  const periodStart = anchor ? computePeriodStart(entryDate, anchor) : null;
+  const dateStatus = useCallback(
+    (date) => {
+      if (!anchor) return null;
+      const start = computePeriodStart(date, anchor);
+      if (closedStarts.has(start)) return "that pay period is closed";
+      if (lockedStarts.has(start)) return "you've already submitted that pay period";
+      return null;
+    },
+    [anchor, closedStarts, lockedStarts]
+  );
+  const dateBlocked = dateStatus(entryDate);
 
   const myPending = useMemo(() => ownRequests.filter((r) => r.status === "pending"), [ownRequests]);
   const myApproved = useMemo(() => ownRequests.filter((r) => r.status === "approved"), [ownRequests]);
@@ -285,7 +298,7 @@ export default function PayrollExtraPay() {
   const amountUsable = Number.isFinite(requestAmount) && requestAmount >= 0;
   // Deliberately not a hard `disabled` on the button \u2014 the button dims but
   // still presses, so tapping it says what is missing instead of doing nothing.
-  const requestReady = Boolean(description.trim()) && amountUsable;
+  const requestReady = Boolean(description.trim()) && amountUsable && !dateBlocked;
 
   const handleSubmit = async () => {
     const amt = requestAmount;
@@ -297,9 +310,13 @@ export default function PayrollExtraPay() {
       toastError("Leave the amount blank, or enter $0 or more");
       return;
     }
+    if (dateBlocked) {
+      toastError(`Pick another day \u2014 ${dateBlocked}`);
+      return;
+    }
     setSubmitting(true);
     try {
-      await submitRequest(profile.id, periodStart, description.trim(), amt);
+      await submitRequest(profile.id, entryDate, description.trim(), amt);
       toastSuccess("Request submitted");
       setDescription("");
       setAmount("");
@@ -433,49 +450,34 @@ export default function PayrollExtraPay() {
                 </Text>
 
                 <ExpandableCard title="New request" open={isOpen("new")} onToggle={() => toggle("new")}>
-                  {closed ? (
-                    <EmptyLine>This pay period is closed — new requests will apply to the next open period.</EmptyLine>
-                  ) : (
-                    <View ref={requestCardRef}>
-                      {/* Which period this is paid in. Without it a request
-                          filed after a period ended — the usual case for a
-                          reimbursement you only remember at review time —
-                          silently landed in the current period instead of the
-                          one being closed. */}
-                      {writablePeriods.length > 1 ? (
-                        <>
-                          <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
-                            Pay period
-                          </Text>
-                          <View className="mb-4 flex-row flex-wrap items-center" style={{ gap: 8 }}>
-                            {writablePeriods.map(({ start_date: start }) => {
-                              const active = start === periodStart;
-                              return (
-                                <Pressable
-                                  key={start}
-                                  onPress={() => (active ? null : selectPeriod(start))}
-                                  className="rounded-full border px-3 py-1.5"
-                                  style={{
-                                    borderColor: active ? colors.primary : "#e7e5e4",
-                                    backgroundColor: active ? "#fdf6f2" : "white",
-                                  }}
-                                >
-                                  <Text
-                                    className="text-xs"
-                                    style={{
-                                      fontFamily: active ? fonts.sansSemiBold : fonts.sansMedium,
-                                      color: active ? colors.primaryOnWhite : "#78716c",
-                                    }}
-                                  >
-                                    {formatDateMD(start)} – {formatDateMD(computePeriodEnd(start))}
-                                    {start === currentPeriodStart ? " · current" : ""}
-                                  </Text>
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        </>
-                      ) : null}
+                  <View ref={requestCardRef}>
+                      {/* The day this is paid on, which is what decides the
+                          pay period. Without it a request filed after a
+                          period ended — the usual case for a reimbursement
+                          you only remember at review time — silently landed
+                          in the current period instead of the one being
+                          closed, and there was no way at all to reach a
+                          period ahead of today. */}
+                      <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
+                        What day is this for?
+                      </Text>
+                      <View className="mb-4">
+                        <PayDatePicker
+                          value={entryDate}
+                          today={todayInBoise()}
+                          onChange={setEntryDate}
+                          dateStatus={dateStatus}
+                          onBlocked={(reason) => toastError(`Can't pick that day \u2014 ${reason}`)}
+                          periodLabel={
+                            periodStart
+                              ? `Paid in the ${formatDateMD(periodStart)} \u2013 ${formatDateMD(computePeriodEnd(periodStart))} period${
+                                  periodStart === currentPeriodStart ? " \u00b7 current" : ""
+                                }${dateBlocked ? ` \u2014 ${dateBlocked}` : ""}`
+                              : null
+                          }
+                          periodWarning={Boolean(dateBlocked)}
+                        />
+                      </View>
                       <Text className="mb-1 text-sm text-stone-700" style={{ fontFamily: fonts.sansMedium }}>
                         Description
                       </Text>
@@ -513,8 +515,7 @@ export default function PayrollExtraPay() {
                           {submitting ? "Submitting…" : "Submit request"}
                         </Text>
                       </Pressable>
-                    </View>
-                  )}
+                  </View>
                 </ExpandableCard>
 
                 <ExpandableCard
