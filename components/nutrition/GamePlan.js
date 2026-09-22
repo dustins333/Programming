@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, Platform } from "react-native";
+import { View, Text, TextInput, Pressable, Platform, AppState } from "react-native";
 import { toastError } from "../../lib/toast";
-import { updateGamePlan } from "../../lib/nutrition/coachClient";
+import { updateGamePlan, beaconGamePlan } from "../../lib/nutrition/coachClient";
 import { fonts } from "../../lib/theme";
 import { NUMERIC_DONE_ID } from "../NumericInputAccessory";
 
@@ -33,6 +33,16 @@ const SAVE_DELAY = 700;
 //                   don't always blur first. Fired directly rather than by
 //                   leaving the timer running: the write should start now,
 //                   not 700ms after the component is gone.
+//   4. tab hidden — switching apps or browser tabs unmounts nothing and
+//                   blurs nothing, and iOS freezes a hidden page, so a
+//                   pending debounce can simply never fire.
+//   5. page hide  — a hard refresh or a closed tab tears the document down
+//                   WITHOUT running React cleanup, so 3 never happens. This
+//                   is the one that loses a note across "wrote it, navigated
+//                   away, came back and it wasn't there": measured in a real
+//                   browser, typing and reloading 120ms later produced zero
+//                   outgoing requests. See beaconGamePlan for why it's a raw
+//                   keepalive PATCH and not a normal save.
 export const GamePlan = forwardRef(function GamePlan({ userId, initialGamePlan, onSaved }, ref) {
   const [text, setText] = useState(initialGamePlan ?? "");
   // What's actually persisted, so "dirty" survives a save without waiting
@@ -40,6 +50,10 @@ export const GamePlan = forwardRef(function GamePlan({ userId, initialGamePlan, 
   const savedRef = useRef(initialGamePlan ?? "");
   const textRef = useRef(initialGamePlan ?? "");
   textRef.current = text;
+  // The last value we've either accepted from the parent or written
+  // ourselves, and the value that write replaced — see the seeding effect.
+  const seenRef = useRef(initialGamePlan ?? "");
+  const supersededRef = useRef(null);
   const [height, setHeight] = useState(MIN_HEIGHT);
   // "idle" | "saving" | "saved" | "failed" — the quiet status line that
   // replaced the button, same idea as the builder header's save light.
@@ -66,6 +80,65 @@ export const GamePlan = forwardRef(function GamePlan({ userId, initialGamePlan, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Flushes 4 and 5 from the header. Split because they need different
+  // machinery: a hidden page is still alive, so an ordinary write works and
+  // is preferred (it updates savedRef and the status line); a page being
+  // unloaded can't await anything at all.
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      // Native never tears the app down under us the way a browser does, so
+      // backgrounding only needs the ordinary flush.
+      const sub = AppState.addEventListener("change", (next) => {
+        if (next !== "active") flush();
+      });
+      return () => sub.remove();
+    }
+    if (typeof document === "undefined" || typeof window === "undefined") return undefined;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    const onPageHide = () => {
+      // Deliberately not `flush()`: an awaited supabase call is dead the
+      // moment the document goes. A duplicate write of the same text is
+      // possible when visibilitychange fired first and hasn't landed — that
+      // is harmless, and losing the note is not.
+      if (textRef.current === savedRef.current) return;
+      beaconGamePlan(userIdRef.current, textRef.current);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Takes a NEW value from the parent while mounted. Without this the box is
+  // seeded once and never again, which is what made autosave look broken: a
+  // note typed in the floating bubble saved fine, but the Notes card on the
+  // tab behind it was still showing the pre-edit text, and reopening the
+  // bubble re-mounted it from the page's equally stale copy. The write had
+  // landed; every surface was just still rendering the old text.
+  //
+  // Three guards, because a re-seed is a clobber if it's wrong:
+  //   - nothing new from the parent (the usual render) does nothing;
+  //   - a coach mid-edit is never overwritten, however new the value is;
+  //   - a page reload that started BEFORE our last write returns the value
+  //     that write replaced, so ignore exactly that one rather than walking
+  //     the box backwards.
+  useEffect(() => {
+    const incoming = initialGamePlan ?? "";
+    if (incoming === seenRef.current) return;
+    if (incoming === supersededRef.current) return;
+    seenRef.current = incoming;
+    if (textRef.current !== savedRef.current) return;
+    if (incoming === savedRef.current) return;
+    savedRef.current = incoming;
+    setText(incoming);
+    setStatus("idle");
+  }, [initialGamePlan]);
+
   // Returns "unchanged" | "saved" | "failed" — three outcomes, not a
   // boolean, because a caller closing on tap-away has to tell "nothing to
   // do" apart from "the write failed", or it closes over an unsaved note.
@@ -79,7 +152,10 @@ export const GamePlan = forwardRef(function GamePlan({ userId, initialGamePlan, 
     if (mounted.current) setStatus("saving");
     try {
       await updateGamePlan(userIdRef.current, value);
+      supersededRef.current = savedRef.current;
       savedRef.current = value;
+      // Our own write is not news when it comes back down as a prop.
+      seenRef.current = value;
       onSavedRef.current?.(value);
       // Guarded because the most important flush of all is the one that runs
       // as this component is being torn down.

@@ -66,7 +66,7 @@ function RailCard({ title, headerRight, children }) {
   );
 }
 
-export function NutritionDashboardTab({ userId, coachId, client, logs, currentTarget, focusItems, milestones, today, isWide, onChanged }) {
+export function NutritionDashboardTab({ userId, coachId, client, logs, currentTarget, focusItems, milestones, today, isWide, onChanged, onNotesSaved }) {
   const [range, setRange] = useState(30);
   // Measured, not derived from window width. An SVG needs a real pixel width,
   // and computing one from useWindowDimensions means subtracting the sidebar,
@@ -182,7 +182,7 @@ export function NutritionDashboardTab({ userId, coachId, client, logs, currentTa
         </RailCard>
 
         <RailCard title="Notes">
-          <GamePlan userId={userId} initialGamePlan={client.game_plan} />
+          <GamePlan userId={userId} initialGamePlan={client.game_plan} onSaved={onNotesSaved} />
         </RailCard>
 
         <RailCard title="Milestones">

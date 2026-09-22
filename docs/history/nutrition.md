@@ -1905,3 +1905,146 @@ selection to empty it), and it swallows its own `Escape`; dispatching a
 `selectTextOnFocus` selects in a `setTimeout(0)`, which the hidden pane
 throttles to ~1s, so typing straight after focusing appends instead of
 replacing. Wait before typing.
+
+## Coach notes looked like they weren't autosaving (2026-09-22)
+
+Reported as "nutrition notes on the coach side are not autosaving." They
+were saving. Every surface was just still rendering the pre-edit text, which
+from a coach's chair is the same thing.
+
+`<GamePlan>` (the Notes card, `clients.game_plan`) seeds its box from
+`initialGamePlan` in a `useState` initialiser and had **no** path for a newer
+value to reach it afterwards. It also accepted an `onSaved` callback that
+**no call site passed** — all three (`NutritionDashboardTab`,
+`NutritionCheckinTab`, `ClientNotesBubble`) rendered it without one. So a
+debounced autosave wrote to the database and told nobody: the page's own
+`client` row kept the old text, and every remount re-seeded from it.
+
+What that looks like in use:
+
+- Type in the floating Notes bubble, pause (the 700ms debounce fires and
+  saves), close it. `ClientNotesBubble.handleClose` calls `onChanged` only
+  when its flush returns `"saved"` — the debounce already saved, so the flush
+  returns `"unchanged"` and the page never reloads. The Notes card on the tab
+  behind still shows the old text, and reopening the bubble re-mounts it from
+  that same stale copy. The note reads as gone.
+- Type on the Dashboard tab, switch to Check-In. The unmount flush saves, the
+  Check-In rail mounts from the stale page copy, note reads as gone.
+- Worse than cosmetic: with the bubble open over a tab, two `GamePlan`s are
+  mounted on the same field. Save in the bubble, then type in the tab's box
+  and the tab's stale base overwrites the bubble's note for real.
+
+Fixed in three parts:
+
+1. `GamePlan` now takes a new `initialGamePlan` while mounted, with three
+   guards, because a re-seed is a clobber if it's wrong: an unchanged prop
+   does nothing; a coach mid-edit (`textRef !== savedRef`) is never
+   overwritten however new the value is; and a value equal to the one our own
+   last write replaced (`supersededRef`) is ignored, which is the reload that
+   was already in flight when we saved and would otherwise walk the box
+   backwards. Our own writes set `seenRef`, so the parent echoing them back is
+   a no-op.
+2. The page holds `handleNotesSaved`, which patches `client.game_plan` in
+   local state, and passes it as `onSaved` to all three call sites. Patched,
+   not reloaded — a full `load()` per 700ms debounce would be absurd, and this
+   one field is all four surfaces read (including the bubble's "there's
+   something written" dot).
+3. `updateGamePlan` now selects the row back and throws on zero rows. This
+   was not hypothetical housekeeping: in the harness, the same update against
+   a made-up client id returned **no error**, and the box cheerfully said
+   "Saved". Same class as the RLS-filtered-write gotcha in CLAUDE.md.
+
+Verified: clean `npm run build`, Babel parse + unresolved-identifier pass on
+all six touched files, and the real `GamePlan` driven twice through a
+throwaway `app/zz-harness.js` (deleted) with two instances sharing one parent
+value — a parent change reached both clean boxes; with one box mid-edit, that
+box kept its text while its sibling updated; a save in one box propagated
+through `onSaved` to the other; and after the guard went in, a write matching
+no row flipped the status line to "Not saved — tap to retry" instead of
+"Saved". Against the live database in rolled-back transactions: the coach
+`UPDATE public.clients` passes RLS (policy `coach can manage clients`,
+`is_coach()`), and all 14 `core.users` coach/admin rows have a matching
+`public.coaches` row — so RLS was never what was blocking this, and the
+staleness above is the whole story.
+
+### The second half: notes gone after a round trip (same day)
+
+Follow-up from Terra: "I would make notes, navigate away, and when I went back
+they weren't there." The staleness above explains notes that look missing on a
+page that is still loaded, and it explains a real overwrite (a stale box saving
+over a newer note). It does NOT explain a note missing after a full reload, so
+that was measured separately, and there was a second hole.
+
+Typing in the notes box and hard-reloading 120ms later produced **zero**
+outgoing requests. The document is torn down without running React cleanup, so
+the unmount flush never happens, and the 700ms debounce never fires either.
+Same finding `lib/formDraft.js` already records for form drafts. Nothing was
+overwritten in that case; the write simply never left the browser.
+
+Two more flushes, bringing `GamePlan` to five:
+
+4. **Tab hidden** — `visibilitychange` → `hidden` runs the ordinary flush. The
+   page is still alive, so a normal awaited write works and the status line
+   and `savedRef` update properly. This is the one that matters on the PWA:
+   switching apps unmounts nothing, blurs nothing, and iOS then freezes the
+   page with the debounce still pending.
+5. **Page hide** — `pagehide` fires `beaconGamePlan`, a raw keepalive PATCH,
+   because a handler there cannot await anything. It reads the access token
+   from a cache kept by an `onAuthStateChange` subscription, since
+   `getSession()` is async and loses the race.
+
+Native takes neither: backgrounding doesn't tear an app down, so it just
+flushes on `AppState` leaving `active`.
+
+Measured in the browser pane, and the results are worth keeping because two of
+them are counter-intuitive:
+
+- On a reload, `beforeunload` and `pagehide` both fire, and a `localStorage`
+  write inside them persists — but `visibilitychange` does **not** fire. So
+  pagehide is load-bearing, not a belt-and-braces duplicate of flush 4.
+- Both listeners are confirmed registered by the shipped component (checked by
+  patching `addEventListener` at module scope before the app boots).
+- Flush 4 verified end to end: typed, dispatched `visibilitychange` with
+  `visibilityState` stubbed to `hidden`, and a `PATCH` with the typed text went
+  out 150ms after typing, well inside the 700ms debounce window.
+- Flush 5's request shape verified by curl instead of in the page: the exact
+  URL, verb and headers `beaconGamePlan` builds return 204 from PostgREST.
+  It could NOT be driven in the harness, because the harness has no real
+  session and the beacon correctly refuses to fire without a token —
+  `supabase.auth.setSession` rejects a fabricated JWT, so there is no way to
+  fake one. The token it would use is the same one the ordinary write uses,
+  which is proven to pass RLS.
+
+### Terra's own repro, driven (same day)
+
+Follow-up intel: "switching tabs within the same person, it's not staying
+current; when I refresh the whole page it's there." That is the staleness
+above and nothing else — the write had always landed, which is exactly why a
+refresh shows it.
+
+Driven through a throwaway harness shaped like the real page (one page-level
+`client` row, two tabs of DIFFERENT component types so React genuinely
+unmounts one and mounts the other, `onNotesSaved` patching the page copy).
+The PATCH was stubbed to succeed, because the harness has no session and the
+new zero-rows guard correctly rejects an unauthenticated write; the DB path
+is proven separately under RLS, and what is under test here is propagation.
+
+- Type on the Dashboard, wait past the 700ms debounce, switch tab: the
+  Check-In box opens on the new text.
+- Type and switch tab after 80ms, well inside the debounce: the unmount flush
+  saves, and the newly mounted tab shows the new text.
+- The decisive one, with 600ms of injected latency so the new tab necessarily
+  mounts BEFORE the save lands: mid-flight the new tab shows the OLD text (the
+  old bug, reproduced), and when the write returns both the page copy and the
+  mounted box move to the new text. So the re-seed effect is what closes that
+  window; a fresh mount reading the current prop is not enough on a real
+  network.
+
+A harness trap worth remembering: the first version rendered both tabs as a
+ternary between two structurally identical `View`s, so React RECONCILED
+instead of remounting and the "immediately" case passed for the wrong reason.
+Give the two branches different component types, or the test proves nothing.
+
+Also worth knowing: `<PrepNotes>` on the onboarding tracking screen is the one
+notes field on the coach side that genuinely does not autosave. It has an
+explicit "Save notes" button by design.

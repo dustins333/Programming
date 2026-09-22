@@ -27,7 +27,7 @@ import { BUBBLE_BOTTOM } from "../CoachMessageBubble";
 // causes (an always-visible transparent Modal swallows every touch to the
 // page underneath, even with pointerEvents="box-none"). Only the opened
 // sheet below is a real Modal, deliberately.
-export function ClientNotesBubble({ userId, client, focusItems, onChanged }) {
+export function ClientNotesBubble({ userId, client, focusItems, onChanged, onNotesSaved }) {
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -131,7 +131,7 @@ export function ClientNotesBubble({ userId, client, focusItems, onChanged }) {
               >
                 Notes
               </Text>
-              <GamePlan ref={notesRef} userId={userId} initialGamePlan={client?.game_plan} />
+              <GamePlan ref={notesRef} userId={userId} initialGamePlan={client?.game_plan} onSaved={onNotesSaved} />
 
               <Text
                 className="mb-2 mt-5 text-xs uppercase"

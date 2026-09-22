@@ -505,6 +505,17 @@ export default function NutritionClientDetail() {
     }
   };
 
+  // Notes autosave, so the page's own copy of the client row has to move
+  // with them. Patched locally rather than reloaded: a full load() on every
+  // 700ms debounce would be absurd, and every surface that shows the note
+  // (the Dashboard card, the Check-In rail, the floating bubble and its
+  // "there's something written" dot) reads this one field. Without it the
+  // write landed but every one of those kept rendering the pre-edit text,
+  // which is indistinguishable from autosave not working.
+  const handleNotesSaved = useCallback((value) => {
+    setClient((prev) => (prev ? { ...prev, game_plan: value } : prev));
+  }, []);
+
   // The picker hands back a week; the tab navigates by offset from the
   // current one. daysBetween is A-minus-B, so current-minus-selected is
   // positive going back in time — which is the direction weekOffset counts.
@@ -794,6 +805,7 @@ export default function NutritionClientDetail() {
             userId={userId}
             coachId={profile.id}
             client={client}
+            onNotesSaved={handleNotesSaved}
             logs={logs}
             currentTarget={currentTarget}
             focusItems={focusItems}
@@ -855,6 +867,7 @@ export default function NutritionClientDetail() {
           <NutritionCheckinTab
             userId={userId}
             client={client}
+            onNotesSaved={handleNotesSaved}
             checkin={checkin}
             priorCheckin={priorCheckin}
             templateQuestions={templateQuestions}
@@ -986,7 +999,7 @@ export default function NutritionClientDetail() {
         onSelectOnboarding={handleSelectOnboarding}
         onboardingSubmittedAt={onboarding?.response?.submitted_at ?? null}
       />
-      <ClientNotesBubble userId={userId} client={client} focusItems={focusItems} onChanged={load} />
+      <ClientNotesBubble userId={userId} client={client} focusItems={focusItems} onChanged={load} onNotesSaved={handleNotesSaved} />
       <CoachMessageBubble userId={userId} clientName={client.name} />
     </CoachShell>
   );
