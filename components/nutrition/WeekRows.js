@@ -1,5 +1,5 @@
-import { memo, useCallback, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, useWindowDimensions } from "react-native";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, Pressable, ScrollView, TextInput, useWindowDimensions } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { colorForTarget, colorForStepsTarget } from "../../lib/nutrition/weekCycle";
@@ -64,6 +64,11 @@ const NOTE_FLEX = 2.4;
 // not a style choice — see the note cell below for why the table's width
 // depends on it.
 const NOTE_MAX_WIDTH = 320;
+// A blank day's "nothing logged" when the weight cell sits before it: every
+// column after weight, plus the note.
+const BLANK_REST_FLEX = DAY_COLUMNS.slice(1).reduce((sum, c) => sum + c.flex, 0) + NOTE_FLEX;
+const BLANK_REST_MIN = DAY_COLUMNS.slice(1).reduce((sum, c) => sum + c.min, 0) + 150;
+const BLANK_TEXT = { fontFamily: fonts.sans, fontSize: 12, color: MUTED, fontStyle: "italic", opacity: 0.55 };
 // The point below which the table stops flexing and starts scrolling.
 const TABLE_MIN_WIDTH =
   DAY_COL_WIDTH + DAY_COLUMNS.reduce((sum, c) => sum + c.min, 0) + 150;
@@ -181,7 +186,128 @@ const CHECKIN_STATE = {
   closed: { label: "Closed out", color: MUTED },
 };
 
-function DayTable({ week, target }) {
+// A day's weight, editable by the coach. Hovering shows a pencil (web); a
+// click or tap turns the number into an input in place. Enter or clicking
+// away saves, Escape cancels, and an emptied box clears the weight. Works on
+// a blank day too, which is how a coach fills in a weight the member never
+// logged.
+//
+// `onSave` resolves once the page has reloaded, so the typed value is shown
+// (dimmed) until the real one replaces it rather than flicking back to the
+// old number mid-save.
+function WeightCell({ date, value, col, onSave }) {
+  const [hover, setHover] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [pending, setPending] = useState(null); // { text } while a save is in flight
+  const [saved, setSaved] = useState(false);
+  const [invalid, setInvalid] = useState(false);
+  // Escape blurs the input, and blur is also "save". This tells the blur
+  // that follows an Escape (or an Enter that already saved) to do nothing.
+  const settled = useRef(false);
+
+  useEffect(() => {
+    if (!saved) return undefined;
+    const t = setTimeout(() => setSaved(false), 1500);
+    return () => clearTimeout(t);
+  }, [saved]);
+
+  const start = () => {
+    if (pending) return;
+    settled.current = false;
+    setInvalid(false);
+    setDraft(value === null || value === undefined ? "" : String(value));
+    setEditing(true);
+  };
+
+  const commit = async () => {
+    if (settled.current) return;
+    const text = draft.trim();
+    const next = text === "" ? null : Number(text);
+    if (next !== null && (!Number.isFinite(next) || next <= 0 || next >= 1000)) {
+      setInvalid(true);
+      return;
+    }
+    settled.current = true;
+    setEditing(false);
+    setHover(false);
+    const current = value === null || value === undefined ? null : Number(value);
+    if (next === current) return;
+    setPending({ text: next === null ? "—" : fmt(next, col.digits) });
+    const ok = await onSave(date, next);
+    setPending(null);
+    if (ok) setSaved(true);
+  };
+
+  const cancel = () => {
+    settled.current = true;
+    setEditing(false);
+    setHover(false);
+  };
+
+  const box = { flex: col.flex, minWidth: col.min, flexDirection: "row", alignItems: "center" };
+
+  if (editing) {
+    return (
+      <View style={box}>
+        <TextInput
+          value={draft}
+          onChangeText={(t) => {
+            setDraft(t);
+            setInvalid(false);
+          }}
+          autoFocus
+          selectTextOnFocus
+          keyboardType="decimal-pad"
+          maxLength={6}
+          onSubmitEditing={commit}
+          onBlur={commit}
+          onKeyPress={(e) => {
+            if (e.nativeEvent.key === "Escape") cancel();
+          }}
+          accessibilityLabel="Weight"
+          style={{
+            width: 52,
+            minWidth: 0,
+            paddingHorizontal: 5,
+            paddingVertical: 2,
+            marginLeft: -6,
+            borderWidth: 1,
+            borderRadius: 5,
+            borderColor: invalid ? OFF : "#a46a57",
+            backgroundColor: "white",
+            fontFamily: fonts.sans,
+            fontSize: 12,
+            color: "#2a211c",
+            outlineStyle: "none",
+          }}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={start}
+      onHoverIn={() => setHover(true)}
+      onHoverOut={() => setHover(false)}
+      accessibilityRole="button"
+      accessibilityLabel={value === null || value === undefined ? "Add weight" : `Edit weight, ${fmt(value, col.digits)}`}
+      style={box}
+    >
+      <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: fonts.sans, fontSize: 12, color: "#57534e", opacity: pending ? 0.5 : 1 }}>
+        {pending ? pending.text : fmt(value, col.digits)}
+      </Text>
+      {saved ? (
+        <Ionicons name="checkmark" size={12} color={OK} style={{ marginLeft: 3 }} />
+      ) : hover && !pending ? (
+        <Ionicons name="pencil" size={11} color="#a46a57" style={{ marginLeft: 3 }} />
+      ) : null}
+    </Pressable>
+  );
+}
+
+function DayTable({ week, target, onSaveWeight }) {
   const byDate = Object.fromEntries(week.summary.days.map((d) => [d.date, d]));
   const dates = Array.from({ length: 7 }, (_, i) => week.dates[i]);
   // Which day's note is opened out to its full text. One at a time.
@@ -222,12 +348,18 @@ function DayTable({ week, target }) {
               // sit on the note's first line instead of floating halfway
               // down a three-line block.
               className={openNote === date ? "flex-row items-start" : "flex-row items-center"}
-              style={{ paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#f6f3ef", opacity: day ? 1 : 0.55 }}
+              style={{ paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#f6f3ef" }}
             >
-              <Text style={{ width: DAY_COL_WIDTH, fontFamily: fonts.sansSemiBold, fontSize: 12, color: day ? "#44403c" : MUTED }}>{weekday}</Text>
+              {/* A blank day dims its label and "nothing logged" rather than the
+                  whole row, so the weight cell (editable on a blank day too)
+                  and its input stay at full strength. */}
+              <Text style={{ width: DAY_COL_WIDTH, fontFamily: fonts.sansSemiBold, fontSize: 12, color: day ? "#44403c" : MUTED, opacity: day ? 1 : 0.55 }}>{weekday}</Text>
               {day ? (
                 DAY_COLUMNS.map((col) => {
                   const value = day[col.key] ?? null;
+                  if (col.key === "weight" && onSaveWeight) {
+                    return <WeightCell key={col.key} date={date} value={value} col={col} onSave={onSaveWeight} />;
+                  }
                   const tone = col.targetKey ? colorFor(col.key, value, targetValue(target, col.targetKey)) : null;
                   return (
                     <Text
@@ -247,7 +379,12 @@ function DayTable({ week, target }) {
                   );
                 })
               ) : (
-                <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12, color: MUTED, fontStyle: "italic" }}>nothing logged</Text>
+                <>
+                  {onSaveWeight ? <WeightCell date={date} value={null} col={DAY_COLUMNS[0]} onSave={onSaveWeight} /> : null}
+                  {/* Spans exactly the columns after weight, so the weight
+                      cell lines up with the weight column above and below. */}
+                  <Text style={onSaveWeight ? { flex: BLANK_REST_FLEX, minWidth: BLANK_REST_MIN, ...BLANK_TEXT } : { flex: 1, ...BLANK_TEXT }}>nothing logged</Text>
+                </>
               )}
               {/* client_note, not note — `day` is a raw public.daily_logs
                   row and there is no `note` column, so this rendered "—"
@@ -344,7 +481,7 @@ function DayTable({ week, target }) {
 // Measure this with a MutationObserver, never a setTimeout poll: the
 // preview browser clamps timers to ~1s while hidden, which reports every
 // interaction as a flat 999ms whatever the truth is.
-export const WeekRow = memo(function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, phasesEnabled, notesEnabled, onOpenTab }) {
+export const WeekRow = memo(function WeekRow({ week, expanded, onToggle, phase, targetChange, notes, phasesEnabled, notesEnabled, onOpenTab, onSaveWeight }) {
   const target = week.target;
   const avgWeight = week.summary.averages.weight;
   // Full macro names where there is room for them, the P/C/F/f shorthand
@@ -469,7 +606,7 @@ export const WeekRow = memo(function WeekRow({ week, expanded, onToggle, phase, 
 
           {expanded ? (
             <View className="px-4 pb-4">
-              <DayTable week={week} target={target} />
+              <DayTable week={week} target={target} onSaveWeight={onSaveWeight} />
             </View>
           ) : null}
         </View>
@@ -494,6 +631,7 @@ export function WeekRows({
   onAddNote,
   onUpdateNote,
   onDeleteNote,
+  onSaveWeight,
 }) {
   const [expanded, setExpanded] = useState(() => (weeks.length > 0 ? weeks[0].start : null));
   // One popup for the whole list, held here rather than per row: sixty
@@ -507,6 +645,12 @@ export function WeekRows({
   // per row is a new prop on every render, which defeats it entirely.
   const handleToggle = useCallback((start) => setExpanded((cur) => (cur === start ? null : start)), []);
   const handleOpenTab = useCallback((w, kind, anchor, note) => setPopup({ kind, week: w, anchor, note: note ?? null }), []);
+  // The page hands down a fresh arrow every render; routing it through a
+  // ref keeps the prop WeekRow sees stable, for the same memo reason.
+  const saveWeightRef = useRef(onSaveWeight);
+  saveWeightRef.current = onSaveWeight;
+  const weightEditable = typeof onSaveWeight === "function";
+  const handleSaveWeight = useCallback((date, weight) => saveWeightRef.current(date, weight), []);
 
   // Resolved once per marker change rather than per render: resolveWeekPhase
   // builds a fresh object each call, and a new object every render is the
@@ -549,6 +693,7 @@ export function WeekRows({
           phasesEnabled={phasesEnabled}
           notesEnabled={notesEnabled}
           onOpenTab={handleOpenTab}
+          onSaveWeight={weightEditable ? handleSaveWeight : undefined}
         />
       ))}
 

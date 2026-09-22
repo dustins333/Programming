@@ -1841,3 +1841,67 @@ unmount with zero writes issued beforehand, and a new phase card on screen 60ms
 after Enter. Console errors checked in a **fresh tab** (the pane's log
 accumulates stale errors across reloads). **Terra confirmed both live** before
 this was committed.
+
+## Weeks tab: coach can edit a day's weight (2026-09-21)
+
+Terra asked for a coach to be able to fix a client's weight from the Weeks
+tab. Her first idea was two taps (click the weight, a pencil appears, click
+the pencil to edit). It shipped as one: hovering a day's weight in the
+expanded day table shows a small pencil, and clicking (or tapping on a phone)
+turns the number into an input in place. Enter or clicking away saves, Escape
+cancels, an emptied box clears the weight, and a check mark shows for 1.5s
+after a save. A value that isn't a number between 0 and 1000 turns the border
+red and doesn't save. The two-tap version was dropped because a click on that
+cell did nothing before, so a "selected" state would only have added a click;
+nothing changes until the coach types and commits anyway.
+
+Decisions Terra made: a coach **can** add a weight to a blank day; emptying
+clears it; the member is **not** shown that the coach changed it (there is no
+column recording who edited a log, so it reads as theirs); weight only, no
+other columns.
+
+- Only the per-day weight is editable. The number on the collapsed week row
+  is the week's average, which recalculates (as does the +/- delta and the
+  Avg row) after the page reloads.
+- `setLogWeight` (`lib/nutrition/dailyLog.js`) upserts only
+  `{client_id, date, weight}` on `client_id,date`. PostgREST's merge upsert
+  updates only the named columns, so the member's macros, notes and
+  `finalized_at` survive; on a blank day it creates a weight-only row
+  (macros have been nullable since the standalone app's 0014).
+- Clearing the weight on a row that then holds nothing deletes the row, or
+  the day would keep counting as logged in "x of 7". The delete re-checks
+  every data column and `finalized_at IS NULL` in its own filter rather than
+  trusting what the screen loaded, so a member logging that day meanwhile
+  keeps their row. `DATA_COLUMNS` there must match the live table: checked
+  against `information_schema` on the day (id, client_id, date, weight, the
+  four macros, calories_override, steps, sleep_hours, sleep_quality, hunger,
+  energy, client_note, coach_note, created_at, finalized_at). **If a column is
+  ever added to `public.daily_logs`, add it to `DATA_COLUMNS`** or clearing a
+  weight could delete a row holding only that column.
+- No migration: the standalone app's `coach can manage daily logs` policy
+  (`is_coach()`, all commands) already allows it, and the table has no
+  triggers.
+- `WeekRows` takes an optional `onSaveWeight`; without it the cell renders as
+  plain text like before. It goes through a ref + `useCallback` so `WeekRow`'s
+  memo still holds. A blank day now dims only its label and "nothing logged"
+  instead of the whole row, so the weight input isn't drawn at 55% opacity,
+  and "nothing logged" spans exactly the columns after weight so the weight
+  cell lines up with the column.
+
+Verified: clean `npm run build` and a Babel scope/unused-import pass on all
+three files. Drove the real `WeekRows` through a throwaway `app/zz-harness.js`
+(deleted) with fake data: hover pencil, edit + Enter, add on a blank day +
+click away (dimmed pending value shows mid-save), clear, invalid input, and
+Escape, with the averages updating. As coach test2, in rolled-back
+transactions against the live table: the coach upsert passes RLS, an edit
+kept the member's other values, the guarded delete removed an emptied
+weight-only row and left a row that still had data; zero test rows remained.
+Not driven against the real client page while signed in.
+
+Browser-pane gotchas hit: its `key` action doesn't deliver `Return`,
+`Backspace` or `Delete` to an input (use `Enter`, or type a space over a
+selection to empty it), and it swallows its own `Escape`; dispatching a
+`KeyboardEvent` from `javascript_tool` reaches the input fine. RNW's
+`selectTextOnFocus` selects in a `setTimeout(0)`, which the hidden pane
+throttles to ~1s, so typing straight after focusing appends instead of
+replacing. Wait before typing.

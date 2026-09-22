@@ -9,7 +9,7 @@ import { getClient, sendOnboardingToClient } from "../../../../lib/nutrition/cli
 import { listCoaches } from "../../../../lib/programming/clients";
 import { getSpcClient, isSpcActive } from "../../../../lib/programming/spcClients";
 import { listTargets, diffTargets } from "../../../../lib/nutrition/targets";
-import { listLogs } from "../../../../lib/nutrition/dailyLog";
+import { listLogs, setLogWeight } from "../../../../lib/nutrition/dailyLog";
 import {
   getCheckinForWeek,
   finalizeCheckin,
@@ -463,6 +463,19 @@ export default function NutritionClientDetail() {
 
   const handleDeleteWeekNote = (id) => runPhaseChange(() => deleteWeekNote(id), "Failed to remove the label");
 
+  // A day's weight, fixed or filled in from the day table. Resolves true once
+  // the page has reloaded, so the cell can confirm the save.
+  const handleSaveWeight = async (date, weight) => {
+    try {
+      await setLogWeight(userId, date, weight);
+      await load();
+      return true;
+    } catch (err) {
+      toastError("Failed to save the weight", err);
+      return false;
+    }
+  };
+
   // Goes straight into Approve & Set Targets right after bypassing, rather
   // than leaving the coach to remember to come back and set one later.
   const handleCloseOut = async () => {
@@ -811,6 +824,7 @@ export default function NutritionClientDetail() {
               onAddNote={handleAddWeekNote}
               onUpdateNote={handleUpdateWeekNote}
               onDeleteNote={handleDeleteWeekNote}
+              onSaveWeight={handleSaveWeight}
             />
             {maxWeeks > WEEKS_SHOWN ? (
               <Pressable onPress={() => setShowAllWeeks((v) => !v)} className="mt-2 self-start">
