@@ -148,6 +148,7 @@ export function NutritionCheckinTab({
   focusItems,
   isWide,
   onChanged,
+  onNotesSaved,
   onChangeHighlights,
   onOpenPhotos,
   onOpenTargets,
@@ -279,7 +280,7 @@ export function NutritionCheckinTab({
 
         <View style={{ width: isWide ? 300 : undefined }}>
           <Card title="Notes" style={{ marginBottom: 16 }}>
-            <GamePlan userId={userId} initialGamePlan={client.game_plan} />
+            <GamePlan userId={userId} initialGamePlan={client.game_plan} onSaved={onNotesSaved} />
           </Card>
 
           <Card title="Focus" style={{ marginBottom: 16 }}>
