@@ -31,6 +31,8 @@ import { getSetting } from "../../../lib/settings";
 import { toastError, toastSuccess } from "../../../lib/toast";
 import { useAuth } from "../../../lib/auth/AuthProvider";
 import { NewBlockModal } from "../../../components/NewBlockModal";
+import { PushBlockModal } from "../../../components/PushBlockModal";
+import { isTrialProgram } from "../../../lib/programming/pushBlock";
 import { NewGroupProgramModal } from "../../../components/NewGroupProgramModal";
 import { FinalizeBlockModal } from "../../../components/FinalizeBlockModal";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
@@ -414,6 +416,7 @@ function BlocksDesktop() {
   const [newBlockOpen, setNewBlockOpen] = useState(false);
   const [newBlockProgramId, setNewBlockProgramId] = useState(null);
   const [newProgramOpen, setNewProgramOpen] = useState(false);
+  const [pushOpen, setPushOpen] = useState(false);
   const [editProgramOpen, setEditProgramOpen] = useState(false);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
@@ -758,6 +761,17 @@ function BlocksDesktop() {
             >
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Block history</Text>
             </PressFade>
+            {/* Trial Group's way out: coaches trial a block on themselves,
+                then push it in as another program's next block. Only ever
+                from the trial program, never back into it (Terra's call). */}
+            {isTrialProgram(selected?.program) && programData.length > 1 ? (
+              <PressFade
+                onPress={() => setPushOpen(true)}
+                style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: "#fff" }}
+              >
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Push to…</Text>
+              </PressFade>
+            ) : null}
             <PressFade
               onPress={() => setNewBlockOpen(true)}
               style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: "#fff" }}
@@ -1005,6 +1019,21 @@ function BlocksDesktop() {
           gymDefaultLength={gymDefaultLength}
           onClose={() => setNewBlockOpen(false)}
           onSubmit={handleCreateBlock}
+        />
+        <PushBlockModal
+          visible={pushOpen}
+          sourceProgram={selected?.program}
+          programs={programData.map((d) => d.program)}
+          createdBy={profile?.id}
+          onClose={() => setPushOpen(false)}
+          onPushed={async ({ block, mode, sessions, targetName }) => {
+            toastSuccess(
+              `${mode === "fill" ? "Filled" : "Created"} ${targetName}'s block starting ${formatDateMD(block.block_start_date)} (${sessions} session${sessions === 1 ? "" : "s"})`
+            );
+            await load();
+            setSelectedProgramId(block.group_program_id);
+            router.setParams({ program: block.group_program_id });
+          }}
         />
         <NewGroupProgramModal visible={newProgramOpen} onClose={() => setNewProgramOpen(false)} onSubmit={handleCreateProgram} />
         <NewGroupProgramModal
