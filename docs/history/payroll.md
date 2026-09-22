@@ -682,3 +682,56 @@ harness and it becomes a *height*, and the card's background stops mid-content
 while the children spill out below it. That looked exactly like a real
 overflow bug for one screenshot. A harness has to reproduce the container, not
 just the component.
+
+## Callie's cleaning pay added to an already-closed period (2026-09-17)
+
+Not a code change. A one-row data fix, recorded because it is the first
+deliberate write into a closed period and the next session should know how it
+was done and why that was allowed.
+
+Terra closed the 9/3–9/16 period at 3:14 PM Boise, then realised four minutes
+later that Callie White's cleaning pay had never been entered. Closing is the
+audit-grade lock (`closePayPeriod` — RLS refuses every write to a closed
+period, admin included, and there is deliberately no reopen path in the app),
+so the modal that would normally do this, `AddPayeeModal`, had no way to reach
+the period any more.
+
+Three options were put to her: write it in directly, un-close the period and
+re-close it after adding through the app, or park it in the open 9/17–9/30
+period. She chose the direct write — no money had moved yet, and the record
+being right for 9/3–9/16 was the point.
+
+**What was written.** One `payroll.pay_entries` row, shaped exactly as
+`createAdminEntry` would have written it: `user_id` null, `staff_name`
+`Callie White`, `staff_email` `callie888@gmail.com` (the grouping key her 8/20
+row already uses, and the email the Gusto skill matches on), `source`
+`admin_entry`, `custom_amt` 120, `custom_description` `Cleaning`,
+`created_by` Terra, and `entry_date` `2026-09-16` — the period's last day,
+which is what `clampToPeriod(todayInBoise(), '2026-09-03')` yields on 9/17.
+Plus `pay_periods.staff_pay` bumped 5441.45 → 5561.45, because the closing
+snapshot is stored read-only and Callie counts as staff, not owner (the close
+loop keys owner pay on an `admin` role, and an unlinked payee has no role).
+
+**How.** The Supabase CLI was authenticated and linked this session, and the
+`postgres` role bypasses RLS. Worth knowing: the closed-period lock is
+**RLS-only** — `payroll.pay_entries` carries no triggers — so a superuser
+write needs nothing disabled and leaves no lock to restore.
+
+**Guards, because this was money into a locked period.** The whole thing ran
+as one `do $$ ... $$` block inside a transaction that aborts if Callie already
+has any row in that period (so a re-run cannot double-pay her) or if
+`staff_pay` is not still 5441.45 (so it cannot be applied twice, or on top of
+someone else's edit). Dry-run with `rollback` first, confirmed nothing was left
+behind, then committed. `closed_at`/`closed_by` were left untouched — the close
+is still Terra's, at the time she made it.
+
+**Verified**: the row reads back as written, the snapshot totals 7561.45 with
+owner pay, and both report screens load a period through
+`listEntriesForPeriodAllStaff` rather than the snapshot, so the line shows in
+the review table, the report and the CSV export.
+
+**Worth generalising**: the honest fix for a closed period is a direct write
+with an idempotence guard and the stored snapshot updated in the same
+transaction. Reopening a period to edit it rewrites `closed_at`/`closed_by`
+and quietly turns one close into two, which is worse for the audit trail than
+the write it was trying to avoid.
