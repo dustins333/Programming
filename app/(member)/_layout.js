@@ -215,7 +215,7 @@ function MemberTabs({ showFitnessTab, showNutritionTab, showEventsTab, unseenEve
         name="back-to-coaching"
         options={{
           title: "Coaching",
-          tabBarIcon: TabIcon("briefcase"),
+          tabBarIcon: TabIcon("clipboard"),
           tabBarLabel: TabLabel("Coaching"),
           href: isStaff ? undefined : null,
         }}

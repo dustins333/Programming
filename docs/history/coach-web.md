@@ -1603,3 +1603,7 @@ entirely from the questionnaire. `npm run build` + `check:routes` clean, Babel
 parse + unresolved-identifier pass clean over all five files. **Not verified
 behind a real login** — standing limitation; worth Terra re-editing one of
 Ashley's questions to confirm.
+
+## Coaching tab icon: briefcase to clipboard (2026-09-21)
+
+The staff-only "Coaching" tab in the member tab bar (`app/(member)/_layout.js`, `back-to-coaching`) used Ionicons `briefcase`; coaches did not like it, so it is now `clipboard` (outline when unfocused, filled when focused, same as every other tab). Other options considered: people, stopwatch (clashes with the rest timer), easel, swap-horizontal, return-up-back, grid.
