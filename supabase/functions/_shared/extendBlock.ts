@@ -42,7 +42,10 @@ export const SPC_BLOCK_KIND: BlockKind = {
   exerciseFields: ["exercise_id", "position", "sets", "reps", "notes", "superset_group_id", "rep_scheme", "rest"],
 };
 
-const WARMUP_FIELDS = ["exercise_id", "position", "label", "sets", "reps", "notes"];
+// Mirrors warmupCopyFields in lib/programming/workouts.js. superset_group_id
+// was missing, so a rolling block quietly flattened a superset warm-up into
+// separate rows every time it grew a week.
+const WARMUP_FIELDS = ["exercise_id", "position", "label", "sets", "reps", "notes", "superset_group_id"];
 
 function addDays(dateString: string, days: number) {
   const d = new Date(dateString + "T00:00:00");

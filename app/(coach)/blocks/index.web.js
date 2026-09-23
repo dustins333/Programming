@@ -33,6 +33,8 @@ import { useAuth } from "../../../lib/auth/AuthProvider";
 import { NewBlockModal } from "../../../components/NewBlockModal";
 import { PushBlockModal } from "../../../components/PushBlockModal";
 import { isTrialProgram } from "../../../lib/programming/pushBlock";
+import { TrialWorkbench } from "../../../components/coach/TrialWorkbench";
+import { getTrialState, startTrial, endTrial } from "../../../lib/programming/trial";
 import { NewGroupProgramModal } from "../../../components/NewGroupProgramModal";
 import { FinalizeBlockModal } from "../../../components/FinalizeBlockModal";
 import { CoachShell, MOBILE_BREAKPOINT } from "../../../components/CoachShell";
@@ -417,6 +419,11 @@ function BlocksDesktop() {
   const [newBlockProgramId, setNewBlockProgramId] = useState(null);
   const [newProgramOpen, setNewProgramOpen] = useState(false);
   const [pushOpen, setPushOpen] = useState(false);
+  // The trial bench replaces the grid for a program flagged is_trial (0134).
+  // Its own state, loaded on demand, so a non-trial program pays nothing.
+  const [trial, setTrial] = useState(null);
+  const [trialShowing, setTrialShowing] = useState("current");
+  const [trialBusy, setTrialBusy] = useState(false);
   const [editProgramOpen, setEditProgramOpen] = useState(false);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
@@ -493,6 +500,24 @@ function BlocksDesktop() {
       load();
     }, [load])
   );
+
+  const selectedProgram = programData?.find((d) => d.program.id === selectedProgramId)?.program ?? null;
+  const onBench = isTrialProgram(selectedProgram);
+
+  const loadTrial = useCallback(async () => {
+    if (!selectedProgram || !isTrialProgram(selectedProgram)) return;
+    try {
+      setTrial(await getTrialState(selectedProgram));
+    } catch (err) {
+      toastError("Failed to load the trial bench", err);
+    }
+  }, [selectedProgram]);
+
+  useEffect(() => {
+    setTrial(null);
+    setTrialShowing("current");
+    loadTrial();
+  }, [loadTrial]);
 
   useEffect(() => {
     if (!programData || programData.length === 0) return;
@@ -597,7 +622,7 @@ function BlocksDesktop() {
     }
   };
 
-  const handleUpdateProgram = async ({ name, sessionsPerWeek, sessionDays, hubEnabled }) => {
+  const handleUpdateProgram = async ({ name, sessionsPerWeek, sessionDays, hubEnabled, isTrial }) => {
     try {
       // block_length_weeks deliberately not written here — a program no
       // longer carries an editable default length. It's picked per block.
@@ -606,6 +631,7 @@ function BlocksDesktop() {
         sessions_per_week: sessionsPerWeek,
         session_days: sessionDays,
         hub_enabled: Boolean(hubEnabled),
+        is_trial: Boolean(isTrial),
       });
       await load();
     } catch (err) {
@@ -622,6 +648,33 @@ function BlocksDesktop() {
   const handleStartGapBlock = () => {
     setNewBlockProgramId(selected?.program?.id ?? null);
     setNewBlockOpen(true);
+  };
+
+  const handleStartTrial = async () => {
+    setTrialBusy(true);
+    try {
+      await startTrial({ program: selectedProgram, createdBy: profile.id, startDate: trial?.nextAvailableMonday });
+      await loadTrial();
+      setTrialShowing("current");
+      toastSuccess("New trial started");
+    } catch (err) {
+      toastError("Failed to start the trial", err);
+    } finally {
+      setTrialBusy(false);
+    }
+  };
+
+  const handleEndTrial = async () => {
+    setTrialBusy(true);
+    try {
+      await endTrial(trial.current.block.id);
+      await loadTrial();
+      toastSuccess("This trial finishes at the end of the week");
+    } catch (err) {
+      toastError("Failed to end the trial", err);
+    } finally {
+      setTrialBusy(false);
+    }
   };
 
   const handlePublishSelected = async () => {
@@ -729,6 +782,7 @@ function BlocksDesktop() {
   }
 
   const today = todayInBoise();
+  const benchSide = (trialShowing === "next" ? trial?.next : trial?.current) ?? null;
   const sessionsPerWeek = selected?.program.sessions_per_week ?? 3;
   const columnWidth = 264;
   const gridWidth = sessionsPerWeek * columnWidth + (sessionsPerWeek - 1) * 14;
@@ -761,23 +815,16 @@ function BlocksDesktop() {
             >
               <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Block history</Text>
             </PressFade>
-            {/* Trial Group's way out: coaches trial a block on themselves,
-                then push it in as another program's next block. Only ever
-                from the trial program, never back into it (Terra's call). */}
-            {isTrialProgram(selected?.program) && programData.length > 1 ? (
+            {/* The bench makes its own blocks (a rolling one-week trial) and
+                carries its own Push button, so neither belongs up here. */}
+            {onBench ? null : (
               <PressFade
-                onPress={() => setPushOpen(true)}
+                onPress={() => setNewBlockOpen(true)}
                 style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: "#fff" }}
               >
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>Push to…</Text>
+                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>+ New block</Text>
               </PressFade>
-            ) : null}
-            <PressFade
-              onPress={() => setNewBlockOpen(true)}
-              style={{ borderWidth: 1, borderColor: "#d9d4cd", borderRadius: 9, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: "#fff" }}
-            >
-              <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>+ New block</Text>
-            </PressFade>
+            )}
           </View>
         </View>
 
@@ -832,7 +879,22 @@ function BlocksDesktop() {
           ) : null}
         </View>
 
-        {selected ? (
+        {selected && onBench ? (
+          <TrialWorkbench
+            state={trial}
+            program={selected.program}
+            today={today}
+            busy={trialBusy}
+            showing={trialShowing}
+            onShow={setTrialShowing}
+            onOpenSession={(session) => router.push(`/(coach)/builder/${session.id}`)}
+            onPush={() => setPushOpen(true)}
+            onStartTrial={handleStartTrial}
+            onEndTrial={handleEndTrial}
+          />
+        ) : null}
+
+        {selected && !onBench ? (
           <>
             <BlockBand
               program={selected.program}
@@ -1023,14 +1085,18 @@ function BlocksDesktop() {
         <PushBlockModal
           visible={pushOpen}
           sourceProgram={selected?.program}
+          sourceBlock={benchSide?.block}
+          sourceWeekNumber={benchSide?.weekNumber}
+          sessions={benchSide?.sessions}
           programs={programData.map((d) => d.program)}
           createdBy={profile?.id}
           onClose={() => setPushOpen(false)}
           onPushed={async ({ block, mode, sessions, targetName }) => {
             toastSuccess(
-              `${mode === "fill" ? "Filled" : "Created"} ${targetName}'s block starting ${formatDateMD(block.block_start_date)} (${sessions} session${sessions === 1 ? "" : "s"})`
+              `${mode === "fill" ? "Filled" : "Created"} ${targetName}'s block starting ${formatDateMD(block.block_start_date)} (${sessions} session${sessions === 1 ? "" : "s"}). This trial finishes out the week.`
             );
             await load();
+            await loadTrial();
             setSelectedProgramId(block.group_program_id);
             router.setParams({ program: block.group_program_id });
           }}

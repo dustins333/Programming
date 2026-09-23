@@ -5,7 +5,7 @@ import { DEFAULT_SESSION_DAYS } from "../lib/programming/schedule";
 import { NUMERIC_DONE_ID } from "./NumericInputAccessory";
 import { KeyboardDoneButton } from "./KeyboardDoneButton";
 
-const DEFAULTS = { name: "", sessionsPerWeek: "3", sessionDays: DEFAULT_SESSION_DAYS, hubEnabled: false };
+const DEFAULTS = { name: "", sessionsPerWeek: "3", sessionDays: DEFAULT_SESSION_DAYS, hubEnabled: false, isTrial: false };
 
 function fromProgram(program) {
   return {
@@ -13,6 +13,7 @@ function fromProgram(program) {
     sessionsPerWeek: String(program.sessions_per_week),
     sessionDays: resizeSessionDays(program.session_days ?? DEFAULT_SESSION_DAYS, program.sessions_per_week),
     hubEnabled: Boolean(program.hub_enabled),
+    isTrial: Boolean(program.is_trial),
   };
 }
 
@@ -52,6 +53,7 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
         sessionsPerWeek: Number(form.sessionsPerWeek) || 3,
         sessionDays: form.sessionDays,
         hubEnabled: form.hubEnabled,
+        isTrial: form.isTrial,
       });
       onClose();
     } finally {
@@ -122,6 +124,21 @@ export function NewGroupProgramModal({ visible, initialProgram, onClose, onSubmi
               value={form.hubEnabled}
               onValueChange={(hubEnabled) => setForm((f) => ({ ...f, hubEnabled }))}
             />
+          </View>
+
+          {/* The bench (0134). A program with this on swaps the week grid
+              for the trial workbench, and is the only program a block can be
+              pushed FROM. Normally exactly one program has it. */}
+          <View className="mb-6 flex-row items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-4 py-3">
+            <View className="flex-1 pr-3">
+              <Text className="text-sm text-stone-700" style={{ fontFamily: "Montserrat_500Medium" }}>
+                Trial bench
+              </Text>
+              <Text className="mt-0.5 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+                Where coaches build and try the next block before pushing it to a group.
+              </Text>
+            </View>
+            <Switch value={form.isTrial} onValueChange={(isTrial) => setForm((f) => ({ ...f, isTrial }))} />
           </View>
 
           <View className="flex-row justify-end gap-3">

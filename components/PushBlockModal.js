@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { Modal, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { addDays } from "../lib/boiseDate";
-import { formatDateMD, formatDateRange } from "../lib/formatDate";
-import { listPushableBlocks, planPush, pushBlockToProgram, isTrialProgram } from "../lib/programming/pushBlock";
+import { formatDateRange } from "../lib/formatDate";
+import { planPush, pushBlockToProgram, isTrialProgram } from "../lib/programming/pushBlock";
 import { WeeksStepper } from "./WeeksStepper";
 
-// "Push to…" from the Group Programs page: a trialed block becomes the next
-// block of another program. The rules (never overwrite, same sessions a week,
-// repeat the source's weeks to fill) live in lib/programming/pushBlock.js;
-// this only lets the coach pick and shows where it will land.
+// "Push to…" from the trial bench: the sessions on the bench right now become
+// another program's next block. The rules (never overwrite, same sessions a
+// week, this week's version repeated to fill) live in
+// lib/programming/pushBlock.js; this picks the target and says where it lands.
 
 function Pill({ active, disabled, onPress, children }) {
   return (
@@ -33,9 +33,7 @@ function Label({ children }) {
   );
 }
 
-export function PushBlockModal({ visible, sourceProgram, programs, createdBy, onClose, onPushed }) {
-  const [sources, setSources] = useState(null);
-  const [sourceBlockId, setSourceBlockId] = useState(null);
+export function PushBlockModal({ visible, sourceProgram, sourceBlock, sourceWeekNumber, sessions, programs, createdBy, onClose, onPushed }) {
   const [targetId, setTargetId] = useState(null);
   const [plan, setPlan] = useState(null);
   const [lengthWeeks, setLengthWeeks] = useState("6");
@@ -48,22 +46,9 @@ export function PushBlockModal({ visible, sourceProgram, programs, createdBy, on
 
   useEffect(() => {
     if (!visible || !sourceProgram) return;
-    setSources(null);
     setError(null);
     setPublish(false);
-    const first = targets.find(matches);
-    setTargetId(first?.id ?? null);
-    let cancelled = false;
-    listPushableBlocks(sourceProgram.id)
-      .then((list) => {
-        if (cancelled) return;
-        setSources(list);
-        setSourceBlockId(list[0]?.block.id ?? null);
-      })
-      .catch((err) => !cancelled && setError(err.message ?? String(err)));
-    return () => {
-      cancelled = true;
-    };
+    setTargetId(targets.find(matches)?.id ?? null);
     // Opening default only, like NewBlockModal's.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, sourceProgram?.id]);
@@ -88,16 +73,17 @@ export function PushBlockModal({ visible, sourceProgram, programs, createdBy, on
   }, [visible, targetId]);
 
   const target = targets.find((p) => p.id === targetId) ?? null;
-  const source = sources?.find((s) => s.block.id === sourceBlockId) ?? null;
+  const built = (sessions ?? []).filter((s) => (s.lifts?.length ?? 0) > 0);
   const length = plan?.mode === "fill" ? plan.lengthWeeks : Number(lengthWeeks);
-  const ready = Boolean(source && target && plan && length >= 1);
+  const ready = Boolean(sourceBlock && built.length > 0 && target && plan && length >= 1);
 
   const handlePush = async () => {
     setSaving(true);
     setError(null);
     try {
       const result = await pushBlockToProgram({
-        sourceBlockId,
+        sourceBlockId: sourceBlock.id,
+        sourceWeekNumber,
         targetProgramId: targetId,
         lengthWeeks: length,
         publish,
@@ -120,45 +106,29 @@ export function PushBlockModal({ visible, sourceProgram, programs, createdBy, on
             Push to another program
           </Text>
           <Text className="mb-4 text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
-            Copies a {sourceProgram?.name} block in as the next block of the program you pick. Nothing already
-            programmed gets changed.
+            The sessions on the bench right now become the next block of the program you pick, repeated across its
+            weeks. Nothing already programmed gets changed, and this trial closes out.
           </Text>
 
-          <Label>Block to push</Label>
-          {sources === null && !error ? (
-            <ActivityIndicator style={{ alignSelf: "flex-start", marginBottom: 16 }} />
-          ) : sources?.length ? (
-            <View className="mb-4 gap-2">
-              {sources.map(({ block, titles, weeks }) => {
-                const active = block.id === sourceBlockId;
-                return (
-                  <Pressable
-                    key={block.id}
-                    onPress={() => setSourceBlockId(block.id)}
-                    className={`rounded-xl border px-3.5 py-2.5 ${active ? "border-primary bg-primary" : "border-stone-300"}`}
-                  >
-                    <Text className={active ? "text-white" : "text-stone-800"} style={{ fontFamily: "Montserrat_600SemiBold", fontSize: 13 }}>
-                      Week of {formatDateMD(block.block_start_date)}
-                      {weeks > 1 ? ` · ${weeks} weeks` : ""}
-                    </Text>
-                    {titles.length ? (
-                      <Text
-                        numberOfLines={1}
-                        className={active ? "text-white" : "text-stone-500"}
-                        style={{ fontFamily: "Montserrat_400Regular", fontSize: 12, marginTop: 2 }}
-                      >
-                        {titles.join(" · ")}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : (
-            <Text className="mb-4 text-sm text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
-              {sourceProgram?.name} has no blocks with anything in them yet.
-            </Text>
-          )}
+          <Label>What goes out</Label>
+          <View className="mb-4 gap-1.5 rounded-xl border border-stone-300 px-3.5 py-3">
+            {built.length === 0 ? (
+              <Text className="text-sm text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+                Nothing on the bench has any lifts in it yet.
+              </Text>
+            ) : (
+              built.map((session) => (
+                <View key={session.id} className="flex-row items-baseline justify-between gap-3">
+                  <Text numberOfLines={1} className="flex-1 text-sm text-stone-800" style={{ fontFamily: "Montserrat_600SemiBold" }}>
+                    {session.title || `Session ${session.session_number}`}
+                  </Text>
+                  <Text className="text-xs text-stone-500" style={{ fontFamily: "Montserrat_400Regular" }}>
+                    {session.lifts.length} lift{session.lifts.length === 1 ? "" : "s"}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
 
           <Label>Push to</Label>
           <View className="mb-1 flex-row flex-wrap gap-2">
@@ -199,9 +169,7 @@ export function PushBlockModal({ visible, sourceProgram, programs, createdBy, on
                   : plan.lastBlock
                     ? `A new ${target.name} block, starting the Monday after its current one ends.`
                     : `A new ${target.name} block, starting this week.`}
-                {source && source.weeks < length
-                  ? ` The ${source.weeks === 1 ? "week" : `${source.weeks} weeks`} you trialed ${source.weeks === 1 ? "repeats" : "repeat"} across all ${length} weeks.`
-                  : ""}
+                {` These ${built.length} session${built.length === 1 ? "" : "s"} repeat across all ${length} weeks.`}
                 {plan.endsRolling ? ` ${target.name}'s current block stops adding weeks on its own.` : ""}
               </Text>
             </View>
