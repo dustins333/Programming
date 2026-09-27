@@ -9,9 +9,12 @@ import { OnboardingCheckinView } from "./OnboardingCheckinView";
 import { FocusChecklist } from "./FocusChecklist";
 import { pairAnswers, metricDeltas } from "../../lib/nutrition/checkinAnswers";
 import { getPhotoSignedUrls, photosForRequirementWeek } from "../../lib/nutrition/photos";
-import { checkinMondayForWeek } from "../../lib/nutrition/weekCycle";
+import { checkinMondayForWeek, computeWeekWindows } from "../../lib/nutrition/weekCycle";
+import { getCheckinForWeek } from "../../lib/nutrition/checkin";
+import { setOneOffPhotoWeek } from "../../lib/nutrition/clients";
+import { addDays, formatDateTimeInBoise, todayInBoise } from "../../lib/boiseDate";
+import { toastError } from "../../lib/toast";
 import { formatDateMDY } from "../../lib/formatDate";
-import { formatDateTimeInBoise } from "../../lib/boiseDate";
 import { fonts, colors } from "../../lib/theme";
 
 // The Check-In tab (coach web v2, screen 22): what came in, what it's
@@ -126,6 +129,74 @@ function CheckinPhotos({ photos, weekWeight, onOpenPhotos }) {
   );
 }
 
+// "Require pics" for a client with no photo schedule: makes photos required
+// on their very next check-in, once. Hidden for a scheduled client (the
+// cadence already covers them, and the one column can hold only one extra
+// week). "Next" is this week's check-in if they haven't sent it yet, so it
+// lands on the one they're about to do; if it's already in, the week after.
+function RequirePicsCard({ userId, client, onClientPatched }) {
+  const today = todayInBoise();
+  const { currentWeek } = computeWeekWindows(today);
+  const [targetWeekStart, setTargetWeekStart] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCheckinForWeek(userId, currentWeek.start)
+      .then((row) => {
+        if (!cancelled) setTargetWeekStart(row ? addDays(currentWeek.start, 7) : currentWeek.start);
+      })
+      .catch(() => {
+        if (!cancelled) setTargetWeekStart(currentWeek.start);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, currentWeek.start]);
+
+  const onSchedule = !!client.photo_frequency && client.photo_frequency !== "off";
+  if (onSchedule || !targetWeekStart) return null;
+
+  // A flag on an earlier week has already been used up, so it doesn't count.
+  const flagged = client.photo_requirement_next_checkin;
+  const active = !!flagged && flagged >= targetWeekStart;
+
+  const save = async (weekStart) => {
+    setSaving(true);
+    try {
+      await setOneOffPhotoWeek(userId, weekStart);
+      onClientPatched({ photo_requirement_next_checkin: weekStart });
+    } catch (err) {
+      toastError("Couldn't update the photo requirement", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title="Progress pics" style={{ marginBottom: 16 }}>
+      {/* One button that flips green with a check once set; tapping it
+          again takes the requirement back off. */}
+      <Pressable
+        onPress={() => save(active ? null : targetWeekStart)}
+        disabled={saving}
+        className="flex-row items-center justify-center rounded-lg py-2.5"
+        style={{ gap: 6, backgroundColor: active ? "#4d6142" : colors.primary, opacity: saving ? 0.5 : 1 }}
+      >
+        <Ionicons name={active ? "checkmark-circle" : "camera-outline"} size={16} color="white" />
+        <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold, fontSize: 13 }}>
+          {active ? "Pics required" : "Require pics"}
+        </Text>
+      </Pressable>
+      <Text className="mt-2" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
+        {active
+          ? `On the ${formatDateMDY(checkinMondayForWeek(flagged))} check-in. Tap again to undo.`
+          : `Not on a photo schedule. This makes pics required on the ${formatDateMDY(checkinMondayForWeek(targetWeekStart))} check-in only.`}
+      </Text>
+    </Card>
+  );
+}
+
 export function NutritionCheckinTab({
   userId,
   client,
@@ -149,6 +220,7 @@ export function NutritionCheckinTab({
   isWide,
   onChanged,
   onNotesSaved,
+  onClientPatched,
   onChangeHighlights,
   onOpenPhotos,
   onOpenTargets,
@@ -279,6 +351,8 @@ export function NutritionCheckinTab({
         </View>
 
         <View style={{ width: isWide ? 300 : undefined }}>
+          <RequirePicsCard userId={userId} client={client} onClientPatched={onClientPatched} />
+
           <Card title="Notes" style={{ marginBottom: 16 }}>
             <GamePlan userId={userId} initialGamePlan={client.game_plan} onSaved={onNotesSaved} />
           </Card>

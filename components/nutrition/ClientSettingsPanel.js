@@ -1,33 +1,40 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { router } from "expo-router";
-import { toastError, toastSuccess } from "../../lib/toast";
+import { Ionicons } from "@expo/vector-icons";
+import { toastError } from "../../lib/toast";
 import { updateClient } from "../../lib/nutrition/clients";
-import { getClientQuestions, addClientQuestion, updateClientQuestion, deleteClientQuestion, listTemplateQuestions } from "../../lib/nutrition/checkin";
+import { getClientQuestions, addClientQuestion, updateClientQuestion, deleteClientQuestion } from "../../lib/nutrition/checkin";
 import { addDays, dateInBoise } from "../../lib/boiseDate";
 import { formatDateMDY } from "../../lib/formatDate";
 import { CADENCE_WEEKS } from "../../lib/nutrition/photos";
-import { checkinMondayForWeek, weekStartForCheckinMonday, mondayOnOrAfter } from "../../lib/nutrition/weekCycle";
+import { checkinMondayForWeek, weekStartForCheckinMonday, mondayOnOrAfter, computeWeekWindows } from "../../lib/nutrition/weekCycle";
 import { MondayPicker } from "../MondayPicker";
+import { DateField } from "../DateField";
 import { SegmentedControl } from "../SegmentedControl";
 import { QuestionListEditor } from "./QuestionListEditor";
-import { CheckinWeekTimeline } from "./CheckinWeekTimeline";
+import { CheckinWeekTimeline, CheckinStatusStrip } from "./CheckinWeekTimeline";
 import { CoachAssignmentField } from "./CoachAssignmentField";
 import { confirmRemoveQuestion } from "../../lib/confirmDialog";
 import { fonts, colors } from "../../lib/theme";
 
-// The Settings tab (coach web v2, screen 25) — off the gear icon, onto a
-// tab. Replaces ClientSettingsModal outright: the same fields, but a
-// three-card page instead of a scrolling dialog. The modal had to cram a
-// dense form, a question editor and a check-in timeline into a fixed 85%
-// viewport height, which is why both of the latter two were collapsed
-// behind expanders by default.
+// The Settings tab (coach web v2, screen 25). Redesigned 2026-09-27:
+//
+// - Everything saves the moment it changes. There used to be a "Save
+//   settings" button for the Client and Photo cards only, while the question
+//   editor and the check-in actions below it already saved on their own, so
+//   half the page needed a button and half didn't. A small "Saved" line in
+//   the Client card header is the confirmation now.
+// - The two long lists (check-in questions, check-in history) are folded
+//   away by default, so the page is one screen tall until the coach
+//   actually wants a list. Folded history still shows one dot per week.
+// - The photo calendar only opens to change the start week; the rest of the
+//   time the schedule reads as a sentence plus its next few due dates.
 //
 // The Client card is deliberately just start date / assigned coach / status.
 // Name and phone were editable here originally and were pulled per direct
 // ask — a client's name comes in from the GHL import and isn't something a
-// coach edits from the nutrition record. Neither is written by handleSave
-// any more, so both columns are simply left alone.
+// coach edits from the nutrition record.
 
 const STATUS_OPTIONS = [
   { key: "active", label: "Active" },
@@ -47,39 +54,86 @@ const FREQUENCIES = [
   { key: "bimonthly", label: "Every 8 weeks" },
 ];
 
-function Card({ title, children, style }) {
+const CARD_STYLE = {
+  borderWidth: 1,
+  borderColor: "#ece7e1",
+  backgroundColor: "white",
+  shadowColor: "#44403c",
+  shadowOffset: { width: 0, height: 3 },
+  shadowOpacity: 0.05,
+  shadowRadius: 10,
+  elevation: 1,
+};
+
+function IconBubble({ name }) {
   return (
-    <View
-      className="rounded-2xl p-5"
-      style={[
-        {
-          borderWidth: 1,
-          borderColor: "#ece7e1",
-          backgroundColor: "white",
-          shadowColor: "#44403c",
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.05,
-          shadowRadius: 10,
-          elevation: 1,
-        },
-        style,
-      ]}
-    >
-      <Text
-        className="mb-4"
-        style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}
-      >
-        {title}
-      </Text>
-      {children}
+    <View className="items-center justify-center" style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#fdf6f2" }}>
+      <Ionicons name={name} size={16} color={colors.primaryOnWhite} />
     </View>
   );
 }
 
-function Field({ label, children }) {
+function CardHeader({ icon, title, subtitle, right }) {
   return (
-    <View className="mb-4">
-      <Text className="mb-1.5" style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
+    <View className="flex-row items-center" style={{ gap: 12 }}>
+      <IconBubble name={icon} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: fonts.sansBold, fontSize: 15, color: "#2a211c" }}>{title}</Text>
+        {subtitle ? (
+          <Text className="mt-0.5" style={{ fontFamily: fonts.sans, fontSize: 12, color: "#a8a29e" }}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {right}
+    </View>
+  );
+}
+
+function Card({ icon, title, subtitle, right, children, style }) {
+  return (
+    <View className="rounded-2xl p-5" style={[CARD_STYLE, style]}>
+      <CardHeader icon={icon} title={title} subtitle={subtitle} right={right} />
+      <View className="mt-4">{children}</View>
+    </View>
+  );
+}
+
+// A card that stays folded to its header until asked. `summary` is what the
+// header shows in place of the list, so folded still answers something.
+function CollapsibleCard({ icon, title, subtitle, summary, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View className="rounded-2xl" style={CARD_STYLE}>
+      <Pressable onPress={() => setOpen((v) => !v)} className="p-5">
+        <CardHeader
+          icon={icon}
+          title={title}
+          subtitle={subtitle}
+          right={
+            <View className="flex-row items-center" style={{ gap: 6 }}>
+              <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: colors.primaryOnWhite }}>{open ? "Hide" : "Show"}</Text>
+              <Ionicons name={open ? "chevron-up" : "chevron-down"} size={15} color={colors.primaryOnWhite} />
+            </View>
+          }
+        />
+        {!open && summary ? <View className="mt-4" style={{ paddingLeft: 44 }}>{summary}</View> : null}
+      </Pressable>
+      {open ? (
+        <View className="px-5 pb-5">
+          <View className="mb-4" style={{ height: 1, backgroundColor: "#f1ede8" }} />
+          {children}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// One labelled setting inside a card, with a hairline between neighbours.
+function SettingRow({ label, children, last }) {
+  return (
+    <View className="py-3" style={last ? undefined : { borderBottomWidth: 1, borderBottomColor: "#f1ede8" }}>
+      <Text className="mb-2" style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
         {label}
       </Text>
       {children}
@@ -87,18 +141,32 @@ function Field({ label, children }) {
   );
 }
 
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: "#ddd6cd",
-  borderRadius: 10,
-  paddingHorizontal: 14,
-  paddingVertical: 12,
-  fontFamily: fonts.sans,
-  fontSize: 14,
-  backgroundColor: "white",
-};
+function SaveIndicator({ state }) {
+  if (state === "idle") return null;
+  const saving = state === "saving";
+  return (
+    <View className="flex-row items-center" style={{ gap: 4 }}>
+      {saving ? null : <Ionicons name="checkmark" size={13} color="#4d6142" />}
+      <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11.5, color: saving ? "#a8a29e" : "#4d6142" }}>{saving ? "Saving…" : "Saved"}</Text>
+    </View>
+  );
+}
 
-export function ClientSettingsPanel({ userId, coachId, coaches = [], client, checkins = [], reopens = [], closeouts = [], photos = [], today, isWide, questionnaireSubmittedAt = null, onSaved }) {
+export function ClientSettingsPanel({
+  userId,
+  coachId,
+  coaches = [],
+  client,
+  checkins = [],
+  reopens = [],
+  closeouts = [],
+  photos = [],
+  today,
+  isWide,
+  questionnaireSubmittedAt = null,
+  onSaved,
+  onClientPatched,
+}) {
   const [startDate, setStartDate] = useState(client.start_date ?? "");
   const [status, setStatus] = useState(client.status ?? "active");
   const [assignedCoachId, setAssignedCoachId] = useState(client.coach_id ?? null);
@@ -112,13 +180,9 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
   const [firstCheckinMonday, setFirstCheckinMonday] = useState(() =>
     client.photo_frequency_started_at ? checkinMondayForWeek(mondayOnOrAfter(client.photo_frequency_started_at)) : null
   );
-  const [oneOffMonday, setOneOffMonday] = useState(() =>
-    client.photo_requirement_next_checkin ? checkinMondayForWeek(client.photo_requirement_next_checkin) : null
-  );
-  const [pickingOneOff, setPickingOneOff] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [pickingStart, setPickingStart] = useState(false);
+  const [saveState, setSaveState] = useState("idle");
   const [questions, setQuestions] = useState([]);
-  const [templateQuestions, setTemplateQuestions] = useState(null);
 
   const projectedMondays = useMemo(() => {
     if (frequency === "off" || !firstCheckinMonday) return [];
@@ -128,9 +192,7 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
 
   const loadQuestions = useCallback(async () => {
     try {
-      const [own, template] = await Promise.all([getClientQuestions(userId), listTemplateQuestions()]);
-      setQuestions(own);
-      setTemplateQuestions(template);
+      setQuestions(await getClientQuestions(userId));
     } catch (err) {
       console.error("Failed to load check-in questions:", err);
     }
@@ -149,36 +211,71 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
     setFirstCheckinMonday(
       client.photo_frequency_started_at ? checkinMondayForWeek(mondayOnOrAfter(client.photo_frequency_started_at)) : null
     );
-    setOneOffMonday(client.photo_requirement_next_checkin ? checkinMondayForWeek(client.photo_requirement_next_checkin) : null);
-    setPickingOneOff(false);
   }, [client]);
 
   useEffect(() => {
     loadQuestions();
   }, [loadQuestions]);
 
-  const handleSave = async () => {
-    setSaving(true);
+  // Every control saves its own field(s) straight away. The parent's client
+  // is patched rather than reloaded, so the header badge and the other tabs
+  // agree immediately without a full-page refetch. On failure the full
+  // reload puts every control back to what's actually stored.
+  const saveFields = async (fields) => {
+    setSaveState("saving");
     try {
-      const freqValue = frequency === "off" || !firstCheckinMonday ? null : frequency;
-      await updateClient(userId, {
-        start_date: startDate,
-        status,
-        coach_id: assignedCoachId,
-        photo_frequency: freqValue,
-        // Stored as the week being checked in about, not the check-in Monday
-        // the coach picked — everything downstream (isPhotoRequirementWeek,
-        // checkin_responses.week_start) works in week-start terms.
-        photo_frequency_started_at: freqValue ? weekStartForCheckinMonday(firstCheckinMonday) : null,
-        photo_requirement_next_checkin: oneOffMonday ? weekStartForCheckinMonday(oneOffMonday) : null,
-      });
-      await onSaved();
-      toastSuccess("Client settings saved");
+      await updateClient(userId, fields);
+      onClientPatched?.(fields);
+      setSaveState("saved");
     } catch (err) {
-      toastError("Failed to save", err);
-    } finally {
-      setSaving(false);
+      toastError("Couldn't save", err);
+      setSaveState("idle");
+      await onSaved();
     }
+  };
+
+  const handleStartDate = (value) => {
+    setStartDate(value);
+    saveFields({ start_date: value });
+  };
+  const handleCoach = (value) => {
+    setAssignedCoachId(value);
+    saveFields({ coach_id: value });
+  };
+  const handleStatus = (value) => {
+    if (value === status) return;
+    setStatus(value);
+    saveFields({ status: value });
+  };
+
+  // Stored as the week being checked in about, not the check-in Monday the
+  // coach picked — everything downstream (isPhotoRequirementWeek,
+  // checkin_responses.week_start) works in week-start terms.
+  const saveSchedule = (freq, monday) =>
+    saveFields({
+      photo_frequency: freq === "off" ? null : freq,
+      photo_frequency_started_at: freq === "off" ? null : weekStartForCheckinMonday(monday),
+    });
+
+  const handleFrequency = (key) => {
+    if (key === frequency) return;
+    setFrequency(key);
+    if (key === "off") {
+      setPickingStart(false);
+      saveSchedule("off", null);
+      return;
+    }
+    // Turning a cadence on needs a start week to mean anything. Default to
+    // her next check-in, so it's live straight away; the calendar is one tap
+    // away if it should start later.
+    const monday = firstCheckinMonday ?? checkinMondayForWeek(computeWeekWindows(today).currentWeek.start);
+    setFirstCheckinMonday(monday);
+    saveSchedule(key, monday);
+  };
+
+  const handleStartMonday = (monday) => {
+    setFirstCheckinMonday(monday);
+    saveSchedule(frequency, monday);
   };
 
   const nextPosition = (list) => (list.length > 0 ? Math.max(...list.map((q) => q.position)) + 1 : 1);
@@ -203,40 +300,38 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
     await loadQuestions();
   };
 
-  // Which of her questions came from the gym template vs. were written for
-  // custom to this client — the same split the Check-In tab badges as CUSTOM, matched
-  // on question text since a client's copy is physical, not a live join
-  // (copyTemplateToClient).
-  const templateTexts = useMemo(
-    () => (templateQuestions ? new Set(templateQuestions.map((q) => q.question_text.trim().toLowerCase())) : null),
-    [templateQuestions]
-  );
-  const customCount = templateTexts
-    ? questions.filter((q) => !templateTexts.has((q.question_text ?? "").trim().toLowerCase())).length
-    : 0;
+  // A one-off week set from the Check-In tab that hasn't been used up yet:
+  // not in the past, and not already filed.
+  const flagged = client.photo_requirement_next_checkin;
+  const oneOffWeek =
+    flagged && today && flagged >= computeWeekWindows(today).currentWeek.start && !checkins.some((c) => c.week_start === flagged)
+      ? flagged
+      : null;
 
-  const nextCheckinMonday = projectedMondays.find((d) => d >= today) ?? null;
+  const upcomingDue = today ? projectedMondays.filter((d) => d >= today).slice(0, 4) : [];
+  const cadenceLabel = FREQUENCIES.find((f) => f.key === frequency)?.label ?? "";
 
   return (
-    <View>
-      <View style={{ flexDirection: isWide ? "row" : "column", gap: 18 }}>
+    <View style={{ gap: 18 }}>
+      <View style={{ flexDirection: isWide ? "row" : "column", gap: 18, alignItems: isWide ? "flex-start" : "stretch" }}>
         {/* NOT `flex: 0` — react-native-web compiles that to `flex: 0 1 0%`,
-            and the 0% basis collapses the explicit width to nothing. This
-            card rendered as a sliver with every label stacked one letter per
-            line. Same trap the member v5 pass documented; spell out grow and
-            shrink instead. */}
-        <Card title="Client" style={isWide ? { flexGrow: 0, flexShrink: 0, width: 320 } : undefined}>
-          <Field label="Start date">
-            <TextInput value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor="#c9c4bd" style={inputStyle} />
-          </Field>
-          <Field label="Assigned coach">
-            {/* The Field wrapper already supplies the label. */}
-            <CoachAssignmentField value={assignedCoachId} coaches={coaches} onChange={setAssignedCoachId} label={null} />
-          </Field>
-          <Field label="Status">
-            <SegmentedControl segments={STATUS_OPTIONS} activeKey={status} onSelect={setStatus} />
-          </Field>
-
+            and the 0% basis collapses the explicit width to nothing. Spell
+            out grow and shrink instead. */}
+        <Card
+          icon="person-outline"
+          title="Client"
+          right={<SaveIndicator state={saveState} />}
+          style={isWide ? { flexGrow: 0, flexShrink: 0, width: 340 } : undefined}
+        >
+          <SettingRow label="Start date">
+            <DateField value={startDate || null} onChange={handleStartDate} minDate="2000-01-01" maxWidth={240} />
+          </SettingRow>
+          <SettingRow label="Assigned coach">
+            <CoachAssignmentField value={assignedCoachId} coaches={coaches} onChange={handleCoach} label={null} />
+          </SettingRow>
+          <SettingRow label="Status">
+            <SegmentedControl segments={STATUS_OPTIONS} activeKey={status} onSelect={handleStatus} dense />
+          </SettingRow>
           {/* The onboarding questionnaire is answered once and then kept
               forever, but the only screen that renders it hangs off the
               Onboarding tab — which disappears the moment a client is
@@ -245,7 +340,7 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
               permanent way back to them, deliberately here rather than on
               Onboarding, since Settings is the one tab that never goes
               away. No extra fetch: the parent already loads the response. */}
-          <Field label="Original questionnaire">
+          <SettingRow label="Original questionnaire" last>
             {questionnaireSubmittedAt ? (
               <Pressable
                 onPress={() => router.push(`/(coach)/nutrition/clients/${userId}/onboarding/questionnaire`)}
@@ -257,151 +352,137 @@ export function ClientSettingsPanel({ userId, coachId, coaches = [], client, che
                   {/* dateInBoise, never .slice(0, 10) — submitted_at is a
                       timestamptz, and slicing the ISO string reads the UTC
                       date, which is already tomorrow for anything submitted
-                      in the Boise evening. Abbi Stauffer's real row is
-                      exactly that case (01:29Z = 19:29 the previous day). */}
+                      in the Boise evening. */}
                   <Text className="mt-0.5" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
                     Submitted {formatDateMDY(dateInBoise(new Date(questionnaireSubmittedAt)))}
                   </Text>
                 </View>
-                <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: colors.primaryOnWhite }}>›</Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.primaryOnWhite} />
               </Pressable>
             ) : (
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
-                Never submitted.
-              </Text>
+              <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>Never submitted.</Text>
             )}
-          </Field>
+          </SettingRow>
         </Card>
 
-        <Card title="Check-in & photo schedule" style={{ flex: 1 }}>
-          <View style={{ flexDirection: isWide ? "row" : "column", gap: 20 }}>
-            <View style={{ flex: 1 }}>
-              <Field label="Progress photo frequency">
-                <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-                  {FREQUENCIES.map((f) => {
-                    const active = frequency === f.key;
-                    return (
-                      <Pressable
-                        key={f.key}
-                        onPress={() => setFrequency(f.key)}
-                        className="rounded-lg px-3.5 py-2"
-                        style={{ borderWidth: 1, borderColor: active ? "#2a211c" : "#ddd6cd", backgroundColor: active ? "#2a211c" : "white" }}
-                      >
-                        <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: active ? "white" : "#57534e" }}>{f.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </Field>
-
-              {frequency !== "off" ? (
-                <>
-                  <Field label="Starting the week of">
-                    <View className="rounded-lg px-3.5 py-3" style={{ borderWidth: 1, borderColor: "#ece7e1", backgroundColor: colors.canvas }}>
-                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 14, color: firstCheckinMonday ? "#2a211c" : "#a8a29e" }}>
-                        {firstCheckinMonday ? formatDateMDY(firstCheckinMonday) : "Pick a Monday on the calendar →"}
-                      </Text>
-                    </View>
-                    <Text className="mt-2" style={{ fontFamily: fonts.sans, fontSize: 11.5, color: "#a8a29e" }}>
-                      Dotted Mondays on the calendar are the weeks photos will actually land on, so the cadence is visible while you pick it.
-                    </Text>
-                  </Field>
-
+        {/* The right column holds everything else, so the two long lists
+            fold up beside the Client card instead of trailing below it. */}
+        <View style={isWide ? { flex: 1, minWidth: 0, gap: 18 } : { gap: 18 }}>
+          <Card
+            icon="camera-outline"
+            title="Progress photo schedule"
+            subtitle={frequency === "off" ? "Not on a schedule" : `${cadenceLabel}, starting with the ${formatDateMDY(firstCheckinMonday)} check-in`}
+          >
+            <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+              {FREQUENCIES.map((f) => {
+                const active = frequency === f.key;
+                return (
                   <Pressable
-                    onPress={() => setPickingOneOff((v) => !v)}
-                    className="items-center rounded-lg py-3"
-                    style={{ borderWidth: 1, borderColor: "#ddd6cd", backgroundColor: "white" }}
+                    key={f.key}
+                    onPress={() => handleFrequency(f.key)}
+                    className="rounded-full px-4 py-2"
+                    style={{ borderWidth: 1, borderColor: active ? "#2a211c" : "#ddd6cd", backgroundColor: active ? "#2a211c" : "white" }}
                   >
-                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#44403c" }}>
-                      {pickingOneOff ? "Done picking" : oneOffMonday ? `Extra week: ${formatDateMDY(oneOffMonday)}` : "+ Add a one-off check-in week"}
-                    </Text>
+                    <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: active ? "white" : "#57534e" }}>{f.label}</Text>
                   </Pressable>
-                  {oneOffMonday ? (
-                    <Pressable onPress={() => { setOneOffMonday(null); setPickingOneOff(false); }} className="mt-2 self-center" hitSlop={8}>
-                      <Text style={{ fontFamily: fonts.sansMedium, fontSize: 12, color: "#b23a22" }}>Clear the extra week</Text>
-                    </Pressable>
-                  ) : null}
-                </>
-              ) : (
-                <Text style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#a8a29e" }}>
-                  No progress photos are required on any cadence.
-                </Text>
-              )}
+                );
+              })}
             </View>
 
-            {frequency !== "off" ? (
-              <View>
-                {nextCheckinMonday ? (
-                  <Text className="mb-2" style={{ fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#57534e" }}>
-                    Next photos due {formatDateMDY(nextCheckinMonday)}
+            {frequency === "off" ? (
+              // Off says nothing, unless a one-off week is pending from the
+              // Check-In tab's Require pics, which would otherwise be
+              // invisible from here.
+              oneOffWeek ? (
+                <View className="mt-5 flex-row items-center rounded-xl px-4 py-3.5" style={{ gap: 10, backgroundColor: "#f3f6ef" }}>
+                  <Ionicons name="camera" size={16} color="#4d6142" />
+                  <Text style={{ flex: 1, fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#4d6142" }}>
+                    Pics required on the {formatDateMDY(checkinMondayForWeek(oneOffWeek))} check-in
                   </Text>
-                ) : null}
-                <MondayPicker
-                  value={pickingOneOff ? oneOffMonday : firstCheckinMonday}
-                  onChange={pickingOneOff ? setOneOffMonday : setFirstCheckinMonday}
-                  markedDates={pickingOneOff ? projectedMondays : projectedMondays}
-                />
-                <View className="mt-2 flex-row flex-wrap items-center" style={{ gap: 12 }}>
-                  <View className="flex-row items-center" style={{ gap: 5 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>
-                      {pickingOneOff ? "Extra week" : "First check-in"}
-                    </Text>
-                  </View>
-                  <View className="flex-row items-center" style={{ gap: 5 }}>
-                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#4d6142" }} />
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>Photos due</Text>
-                  </View>
                 </View>
+              ) : null
+            ) : (
+              <View className="mt-5">
+                <Text className="mb-2" style={{ fontFamily: fonts.sansBold, fontSize: 10.5, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Photos due
+                </Text>
+                <View className="flex-row flex-wrap items-center" style={{ gap: 8 }}>
+                  {upcomingDue.map((d, i) => (
+                    <View
+                      key={d}
+                      className="flex-row items-center rounded-lg px-3 py-2"
+                      style={{ gap: 6, backgroundColor: i === 0 ? "#f3f6ef" : colors.canvas, borderWidth: 1, borderColor: i === 0 ? "#cfdac6" : "#ece7e1" }}
+                    >
+                      <Ionicons name="camera" size={12} color={i === 0 ? "#4d6142" : "#a8a29e"} />
+                      <Text style={{ fontFamily: i === 0 ? fonts.sansSemiBold : fonts.sans, fontSize: 12.5, color: i === 0 ? "#4d6142" : "#57534e" }}>
+                        {formatDateMDY(d)}
+                      </Text>
+                      {i === 0 ? <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#4d6142" }}>next</Text> : null}
+                    </View>
+                  ))}
+                </View>
+
+                <Pressable onPress={() => setPickingStart((v) => !v)} className="mt-4 flex-row items-center self-start" style={{ gap: 5 }} hitSlop={6}>
+                  <Ionicons name="calendar-outline" size={14} color={colors.primaryOnWhite} />
+                  <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12.5, color: colors.primaryOnWhite }}>
+                    {pickingStart ? "Done" : "Change start week"}
+                  </Text>
+                </Pressable>
+
+                {pickingStart ? (
+                  <View className="mt-3">
+                    <MondayPicker value={firstCheckinMonday} onChange={handleStartMonday} markedDates={projectedMondays} />
+                    <View className="mt-2 flex-row flex-wrap items-center" style={{ gap: 12 }}>
+                      <View className="flex-row items-center" style={{ gap: 5 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
+                        <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>First check-in</Text>
+                      </View>
+                      <View className="flex-row items-center" style={{ gap: 5 }}>
+                        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#4d6142" }} />
+                        <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: "#a8a29e" }}>Photos due</Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
               </View>
-            ) : null}
-          </View>
-        </Card>
-      </View>
+            )}
+          </Card>
 
-      <View className="mt-4 flex-row justify-end" style={{ gap: 10 }}>
-        <Pressable onPress={handleSave} disabled={saving} className="rounded-lg px-5 py-3" style={{ backgroundColor: colors.primary, opacity: saving ? 0.5 : 1 }}>
-          <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-            {saving ? "Saving…" : "Save settings"}
-          </Text>
-        </Pressable>
-      </View>
-
-      <View className="mt-4">
-        <Card title="Check-in questions">
-          <Text className="mb-3" style={{ fontFamily: fonts.sans, fontSize: 12.5, color: "#78716c" }}>
-            {templateTexts === null
-              ? "This client's own copy — editing here doesn't affect the shared template or any other client."
-              : `${questions.length - customCount} come from the gym template in Settings. ${customCount === 0 ? "None are" : customCount === 1 ? "One is" : `${customCount} are`} custom to this client. Editing here doesn't affect the template or any other client.`}
-          </Text>
-          <QuestionListEditor
-            questions={questions}
-            onAdd={handleAddQuestion}
-            onUpdate={handleUpdateQuestion}
-            onDelete={handleDeleteQuestion}
-            onMove={handleMoveQuestion}
-            choicesEnabled
-            bookingEnabled
-          />
-        </Card>
-      </View>
-
-      <View className="mt-4">
-        <Card title="Check-in status">
-          {today ? (
-            <CheckinWeekTimeline
-              userId={userId}
-              coachId={coachId}
-              client={client}
-              checkins={checkins}
-              reopens={reopens}
-              closeouts={closeouts}
-              photos={photos}
-              today={today}
-              onChanged={onSaved}
+          <CollapsibleCard
+            icon="chatbubble-ellipses-outline"
+            title="Check-in questions"
+          >
+            <QuestionListEditor
+              questions={questions}
+              onAdd={handleAddQuestion}
+              onUpdate={handleUpdateQuestion}
+              onDelete={handleDeleteQuestion}
+              onMove={handleMoveQuestion}
+              choicesEnabled
+              bookingEnabled
             />
+          </CollapsibleCard>
+
+          {today ? (
+            <CollapsibleCard
+              icon="calendar-outline"
+              title="Check-in history"
+              summary={<CheckinStatusStrip client={client} checkins={checkins} reopens={reopens} closeouts={closeouts} today={today} />}
+            >
+              <CheckinWeekTimeline
+                userId={userId}
+                coachId={coachId}
+                client={client}
+                checkins={checkins}
+                reopens={reopens}
+                closeouts={closeouts}
+                photos={photos}
+                today={today}
+                onChanged={onSaved}
+              />
+            </CollapsibleCard>
           ) : null}
-        </Card>
+        </View>
       </View>
     </View>
   );

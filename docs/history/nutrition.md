@@ -2048,3 +2048,34 @@ Give the two branches different component types, or the test proves nothing.
 Also worth knowing: `<PrepNotes>` on the onboarding tracking screen is the one
 notes field on the coach side that genuinely does not autosave. It has an
 explicit "Save notes" button by design.
+
+## Check-in: photo skip removed (2026-09-27)
+
+Terra: "If they can't submit pics, then they can't submit their check-in." The "I can't provide photos this week" escape hatch is gone from the member check-in, on both the live week and a coach-reopened missed week: the link under the photo task, the link inside the upload popup, the `SkipReasonModal`, and the skip-reason state. On a photo week the photo task is now satisfied only by all three angles (`hasAllAngles`), so the check-in cannot auto-send or be sent until they're in.
+
+The gate is enforced in `lib/nutrition/checkin.js`'s `submitCheckin` too, not just the UI: the `photosSkipReason` option is removed, and a photo week without all three angles always throws. `hasStartedCheckin` in `lib/nutrition/checkinProgress.js` lost its `skipReason` input.
+
+Old check-ins submitted with a skip still carry their "Progress photos this week: Not provided ..." answer in `checkin_responses.answers`; nothing reads that specially, so they render as a normal answer and were left alone. Verified with `npm run build` and a Babel unresolved-identifier / unused-import pass over the three files; not driven in the browser.
+
+## Check-In tab: "Require pics" for unscheduled clients (2026-09-27)
+
+The one-off photo week had been in the Settings tab's "Check-in & photo schedule" card, but only rendered when a cadence was picked, which is backwards: a scheduled client is already covered, and the client who needs a one-off is the one on **Off** (Bob Getsinger was the example). Terra: it should only show when they are NOT on a schedule, on the Check-In tab, right above Notes.
+
+- **New `RequirePicsCard`** inside `components/nutrition/NutritionCheckinTab.js`, first in the right rail. Returns null for any client with a cadence (`photo_frequency` set and not `"off"`). Otherwise a "Require pics" button that writes `clients.photo_requirement_next_checkin` for the **very next check-in**: `computeWeekWindows().currentWeek.start` if that week has no `checkin_responses` row yet, else the week after. Once set, the same button turns green with a check ("Pics required"), with "On the MM-DD-YYYY check-in. Tap again to undo." under it (check-in Monday, same labeling as the tab header); tapping it again clears the column. A first pass used a green text line plus a separate Undo link; Terra preferred the button itself flipping green. A flag on an earlier week counts as used up, so the button comes back.
+- **New `setOneOffPhotoWeek(userId, weekStart)`** in `lib/nutrition/clients.js`, selecting the row back and throwing on 0 rows (RLS-filtered UPDATE gotcha). The parent patches its `client` state through a new `onClientPatched` prop.
+- **Removed from Settings**: the "+ Add a one-off check-in week" button, the Extra-week picker mode, and `photo_requirement_next_checkin` from `handleSave`'s patch. Settings no longer writes that column at all, so a Settings save made from a stale panel can't wipe a requirement set on the Check-In tab.
+- No member notification is sent when pics are required; the member simply sees the photo task on their next check-in (which, after the skip removal above, can't be sent without them).
+
+Verified: `npm run build`, Babel unresolved-identifier/unused-import pass on the four touched files, and a throwaway `app/zz-harness.js` rendering the tab in three states (Off, Off already required, Weekly). Both Off states rendered correctly and the Weekly one showed no card. The button's actual write was not exercised (the harness has no signed-in coach).
+
+## Settings tab redesign + autosave (2026-09-27)
+
+Terra: the check-in questions and check-in history should be collapsed until wanted, the page shouldn't be "scrolling lists and random boxes," and why is there a Save button at all. Functionality unchanged; layout and saving reworked in `components/nutrition/ClientSettingsPanel.js`.
+
+- **Autosave.** The "Save settings" button is gone. Start date (now a `DateField` calendar instead of a typed `YYYY-MM-DD` box, `minDate="2000-01-01"` since start dates are in the past), assigned coach, status, photo cadence and start week each save the moment they change via `updateClient`, and a "Saving… / ✓ Saved" line sits in the Client card header. The parent's `client` is patched through a new `onClientPatched` prop rather than a full `load()`; on a failed save the panel toasts and calls `onSaved` (`load`) so every control snaps back to what's stored. Status saves instantly too, including Archived (no confirm), since it's one tap to undo.
+- **`updateClient` now selects the row back and throws on 0 rows** (RLS-filtered UPDATE gotcha). With autosave a silent no-op would have shown "Saved". Its other caller (`onboarding/tracking.js`, coach assignment) gets the same protection.
+- **Picking a cadence from Off** used to need a start Monday before Save meant anything. It now defaults the start to her next check-in (`checkinMondayForWeek(currentWeek.start)`) and saves immediately. The schedule reads as a subtitle ("Every 2 weeks, starting with the MM-DD-YYYY check-in") plus the next four due dates as chips; the `MondayPicker` only opens behind "Change start week". Off shows nothing extra, unless a one-off week from the Check-In tab's Require pics is still pending (not in the past, not already filed), in which case a green note reads "Pics required on the MM-DD-YYYY check-in".
+- **Layout.** Wide: Client card fixed 340px on the left; the right column stacks Photo schedule, Check-in questions, Check-in history. Every card has the same icon-bubble header. Narrow: one column.
+- **Collapsed sections.** Questions and history are `CollapsibleCard`s, folded by default. Headers carry no subtitle or filler copy (Terra asked for it gone; the template/custom count and its `listTemplateQuestions` fetch were removed with it). History, folded, shows a new `CheckinStatusStrip` (exported from `CheckinWeekTimeline.js`): one dot per recent week, oldest to newest, colored with the same `STATUS_STYLE` as the rows (current week dashed/hollow), labeled by check-in Monday and no counts text (dots only, per Terra). The start-date week filter the timeline used was pulled into a shared `recentWeeksFor` so the strip and the list can't disagree.
+
+Verified: `npm run build`, Babel unresolved-identifier/unused-import pass, and a throwaway `app/zz-harness.js` rendering the panel with fake data (Off and Every-2-weeks clients, four fake check-ins) at 1300px and 375px, including expanding history (Reopen/Close out rows intact). No autosave write was exercised against the database (harness is signed out); try one field on a real client.

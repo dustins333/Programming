@@ -868,6 +868,7 @@ export default function NutritionClientDetail() {
             userId={userId}
             client={client}
             onNotesSaved={handleNotesSaved}
+            onClientPatched={(fields) => setClient((prev) => (prev ? { ...prev, ...fields } : prev))}
             checkin={checkin}
             priorCheckin={priorCheckin}
             templateQuestions={templateQuestions}
@@ -971,6 +972,7 @@ export default function NutritionClientDetail() {
             isWide={isWide}
             questionnaireSubmittedAt={onboarding?.response?.submitted_at ?? null}
             onSaved={load}
+            onClientPatched={(fields) => setClient((prev) => (prev ? { ...prev, ...fields } : prev))}
           />
         ) : null}
       </ScrollView>

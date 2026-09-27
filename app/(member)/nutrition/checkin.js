@@ -153,54 +153,6 @@ function PopupModal({ visible, title, onClose, children, scrollViewRef: external
   );
 }
 
-function SkipReasonModal({ visible, onClose, onSubmit }) {
-  const [text, setText] = useState("");
-
-  useEffect(() => {
-    if (visible) setText("");
-  }, [visible]);
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable onPress={onClose} className="flex-1 items-center justify-center px-6" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
-        <Pressable onPress={(e) => e.stopPropagation()} className="w-full rounded-2xl bg-white p-5" style={{ maxWidth: 420 }}>
-          <Text className="mb-2" style={{ fontFamily: fonts.sansBold, fontSize: 15 }}>
-            Why can't you provide progress pictures this week?
-          </Text>
-          <Text className="mb-3 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
-            Your coach will see this note along with your check-in.
-          </Text>
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            multiline
-            autoFocus
-            inputAccessoryViewID={NUMERIC_DONE_ID}
-            placeholder="e.g. traveling this week, will catch up next week"
-            className="mb-4 min-h-[80px] px-3 py-2.5"
-            style={{ fontFamily: fonts.sans, fontSize: 13.5, borderRadius: 14, borderWidth: 1, borderColor: "#d9d4cd", backgroundColor: "#fff" }}
-          />
-          <View className="flex-row justify-end gap-3">
-            <Pressable onPress={onClose} className="rounded-[14px] border border-[#d9d4cd] px-4 py-2.5">
-              <Text style={{ fontFamily: fonts.sansMedium }}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => text.trim() && onSubmit(text.trim())}
-              disabled={!text.trim()} style={{ opacity: !text.trim() ? 0.5 : 1 }}
-              className="rounded-[14px] bg-primary px-4 py-2.5"
-            >
-              <Text className="text-white" style={{ fontFamily: fonts.sansSemiBold }}>
-                Save
-              </Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-      <KeyboardDoneButton />
-    </Modal>
-  );
-}
-
 // The screen had no "not sent" state distinct from "still going": one quiet
 // grey line beneath two cards, one of which was green. This states the one
 // thing she needs to know, in the app's attention peach rather than an alarm
@@ -248,15 +200,13 @@ export default function WeeklyCheckin() {
 
   const [photoPopupOpen, setPhotoPopupOpen] = useState(false);
   const [formPopupOpen, setFormPopupOpen] = useState(false);
-  const [skipReason, setSkipReason] = useState(null);
-  const [skipModalOpen, setSkipModalOpen] = useState(false);
 
   // The check-in submits itself once the last task is finished — a member
   // whose only task was the form used to finish it and reasonably think she
   // was done, while a separate Finalize button sat below waiting for a tap.
   //
   // "Armed" means she just FINISHED an interaction (closed the form, an
-  // upload landed, a skip reason saved), not that the answers happen to be
+  // upload landed), not that the answers happen to be
   // complete. Auto-submitting straight off completeness would fire the
   // moment the last box had one character in it, mid-sentence. Arming is
   // also why a restored draft (useFormDraft below, which can fill every
@@ -275,8 +225,6 @@ export default function WeeklyCheckin() {
   const [reopenAnswers, setReopenAnswers] = useState({});
   const [reopenPhotoPopupOpen, setReopenPhotoPopupOpen] = useState(false);
   const [reopenFormPopupOpen, setReopenFormPopupOpen] = useState(false);
-  const [reopenSkipReason, setReopenSkipReason] = useState(null);
-  const [reopenSkipModalOpen, setReopenSkipModalOpen] = useState(false);
   const [reopenSubmitting, setReopenSubmitting] = useState(false);
   const [reopenSubmitError, setReopenSubmitError] = useState(null);
   const [reopenSubmitted, setReopenSubmitted] = useState(false);
@@ -347,7 +295,7 @@ export default function WeeklyCheckin() {
   // "front, side" tells a member which one she still owes (v5, 5a).
   const anglesIn = ANGLES.filter((a) => recentPhotos.some((p) => p.angle === a));
   const anglesMissing = ANGLES.filter((a) => !anglesIn.includes(a));
-  const photosSatisfied = !photosRequired || photosUploaded || !!skipReason;
+  const photosSatisfied = !photosRequired || photosUploaded;
   const answeredCount = questions ? questions.filter((q) => (answers[q.id] || "").trim().length > 0).length : 0;
   const formSatisfied = questions ? questions.every((q) => (answers[q.id] || "").trim().length > 0) : false;
   const canFinalize = photosSatisfied && (questions?.length === 0 || formSatisfied);
@@ -372,7 +320,7 @@ export default function WeeklyCheckin() {
   // (including a fresh upload made right now, while catching up) counts.
   const reopenRecentPhotos = useMemo(() => (reopen ? (photos ?? []).filter((p) => p.date >= reopen.week_start) : []), [photos, reopen]);
   const reopenPhotosUploaded = hasAllAngles(reopenRecentPhotos);
-  const reopenPhotosSatisfied = !reopenPhotosRequired || reopenPhotosUploaded || !!reopenSkipReason;
+  const reopenPhotosSatisfied = !reopenPhotosRequired || reopenPhotosUploaded;
   const reopenFormSatisfied = questions ? questions.every((q) => (reopenAnswers[q.id] || "").trim().length > 0) : false;
   const reopenCanFinalize = reopenPhotosSatisfied && (questions?.length === 0 || reopenFormSatisfied);
   const reopenAnsweredCount = questions ? questions.filter((q) => (reopenAnswers[q.id] || "").trim().length > 0).length : 0;
@@ -499,10 +447,7 @@ export default function WeeklyCheckin() {
     setReopenSubmitError(null);
     try {
       const payload = questions.map((q) => ({ question: q.question_text, answer: reopenAnswers[q.id] || "" }));
-      await submitCheckin(profile.id, payload, {
-        weekStart: reopen.week_start,
-        photosSkipReason: !reopenPhotosUploaded ? reopenSkipReason : null,
-      });
+      await submitCheckin(profile.id, payload, { weekStart: reopen.week_start });
       await reopenDraft.clearDraft();
       setReopenSubmitted(true);
       setReopen(null);
@@ -541,7 +486,7 @@ export default function WeeklyCheckin() {
     setSubmitError(null);
     try {
       const payload = questions.map((q) => ({ question: q.question_text, answer: answers[q.id] || "" }));
-      const saved = await submitCheckin(profile.id, payload, { photosSkipReason: !photosUploaded ? skipReason : null });
+      const saved = await submitCheckin(profile.id, payload);
       await liveDraft.clearDraft();
       setResponse(saved);
       toastSuccess("Check-in submitted. Your coach will review it!");
@@ -580,7 +525,7 @@ export default function WeeklyCheckin() {
   // A popup being open blocks it outright — that covers the member who
   // finishes the form, closes it (arming), then reopens it to change an
   // answer, and it means completeness reached mid-typing can never fire.
-  const anyLivePopupOpen = photoPopupOpen || formPopupOpen || skipModalOpen;
+  const anyLivePopupOpen = photoPopupOpen || formPopupOpen;
   const liveShouldSend = shouldAutoSubmit({
     armed: autoArmed,
     popupOpen: anyLivePopupOpen,
@@ -595,7 +540,7 @@ export default function WeeklyCheckin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveShouldSend]);
 
-  const anyReopenPopupOpen = reopenPhotoPopupOpen || reopenFormPopupOpen || reopenSkipModalOpen;
+  const anyReopenPopupOpen = reopenPhotoPopupOpen || reopenFormPopupOpen;
   const reopenShouldSend = shouldAutoSubmit({
     armed: reopenAutoArmed,
     popupOpen: anyReopenPopupOpen,
@@ -622,7 +567,7 @@ export default function WeeklyCheckin() {
   const leaveStateRef = useRef({});
   leaveStateRef.current = {
     submitted: !!response,
-    started: hasStartedCheckin({ answeredCount, anglesInCount: anglesIn.length, skipReason }),
+    started: hasStartedCheckin({ answeredCount, anglesInCount: anglesIn.length }),
     label: outstandingLabel(progress),
     taskTotal,
   };
@@ -743,7 +688,7 @@ export default function WeeklyCheckin() {
               title="That week's progress photos"
               step={reopenTaskTotal > 1 ? "Step 1 of 2" : null}
               done={reopenPhotosSatisfied}
-              subtitle={reopenPhotosUploaded ? "Submitted" : reopenSkipReason ? `Skipped: ${reopenSkipReason}` : "Tap to upload"}
+              subtitle={reopenPhotosUploaded ? "Submitted" : "Tap to upload"}
               onPress={() => setReopenPhotoPopupOpen(true)}
             />
           ) : null}
@@ -842,25 +787,12 @@ export default function WeeklyCheckin() {
                 subtitle={
                   photosUploaded
                     ? `Submitted | ${anglesIn.join(", ")}`
-                    : skipReason
-                      ? `Skipped: ${skipReason}`
-                      : anglesIn.length > 0
-                        ? `${anglesIn.join(", ")} in | ${anglesMissing.join(", ")} still needed`
-                        : "Tap to upload | front, side, back"
+                    : anglesIn.length > 0
+                      ? `${anglesIn.join(", ")} in | ${anglesMissing.join(", ")} still needed`
+                      : "Tap to upload | front, side, back"
                 }
                 onPress={() => setPhotoPopupOpen(true)}
               />
-              {!photosUploaded && !skipReason ? (
-                // Surfaced on the task itself — the skip option used to hide
-                // inside the upload modal, so a member who couldn't take
-                // photos had to open an upload sheet to learn they could
-                // decline.
-                <Pressable onPress={() => setSkipModalOpen(true)} className="mb-3 self-start" hitSlop={8}>
-                  <Text className="text-xs" style={{ fontFamily: fonts.sansSemiBold, color: colors.primaryOnWhite }}>
-                    I can't provide photos this week
-                  </Text>
-                </Pressable>
-              ) : null}
             </>
           ) : null}
 
@@ -946,26 +878,6 @@ export default function WeeklyCheckin() {
 
       <PopupModal visible={photoPopupOpen} title="This week's progress photos" onClose={() => setPhotoPopupOpen(false)}>
         <PhotoUpload userId={profile.id} onUploaded={handlePhotosUploaded} />
-        {!photosUploaded ? (
-          skipReason ? (
-            <View className="mt-4 flex-row items-center justify-between rounded-lg border border-stone-200 px-3 py-2.5">
-              <Text className="flex-1 text-xs text-stone-600" style={{ fontFamily: fonts.sans }}>
-                Skipped: {skipReason}
-              </Text>
-              <Pressable onPress={() => setSkipReason(null)} hitSlop={8}>
-                <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                  Undo
-                </Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable onPress={() => setSkipModalOpen(true)} className="mt-4 items-center py-1">
-              <Text className="text-xs underline text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-                I can't provide photos this week
-              </Text>
-            </Pressable>
-          )
-        ) : null}
       </PopupModal>
 
       <PopupModal
@@ -1017,43 +929,10 @@ export default function WeeklyCheckin() {
         </Pressable>
       </PopupModal>
 
-      <SkipReasonModal
-        visible={skipModalOpen}
-        onClose={() => setSkipModalOpen(false)}
-        onSubmit={(reason) => {
-          setSkipReason(reason);
-          setSkipModalOpen(false);
-          setPhotoPopupOpen(false);
-          setAutoArmed(true);
-          // Declining photos satisfies that task, so the same chain applies.
-          if (questions.length > 0 && !formSatisfied) setFormPopupOpen(true);
-        }}
-      />
-
       {reopen ? (
         <>
           <PopupModal visible={reopenPhotoPopupOpen} title="That week's progress photos" onClose={() => setReopenPhotoPopupOpen(false)}>
             <PhotoUpload userId={profile.id} onUploaded={handleReopenPhotosUploaded} />
-            {!reopenPhotosUploaded ? (
-              reopenSkipReason ? (
-                <View className="mt-4 flex-row items-center justify-between rounded-lg border border-stone-200 px-3 py-2.5">
-                  <Text className="flex-1 text-xs text-stone-600" style={{ fontFamily: fonts.sans }}>
-                    Skipped: {reopenSkipReason}
-                  </Text>
-                  <Pressable onPress={() => setReopenSkipReason(null)} hitSlop={8}>
-                    <Text className="text-xs" style={{ fontFamily: fonts.sansMedium, color: colors.primaryOnWhite }}>
-                      Undo
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable onPress={() => setReopenSkipModalOpen(true)} className="mt-4 items-center py-1">
-                  <Text className="text-xs underline text-stone-500" style={{ fontFamily: fonts.sansMedium }}>
-                    I can't provide photos for that week
-                  </Text>
-                </Pressable>
-              )
-            ) : null}
           </PopupModal>
 
           <PopupModal
@@ -1098,17 +977,6 @@ export default function WeeklyCheckin() {
             </Pressable>
           </PopupModal>
 
-          <SkipReasonModal
-            visible={reopenSkipModalOpen}
-            onClose={() => setReopenSkipModalOpen(false)}
-            onSubmit={(reason) => {
-              setReopenSkipReason(reason);
-              setReopenSkipModalOpen(false);
-              setReopenPhotoPopupOpen(false);
-              setReopenAutoArmed(true);
-              if (questions.length > 0 && !reopenFormSatisfied) setReopenFormPopupOpen(true);
-            }}
-          />
         </>
       ) : null}
 

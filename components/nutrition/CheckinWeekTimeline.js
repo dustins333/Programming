@@ -187,6 +187,78 @@ function OnboardingRow({ onSelect, selected, submittedAt }) {
 // the rows navigable, selectedWeekStart to mark where the coach currently
 // is, and onboardingEntry to hang her onboarding off the end of the list.
 // Without those it renders exactly as it always did on the Settings tab.
+// The recent weeks that are actually hers: stop at her start date, so weeks
+// before she existed don't render as missed, but always keep a week she
+// really filed. enumerateRecentWeeks puts the current week at index 0.
+function recentWeeksFor(client, checkins, today, pastWeeks) {
+  const { currentWeek } = computeWeekWindows(today);
+  const allRecent = enumerateRecentWeeks(currentWeek, addDays, pastWeeks);
+  const submittedWeeks = new Set(checkins.map((c) => c.week_start));
+  return client?.start_date ? allRecent.filter((w) => w.end >= client.start_date || submittedWeeks.has(w.start)) : allRecent;
+}
+
+// Same status call the rows make, for the collapsed summary strip on the
+// Settings tab.
+function statusKeyFor({ checkin, closeout, reopen, isCurrent, today }) {
+  if (checkin) return deriveCheckinStatus(checkin) === "ready" ? "ready" : "completed";
+  if (closeout) return "closedOut";
+  if (isCurrent) return "notDue";
+  return reopen && reopen.expires_at >= today ? "reopened" : "missed";
+}
+
+// A glance at her recent check-ins, oldest to newest, one dot per week: what
+// the Settings tab shows while the full timeline is folded away.
+export function CheckinStatusStrip({ client, checkins, reopens = [], closeouts = [], today, pastWeeks = PAST_WEEKS }) {
+  const weeks = recentWeeksFor(client, checkins, today, pastWeeks);
+  const checkinsByWeek = Object.fromEntries(checkins.map((c) => [c.week_start, c]));
+  const reopensByWeek = {};
+  for (const r of reopens) if (!(r.week_start in reopensByWeek)) reopensByWeek[r.week_start] = r;
+  const closeoutsByWeek = Object.fromEntries((closeouts ?? []).map((c) => [c.week_start, c]));
+
+  const items = weeks
+    .map((w, i) => ({
+      week: w,
+      key: statusKeyFor({
+        checkin: checkinsByWeek[w.start],
+        closeout: closeoutsByWeek[w.start],
+        reopen: reopensByWeek[w.start],
+        isCurrent: i === 0,
+        today,
+      }),
+    }))
+    .reverse();
+  if (items.length === 0) return null;
+
+  return (
+    <View className="flex-row flex-wrap items-center" style={{ gap: 12 }}>
+      <View className="flex-row items-end" style={{ gap: 6 }}>
+        {items.map((it) => {
+          const st = STATUS_STYLE[it.key];
+          const hollow = it.key === "notDue";
+          return (
+            <View key={it.week.start} className="items-center" style={{ gap: 4 }}>
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
+                  backgroundColor: hollow ? "white" : st.color,
+                  borderWidth: hollow ? 1.5 : 0,
+                  borderColor: st.color,
+                  borderStyle: hollow ? "dashed" : "solid",
+                }}
+              />
+              <Text style={{ fontFamily: fonts.sans, fontSize: 9.5, color: "#a8a29e" }}>
+                {formatDateMDY(checkinMondayForWeek(it.week.start)).slice(0, 5)}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export function CheckinWeekTimeline({
   userId,
   coachId,
@@ -208,15 +280,9 @@ export function CheckinWeekTimeline({
   // with a Reopen button — a client who started nine days ago showed four
   // of them. A week counts as hers if it ENDS on or after her start date,
   // matching the Weeks tab's "the week containing the start date is week 1"
-  // rule, so the two screens agree on where her history begins.
-  const allRecent = enumerateRecentWeeks(currentWeek, addDays, pastWeeks);
-  const submittedWeeks = new Set(checkins.map((c) => c.week_start));
-  const recent = client?.start_date
-    // A check-in she actually filed always shows, whatever the dates say —
-    // hiding one because it predates her recorded start date would lose real
-    // work over a data oddity.
-    ? allRecent.filter((w) => w.end >= client.start_date || submittedWeeks.has(w.start))
-    : allRecent;
+  // rule, so the two screens agree on where her history begins. A check-in
+  // she actually filed always shows, whatever the dates say.
+  const recent = recentWeeksFor(client, checkins, today, pastWeeks);
   const upcoming = enumerateUpcomingWeeks(currentWeek, addDays, UPCOMING_WEEKS);
   const checkinsByWeek = Object.fromEntries(checkins.map((c) => [c.week_start, c]));
   // Several reopen rows can exist historically for the same week (an
