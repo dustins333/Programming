@@ -24,6 +24,7 @@ import {
 } from "../../lib/nutrition/onboarding";
 import { listSpecialtyBars, saveSpecialtyBars } from "../../lib/equipment/specialtyBars";
 import { BenchmarkSettings } from "../../components/coach/BenchmarkSettings";
+import { HiddenAccountsSettings } from "../../components/coach/HiddenAccountsSettings";
 import { fonts, colors } from "../../lib/theme";
 import { toastError, toastSuccess } from "../../lib/toast";
 import { CoachShell } from "../../components/CoachShell";
@@ -133,6 +134,7 @@ const SETTINGS_TABS = [
   { key: "templates", label: "Nutrition" },
   { key: "notifications", label: "Notifications" },
   { key: "messaging", label: "Messaging" },
+  { key: "hidden", label: "Hidden" },
   { key: "diagnostics", label: "Diagnostics" },
 ];
 
@@ -1170,6 +1172,8 @@ export default function Settings() {
       )}
 
       {tab === "benchmark" && <BenchmarkSettings />}
+
+      {tab === "hidden" && <HiddenAccountsSettings />}
 
       {tab === "notifications" && (
       <View className="rounded-xl border border-stone-200 p-5">

@@ -1607,3 +1607,21 @@ Ashley's questions to confirm.
 ## Coaching tab icon: briefcase to clipboard (2026-09-21)
 
 The staff-only "Coaching" tab in the member tab bar (`app/(member)/_layout.js`, `back-to-coaching`) used Ionicons `briefcase`; coaches did not like it, so it is now `clipboard` (outline when unfocused, filled when focused, same as every other tab). Other options considered: people, stopwatch (clashes with the rest timer), easel, swap-horizontal, return-up-back, grid.
+
+## Settings -> Hidden: test accounts off the dashboard (2026-09-27)
+
+Terra's test accounts kept landing on the dashboard's lists ("girls not in this week", SPC due, nutrition not seen), which drove the coaches nuts. New admin-only Settings tab **Hidden** (`components/coach/HiddenAccountsSettings.js`): search any account by name or email (members and staff, minus the wall display) to hide it, and a "Hidden now" list with Unhide. Backed by `core.dashboard_hidden_users` (0136) and `lib/programming/hiddenAccounts.js`.
+
+Decisions Terra made up front, keep them:
+- **Dashboard only.** A hidden account still shows on the Clients page, the live board, the client search on the dashboard, CCrew, and the Nutrition queue, so a test account can still be opened and driven. Deliberately a Settings tab, not a toggle on each client page.
+- **Admins only** change the list (the Settings page is already admin-only; RLS enforces it too).
+- **Automations untouched.** The nightly SPC draft, reminder pushes etc. still treat hidden accounts normally, which is what you want when testing a flow.
+
+Where the filter lives (one place per data source, so no tile can forget):
+- `getCoachDashboardStats` filters `members`, `assignments`, the SPC roster and the nutrition roster right after loading. Everything derived from them (program counts, SPC tiles and due rows, nutrition buckets, not-seen, unassigned) inherits it.
+- `getGymToday` loads the set once and passes it to `getGymWeek` (roster AND sessions, so "sessions this week" drops a test account's sessions too), `nutritionLoggedToday`, `quietMemberCount`, and `countPersonalRecordsOn` (new optional `excludeIds`).
+- `useCoachDashboard` passes it to `getNutritionToday`.
+
+`listHiddenUserIds()` never throws: a failed load shows everyone rather than silently hiding a real client. The Settings tab's own loader does throw, so "nobody hidden" and "couldn't load" read differently. Writes select the row back (RLS-filtered write reports success with 0 rows).
+
+Verified: build clean, Babel parse + unresolved-identifier + unused-import pass clean on every touched file, the tab driven through a throwaway `app/zz-harness.js` with faked REST responses (search skips already-hidden accounts, Hide POSTs an upsert and moves the row down, Unhide DELETEs and removes it, both toast), and a live anon insert refused by RLS. **Not verified signed in against real data**: the pane had no session, so the dashboard filtering itself was checked by reading, not by watching a count drop.
