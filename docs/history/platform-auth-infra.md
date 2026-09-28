@@ -747,3 +747,15 @@ decided, or shown not to be findings. The one live task left anywhere in it is
 the payroll finalize → approve → send-back → close walkthrough, which Terra
 scheduled for the next real payroll run — see the note in the section above
 before poking at it.
+
+## Installed-PWA header haze: iOS 26's Liquid Glass top fade (2026-09-27)
+
+Terra reported the coach header on the installed iPhone app (hamburger, logo, "Kova Strength") looking washed out, "lost in the clouds", fairly often. Cause: iOS 26 paints a frosted "Liquid Glass" fade over the top edge of home-screen web apps, and the header sat inside it.
+
+What was tried, in order, on her phone via the dev server:
+1. **Re-measuring safe-area insets** (theory: `useSafeAreaInsets()` stuck at 0 so the header slid under the status bar). Wrong: her screenshot showed the header already clear of the status bar. Removed.
+2. **A fixed white strip at the top edge**, reported elsewhere to make WebKit swap the fade for a solid color. Never actually ran: it was gated on `insets.top > 0`.
+3. **Extra header padding gated on `insets.top > 0`.** Also never ran. On her phone the page starts BELOW the status bar (`apple-mobile-web-app-status-bar-style` is `default`), so the top inset is 0, and the fade still covers the page's top edge anyway.
+4. **Extra padding gated on "installed"** (`display-mode: standalone` or `navigator.standalone`). Worked. Tuned 32 → 22 → 15 on her device, all sharp; shipped at 15.
+
+The fix is in `CoachShell.js`'s mobile-web branch (`isInstalledWebApp()`, `clearOfGlass`), and it also moves the slide-out drawer's top. A browser tab and desktop are unchanged. **Lesson:** don't gate PWA-chrome fixes on the top inset; on this app it is 0 in the installed app. Member screens very likely have the same haze and were not changed.
