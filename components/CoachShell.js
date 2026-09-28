@@ -41,6 +41,7 @@ const NAV_SECTIONS = [
       { key: "spc", label: "SPC", href: "/(coach)/spc", icon: "clipboard", permission: "can_view_spc" },
       { key: "nutrition", label: "Nutrition", href: "/(coach)/nutrition", icon: "restaurant", permission: "can_view_nutrition" },
       { key: "prep", label: "Coach Prep", href: "/(coach)/prep", icon: "school" },
+      { key: "strategy", label: "Strategy Sessions", href: "/(coach)/strategy", icon: "compass" },
       { key: "ccrew", label: "CCrew", href: "/(coach)/ccrew", icon: "trophy" },
       // The library itself is open to every coach since 0094 — anyone can
       // add an exercise and program it the same minute. What

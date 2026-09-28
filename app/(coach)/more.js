@@ -44,6 +44,19 @@ export default function More() {
         More
       </Text>
 
+      {/* No permission gate: every coach runs strategy sessions. */}
+      <Pressable
+        onPress={() => router.push("/(coach)/strategy")}
+        className="mb-3 rounded-2xl border border-stone-200 px-5 py-4"
+      >
+        <Text style={{ fontFamily: fonts.sansSemiBold }} className="text-stone-700">
+          Strategy Sessions
+        </Text>
+        <Text className="mt-1 text-xs text-stone-500" style={{ fontFamily: fonts.sans }}>
+          Who's booked today, prep and notes
+        </Text>
+      </Pressable>
+
       {/* No permission gate since 0094 — every coach can add an exercise
           and program it right away. The flag now gates the review row
           below, not the library itself. */}
