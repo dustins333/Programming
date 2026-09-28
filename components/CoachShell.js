@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, Image, Pressable, Platform, Modal, ScrollView, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets, SafeAreaInsetsContext } from "react-native-safe-area-context";
+import { isInstalledWebApp } from "./GlassSafeArea";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../lib/auth/AuthProvider";
@@ -410,10 +411,11 @@ export function CoachShell({ children, headerAccessory }) {
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
-            // insets.top already includes GLASS_CLEARANCE in the installed
-            // app (components/GlassSafeArea.js), which keeps this row out of
-            // iOS 26's frosted top fade.
-            paddingTop: insets.top + 10,
+            // insets.top already includes GLASS_CLEARANCE (20) in the
+            // installed app (components/GlassSafeArea.js), which keeps this
+            // row out of iOS 26's frosted top fade. 5 there, not 10: 25pt
+            // total is what Terra tuned on her phone.
+            paddingTop: insets.top + (isInstalledWebApp() ? 5 : 10),
             paddingBottom: 10,
             paddingHorizontal: 14,
           }}

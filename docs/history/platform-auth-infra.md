@@ -762,4 +762,6 @@ What was tried, in order, on her phone via the dev server:
 - CoachShell's web branches re-provide `top: 0` to their children: the pages sit under its header, which already cleared the top, and ~15 coach pages pad by `insets.top` and would otherwise have gained a 15pt gap.
 - Full-screen overlays opened from those pages cover the header, so they read `useScreenInsets()` (the un-zeroed value) instead: `ExerciseFormModal`, `SpcSessionPreview`. Any other full-screen overlay under a coach page that pads by `insets.top` still sits under the fade; switch it to `useScreenInsets()` if one turns up.
 
+**Second follow-up: 15 → 20.** At 15, member pages were still hazy: they pad only `insets.top + 6..16`, so My Week's "Hi, Terra" started 21pt down, while the coach header (15 + its own 10) was sharp at 25. `GLASS_CLEARANCE` is now 20 (My Week at 26, measured in the preview by forcing `isInstalledWebApp()` true), and CoachShell pads `insets.top + 5` in the installed app so the coach header stays at the 25 Terra tuned. Confirmed sharp on her phone. Her first report after the change was "didn't change anything"; a reopen of the installed app picked it up, so ask for that before debugging a stale PWA.
+
 **Lesson:** don't gate PWA-chrome fixes on the top inset; on this app it is 0 in the installed app.

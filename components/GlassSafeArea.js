@@ -12,9 +12,12 @@ import { SafeAreaInsetsContext } from "react-native-safe-area-context";
 // on the inset itself: on Terra's iPhone the page starts below the status
 // bar, the inset is 0, and the fade still covers it.
 //
-// 15 was tuned on her iPhone (32, 22, 15 all sharp). Go back up if the
-// haze returns on a newer iOS.
-export const GLASS_CLEARANCE = 15;
+// Tuned on her iPhone: content has to start ~25pt below the page's top
+// edge to be sharp. The coach header (15 + its own 10) was sharp at 25;
+// My Week's "Hi, Terra" (15 + its own 6 = 21) was still hazy. 20 puts
+// My Week at 26; CoachShell trims its own padding to stay at 25. Go back
+// up if the haze returns on a newer iOS.
+export const GLASS_CLEARANCE = 20;
 
 // True in a home-screen install (standalone display mode, or iOS's older
 // navigator.standalone flag); false in a browser tab and on native.
