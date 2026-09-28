@@ -16,6 +16,7 @@ import { CoachShell } from "../CoachShell";
 import { PressFade } from "../PressFade";
 import { GymWeekModal } from "./GymWeekModal";
 import { GymBand } from "./dashboard/GymBand";
+import { useGymWeekBrowse } from "../../lib/programming/useGymWeekBrowse";
 import { SpcActionRow } from "./dashboard/SpcActionRow";
 import { DashboardSheet, SheetRow, SheetEmpty } from "./dashboard/DashboardSheet";
 import { NutritionTodayList } from "./dashboard/NutritionTodayList";
@@ -79,14 +80,6 @@ function greeting() {
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";
-}
-
-// "Week of Sep 1" — the Monday the gym band's week figures are counted from.
-function weekOfLabel(week) {
-  if (!week?.weekStart) return null;
-  const [, month, day] = week.weekStart.split("-").map(Number);
-  const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `Week of ${MONTH_SHORT[month - 1]} ${day}`;
 }
 
 /* ---------------------------------------------------------- header search */
@@ -304,6 +297,8 @@ export function CoachHomeDesktop() {
   const [gymView, setGymView] = useState(null);
   const [sheet, setSheet] = useState(null);
   const { profile, stats, extras, dismissals, setDismissals, nutritionToday, loadError, reload: load } = useCoachDashboard();
+  // Above the loading return: it is a hook. Offset 0 reads the dashboard's own load.
+  const gymBrowse = useGymWeekBrowse(extras?.gym ?? {});
   // Hooks, so they sit above the early returns.
   const canSpc = profile?.role === "admin" || Boolean(profile?.can_view_spc);
   const openHub = useOpenHubSession(canSpc);
@@ -393,12 +388,7 @@ export function CoachHomeDesktop() {
 
           <FinalizePrompt prompt={safeExtras.finalizePrompt} />
 
-          <GymBand
-            gym={safeExtras.gym}
-            wide
-            note={[weekOfLabel(safeExtras.gym?.week), "every tile opens its list"].filter(Boolean).join(" · ")}
-            onOpen={setGymView}
-          />
+          <GymBand browse={gymBrowse} wide onOpen={setGymView} />
 
           <View style={{ flexDirection: "row", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
             {/* Left: the modules — the same three the phone shows, wider. */}
@@ -524,7 +514,7 @@ export function CoachHomeDesktop() {
           </View>
         </View>
 
-        <GymWeekModal visible={gymView !== null} view={gymView} week={safeExtras.gym?.week ?? null} onClose={() => setGymView(null)} />
+        <GymWeekModal visible={gymView !== null} view={gymView} week={gymBrowse.gym?.week ?? null} onClose={() => setGymView(null)} />
 
         <DashboardSheet
           visible={sheet === "nutritionToday"}

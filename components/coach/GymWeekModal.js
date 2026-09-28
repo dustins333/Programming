@@ -62,9 +62,9 @@ function PersonRow({ person, subtitle, tone, onPress }) {
   );
 }
 
-function seenSubtitle(p) {
-  if (p.startedOnly) return "Trained, not finalized yet";
-  return `${p.sessions} ${p.sessions === 1 ? "session" : "sessions"} this week`;
+function seenSubtitle(p, past) {
+  if (p.startedOnly) return past ? "Trained, never finalized" : "Trained, not finalized yet";
+  return `${p.sessions} ${p.sessions === 1 ? "session" : "sessions"} ${past ? "that" : "this"} week`;
 }
 
 function notSeenSubtitle(p) {
@@ -83,7 +83,26 @@ export function GymWeekModal({ visible, onClose, view, week }) {
     router.push(`/(coach)/clients/${userId}`);
   };
 
-  const spec = {
+  // A past week, from the band's arrows: Monday to Sunday, already over.
+  const past = week ? week.current === false : false;
+
+  const spec = past ? {
+    sessionsWeek: {
+      eyebrow: "SESSIONS THAT WEEK",
+      count: week?.sessions.length,
+      note: "Finalized Monday to Sunday.",
+    },
+    membersWeek: {
+      eyebrow: "GIRLS IN THAT WEEK",
+      count: week?.seen.length,
+      note: "Anyone who trained that week, whether or not she finalized.",
+    },
+    membersNotSeen: {
+      eyebrow: "GIRLS NOT IN THAT WEEK",
+      count: week?.notSeen.length,
+      note: "On a training program now, nothing logged that week. Longest gone first.",
+    },
+  }[view] : {
     sessionsToday: {
       eyebrow: "SESSIONS TODAY",
       count: week?.sessionsToday.length,
@@ -105,6 +124,7 @@ export function GymWeekModal({ visible, onClose, view, week }) {
       note: "On a training program, nothing logged since Monday. Longest gone first.",
     },
   }[view];
+  if (!spec) return null;
 
   const rows = () => {
     if (!week) return null;
@@ -160,6 +180,7 @@ export function GymWeekModal({ visible, onClose, view, week }) {
     }
     const list = view === "membersWeek" ? week.seen : week.notSeen;
     if (list.length === 0) {
+      if (past) return <Empty text={view === "membersWeek" ? "Nobody in that week." : "Everyone was in. Good week."} />;
       return <Empty text={view === "membersWeek" ? "Nobody in yet this week." : "Everyone's been in. Good week."} />;
     }
     return list.map((person) => (
@@ -167,7 +188,7 @@ export function GymWeekModal({ visible, onClose, view, week }) {
         key={person.userId}
         person={person}
         tone={view === "membersWeek" ? (person.startedOnly ? "warn" : "ok") : "warn"}
-        subtitle={view === "membersWeek" ? seenSubtitle(person) : notSeenSubtitle(person)}
+        subtitle={view === "membersWeek" ? seenSubtitle(person, past) : notSeenSubtitle(person)}
         onPress={() => open(person.userId)}
       />
     ));
@@ -209,7 +230,7 @@ export function GymWeekModal({ visible, onClose, view, week }) {
           </View>
 
           <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 18 }}>
-            {week ? rows() : <Empty text="Couldn't load this week." />}
+            {week ? rows() : <Empty text={past ? "Couldn't load that week." : "Couldn't load this week."} />}
           </ScrollView>
         </Pressable>
       </Pressable>

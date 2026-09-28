@@ -13,6 +13,7 @@ import { PressFade } from "../PressFade";
 import { GymWeekModal } from "./GymWeekModal";
 import { QuickPickBar } from "./QuickPickBar";
 import { GymBand } from "./dashboard/GymBand";
+import { useGymWeekBrowse } from "../../lib/programming/useGymWeekBrowse";
 import { SpcActionRow } from "./dashboard/SpcActionRow";
 import { DashboardSheet, SheetRow, SheetEmpty } from "./dashboard/DashboardSheet";
 import { NutritionTodayList } from "./dashboard/NutritionTodayList";
@@ -203,6 +204,8 @@ export function CoachHomeMobile() {
   const [gymView, setGymView] = useState(null);
   const [sheet, setSheet] = useState(null); // "nutritionToday" | "notSeen"
   const { profile, stats, extras, nutritionToday, loadError, reload: load } = useCoachDashboard();
+  // Above the loading return: it is a hook. Offset 0 reads the dashboard's own load.
+  const gymBrowse = useGymWeekBrowse(extras?.gym ?? {});
   // Hooks, so they sit above the loading/error returns below.
   const canSeeHub = profile?.role === "admin" || Boolean(profile?.can_view_spc);
   const openHub = useOpenHubSession(canSeeHub);
@@ -297,7 +300,7 @@ export function CoachHomeMobile() {
           <Ionicons name="chevron-forward" size={16} color={CHEVRON} />
         </PressFade>
 
-        <GymBand gym={safeExtras.gym} onOpen={setGymView} />
+        <GymBand browse={gymBrowse} onOpen={setGymView} />
 
         {canSpc ? (
           <ModuleCard>
@@ -377,7 +380,7 @@ export function CoachHomeMobile() {
       </ScrollView>
 
       <ClientLookupSheet visible={lookupOpen} onClose={() => setLookupOpen(false)} router={router} />
-      <GymWeekModal visible={gymView !== null} view={gymView} week={safeExtras.gym?.week ?? null} onClose={() => setGymView(null)} />
+      <GymWeekModal visible={gymView !== null} view={gymView} week={gymBrowse.gym?.week ?? null} onClose={() => setGymView(null)} />
 
       <DashboardSheet
         visible={sheet === "nutritionToday"}
