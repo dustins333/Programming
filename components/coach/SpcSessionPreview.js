@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, Platform, Modal, useWindowDimensions } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { PressFade } from "../PressFade";
@@ -13,6 +12,8 @@ import { warmupNumbersFor } from "../../lib/programming/sessionLabels";
 import { formatDateShort } from "../../lib/formatDate";
 import { currentWeekNumber } from "../../lib/programming/schedule";
 import { fonts, colors, statusColors, type } from "../../lib/theme";
+// Full-screen: covers CoachShell's header, so it clears the top itself.
+import { useScreenInsets } from "../GlassSafeArea";
 
 // The printed SPC sheet, on a phone (design_handoff_spc_roster_v1, screen 3).
 //
@@ -731,7 +732,7 @@ function SpcSessionPreviewPage({
 // One client, from the roster. Unchanged behaviour — the page above is
 // exactly what this used to render inline.
 export function SpcSessionPreview({ client, visible, onClose }) {
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: colors.canvas, paddingTop: insets.top }}>
@@ -753,7 +754,7 @@ export function SpcSessionPreview({ client, visible, onClose }) {
 // Each page loads its own client, so four opens four reads. That is the cost
 // of showing real week-by-week history and it is bounded at four.
 export function SpcSessionDeck({ visible, onClose, clients = [], initialIndex = 0, targetDate = null, label = "Reviewing" }) {
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { width } = useWindowDimensions();
   const scroller = useRef(null);
   const [index, setIndex] = useState(initialIndex);

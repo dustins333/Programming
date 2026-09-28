@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, Image, Pressable, Platform, Modal, ScrollView, useWindowDimensions } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaInsetsContext } from "react-native-safe-area-context";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../lib/auth/AuthProvider";
@@ -319,13 +319,6 @@ export function NavList({ profile, pathname, messagingEnabled, badges, onNavigat
   );
 }
 
-// True in a home-screen install (standalone display mode, or iOS's older
-// navigator.standalone flag); false in a browser tab and on native.
-function isInstalledWebApp() {
-  if (Platform.OS !== "web" || typeof window === "undefined") return false;
-  return window.navigator.standalone === true || Boolean(window.matchMedia?.("(display-mode: standalone)").matches);
-}
-
 // Web-only shell — every coach screen wraps its content in this. On native
 // it's a transparent passthrough (the Tabs navigator in
 // app/(coach)/_layout.js already provides chrome), so screens can wrap
@@ -400,17 +393,15 @@ export function CoachShell({ children, headerAccessory }) {
     );
   }
 
+  // The pages under the web header start below it, so the top is already
+  // cleared for them: they get a top inset of 0, or they'd pad for a
+  // status bar (and the glass clearance) they don't touch. A full-screen
+  // overlay opened from one reads useScreenInsets() instead.
+  const underHeader = (
+    <SafeAreaInsetsContext.Provider value={{ ...insets, top: 0 }}>{children}</SafeAreaInsetsContext.Provider>
+  );
+
   if (width < MOBILE_BREAKPOINT) {
-    // iOS 26's installed-PWA "Liquid Glass" edge effect paints a frosted
-    // fade over the top of the page, and nothing a page does switches it
-    // off. So in the installed app the header's content starts below the
-    // fade and the white band above it stays empty. 15 was tuned down from
-    // 32 on Terra's iPhone (32, 22, 15 all sharp); go back up if the haze
-    // returns on a newer iOS. Keyed on
-    // "installed", not on the top inset: on Terra's phone the page starts
-    // below the status bar (inset 0) and the fade still covers the header.
-    // Two earlier tries keyed on the inset never ran there for that reason.
-    const clearOfGlass = insets.top + (isInstalledWebApp() ? 15 : 0);
     return (
       <View style={{ flex: 1, backgroundColor: "#f6f1ec" }}>
         <View style={{ backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#e7e5e4" }}>
@@ -419,7 +410,10 @@ export function CoachShell({ children, headerAccessory }) {
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
-            paddingTop: clearOfGlass + 10,
+            // insets.top already includes GLASS_CLEARANCE in the installed
+            // app (components/GlassSafeArea.js), which keeps this row out of
+            // iOS 26's frosted top fade.
+            paddingTop: insets.top + 10,
             paddingBottom: 10,
             paddingHorizontal: 14,
           }}
@@ -457,13 +451,13 @@ export function CoachShell({ children, headerAccessory }) {
         {headerAccessory}
         </View>
 
-        <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
+        <View style={{ flex: 1, minWidth: 0 }}>{underHeader}</View>
 
         <Modal visible={drawerOpen} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
           <Pressable onPress={() => setDrawerOpen(false)} style={{ flex: 1, flexDirection: "row", backgroundColor: "rgba(68,64,60,0.35)" }}>
             <Pressable
               onPress={(e) => e.stopPropagation?.()}
-              style={{ width: 264, height: "100%", backgroundColor: "white", paddingTop: clearOfGlass + 20, paddingHorizontal: 16, paddingBottom: 20 }}
+              style={{ width: 264, height: "100%", backgroundColor: "white", paddingTop: insets.top + 20, paddingHorizontal: 16, paddingBottom: 20 }}
             >
               <View className="mb-7 flex-row items-center gap-2.5 px-2">
                 <Image source={require("../assets/kova-logo.jpg")} style={{ width: 32, height: 32, borderRadius: 16 }} />
@@ -521,7 +515,7 @@ export function CoachShell({ children, headerAccessory }) {
         />
       </View>
 
-      <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
+      <View style={{ flex: 1, minWidth: 0 }}>{underHeader}</View>
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect } from "react";
 import { Slot } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GlassSafeArea } from "../components/GlassSafeArea";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
@@ -53,6 +54,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <GlassSafeArea>
         <StatusBar style="dark" />
         <AppErrorBoundary>
           <AuthProvider>
@@ -67,6 +69,7 @@ export default function RootLayout() {
             <ToastHost />
           </AuthProvider>
         </AppErrorBoundary>
+        </GlassSafeArea>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

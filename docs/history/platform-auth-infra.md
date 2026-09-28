@@ -758,4 +758,8 @@ What was tried, in order, on her phone via the dev server:
 3. **Extra header padding gated on `insets.top > 0`.** Also never ran. On her phone the page starts BELOW the status bar (`apple-mobile-web-app-status-bar-style` is `default`), so the top inset is 0, and the fade still covers the page's top edge anyway.
 4. **Extra padding gated on "installed"** (`display-mode: standalone` or `navigator.standalone`). Worked. Tuned 32 → 22 → 15 on her device, all sharp; shipped at 15.
 
-The fix is in `CoachShell.js`'s mobile-web branch (`isInstalledWebApp()`, `clearOfGlass`), and it also moves the slide-out drawer's top. A browser tab and desktop are unchanged. **Lesson:** don't gate PWA-chrome fixes on the top inset; on this app it is 0 in the installed app. Member screens very likely have the same haze and were not changed.
+**Follow-up, same day: app-wide.** Terra asked for it everywhere (iOS 27 had just launched). The clearance moved out of CoachShell into `components/GlassSafeArea.js`, mounted in `app/_layout.js` just inside `SafeAreaProvider`. In the installed web app it re-provides `SafeAreaInsetsContext` with `top + GLASS_CLEARANCE` (15), so every existing `useSafeAreaInsets()` screen (member pages, login, benchmark) clears the fade with no per-screen edits. Browser tabs, desktop and native are unchanged.
+- CoachShell's web branches re-provide `top: 0` to their children: the pages sit under its header, which already cleared the top, and ~15 coach pages pad by `insets.top` and would otherwise have gained a 15pt gap.
+- Full-screen overlays opened from those pages cover the header, so they read `useScreenInsets()` (the un-zeroed value) instead: `ExerciseFormModal`, `SpcSessionPreview`. Any other full-screen overlay under a coach page that pads by `insets.top` still sits under the fade; switch it to `useScreenInsets()` if one turns up.
+
+**Lesson:** don't gate PWA-chrome fixes on the top inset; on this app it is 0 in the installed app.

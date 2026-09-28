@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, Platform, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MOVEMENT_PATTERNS, isLibraryReviewer } from "../lib/programming/exercises";
 import { listExerciseParents, createExerciseParent } from "../lib/programming/exerciseParents";
 import { useAuth } from "../lib/auth/AuthProvider";
@@ -16,6 +15,8 @@ import { findLikelyDuplicates } from "../lib/stringSimilarity";
 import { useKeyboardHeight, useScrollToKeyboard, DONE_BAR_HEIGHT } from "../lib/scrollToKeyboard";
 import { MuscleGroupPicker } from "./exercise/MuscleGroupPicker";
 import { ParentPicker } from "./exercise/ParentPicker";
+// Full-screen: covers CoachShell's header, so it clears the top itself.
+import { useScreenInsets } from "./GlassSafeArea";
 import {
   CARD_BORDER,
   INPUT_BORDER,
@@ -273,7 +274,7 @@ export function ExerciseFormModal({
   // switching from one parent to another re-pull the new parent's tags,
   // while never clobbering a set the coach has since edited by hand.
   const [taggedFromParent, setTaggedFromParent] = useState(false);
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   // Width, not Platform.OS: the installed PWA is a phone running the web
   // build, so a coach there gets the mobile library and must get the mobile
   // form to match. A tablet gets the drawer, which is what it has room for.
