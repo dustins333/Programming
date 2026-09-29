@@ -13,8 +13,12 @@
 // GoHighLevel yet" with a retry rather than an error that reads as lost
 // work. Saving again retries it.
 //
-// Body: { ghl_contact_id } or { user_id }, plus { notes } and { pillar }
-// (one of PILLARS' keys: the coach's choice, which saving locks in), optional
+// Body: { ghl_contact_id } or { user_id }, plus the session's template:
+// { goal } and { plan: string[] } (both required), optional { client_notes }
+// and { coach_notes }, and { pillar } (one of PILLARS' keys: the coach's
+// choice, which saving locks in). The older { notes } free-text body is
+// still accepted in place of the template, for a screen loaded before the
+// template shipped. Optional
 // { held_on: "YYYY-MM-DD" } (defaults to today in Boise) and optional
 // { appointment_id } (the calendar booking it was held as).
 //
@@ -24,8 +28,12 @@ import { corsHeaders } from "../_shared/cors.ts";
 import {
   describeGhlError,
   isIsoDate,
+  composeBody,
   isPillar,
   type KovaSessionRow,
+  readSessionFields,
+  type SessionFields,
+  textForRow,
   listGhlUsers,
   requireStaff,
   SESSION_COLUMNS,
@@ -44,8 +52,18 @@ Deno.serve(async (req) => {
   const { admin, caller } = auth;
 
   const input = await req.json().catch(() => ({}));
-  const notes = typeof input.notes === "string" ? input.notes.trim() : "";
-  if (!notes) return reply({ error: "Write some notes before saving." }, 400);
+  // The template, or (from a screen loaded before it shipped) free text.
+  let fields: SessionFields | null = null;
+  let notes: string;
+  if (input.goal !== undefined || input.plan !== undefined) {
+    const read = readSessionFields(input);
+    if (typeof read === "string") return reply({ error: read }, 400);
+    fields = read;
+    notes = composeBody(fields);
+  } else {
+    notes = typeof input.notes === "string" ? input.notes.trim() : "";
+    if (!notes) return reply({ error: "Write some notes before saving." }, 400);
+  }
   if (!isPillar(input.pillar)) return reply({ error: "Pick her pillar to save." }, 400);
   const pillar = input.pillar;
   const today = todayInBoise();
@@ -80,6 +98,10 @@ Deno.serve(async (req) => {
     coach_id: caller.id,
     notes,
     pillar,
+    goal: fields?.goal ?? null,
+    plan: fields?.plan ?? null,
+    client_notes: fields?.client_notes ?? null,
+    coach_notes: fields?.coach_notes ?? null,
     updated_at: new Date().toISOString(),
   };
   if (appointmentId) patch.ghl_appointment_id = appointmentId;
@@ -93,11 +115,24 @@ Deno.serve(async (req) => {
     .single();
   if (readErr || !row) return reply({ error: readErr?.message ?? "Saved, but couldn't read the session back." }, 500);
 
+  // The text she'd get if the coach sends one. The screen compares it with
+  // texted_body to decide whether to offer (again). A lookup failure only
+  // costs the offer, never the save.
+  const textPreview = await textForRow(admin, row as KovaSessionRow).catch((err) => {
+    console.error("text preview failed:", err);
+    return null;
+  });
+
   try {
     const synced = await syncSessionToGhl(admin, row as KovaSessionRow, await listGhlUsers());
-    return reply({ session: { ...row, ...synced }, ghl_synced: true });
+    return reply({ session: { ...row, ...synced }, ghl_synced: true, text_preview: textPreview });
   } catch (err) {
     console.error("GHL note write failed:", err);
-    return reply({ session: row, ghl_synced: false, error: `Saved in Kova, but not sent to GoHighLevel yet. ${describeGhlError(err)}` });
+    return reply({
+      session: row,
+      ghl_synced: false,
+      text_preview: textPreview,
+      error: `Saved in Kova, but not sent to GoHighLevel yet. ${describeGhlError(err)}`,
+    });
   }
 });

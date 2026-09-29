@@ -165,6 +165,35 @@ export async function listContactNotes(contactId: string): Promise<GhlNote[]> {
     .filter((n: GhlNote) => n.text.length > 0);
 }
 
+// Whether a text can reach this contact, and if not, why, in words for the
+// coach. GHL marks a contact's opt-outs either with the blanket `dnd` flag
+// or per channel in dndSettings (SMS.status "active" means texts are off).
+export async function getContactTexting(contactId: string): Promise<{ ok: boolean; reason: string | null }> {
+  const body = await ghl(`/contacts/${contactId}`, "2021-07-28", "get contact");
+  const c = body?.contact ?? {};
+  const first = (c.firstName || String(c.contactName ?? "").split(/\s+/)[0] || "This client").trim();
+  if (!c.phone) return { ok: false, reason: `${first} has no phone number in GLM.` };
+  if (c.dnd === true || c.dndSettings?.SMS?.status === "active") return { ok: false, reason: `${first} has texts turned off in GLM.` };
+  return { ok: true, reason: null };
+}
+
+// Texts the contact through GHL's conversations API. It passes the saving
+// coach's GHL user, but in practice (tested 2026-09-28) GHL sends it as the
+// CONTACT's assigned user regardless; Terra is fine with that. If GHL ever
+// rejects the send with a userId, it goes again without one.
+export async function sendSms(contactId: string, message: string, ghlUserId: string | null): Promise<void> {
+  const base = { locationId: Deno.env.get("GHL_LOCATION_ID"), contactId, type: "SMS", message };
+  if (ghlUserId) {
+    try {
+      await ghl("/conversations/messages", "2021-04-15", "send text", { method: "POST", body: JSON.stringify({ ...base, userId: ghlUserId }) });
+      return;
+    } catch (err) {
+      if (!(err instanceof GhlError) || err.status >= 500) throw err;
+    }
+  }
+  await ghl("/conversations/messages", "2021-04-15", "send text", { method: "POST", body: JSON.stringify(base) });
+}
+
 export async function getContactName(contactId: string): Promise<string | null> {
   const body = await ghl(`/contacts/${contactId}`, "2021-07-28", "get contact");
   const c = body?.contact;
@@ -225,11 +254,87 @@ export function noteHeader(heldOn: string, coachName: string | null): string {
 
 const HEADER_RE = /^Strategy Session · (\d{4}-\d{2}-\d{2})/;
 
-// Header, then the pillar the coach locked in, then her notes. The "Pillar:"
-// line is what lets the next summary see what was chosen last time.
+// Header, then the pillar the coach locked in, then her notes (composeBody's
+// sections, for a session saved with the template). The "Pillar:" line is
+// what lets the next summary see what was chosen last time.
 export function composeNote(heldOn: string, coachName: string | null, pillar: string | null, notes: string): string {
   const pillarLine = isPillar(pillar) ? `\nPillar: ${PILLARS[pillar]}` : "";
   return `${noteHeader(heldOn, coachName)}${pillarLine}\n\n${notes.trim()}`;
+}
+
+// The template every session is written in. Goal, Plan and Notes go to the
+// client; coach_notes never do. A session saved before the template has
+// only `notes` (these are all null).
+export type SessionFields = {
+  goal: string;
+  plan: string[];
+  client_notes: string | null;
+  coach_notes: string | null;
+};
+
+// Cleans what the app sent: trims everything, drops empty bullets, turns
+// empty optional fields into null. Returns an error string when a required
+// field is missing.
+export function readSessionFields(input: Record<string, unknown>): SessionFields | string {
+  const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const goal = text(input.goal);
+  const plan = Array.isArray(input.plan) ? input.plan.map(text).filter(Boolean) : [];
+  if (!goal) return "Write her goal before saving.";
+  if (plan.length === 0) return "Add at least one plan bullet before saving.";
+  return { goal, plan, client_notes: text(input.client_notes) || null, coach_notes: text(input.coach_notes) || null };
+}
+
+function clientSections(f: SessionFields): string {
+  const parts = [`GOAL\n${f.goal}`, `PLAN\n${f.plan.map((b) => `• ${b}`).join("\n")}`];
+  if (f.client_notes) parts.push(`NOTES\n${f.client_notes}`);
+  return parts.join("\n\n");
+}
+
+// The body of the GHL note (composeNote adds the header and pillar), and
+// what's stored in strategy_sessions.notes.
+export function composeBody(f: SessionFields): string {
+  const body = clientSections(f);
+  return f.coach_notes ? `${body}\n\nCOACH ONLY\n${f.coach_notes}` : body;
+}
+
+// "Mon, Sep 28" from a Boise YYYY-MM-DD, read at UTC noon so no offset can
+// move it a day.
+function shortWeekdayDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(
+    new Date(`${iso}T12:00:00Z`),
+  );
+}
+
+const firstWord = (name: string | null | undefined) => (name ?? "").trim().split(/\s+/)[0] ?? "";
+
+// The text the client gets: Goal, Plan and Notes only. Never the pillar,
+// never coach_notes. Deterministic, so texted_body can be compared with a
+// fresh composeText to tell whether an edit changed what she'd receive.
+export function composeText(f: SessionFields, heldOn: string, clientName: string | null, coachName: string | null): string {
+  const first = firstWord(clientName);
+  const coach = firstWord(coachName);
+  const hello = `Hi${first ? ` ${first}` : ""}, here's your Strategy Session from ${shortWeekdayDate(heldOn)}.`;
+  return [hello, clientSections(f), coach ? `Coach ${coach}` : null].filter(Boolean).join("\n\n");
+}
+
+// A saved row's fields, or null for a row saved before the template.
+export function rowFields(row: KovaSessionRow): SessionFields | null {
+  if (!row.goal || !row.plan?.length) return null;
+  return { goal: row.goal, plan: row.plan, client_notes: row.client_notes ?? null, coach_notes: row.coach_notes ?? null };
+}
+
+// The text for a saved row, naming the client (Kova name, else GHL's) and
+// the coach who saved it. Null for a row saved before the template.
+export async function textForRow(admin: SupabaseClient, row: KovaSessionRow): Promise<string | null> {
+  const fields = rowFields(row);
+  if (!fields) return null;
+  const users = admin.schema("core").from("users");
+  const [{ data: client }, { data: coach }] = await Promise.all([
+    users.select("name").eq("ghl_contact_id", row.ghl_contact_id).maybeSingle(),
+    row.coach_id ? users.select("name").eq("id", row.coach_id).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const clientName = client?.name ?? (await getContactName(row.ghl_contact_id).catch(() => null));
+  return composeText(fields, row.held_on, clientName, coach?.name ?? null);
 }
 
 // ---------------------------------------------------------------------------
@@ -403,6 +508,12 @@ export type KovaSessionRow = {
   ghl_synced_at: string | null;
   ghl_appointment_id: string | null;
   pillar?: string | null;
+  goal?: string | null;
+  plan?: string[] | null;
+  client_notes?: string | null;
+  coach_notes?: string | null;
+  texted_at?: string | null;
+  texted_body?: string | null;
   updated_at?: string;
 };
 
@@ -586,7 +697,16 @@ export async function ensureSummary(
 }
 
 export const SESSION_COLUMNS =
-  "id, ghl_contact_id, user_id, held_on, coach_id, notes, pillar, ghl_note_id, ghl_synced_at, ghl_appointment_id, updated_at";
+  "id, ghl_contact_id, user_id, held_on, coach_id, notes, pillar, goal, plan, client_notes, coach_notes, texted_at, texted_body, ghl_note_id, ghl_synced_at, ghl_appointment_id, updated_at";
+
+// The saving coach's GHL user, matched on email, so a note or text Kova
+// sends is attributed to them. Null when they have no GHL user.
+export async function coachGhlUserId(admin: SupabaseClient, coachId: string | null, ghlUsers: Map<string, GhlUser>): Promise<string | null> {
+  if (!coachId) return null;
+  const { data: coach } = await admin.schema("core").from("users").select("email").eq("id", coachId).maybeSingle();
+  const email = (coach?.email ?? "").toLowerCase();
+  return email ? [...ghlUsers.values()].find((u) => u.email === email)?.id ?? null : null;
+}
 
 // Writes one saved session to its client's GHL notes (posting, or editing
 // the note it already wrote) and records the note id. Shared by the save

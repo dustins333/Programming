@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
   const [{ data: recentRows, error: rowsErr }, { data: noteDated, error: notedErr }, { data: bookedSummaries }] = await Promise.all([
     programming
       .from("strategy_sessions")
-      .select("ghl_contact_id, user_id, held_on, coach_id")
+      .select("id, ghl_contact_id, user_id, held_on, coach_id, coach_notes")
       .gte("held_on", windowStart)
       .lte("held_on", windowEnd),
     programming
@@ -195,9 +195,13 @@ Deno.serve(async (req) => {
 
   // Completed: one entry per client, the session closest to the day.
   // A Kova save beats a note-derived date for the same client.
-  const completedByContact = new Map<string, { held_on: string; coach_name: string | null; source: "kova" | "notes" }>();
+  // Kova saves carry has_coach_notes, for the list's "Add coach notes" /
+  // "Edit coach notes" button; a session written straight into GHL has no
+  // Kova row to add them to, so it gets no button.
+  type Completed = { held_on: string; coach_name: string | null; source: "kova" | "notes"; has_coach_notes: boolean };
+  const completedByContact = new Map<string, Completed>();
   for (const r of noteDated ?? []) {
-    completedByContact.set(r.ghl_contact_id, { held_on: r.last_session_on, coach_name: null, source: "notes" });
+    completedByContact.set(r.ghl_contact_id, { held_on: r.last_session_on, coach_name: null, source: "notes", has_coach_notes: false });
   }
   for (const r of recentRows ?? []) {
     const prev = completedByContact.get(r.ghl_contact_id);
@@ -206,6 +210,7 @@ Deno.serve(async (req) => {
       held_on: r.held_on,
       coach_name: r.coach_id ? coachName.get(r.coach_id) ?? null : null,
       source: "kova",
+      has_coach_notes: !!r.coach_notes,
     });
   }
   const completed = [...completedByContact.entries()]

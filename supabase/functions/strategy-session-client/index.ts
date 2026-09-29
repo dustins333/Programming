@@ -36,6 +36,7 @@ import {
   ensureSummary,
   getCalendarId,
   getContactName,
+  getContactTexting,
   notesFingerprint,
   readCachedSummary,
   type SummaryRow,
@@ -84,13 +85,16 @@ Deno.serve(async (req) => {
   const today = input.date === undefined ? todayInBoise() : input.date;
   if (!isIsoDate(today)) return reply({ error: "date must be a YYYY-MM-DD date" }, 400);
 
-  let notes, appointments, ghlUsers, contactName;
+  let notes, appointments, ghlUsers, contactName, texting;
   try {
-    [notes, appointments, ghlUsers, contactName] = await Promise.all([
+    [notes, appointments, ghlUsers, contactName, texting] = await Promise.all([
       listContactNotes(contactId),
       listContactAppointments(contactId),
       listGhlUsers(),
       member?.name ? Promise.resolve(member.name as string) : getContactName(contactId),
+      // Whether a copy can be texted to her after saving. Unknown (null)
+      // on a failed lookup: the screen still offers, and the send says why.
+      getContactTexting(contactId).catch(() => null),
     ]);
   } catch (err) {
     if (err instanceof GhlError && err.status === 404) return reply({ error: "That client wasn't found in GoHighLevel." }, 404);
@@ -169,7 +173,7 @@ Deno.serve(async (req) => {
   const { notes: _verdicts, ...summary } = summaryRow?.summary ?? ({} as Record<string, unknown>);
 
   return reply({
-    client: { ghl_contact_id: contactId, user_id: userId, name: contactName ?? null },
+    client: { ghl_contact_id: contactId, user_id: userId, name: contactName ?? null, texting },
     today,
     last_session: past[0] ?? null,
     last_note: lastWithNote ? { date: lastWithNote.date, coach_name: lastWithNote.coach_name, text: lastWithNote.note_text } : null,
@@ -186,6 +190,12 @@ Deno.serve(async (req) => {
       notes: todayRow.notes,
       ghl_synced: !!todayRow.ghl_note_id,
       pillar: todayRow.pillar ?? null,
+      goal: todayRow.goal ?? null,
+      plan: todayRow.plan ?? null,
+      client_notes: todayRow.client_notes ?? null,
+      coach_notes: todayRow.coach_notes ?? null,
+      texted_at: todayRow.texted_at ?? null,
+      texted_body: todayRow.texted_body ?? null,
       saved_at: todayRow.updated_at ?? null,
     },
   });

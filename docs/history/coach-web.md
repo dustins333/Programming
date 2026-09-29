@@ -1694,3 +1694,123 @@ Terra asked for the dashboard's "In the gym" band to scroll back to previous wee
 - **Past weeks drop "sessions today"** (meaningless once the week is over) and relabel "this week" to "that week", in the band and in `GymWeekModal`'s eyebrows, notes, subtitles and empty states. The roster is today's roster: there is no record of who was enrolled in a past week, and the modal note says "On a training program now".
 - **Bug found while verifying:** the decorative corner circle hangs 50px off the band's edge, which made the `overflow: hidden` band scrollable on web; focusing a week arrow slid the whole band sideways. The circle now sits in its own clipped full-size layer, so the band's scrollWidth equals its width.
 - Verified in the browser pane at 1300px and 375px: stepped back two weeks, figures change (Sep 14: 256 / 130 / 19), popup copy reads "that week", no sideways scroll after clicking. `npm run build` clean, Babel scope pass clean over all six touched files.
+
+## Strategy sessions: the template and texting the client (2026-09-28)
+
+**What changed.** The one free-text notes box became a fixed template, the
+same for every session, so sessions can be classified later:
+
+- **Shared with {first}** (white card, clay edge, chat icon): **Goal**
+  (required), **Plan** (required, one field per bullet, "+ Add bullet", Enter
+  inside a bullet splits it into a new one, empty bullets are dropped on
+  save), **Notes** (optional).
+- **Coach only · not sent to {first}** (inset colour, dashed edge, lock):
+  the pillar dropdown and **Coach notes** (optional, collapsed behind
+  "+ Add coach-only notes"). Terra wanted "this doesn't go to the client"
+  obvious visually, with no explanatory copy, so the split is carried by the
+  two different surfaces and the box titles.
+
+Components: `components/coach/strategy/SessionForm.js` (`SharedBox`,
+`CoachOnlyBox`, `bullet()`), `components/coach/strategy/SavedDialog.js`.
+
+**GHL is still ONE note per session**, by Terra's call: header, `Pillar:`
+line, then `GOAL` / `PLAN` (• bullets) / `NOTES` / `COACH ONLY` sections.
+`composeBody` in `_shared/strategySession.ts` builds it and it is also what's
+stored in `strategy_sessions.notes`, so `syncSessionToGhl`, the day list's
+retry and history's "show what was typed" fallback didn't change. The header
+format is untouched on purpose (HEADER_RE depends on it).
+
+**The AI summary is NOT written onto the note.** Discussed and decided
+against: the summary is built from the notes, so putting it on each note
+would feed old summaries back into the next one, repeating stale details as
+current. It's regenerated fresh on the page anyway.
+
+**Texting the client a copy.** Never automatic. After Save, `SavedDialog`
+opens: "Saved to GLM" (or "Saved in Kova" + the keep-trying line), then, if
+there's something new for her, "Send {first} a copy?" with the exact text as
+a preview and No / Yes. The text (`composeText`) is:
+
+```
+Hi Sarah, here's your Strategy Session from Mon, Sep 28.
+
+GOAL ... PLAN (• bullets) ... NOTES (only if filled)
+
+Coach Terra
+```
+
+Never the pillar, never coach notes. Sent by the new `strategy-session-text`
+function (`{ session_id }`) through GHL `POST /conversations/messages`, as the
+saving coach's GHL user (matched on email, `coachGhlUserId`) so it lands in
+their thread; if GHL rejects the send with a `userId`, it retries once from
+the location. The exact message goes in `texted_body`.
+
+**When it offers.** The save response carries `text_preview`; the dialog
+offers when `text_preview !== texted_body`. So a first save offers, an edit
+to Goal/Plan/Notes offers again ("You texted Sarah at 3:12. Send the updated
+copy?"), and an edit to only the pillar or coach notes offers nothing, just
+"Saved to GLM". After a No, the saved card keeps a "Text {first} a copy"
+link. A session saved before the template has no Goal/Plan, so no preview
+and no offer.
+
+**Can't-text cases.** The client call returns `client.texting` from the GHL
+contact (`getContactTexting`): no `phone`, or `dnd` / `dndSettings.SMS.status
+=== "active"`, means the dialog says why and shows only Done. A failed lookup
+returns null and the dialog offers anyway; the send function re-checks and
+reports. A failed send keeps the dialog open with the reason and "Try again".
+
+**Coach notes after the session.** These are 10-minute conversations and
+nobody types private notes in front of the client, so a Kova-saved row in
+Completed gets an "Add coach notes" / "Edit coach notes" button
+(`has_coach_notes` from the day function). It opens the client page with
+`focus=coach` and `date=held_on` (the session's own day, not whatever day the
+list shows): coach notes are expanded, focused, and scrolled into view. Saving
+edits the same Kova row and the same GHL note. Sessions found only in GHL
+notes (`source: "notes"`) have no Kova row and get no button.
+
+**Follow-up the same day: fields grow, bullets look like the nutrition Plan
+tab.** Terra: the boxes were "goofy sized" with scrollbars, and the bullets
+were "quite terrible". Every field is now a `GrowingInput`: it wraps and grows
+downward, never scrolls inside itself (Goal starts at one line, Notes and
+Coach notes at three). **It cannot hit the auto-grow loop this codebase has
+been bitten by three times** (platform-auth-infra history), because it never
+measures itself: an invisible copy of the text, with the same font, padding
+and border, sits in normal flow and sets the wrapper's height, and the real
+input is pinned to the wrapper's four edges. No `onContentSizeChange`, no
+height state. Measured at 375px: `scrollHeight === clientHeight` on all six
+fields, through a 3-line goal, a 3-line bullet and a 6-line note, and no
+console errors. Plan bullets copy `components/nutrition/PlanPhases.js`: a dash,
+a bare line of text, a faint ✕, "+ Add bullet". Enter starts the next bullet;
+Backspace in an empty one deletes it and focuses the one above. **Trap hit
+while building it:** a row child needs `flexBasis: 0` or its long text's
+natural width squeezes the fixed-width dash beside it, but the same
+`flexBasis: 0` in a column (Goal) collapses the box to its min height and
+clips the text. Hence `GrowingInput`'s `inRow` prop, only on bullets.
+
+Then, per Terra: every field is a white box, including one per plan bullet
+("so it's obvious that we are entering info for each bullet"), and the Shared
+card went from white to `T.clayTint` so the white fields stand out against it
+(the Coach only box was already on `T.inset`). The "Enter for the next one"
+placeholder is gone; Enter still starts the next bullet. Required fields (Goal, Plan, Her pillar) carry a red `*` after the label
+(`FieldLabel required`); Notes and Coach notes say "optional".
+
+**Old sessions** (saved 2026-09-27 with the free-text box): opening one puts
+its text in Notes; Goal and Plan are empty and required on the next save.
+
+**Deploy order matters:** migration 0138 (applied), then the functions
+(`strategy-session-text` is new; `-save`, `-client`, `-day` all changed and
+select the new columns), then the app push. The save function still accepts
+the old `{ notes }` body, so an app loaded before the push keeps saving.
+
+**Verified:** `npm run build` clean; Babel parse + unresolved-identifier +
+unused-import pass on every touched JS file; tsc on the Edge Function files
+(only the usual Deno/`npm:` resolution noise); the shipped `readSessionFields`
+/ `composeText` / `composeNote(composeBody)` run in Node on sample data and
+produce exactly the agreed text and note, and a coach-notes-only edit leaves
+the text unchanged. Form and every dialog state (ask, sending, resend with
+error, no phone + unsynced) driven at 375px through a throwaway
+`app/zz-harness.js`, since deleted. **Tested live by Terra (2026-09-28):** the GHL note came through correctly,
+and so did the text, but the text showed as from the **client's assigned
+user** in GHL, not the signed-in coach: GHL ignores the `userId` we pass on
+`/conversations/messages` and sends as the contact's assigned user. Terra:
+"I think that's prob ok", so it was left that way. Don't spend time trying to
+make it send as the saving coach unless she asks.

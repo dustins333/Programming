@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { View, Text, ScrollView, TextInput, ActivityIndicator, Platform } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { BottomTabBarHeightContext } from "expo-router/build/react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,16 +8,25 @@ import { PressFade } from "../../../components/PressFade";
 import { T, MAX_WIDTH, GUTTER, Card, Eyebrow, shortDate, longDate, firstName, coachShort } from "../../../components/coach/strategy/ui";
 import { dateInBoise, formatTimeInBoise, todayInBoise } from "../../../lib/boiseDate";
 import { useKeyboardHeight } from "../../../lib/scrollToKeyboard";
-import { getStrategySessionClient, pillarLabel, saveStrategySession } from "../../../lib/programming/strategySessions";
-import { PillarDropdown } from "../../../components/coach/strategy/PillarDropdown";
+import { getStrategySessionClient, pillarLabel, saveStrategySession, textStrategySession } from "../../../lib/programming/strategySessions";
+import { bullet, CoachOnlyBox, SharedBox } from "../../../components/coach/strategy/SessionForm";
+import { SavedDialog } from "../../../components/coach/strategy/SavedDialog";
 import { fonts } from "../../../lib/theme";
 
 // One client's strategy session: prep (a one-or-two sentence recap, the
 // AI's suggested pillar, questions to ask, then the last write-up and
-// history) on top; the pillar dropdown, today's notes and Save underneath.
-// The coach must choose the pillar herself (the dropdown starts blank, the
-// suggestion is only marked), and saving locks it in. Built from
-// design_handoff_strategy_sessions_v1; see its README for every state.
+// history) on top; the session template and Save underneath. The template
+// (components/coach/strategy/SessionForm) is Goal, Plan bullets and Notes,
+// shared with the client, then a Coach only box with the pillar and
+// coach-only notes. The coach must choose the pillar herself (the dropdown
+// starts blank, the suggestion is only marked), and saving locks it in.
+// Built from design_handoff_strategy_sessions_v1; see its README for every
+// state.
+//
+// Save opens SavedDialog, which offers to text her a copy of the shared part
+// whenever it changed since the last text. ?focus=coach (the day list's
+// "Add coach notes") opens with coach-only notes out and focused, for the
+// write-up a coach adds after the client has left.
 //
 // Loads in two steps so the page is usable at once: a cache-only call that
 // never waits on the AI, then, only if her summary is missing or stale, a
@@ -219,7 +228,7 @@ function History({ entries }) {
   );
 }
 
-function SavedCard({ saved, name, onRetry, retrying }) {
+function SavedCard({ saved, name, onRetry, retrying, textedAt, onText }) {
   const time = formatTimeInBoise(saved.at);
   return (
     <View style={{ borderWidth: 2, borderColor: T.olive, borderRadius: 18, backgroundColor: T.card, padding: 16 }}>
@@ -234,6 +243,18 @@ function SavedCard({ saved, name, onRetry, retrying }) {
           <Text style={{ fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, color: T.ink2, marginTop: 2 }}>
             {saved.synced ? `In GLM. ${name}'s moved to Completed.` : `${name}'s in Completed and her notes are safe.`}
           </Text>
+          {textedAt ? (
+            <Text style={{ fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, color: T.ink2, marginTop: 2 }}>
+              {`Texted to ${name} at ${formatTimeInBoise(textedAt)}.`}
+            </Text>
+          ) : null}
+          {onText ? (
+            <PressFade onPress={onText} style={{ alignSelf: "flex-start", height: 40, justifyContent: "center" }}>
+              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13.5, color: T.clayText }}>
+                {textedAt ? `Text ${name} the updated copy` : `Text ${name} a copy`}
+              </Text>
+            </PressFade>
+          ) : null}
         </View>
       </View>
       {!saved.synced ? (
@@ -273,6 +294,12 @@ function SavedCard({ saved, name, onRetry, retrying }) {
   );
 }
 
+// Everything that's saved, in one comparable shape: what "dirty" and
+// "unchanged since the save" compare.
+function snapshot({ goal, plan, clientNotes, coachNotes, pillar }) {
+  return JSON.stringify([goal.trim(), plan.map((b) => b.text.trim()).filter(Boolean), clientNotes.trim(), coachNotes.trim(), pillar]);
+}
+
 export default function StrategyClient() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -283,14 +310,28 @@ export default function StrategyClient() {
 
   const [state, setState] = useState({ status: "loading" });
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [notes, setNotes] = useState("");
+  const [goal, setGoal] = useState("");
+  const [plan, setPlan] = useState(() => [bullet()]);
+  const [clientNotes, setClientNotes] = useState("");
+  const [coachNotes, setCoachNotes] = useState("");
+  const focusCoach = params.focus === "coach";
+  const [showCoachNotes, setShowCoachNotes] = useState(focusCoach);
+  // Focus coach notes only when asked for (the day list's button, or the
+  // "+ Add coach-only notes" tap), never just because some already exist.
+  const [focusCoachNotes, setFocusCoachNotes] = useState(focusCoach);
+  const [showMissing, setShowMissing] = useState(false);
   const [pillar, setPillar] = useState(null);
   const [pillarMissing, setPillarMissing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  // { at, synced, notes, pillar } for a save made during THIS visit.
+  // { at, synced, snap } for a save made during THIS visit.
   const [saved, setSaved] = useState(null);
+  // The saved session's id and text state: { id, textedAt, textedBody,
+  // preview }. preview is the text she'd get for what's saved now.
+  const [session, setSession] = useState(null);
+  const [dialog, setDialog] = useState(null);
+  const coachBoxRef = useRef(null);
   // today_session as it was when the screen loaded: a save made earlier.
   const [earlier, setEarlier] = useState(null);
   const notesSeeded = useRef(false);
@@ -320,10 +361,22 @@ export default function StrategyClient() {
       setState({ status: "ready", data });
       if (!notesSeeded.current) {
         notesSeeded.current = true;
-        if (data.today_session) {
-          setNotes(data.today_session.notes ?? "");
-          setPillar(data.today_session.pillar ?? null);
-          setEarlier({ at: data.today_session.saved_at, synced: data.today_session.ghl_synced });
+        const t = data.today_session;
+        if (t) {
+          if (t.goal) {
+            setGoal(t.goal);
+            setPlan(t.plan?.length ? t.plan.map((x) => bullet(x)) : [bullet()]);
+            setClientNotes(t.client_notes ?? "");
+          } else {
+            // Saved before the template: its free text lands in Notes, and
+            // Goal and Plan wait to be filled in on the next save.
+            setClientNotes(t.notes ?? "");
+          }
+          setCoachNotes(t.coach_notes ?? "");
+          if (t.coach_notes) setShowCoachNotes(true);
+          setPillar(t.pillar ?? null);
+          setEarlier({ at: t.saved_at, synced: t.ghl_synced });
+          setSession({ id: t.id, textedAt: t.texted_at, textedBody: t.texted_body, preview: null });
         }
       }
       if (data.summary_pending) fetchFull(false);
@@ -340,14 +393,22 @@ export default function StrategyClient() {
     }, [load])
   );
 
+  const fields = { goal, plan, clientNotes, coachNotes, pillar };
+  const snap = snapshot(fields);
+  const ready = !!goal.trim() && plan.some((b) => b.text.trim()) && !!pillar;
+
+  // A copy is worth offering when what she'd get differs from what she was
+  // last sent (or she was never sent one). An edit to coach-only fields
+  // leaves the preview unchanged, so it offers nothing.
+  const offerFor = (s) => !!s?.preview && s.preview !== s.textedBody;
+
   const save = useCallback(
     async ({ silent = false } = {}) => {
-      const text = notes.trim();
-      if (!text) return;
-      // Tappable without a pillar on purpose: say what's missing rather
+      // Tappable with fields missing on purpose: say what's missing rather
       // than leave a button that looks ready and does nothing.
-      if (!pillar) {
-        setPillarMissing(true);
+      if (!ready) {
+        setShowMissing(true);
+        if (!pillar) setPillarMissing(true);
         return;
       }
       silent ? setRetrying(true) : setSaving(true);
@@ -355,24 +416,48 @@ export default function StrategyClient() {
       try {
         const res = await saveStrategySession({
           ghlContactId: contactId,
-          notes: text,
+          goal,
+          plan: plan.map((b) => b.text),
+          clientNotes,
+          coachNotes,
           pillar,
           appointmentId: state.data?.today_booking?.appointment_id,
           heldOn: date !== today ? date : undefined,
         });
-        setSaved({ at: res.session?.updated_at ?? new Date().toISOString(), synced: !!res.ghl_synced, notes, pillar });
+        const synced = !!res.ghl_synced;
+        const next = {
+          id: res.session?.id,
+          textedAt: res.session?.texted_at ?? null,
+          textedBody: res.session?.texted_body ?? null,
+          preview: res.text_preview ?? null,
+        };
+        setSaved({ at: res.session?.updated_at ?? new Date().toISOString(), synced, snap });
+        setSession(next);
+        if (!silent) setDialog({ synced, offer: offerFor(next), preview: next.preview, textedAt: next.textedAt, sending: false, error: null });
       } catch (err) {
         if (!silent) setSaveError(err.message ?? "Couldn't save. Try again.");
       } finally {
         silent ? setRetrying(false) : setSaving(false);
       }
     },
-    [notes, pillar, contactId, state.data, date, today]
+    [ready, goal, plan, clientNotes, coachNotes, pillar, snap, contactId, state.data, date, today]
   );
 
-  // Keep trying GLM on our own while the screen is open, as long as the
-  // notes haven't been edited since the save (an edit waits for Save).
-  const unsynced = saved && !saved.synced && saved.notes === notes && saved.pillar === pillar;
+  const sendText = async () => {
+    if (!session?.id) return;
+    setDialog((d) => d && { ...d, sending: true, error: null });
+    try {
+      const res = await textStrategySession(session.id);
+      setSession((s) => ({ ...s, textedAt: res.texted_at, textedBody: res.texted_body }));
+      setDialog(null);
+    } catch (err) {
+      setDialog((d) => d && { ...d, sending: false, error: err.message ?? "The text didn't send." });
+    }
+  };
+
+  // Keep trying GLM on our own while the screen is open, as long as
+  // nothing's been edited since the save (an edit waits for Save).
+  const unsynced = saved && !saved.synced && saved.snap === snap;
   const saveRef = useRef(save);
   saveRef.current = save;
   useEffect(() => {
@@ -380,6 +465,15 @@ export default function StrategyClient() {
     const id = setInterval(() => saveRef.current({ silent: true }), RETRY_MS);
     return () => clearInterval(id);
   }, [unsynced]);
+
+  // Arriving from "Add coach notes": bring the Coach only box into view once
+  // the page has rendered (web; the coach app is used as a PWA).
+  const isReady = state.status === "ready";
+  useEffect(() => {
+    if (!isReady || !focusCoach || Platform.OS !== "web") return undefined;
+    const id = setTimeout(() => coachBoxRef.current?.scrollIntoView?.({ block: "center" }), 150);
+    return () => clearTimeout(id);
+  }, [isReady, focusCoach]);
 
   const backToToday = () =>
     router.canGoBack()
@@ -425,9 +519,9 @@ export default function StrategyClient() {
   const history = past.filter((_, i) => i !== shownIndex);
   const showSummaryCard = data.note_count > 0 || data.summary || summaryLoading;
 
-  const dirty = !saved || saved.notes !== notes || saved.pillar !== pillar;
+  const dirty = !saved || saved.snap !== snap;
   const hasSaved = !!saved || !!earlier;
-  const canSave = notes.trim().length > 0;
+  const canSave = ready;
   const showBack = saved && !dirty;
   const kbPad = Platform.OS === "ios" ? Math.max(0, keyboardHeight - tabBarHeight) : 0;
 
@@ -500,22 +594,6 @@ export default function StrategyClient() {
                 </Text>
               ) : (
                 <>
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13.5, color: T.ink2, marginBottom: 6 }}>Her pillar</Text>
-                    <PillarDropdown
-                      value={pillar}
-                      suggested={data.summary?.pillar}
-                      invalid={pillarMissing && !pillar}
-                      disabled={saving}
-                      onChange={(v) => {
-                        setPillar(v);
-                        setPillarMissing(false);
-                      }}
-                    />
-                    {pillarMissing && !pillar ? (
-                      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 13, color: "#b23a22", marginTop: 6 }}>Pick her pillar to save.</Text>
-                    ) : null}
-                  </View>
                   {earlier && !saved ? (
                     <View style={{ marginTop: 10, backgroundColor: T.oliveTint, borderRadius: 14, padding: 12 }}>
                       <Text style={{ fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, color: T.olive }}>
@@ -523,32 +601,53 @@ export default function StrategyClient() {
                       </Text>
                     </View>
                   ) : null}
-                  <TextInput
-                    value={notes}
-                    onChangeText={setNotes}
-                    editable={!saving}
-                    multiline
-                    textAlignVertical="top"
-                    placeholder="Goals, what's changed, the plan. Plain sentences are fine."
-                    placeholderTextColor={T.ink4}
-                    style={{
-                      marginTop: 10,
-                      height: 220,
-                      borderRadius: 14,
-                      borderWidth: 1.5,
-                      borderColor: T.inputBorder,
-                      backgroundColor: T.card,
-                      padding: 14,
-                      fontFamily: fonts.sans,
-                      fontSize: 15,
-                      lineHeight: 23,
-                      color: T.ink,
-                      opacity: saving ? 0.6 : 1,
-                    }}
-                  />
+                  <View style={{ marginTop: 10, gap: 14 }}>
+                    <SharedBox
+                      first={first}
+                      goal={goal}
+                      onGoal={setGoal}
+                      plan={plan}
+                      onPlan={setPlan}
+                      clientNotes={clientNotes}
+                      onClientNotes={setClientNotes}
+                      showMissing={showMissing}
+                      disabled={saving}
+                    />
+                    <CoachOnlyBox
+                      ref={coachBoxRef}
+                      first={first}
+                      pillar={pillar}
+                      onPillar={(v) => {
+                        setPillar(v);
+                        setPillarMissing(false);
+                      }}
+                      suggested={data.summary?.pillar}
+                      pillarMissing={pillarMissing}
+                      coachNotes={coachNotes}
+                      onCoachNotes={setCoachNotes}
+                      showCoachNotes={showCoachNotes}
+                      onShowCoachNotes={() => {
+                        setFocusCoachNotes(true);
+                        setShowCoachNotes(true);
+                      }}
+                      autoFocusCoachNotes={focusCoachNotes}
+                      disabled={saving}
+                    />
+                  </View>
                   {saved ? (
                     <View style={{ marginTop: 14 }}>
-                      <SavedCard saved={saved} name={first} retrying={retrying} onRetry={() => save({ silent: true })} />
+                      <SavedCard
+                        saved={saved}
+                        name={first}
+                        retrying={retrying}
+                        onRetry={() => save({ silent: true })}
+                        textedAt={session?.textedAt}
+                        onText={
+                          !dirty && offerFor(session) && state.data.client.texting?.ok !== false
+                            ? () => setDialog({ synced: saved.synced, offer: true, preview: session.preview, textedAt: session.textedAt, sending: false, error: null })
+                            : null
+                        }
+                      />
                     </View>
                   ) : null}
                   {saveError ? (
@@ -605,6 +704,7 @@ export default function StrategyClient() {
           </View>
         ) : null}
       </View>
+      <SavedDialog dialog={dialog} first={first} texting={data.client.texting} onYes={sendText} onClose={() => setDialog(null)} />
     </CoachShell>
   );
 }

@@ -121,6 +121,15 @@ export default function StrategyToday() {
   const openClient = (contactId) =>
     router.push({ pathname: "/(coach)/strategy/[contactId]", params: { contactId, ...(date !== today ? { date } : {}) } });
 
+  // Coach-only notes are usually written after the client has gone, so a
+  // Kova-saved session in Completed gets a button straight to them, on the
+  // day it was held (which isn't always the day this list is showing).
+  const openCoachNotes = (contactId, heldOn) =>
+    router.push({
+      pathname: "/(coach)/strategy/[contactId]",
+      params: { contactId, focus: "coach", ...(heldOn !== today ? { date: heldOn } : {}) },
+    });
+
   const focusSearch = () => {
     if (!clients) loadClients();
     searchRef.current?.focus();
@@ -326,20 +335,41 @@ export default function StrategyToday() {
                       const onDay = c.held_on === date;
                       const when = onDay ? (isToday ? "Today" : shortDate(c.held_on)) : shortDate(c.held_on);
                       const right = [when, c.coach_name ? coachShort(c.coach_name) : null].filter(Boolean).join(" | ");
+                      const last = i === completed.length - 1;
                       return (
-                        <Row
-                          key={c.client.ghl_contact_id}
-                          minHeight={52}
-                          last={i === completed.length - 1}
-                          onPress={() => openClient(c.client.ghl_contact_id)}
-                        >
-                          {onDay ? <Ionicons name="checkmark" size={17} color={T.olive} style={{ marginRight: 8 }} /> : null}
-                          <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontFamily: fonts.sansSemiBold, fontSize: 14, color: T.ink }}>
-                            {c.client.name ?? "Unknown client"}
-                          </Text>
-                          <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: onDay ? T.olive : T.ink3, marginLeft: 10 }}>{right}</Text>
-                          <Chevron />
-                        </Row>
+                        <View key={c.client.ghl_contact_id} style={{ borderBottomWidth: last ? 0 : 1, borderBottomColor: T.border }}>
+                          <Row minHeight={52} last onPress={() => openClient(c.client.ghl_contact_id)}>
+                            {onDay ? <Ionicons name="checkmark" size={17} color={T.olive} style={{ marginRight: 8 }} /> : null}
+                            <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontFamily: fonts.sansSemiBold, fontSize: 14, color: T.ink }}>
+                              {c.client.name ?? "Unknown client"}
+                            </Text>
+                            <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: onDay ? T.olive : T.ink3, marginLeft: 10 }}>{right}</Text>
+                            <Chevron />
+                          </Row>
+                          {c.source === "kova" ? (
+                            <PressFade
+                              onPress={() => openCoachNotes(c.client.ghl_contact_id, c.held_on)}
+                              style={{
+                                alignSelf: "flex-start",
+                                marginLeft: 16,
+                                marginTop: -4,
+                                marginBottom: 10,
+                                height: 40,
+                                paddingHorizontal: 12,
+                                borderRadius: 10,
+                                backgroundColor: T.inset,
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <Ionicons name="lock-closed" size={12} color={T.ink2} />
+                              <Text style={{ fontFamily: fonts.sansBold, fontSize: 13, color: T.ink2 }}>
+                                {c.has_coach_notes ? "Edit coach notes" : "Add coach notes"}
+                              </Text>
+                            </PressFade>
+                          ) : null}
+                        </View>
                       );
                     })}
                   </Card>
