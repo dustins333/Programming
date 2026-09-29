@@ -2079,3 +2079,47 @@ Terra: the check-in questions and check-in history should be collapsed until wan
 - **Collapsed sections.** Questions and history are `CollapsibleCard`s, folded by default. Headers carry no subtitle or filler copy (Terra asked for it gone; the template/custom count and its `listTemplateQuestions` fetch were removed with it). History, folded, shows a new `CheckinStatusStrip` (exported from `CheckinWeekTimeline.js`): one dot per recent week, oldest to newest, colored with the same `STATUS_STYLE` as the rows (current week dashed/hollow), labeled by check-in Monday and no counts text (dots only, per Terra). The start-date week filter the timeline used was pulled into a shared `recentWeeksFor` so the strip and the list can't disagree.
 
 Verified: `npm run build`, Babel unresolved-identifier/unused-import pass, and a throwaway `app/zz-harness.js` rendering the panel with fake data (Off and Every-2-weeks clients, four fake check-ins) at 1300px and 375px, including expanding history (Reopen/Close out rows intact). No autosave write was exercised against the database (harness is signed out); try one field on a real client.
+
+## Progress photos can zoom out past cover, for pre-cropped uploads (2026-09-28)
+
+Follow-up to "Progress photos can be nudged into a common frame" above.
+Rae Karanjia's last two check-ins came in pre-cropped tall and skinny (the
+9/24 front is 854x2000, ratio 0.43, against the 3:4 compare panes), so
+`cover` cut about 43% of the height and her head and feet were gone. The
+100% zoom floor meant there was no way out of it.
+
+**Zoom now goes below 100%, down to `fitScale`: the point where the whole
+photo just fits in that frame** (`contain`, expressed relative to cover).
+Past that it would only add empty space. `FLOOR_SCALE` (0.2) is just a
+sanity clamp on stored values; the real floor is per photo and per frame.
+With no `ar` on file the floor stays at 1, so nothing changes for a photo
+the editor has never measured.
+
+**The floor is re-applied at render against whatever frame the photo is
+in** (`effectiveScale`), same idea as the pan clamp: a 57% set in a 3:4 pane
+would shrink the photo on BOTH axes in the board's much narrower 3-up cell,
+so there it is lifted to that cell's own whole-photo fit instead. The most
+any frame will ever do is show the whole photo.
+
+**Pan rule generalised: per axis, the image either covers the frame or
+stays fully inside it** (`Math.abs(image - frame) / 2`). So a zoomed-out
+photo can still slide sideways to line up against the guides, and no photo
+edge ever lands mid-frame. Brute-forced across 8,000 combinations of frame
+shape x photo ratio x scale x offset against the shipped source (copied to
+.mjs and imported, not paraphrased): zero violations, pixel and fraction
+paths agree.
+
+**Bars take whatever the frame sits on** (Terra's call: match the page, not
+white). `FramedPhoto` drops its `#f1efed` placeholder fill to transparent
+when `framingLayoutFractions(...).letterboxed`, so the bars are the page on
+coach and member screens and the dark cell backing on the shareable board.
+In the editor the idle outline switches from translucent white to `#ddd6cd`
+when letterboxed, since the frame no longer has a fill to show its edge.
+
+Verified through a throwaway `app/zz-harness.js` with a synthetic 854x2000
+figure: at 100% head and feet cut exactly as reported; 11 zoom-out taps
+stopped at 57% with the minus button dimmed and the whole figure visible;
+a drag slid it flush to the frame's right edge and no further (no vertical
+room, as expected); the board-shaped cell showed the whole photo with dark
+bars. Harness deleted, `npm run build` clean, Babel scope pass clean.
+**Not verified**: behind a real login on Rae's actual photos, and native.

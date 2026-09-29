@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Image, Pressable, PanResponder, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { FramedPhoto } from "./FramedPhoto";
-import { MAX_SCALE, MIN_SCALE, SCALE_STEP, normalizeFraming, panRange, withAspectRatio, withPan, withScale } from "../../lib/nutrition/photoFraming";
+import { MAX_SCALE, SCALE_STEP, framingLayoutFractions, minScale, normalizeFraming, panRange, withAspectRatio, withPan, withScale } from "../../lib/nutrition/photoFraming";
 import { fonts } from "../../lib/theme";
 
 const isWeb = Platform.OS === "web";
@@ -90,6 +90,12 @@ export function AdjustablePhoto({ uri, framing, width, height, radius = 12, onCh
   const scale = f?.scale ?? 1;
   const range = panRange(framing, width, height);
   const canPan = range.x > 0.001 || range.y > 0.001;
+  // Zooming out stops where the whole photo just fits; past that it would
+  // only add empty space.
+  const floor = minScale(framing, width, height);
+  // Once the frame shows around the photo it has no fill of its own, so
+  // the idle outline has to carry the frame's edge on a light page.
+  const letterboxed = !!framingLayoutFractions(framing, width / height)?.letterboxed;
 
   const step = (delta) => {
     onChange(withScale(framing, scale + delta, width, height));
@@ -120,7 +126,7 @@ export function AdjustablePhoto({ uri, framing, width, height, radius = 12, onCh
               bottom: 0,
               borderRadius: radius,
               borderWidth: 2,
-              borderColor: dragging ? tone : "rgba(255,255,255,0.55)",
+              borderColor: dragging ? tone : letterboxed ? "#ddd6cd" : "rgba(255,255,255,0.55)",
             }}
           />
         </FramedPhoto>
@@ -130,7 +136,7 @@ export function AdjustablePhoto({ uri, framing, width, height, radius = 12, onCh
         style={{ position: "absolute", left: 8, right: 8, bottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 }}
       >
         <View className="flex-row items-center" style={{ borderRadius: 999, backgroundColor: "rgba(26,20,17,0.72)", paddingHorizontal: 4, paddingVertical: 3, gap: 2 }}>
-          <ZoomButton icon="remove" onPress={() => step(-SCALE_STEP)} disabled={scale <= MIN_SCALE + 0.001} />
+          <ZoomButton icon="remove" onPress={() => step(-SCALE_STEP)} disabled={scale <= floor + 0.001} />
           <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 12, color: "white", minWidth: 42, textAlign: "center" }}>
             {Math.round(scale * 100)}%
           </Text>

@@ -1,5 +1,5 @@
 import { View, Image } from "react-native";
-import { framingPercentStyle } from "../../lib/nutrition/photoFraming";
+import { framingLayoutFractions, framingPercentStyle } from "../../lib/nutrition/photoFraming";
 
 // One place that knows how to draw a progress photo inside a frame.
 //
@@ -35,11 +35,17 @@ export function FramedPhoto({
 }) {
   const fixed = width != null && height != null;
   const ratio = fixed ? width / height : aspectRatio ?? 3 / 4;
-  const frame = fixed
-    ? { width, height, borderRadius: radius, backgroundColor, overflow: "hidden" }
-    : { width: "100%", aspectRatio: ratio, borderRadius: radius, backgroundColor, overflow: "hidden" };
 
   const positioned = uri ? framingPercentStyle(framing, ratio) : null;
+  // A photo zoomed out to be seen whole (a client's pre-cropped upload)
+  // leaves bars. They take whatever the frame sits on, so they read as
+  // page rather than as a grey box around the photo.
+  const letterboxed = positioned ? framingLayoutFractions(framing, ratio)?.letterboxed : false;
+  const fill = letterboxed ? "transparent" : backgroundColor;
+
+  const frame = fixed
+    ? { width, height, borderRadius: radius, backgroundColor: fill, overflow: "hidden" }
+    : { width: "100%", aspectRatio: ratio, borderRadius: radius, backgroundColor: fill, overflow: "hidden" };
 
   return (
     <View style={[frame, style]}>
